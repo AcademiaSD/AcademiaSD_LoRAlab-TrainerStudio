@@ -374,7 +374,7 @@ if errorlevel 1 (
 echo.
 echo Instalando BitsAndBytes y utilidades... / Installing BitsAndBytes and utilities...
 
-"%VENV_PYTHON%" -m pip install bitsandbytes sentencepiece protobuf pyarrow einops rotary_embedding_torch
+"%VENV_PYTHON%" -m pip install bitsandbytes sentencepiece protobuf pyarrow einops rotary_embedding_torch flask psutil
 
 if errorlevel 1 (
     echo.
@@ -446,6 +446,26 @@ if errorlevel 1 (
 )
 
 echo [OK] Hugging Face Hub cargado correctamente / Hugging Face Hub loaded successfully.
+
+:: --------------------------------------------------------
+:: FLASK / PSUTIL (lanzador e interfaces web / launcher and web UIs)
+:: --------------------------------------------------------
+
+echo.
+echo ========================================================
+echo Flask / psutil
+echo ========================================================
+
+"%VENV_PYTHON%" -c "import flask, psutil; from importlib.metadata import version; print('Flask:', version('flask'), '| psutil:', psutil.__version__)"
+
+if errorlevel 1 (
+    echo.
+    echo [ERROR] Flask o psutil no estan instalados / Flask or psutil is not installed.
+    pause
+    exit /b 1
+)
+
+echo [OK] Flask y psutil cargados correctamente / Flask and psutil loaded successfully.
 
 :: --------------------------------------------------------
 :: TRANSFORMERS
