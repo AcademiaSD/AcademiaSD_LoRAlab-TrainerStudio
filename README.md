@@ -5,7 +5,7 @@ Todos los LoRAlab de AcademiaSD en una sola carpeta, con **un solo entorno de Py
 
 | LoRAlab | Trains / Entrena | Guide / Guía |
 | :--- | :--- | :--- |
-| LTX-2.3 | Video LoRAs / LoRAs de vídeo | [README_LTX23.md](README_LTX23.md) |
+| LTX-2.3 (also LTX-2.5 / también LTX-2.5) | Video LoRAs / LoRAs de vídeo | [README_LTX23.md](README_LTX23.md) |
 | Krea 2 | Image LoRAs / LoRAs de imagen | [README_Krea2.md](README_Krea2.md) |
 | MiniMax-H3 | Video and audio LoRAs / LoRAs de vídeo y audio | [README_MiniMaxH3.md](README_MiniMaxH3.md) |
 | Qwen-Image 2.1 | Image and edit LoRAs / LoRAs de imagen y edición | [README_QwenImage21.md](README_QwenImage21.md) |
