@@ -1,0 +1,36 @@
+{
+  "title": "AcademiaSD LoRAlab Trainer",
+  "subtitle": "Elige un entrenador / Choose a trainer",
+  "image_scale": 0.2,
+  "rows": "auto",
+  "trainers": [
+    {
+      "id": "ltx23",
+      "name": "LTX-2.3",
+      "description": "LoRAs de vídeo / Video LoRAs",
+      "image": "assets/ltx23/portada.jpg",
+      "run": "Run_LoRAlab-LTX23.bat"
+    },
+    {
+      "id": "krea2",
+      "name": "Krea 2",
+      "description": "LoRAs de imagen / Image LoRAs",
+      "image": "assets/krea2/portada.jpg",
+      "run": "Run_LoRAlab-Krea2.bat"
+    },
+    {
+      "id": "minimaxh3",
+      "name": "MiniMax-H3",
+      "description": "LoRAs de vídeo y audio / Video and audio LoRAs",
+      "image": "assets/minimaxh3/portada.jpg",
+      "run": "Run_LoRAlab-MiniMaxH3.bat"
+    },
+    {
+      "id": "qwenimage21",
+      "name": "Qwen-Image 2.1",
+      "description": "LoRAs de imagen y edición / Image and edit LoRAs",
+      "image": "assets/qwenimage21/portada.jpg",
+      "run": "Run_LoRAlab-QwenImage21.bat"
+    }
+  ]
+}

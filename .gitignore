@@ -1,0 +1,32 @@
+# Entorno / Environment
+venv/
+__pycache__/
+*.pyc
+python-3.13.1-amd64.exe
+
+# Modelos / Models
+Krea-2-NF4/
+LTX23-NF4/
+Captioner-Qwen3-VL-8B/
+MiniMax-H3-NF4/
+Qwen3-VL-4B-Instruct/
+MelBandRoFormer/
+Qwen-Image21-NF4/
+Krea-2-Raw/
+LTX23-Raw/
+LTX23-NF4_weights/
+
+# Ejecuciones / Runs
+cached_data_*/
+*_lora_output*/
+refmods/
+_offload_tmp_*/
+
+# Ajustes y credenciales / Settings and credentials
+*_settings_*.json
+HF_token.json
+
+# Copias de seguridad / Backups
+*_bak*.py
+*_bak*.html
+*.bak

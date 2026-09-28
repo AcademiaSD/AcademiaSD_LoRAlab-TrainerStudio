@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AcademiaSD LoRAlab Trainer</title>
+    <link rel="icon" type="image/png" href="/assets/qwenimage21/logo_128.png">
+
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --panel-bg: #1e293b;
+            --panel-border: #334155;
+            --accent: #6366f1;
+            --glow: #38bdf8;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body {
+            min-height: 100vh;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 34px; padding: 40px 20px;
+            color: var(--text-main);
+            background: radial-gradient(ellipse at top, #1e1b4b 0%, var(--bg-dark) 55%, #020617 100%);
+        }
+
+        header { text-align: center; }
+        header h1 { font-size: 2rem; font-weight: 800; letter-spacing: -0.5px; }
+        header p { margin-top: 6px; color: var(--text-muted); font-size: 0.95rem; }
+
+        .grid { display: flex; flex-direction: column; align-items: center; gap: 28px; }
+        .row { display: flex; justify-content: center; gap: 28px; flex-wrap: wrap; }
+
+        .card {
+            display: flex; flex-direction: column; align-items: center; gap: 12px;
+            padding: 16px 16px 14px;
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            color: inherit; cursor: pointer;
+            transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .card img {
+            display: block; border-radius: 10px;
+            filter: brightness(0.82) saturate(0.95);
+            transition: filter 0.2s ease;
+        }
+        .card:hover, .card:focus-visible {
+            outline: none;
+            transform: translateY(-5px);
+            border-color: var(--glow);
+            box-shadow: 0 0 0 1px var(--glow), 0 0 28px rgba(56, 189, 248, 0.55), 0 12px 30px rgba(0, 0, 0, 0.5);
+        }
+        .card:hover img, .card:focus-visible img { filter: brightness(1.08) saturate(1.1); }
+        .card:active { transform: translateY(-2px) scale(0.99); }
+        .card.launching { border-color: #10b981; box-shadow: 0 0 0 1px #10b981, 0 0 30px rgba(16, 185, 129, 0.6); }
+
+        .card .name { font-size: 1.1rem; font-weight: 700; }
+        .card .desc { font-size: 0.8rem; color: var(--text-muted); text-align: center; max-width: 250px; }
+
+        #status { min-height: 1.4em; font-size: 0.9rem; color: var(--text-muted); text-align: center; }
+        #status.ok { color: #10b981; }
+        #status.warn { color: #f59e0b; }
+        #status a { color: var(--glow); }
+
+        footer { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+        footer a {
+            padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600;
+            color: var(--text-main); text-decoration: none;
+            background: var(--bg-dark); border: 1px solid var(--panel-border);
+            transition: border-color 0.2s;
+        }
+        footer a:hover { border-color: var(--accent); }
+    </style>
+</head>
+<body>
+    <header>
+        <h1 id="title">AcademiaSD LoRAlab Trainer</h1>
+        <p id="subtitle"></p>
+    </header>
+
+    <div class="grid" id="grid"></div>
+    <div id="status"></div>
+
+    <footer>
+        <a href="https://www.youtube.com/@Academia_SD" target="_blank">▶ YouTube</a>
+        <a href="https://twitter.com/Academia_S_D" target="_blank">𝕏 X (Twitter)</a>
+        <a href="https://discord.gg/Syuaduy678" target="_blank">💬 Discord</a>
+        <a href="https://ko-fi.com/academiasd" target="_blank">☕ Ko-Fi</a>
+    </footer>
+
+    <script>
+        // Filas: hasta 3 entrenadores en una fila; con más, dos filas y la de arriba con el sobrante
+        // (4 -> 2+2, 5 -> 3+2, 6 -> 3+3, 7 -> 4+3). "rows" en launcher.json fija el número a mano.
+        function splitRows(items, rows) {
+            const n = items.length;
+            const count = rows === 'auto' || !rows ? (n <= 3 ? 1 : 2) : Math.max(1, parseInt(rows));
+            const out = [];
+            let start = 0;
+            for (let r = 0; r < count; r++) {
+                const size = Math.ceil((n - start) / (count - r));
+                out.push(items.slice(start, start + size));
+                start += size;
+            }
+            return out.filter(row => row.length);
+        }
+
+        function setStatus(html, cls) {
+            const el = document.getElementById('status');
+            el.className = cls || '';
+            el.innerHTML = html;
+        }
+
+        async function launch(trainer, card) {
+            card.classList.add('launching');
+            setStatus(`Abriendo / Opening ${trainer.name}...`);
+            try {
+                const res = await fetch('/api/launch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: trainer.id })
+                });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    setStatus(`✓ ${trainer.name}: se abrirá en una ventana nueva y en el navegador / will open in a new window and in the browser.`, 'ok');
+                } else if (data.status === 'busy') {
+                    setStatus(`Ya hay un entrenador abierto en <a href="${data.url}" target="_blank">${data.url}</a>. Ciérralo antes de abrir otro. / `
+                        + `A trainer is already open at <a href="${data.url}" target="_blank">${data.url}</a>. Close it before opening another.`, 'warn');
+                } else {
+                    setStatus(`[!] ${data.error || 'Error'}`, 'warn');
+                }
+            } catch (e) {
+                setStatus(`[!] ${e}`, 'warn');
+            }
+            setTimeout(() => card.classList.remove('launching'), 1500);
+        }
+
+        async function init() {
+            const cfg = await (await fetch('/launcher.json')).json();
+            document.title = cfg.title || document.title;
+            document.getElementById('title').innerText = cfg.title || '';
+            document.getElementById('subtitle').innerText = cfg.subtitle || '';
+            const scale = parseFloat(cfg.image_scale) || 0.2;
+
+            const grid = document.getElementById('grid');
+            for (const rowItems of splitRows(cfg.trainers, cfg.rows)) {
+                const row = document.createElement('div');
+                row.className = 'row';
+                for (const t of rowItems) {
+                    const card = document.createElement('button');
+                    card.type = 'button';
+                    card.className = 'card';
+                    card.title = `${t.name}: ${t.run}`;
+                    const img = document.createElement('img');
+                    img.alt = t.name;
+                    // El tamaño sale de la imagen real: image_scale = 0.2 es el 20 % de su tamaño.
+                    img.onload = () => { img.width = Math.round(img.naturalWidth * scale); };
+                    img.src = '/' + t.image;
+                    const name = document.createElement('div');
+                    name.className = 'name';
+                    name.innerText = t.name;
+                    const desc = document.createElement('div');
+                    desc.className = 'desc';
+                    desc.innerText = t.description || '';
+                    card.append(img, name, desc);
+                    card.onclick = () => launch(t, card);
+                    row.appendChild(card);
+                }
+                grid.appendChild(row);
+            }
+        }
+        init();
+    </script>
+</body>
+</html>
