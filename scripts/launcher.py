@@ -3,9 +3,9 @@
 launcher.py — Lanzador común de AcademiaSD LoRAlab Trainer
 Common launcher for AcademiaSD LoRAlab Trainer
 
-Sirve launcher.html en http://127.0.0.1:4990. Los entrenadores salen de launcher.json:
-al pulsar uno se abre su Run_LoRAlab-*.bat en una ventana nueva, que arranca su servidor
-en http://127.0.0.1:5000. Para añadir un LoRAlab basta con una entrada más en launcher.json.
+Sirve GUI/launcher.html en http://127.0.0.1:4990. Los entrenadores salen de GUI/launcher.json:
+al pulsar uno se abre su code/Run_LoRAlab-*.bat en una ventana nueva, que arranca su servidor
+en http://127.0.0.1:5000. Para añadir un LoRAlab basta con una entrada más en GUI/launcher.json.
 """
 import json
 import logging
@@ -18,8 +18,10 @@ from pathlib import Path
 
 from flask import Flask, abort, jsonify, request, send_from_directory
 
-BASE_DIR = Path(__file__).resolve().parent
-CONFIG_FILE = BASE_DIR / "launcher.json"
+BASE_DIR = Path(__file__).resolve().parent.parent
+GUI_DIR = BASE_DIR / "GUI"
+CODE_DIR = BASE_DIR / "code"
+CONFIG_FILE = GUI_DIR / "launcher.json"
 PORT = 4990
 TRAINER_PORT = 5000
 
@@ -41,7 +43,7 @@ def trainer_running():
 
 @app.route("/")
 def index():
-    return send_from_directory(str(BASE_DIR), "launcher.html")
+    return send_from_directory(str(GUI_DIR), "launcher.html")
 
 
 @app.route("/launcher.json")
@@ -61,8 +63,8 @@ def launch():
     if trainer is None:
         abort(404)
 
-    run = (BASE_DIR / trainer["run"]).resolve()
-    if run.parent != BASE_DIR or run.suffix.lower() != ".bat" or not run.is_file():
+    run = (CODE_DIR / trainer["run"]).resolve()
+    if run.parent != CODE_DIR or run.suffix.lower() != ".bat" or not run.is_file():
         return jsonify({"status": "error", "error": f"Not found / No existe: {trainer['run']}"}), 404
 
     if trainer_running():

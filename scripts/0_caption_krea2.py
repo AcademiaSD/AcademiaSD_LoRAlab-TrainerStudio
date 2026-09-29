@@ -1,18 +1,17 @@
 # -*- coding: utf-8 -*-
 """
-0_caption_LTX23.py — Captions automáticos del dataset con Qwen3-VL-8B
-Dataset auto-captioning with Qwen3-VL-8B
+0_caption_krea2.py — Captions automáticos del dataset con Qwen3-VL-4B
+Dataset auto-captioning with Qwen3-VL-4B
 
 Un .txt por imagen con una descripción. La palabra trigger va siempre al principio.
 One .txt per image with a description. The trigger word always goes first.
 
-Usa el mismo captioner que el LoRAlab de Qwen-Image 2.1: el text encoder NF4 de su repo
-(Qwen3-VL-8B-Instruct, ~5.5 GB de VRAM). El de LTX-2.3 (Gemma 3 12B) también describe
-bien, pero es unas 7 veces más lento. La primera vez se descargan solo text_encoder_NF4/
-y processor/ (~5 GB) a Captioner-Qwen3-VL-8B/.
+No descarga ningún modelo nuevo: el text encoder de Krea-2 es Qwen3-VL-4B-Instruct
+con lm_head atado a los embeddings, así que puede escribir texto. Se cuantiza a NF4
+al cargar (~3.5 GB de VRAM, mismas descripciones que en BF16).
 
-Lee caption_settings_ltx23.json; la ruta del dataset y el trigger salen de
-pre_cache_settings_ltx23.json.
+Lee caption_settings_krea2.json; la ruta del dataset y el trigger salen de
+pre_cache_settings_krea2.json.
 """
 import os
 import sys
@@ -23,7 +22,7 @@ import warnings
 import torch
 from PIL import Image
 from huggingface_hub import snapshot_download
-from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
+from transformers import AutoProcessor, BitsAndBytesConfig, Qwen3VLForConditionalGeneration
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -31,11 +30,11 @@ try:
 except Exception:
     pass
 
-# NF4: las capas de visión (4304) no son múltiplo de 64 y usan el kernel general; solo cambia la velocidad.
+# NF4: algunas capas de visión no son múltiplo de 64 y usan el kernel general; solo cambia la velocidad.
 warnings.filterwarnings("ignore", message=".*is not aligned for fast kernel.*")
 
 DEFAULTS = {
-    "captioner_dir": "Captioner-Qwen3-VL-8B",
+    "model_id": "Krea-2-NF4",
     "dataset_path": "./dataset",
     "trigger_word": "",
     "caption_prompt": (
@@ -57,9 +56,9 @@ DEFAULTS = {
 
 IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp")
 
-PRECACHE_CONFIG = "pre_cache_settings_ltx23.json"
-CONFIG_PATH = "caption_settings_ltx23.json"
-HF_REPO_ID = "AcademiaSD/Qwen-Image-2.1-NF4-for-LoRA-Training"
+PRECACHE_CONFIG = "settings/pre_cache_settings_krea2.json"
+CONFIG_PATH = "settings/caption_settings_krea2.json"
+HF_REPO_ID = "AcademiaSD/Krea-2-NF4-for-LoRA-Training"
 
 
 def read_json(path):
@@ -73,25 +72,28 @@ def read_json(path):
 def load_config():
     cfg = dict(DEFAULTS)
     precache = read_json(PRECACHE_CONFIG)
-    for key in ("dataset_path", "trigger_word"):
+    for key in ("model_id", "dataset_path", "trigger_word"):
         if precache.get(key):
             cfg[key] = precache[key]
     cfg.update({k: v for k, v in read_json(CONFIG_PATH).items() if v != ""})
     return cfg
 
 
-def load_captioner(captioner_dir):
-    path = os.path.join(captioner_dir, "text_encoder_NF4")
-    if not os.path.exists(os.path.join(path, "config.json")):
-        print(f"Downloading captioner from Hugging Face / Descargando el captioner desde Hugging Face: {HF_REPO_ID} (~5 GB)", flush=True)
-        token = read_json("HF_token.json").get("token", "").strip() or None
-        snapshot_download(repo_id=HF_REPO_ID, local_dir=captioner_dir, token=token, max_workers=2,
-                          allow_patterns=["text_encoder_NF4/*", "processor/*"])
+def load_captioner(model_id):
+    path = os.path.join(model_id, "text_encoder")
+    processor_path = os.path.join(model_id, "processor")
+    if not os.path.exists(os.path.join(path, "config.json")) or not os.path.exists(os.path.join(processor_path, "preprocessor_config.json")):
+        # Instalación limpia: solo hace falta el text encoder y el processor (~9 GB), no el modelo entero.
+        print(f"Downloading captioner from Hugging Face / Descargando el captioner desde Hugging Face: {HF_REPO_ID}", flush=True)
+        token = read_json("settings/HF_token.json").get("token", "").strip() or None
+        snapshot_download(repo_id=HF_REPO_ID, local_dir=model_id, token=token, max_workers=2,
+                          allow_patterns=["text_encoder/*", "processor/*"])
 
-    print("Loading Qwen3-VL-8B (NF4)... / Cargando Qwen3-VL-8B (NF4)...", flush=True)
-    model = Qwen3VLForConditionalGeneration.from_pretrained(path, dtype=torch.bfloat16, device_map="cuda")
+    print("Loading Qwen3-VL-4B (NF4)... / Cargando Qwen3-VL-4B (NF4)...", flush=True)
+    quant = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16)
+    model = Qwen3VLForConditionalGeneration.from_pretrained(path, dtype=torch.bfloat16, device_map="cuda", quantization_config=quant)
     model.eval()
-    processor = AutoProcessor.from_pretrained(os.path.join(captioner_dir, "processor"))
+    processor = AutoProcessor.from_pretrained(processor_path)
     print(f"Ready / Listo. VRAM: {torch.cuda.memory_allocated() / 1e9:.1f} GB", flush=True)
     return model, processor
 
@@ -162,7 +164,7 @@ def main():
         print("Nothing to do: every image already has a caption. / Nada que hacer: todas las imágenes ya tienen caption.")
         return 0
 
-    model, processor = load_captioner(cfg["captioner_dir"])
+    model, processor = load_captioner(cfg["model_id"])
 
     started = time.time()
     done, failed = 0, []

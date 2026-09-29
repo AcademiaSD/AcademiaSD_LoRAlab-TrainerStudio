@@ -142,7 +142,7 @@ DEFAULTS = {
     "loss_chunk_elements": 2000000,
 }
 
-CONFIG_PATH = "train_settings_ltx23.json"
+CONFIG_PATH = "settings/train_settings_ltx23.json"
 
 HF_BASE_REPO_ID = "diffusers/LTX-2.3-Diffusers"
 HF_NF4_REPO_ID = "AcademiaSD/LTX23_NF4"
@@ -301,9 +301,9 @@ print("=" * 80)
 # DESCARGA DEL MODELO
 # ===========================================================================
 def get_hf_token():
-    if os.path.exists("HF_token.json"):
+    if os.path.exists("settings/HF_token.json"):
         try:
-            with open("HF_token.json", "r", encoding="utf-8") as f:
+            with open("settings/HF_token.json", "r", encoding="utf-8") as f:
                 token_data = json.load(f)
                 token = token_data.get("token", "").strip()
                 if token:

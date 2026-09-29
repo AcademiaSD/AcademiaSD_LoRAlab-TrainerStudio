@@ -166,9 +166,9 @@ IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".bmp")
 VIDEO_EXTS = (".mp4", ".webm", ".mov", ".mkv", ".avi")
 MEDIA_EXTS = IMAGE_EXTS + VIDEO_EXTS
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_PATH = os.path.join(BASE_DIR, "caption_settings_minimaxh3.json")
-PRECACHE_CONFIG = os.path.join(BASE_DIR, "pre_cache_settings_minimaxh3.json")
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CONFIG_PATH = os.path.join(BASE_DIR, "settings", "caption_settings_minimaxh3.json")
+PRECACHE_CONFIG = os.path.join(BASE_DIR, "settings", "pre_cache_settings_minimaxh3.json")
 
 
 def L(en, es):

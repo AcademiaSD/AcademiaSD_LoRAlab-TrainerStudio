@@ -1,6 +1,7 @@
 @echo off
 title Triton and SageAttention Installer by Academia SD
 color 0A
+cd /d "%~dp0"
 
 :: Define the portable Python path for ComfyUI
 set PYTHON_EXE=venv\scripts\python.exe
@@ -15,7 +16,7 @@ echo.
 if not exist "%PYTHON_EXE%" (
     color 0C
     echo [ERROR] %PYTHON_EXE% not found.
-    echo Please place this .bat file in the root folder.
+    echo Run Install_LoRAlab.bat first.
     pause
     exit /b
 )

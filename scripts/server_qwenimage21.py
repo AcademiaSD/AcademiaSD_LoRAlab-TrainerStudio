@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-server.py — Backend web para AcademiaSD Loralab Trainer
-Web backend for AcademiaSD Loralab Trainer
+server.py — Backend web para AcademiaSD Qwen-Image 2.1 Trainer
+Web backend for AcademiaSD Qwen-Image 2.1 Trainer
 """
 
 import json
@@ -68,23 +68,26 @@ logging.getLogger('werkzeug').setLevel(logging.ERROR)
 # CONFIGURACIÓN / CONFIGURATION
 # =============================================================================
 
-BASE_DIR = Path(__file__).resolve().parent
-ASSETS_DIR = BASE_DIR / "assets" / "ltx23"
+SCRIPTS_DIR = Path(__file__).resolve().parent
+BASE_DIR = SCRIPTS_DIR.parent
+SETTINGS_DIR = BASE_DIR / "settings"
+SETTINGS_DIR.mkdir(exist_ok=True)
+ASSETS_DIR = BASE_DIR / "assets" / "qwenimage21"
 
-UI_FILE = BASE_DIR / "trainer_ui_ltx23.html"
+UI_FILE = BASE_DIR / "GUI" / "trainer_ui_qwenimage21.html"
 LOGO_FILE = ASSETS_DIR / "logo.png" if (ASSETS_DIR / "logo.png").exists() else BASE_DIR / "logo.png"
 
-PRECACHE_CONFIG = BASE_DIR / "pre_cache_settings_ltx23.json"
-PREVIEW_KEYS = ("preview_custom_prompt",)
-TRAIN_CONFIG = BASE_DIR / "train_settings_ltx23.json"
-HF_TOKEN_CONFIG = BASE_DIR / "HF_token.json"
-CAPTION_CONFIG = BASE_DIR / "caption_settings_ltx23.json"
+PRECACHE_CONFIG = SETTINGS_DIR / "pre_cache_settings_qwenimage21.json"
+PREVIEW_KEYS = ("lora_type", "preview_custom_prompt", "preview_edit_image")
+TRAIN_CONFIG = SETTINGS_DIR / "train_settings_qwenimage21.json"
+HF_TOKEN_CONFIG = SETTINGS_DIR / "HF_token.json"
+CAPTION_CONFIG = SETTINGS_DIR / "caption_settings_qwenimage21.json"
 
 DATASET_EXTS = (".png", ".jpg", ".jpeg", ".webp")
 
-CAPTION_SCRIPT = BASE_DIR / "0_caption_LTX23.py"
-PRECACHE_SCRIPT = BASE_DIR / "1_pre_cache_LTX23.py"
-TRAIN_SCRIPT = BASE_DIR / "2_train_lora_LTX23.py"
+CAPTION_SCRIPT = SCRIPTS_DIR / "0_caption_qwen_image21.py"
+PRECACHE_SCRIPT = SCRIPTS_DIR / "1_pre_cache_qwen_image21.py"
+TRAIN_SCRIPT = SCRIPTS_DIR / "2_train_lora_qwen_image21.py"
 
 app = Flask(__name__)
 
@@ -148,8 +151,8 @@ def get_train_output_dir():
     cfg = read_json_file(TRAIN_CONFIG, {})
     proj = cfg.get("project_name", "").strip()
     if proj:
-        return resolve_config_path(f"LTX23_lora_output_{proj}", "LTX23_lora_output")
-    return resolve_config_path(cfg.get("output_dir"), "LTX23_lora_output")
+        return resolve_config_path(f"qwen_image21_lora_output_{proj}", "qwen_image21_lora_output")
+    return resolve_config_path(cfg.get("output_dir"), "qwen_image21_lora_output")
 
 
 def get_dataset_dir():
@@ -161,8 +164,8 @@ def get_precache_dir():
     cfg = read_json_file(PRECACHE_CONFIG, {})
     proj = cfg.get("project_name", "").strip()
     if proj:
-        return resolve_config_path(f"cached_data_LTX23_{proj}", "cached_data_LTX23")
-    return resolve_config_path(cfg.get("cache_dir"), "cached_data_LTX23")
+        return resolve_config_path(f"cached_data_qwen_image21_{proj}", "cached_data_qwen_image21")
+    return resolve_config_path(cfg.get("cache_dir"), "cached_data_qwen_image21")
 
 
 def get_script_for_name(script_name):
@@ -213,6 +216,55 @@ def save_hf_token():
 # =============================================================================
 # REQUESTER NATIVO DE WINDOWS (POPUP SELECCIONAR CARPETA)
 # =============================================================================
+
+@app.route("/api/select-file", methods=["POST"])
+def select_file_native():
+    """Diálogo nativo para elegir una imagen (la de antes de las previews de edición)."""
+    try:
+        initial = str((request.get_json(force=True) or {}).get("initial_path", "")).strip()
+        initial_dir = os.path.dirname(initial) if initial and os.path.exists(os.path.dirname(initial)) else str(BASE_DIR)
+
+        selected_path = None
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes('-topmost', True)
+            chosen = filedialog.askopenfilename(
+                title="Select Image / Seleccionar Imagen",
+                initialdir=initial_dir,
+                filetypes=[("Images", "*.png *.jpg *.jpeg *.webp"), ("All files", "*.*")],
+            )
+            root.destroy()
+            if chosen:
+                selected_path = str(Path(chosen).resolve())
+        except Exception:
+            pass
+
+        if not selected_path:
+            try:
+                ps_cmd = (
+                    '[System.Reflection.Assembly]::LoadWithPartialName("System.windows.forms") | Out-Null; '
+                    '$dialog = New-Object System.Windows.Forms.OpenFileDialog; '
+                    '$dialog.Filter = "Images|*.png;*.jpg;*.jpeg;*.webp"; '
+                    f'$dialog.InitialDirectory = "{initial_dir}"; '
+                    'if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { $dialog.FileName }'
+                )
+                creation_flag = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+                output = subprocess.check_output(["powershell", "-command", ps_cmd], text=True, errors="ignore", creationflags=creation_flag).strip()
+                if output:
+                    selected_path = str(Path(output).resolve())
+            except Exception:
+                pass
+
+        if selected_path:
+            return jsonify({"status": "ok", "path": selected_path})
+        return jsonify({"status": "cancelled", "path": None})
+    except Exception as exc:
+        return jsonify({"status": "error", "error": str(exc)}), 500
+
 
 @app.route("/api/select-folder", methods=["POST"])
 def select_folder_native():
@@ -375,7 +427,7 @@ def export_lora():
             return jsonify({"status": "error", "error": f"Target folder does not exist / Carpeta de destino no existe: {target_dir}"}), 400
 
         if not custom_name:
-            custom_name = "LTX23_lora.safetensors"
+            custom_name = "qwen_image21_lora.safetensors"
         if not custom_name.lower().endswith(".safetensors"):
             custom_name += ".safetensors"
 
@@ -383,7 +435,7 @@ def export_lora():
         if not output_dir.exists():
             return jsonify({"status": "error", "error": f"Output folder does not exist / Carpeta de salida no existe: {output_dir}"}), 404
 
-        final_file = output_dir / "LTX23_FINAL_LoRA.safetensors"
+        final_file = output_dir / "QwenImage21_FINAL_LoRA.safetensors"
         source_file = None
 
         if final_file.exists():
@@ -422,8 +474,8 @@ def export_lora():
 @app.route("/")
 def index():
     if not UI_FILE.exists():
-        return f"File not found / No se encuentra: trainer_ui.html in {BASE_DIR}", 404
-    return send_from_directory(str(BASE_DIR), UI_FILE.name)
+        return f"File not found / No se encuentra: trainer_ui.html in {UI_FILE.parent}", 404
+    return send_from_directory(str(UI_FILE.parent), UI_FILE.name)
 
 
 @app.route("/assets/<path:filename>")
@@ -464,12 +516,12 @@ def save_precache():
             return jsonify({"status": "error", "error": "JSON object required / Objeto JSON requerido."}), 400
         
         proj = data.get("project_name", "").strip()
-        cache_dir_name = f"cached_data_LTX23_{proj}" if proj else "cached_data_LTX23"
-        output_dir_name = f"LTX23_lora_output_{proj}" if proj else "LTX23_lora_output"
+        cache_dir_name = f"cached_data_qwen_image21_{proj}" if proj else "cached_data_qwen_image21"
+        output_dir_name = f"qwen_image21_lora_output_{proj}" if proj else "qwen_image21_lora_output"
 
         data["cache_dir"] = f"./{cache_dir_name}"
 
-        # 1. Guardar en raíz con nombre genérico pre_cache_settings_ltx23.json (lectura por defecto)
+        # 1. Guardar en raíz con nombre genérico pre_cache_settings_qwenimage21.json (lectura por defecto)
         write_json_file(PRECACHE_CONFIG, data)
         saved_files = [PRECACHE_CONFIG.name]
 
@@ -481,7 +533,7 @@ def save_precache():
             write_json_file(cache_json_file, data)
             saved_files.append(f"{cache_dir_name}/{cache_json_file.name}")
 
-        # Sincronizar train_settings_ltx23.json en raíz
+        # Sincronizar train_settings_qwenimage21.json en raíz
         train_cfg = read_json_file(TRAIN_CONFIG, {})
         if "dataset_path" in data:
             train_cfg["dataset_path"] = data["dataset_path"]
@@ -502,6 +554,43 @@ def save_precache():
         return jsonify({"status": "error", "error": str(exc)}), 500
 
 
+prompt_job = {"process": None, "args": None, "stage": None, "device": None}
+
+
+def encoding_stage():
+    # "loading", "image" o "prompt" mientras se codifica la preview manual; None si no hay nada en marcha.
+    process = prompt_job["process"]
+    return prompt_job["stage"] if process is not None and process.poll() is None else None
+
+
+def encode_preview_prompt(cache_dir, prompt, image):
+    # Un solo proceso a la vez: si se guarda otro prompt mientras codifica, gana el último.
+    # En GPU si está libre; con el entrenamiento en marcha, en CPU para no tocar su VRAM.
+    device = "cpu" if get_status()["script"] == "train" else "cuda"
+    args = [sys.executable, "-u", str(PRECACHE_SCRIPT), "--prompt-only", str(cache_dir), prompt, image, device]
+    if encoding_stage() is not None:
+        if prompt_job["args"] == args:
+            return
+        prompt_job["process"].terminate()
+        prompt_job["process"].wait()
+    env = {**os.environ, "CUDA_VISIBLE_DEVICES": ""} if device == "cpu" else None
+    process = subprocess.Popen(args, cwd=str(BASE_DIR), env=env,
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                               encoding="utf-8", errors="replace", bufsize=1)
+    prompt_job.update(process=process, args=args, stage="loading", device="GPU" if device == "cuda" else "CPU")
+
+    def follow():
+        # Reenvía la salida a la consola del servidor y actualiza la fase que muestra la GUI.
+        for line in process.stdout:
+            print(line, end="", flush=True)
+            if prompt_job["process"] is process and line.startswith("[Custom Prompt] "):
+                stage = line[len("[Custom Prompt] "):].split(":", 1)[0].lower()
+                if stage in ("image", "prompt"):
+                    prompt_job["stage"] = stage
+
+    threading.Thread(target=follow, daemon=True).start()
+
+
 @app.route("/api/save-train", methods=["POST"])
 def save_train():
     try:
@@ -510,8 +599,8 @@ def save_train():
             return jsonify({"status": "error", "error": "JSON object required / Objeto JSON requerido."}), 400
         
         proj = data.get("project_name", "").strip()
-        cache_dir_name = f"cached_data_LTX23_{proj}" if proj else "cached_data_LTX23"
-        output_dir_name = f"LTX23_lora_output_{proj}" if proj else "LTX23_lora_output"
+        cache_dir_name = f"cached_data_qwen_image21_{proj}" if proj else "cached_data_qwen_image21"
+        output_dir_name = f"qwen_image21_lora_output_{proj}" if proj else "qwen_image21_lora_output"
 
         data["cache_dir"] = f"./{cache_dir_name}"
         data["output_dir"] = f"./{output_dir_name}"
@@ -519,12 +608,24 @@ def save_train():
         # 1. Guardar en raíz con nombre genérico
         write_json_file(TRAIN_CONFIG, data)
 
-        # El Pre-Cache codifica el prompt de las previews desde su propio json.
+        # El Pre-Cache codifica el prompt y la imagen de las previews desde su propio json.
         precache_cfg = read_json_file(PRECACHE_CONFIG, {})
         for key in PREVIEW_KEYS:
             precache_cfg[key] = data.get(key, "")
         write_json_file(PRECACHE_CONFIG, precache_cfg)
 
+        # Si la caché no tiene el prompt o la imagen de preview guardados, se codifican en CPU en paralelo
+        # (sin tocar la GPU del entrenamiento) y el trainer los relee antes de la siguiente preview.
+        prompt = data.get("preview_custom_prompt", "").strip()
+        trigger = data.get("trigger_word", "").strip()
+        if trigger and prompt and trigger.lower() not in prompt.lower():
+            prompt = f"{trigger}, {prompt}"
+        wanted = [prompt, data.get("preview_edit_image", "").strip() if data.get("lora_type") == "edit" else ""]
+        cache_dir = resolve_config_path(data["cache_dir"], cache_dir_name)
+        encoded = [(cache_dir / f).read_text(encoding="utf-8") if (cache_dir / f).exists() else None
+                   for f in ("_custom_prompt.txt", "_custom_image.txt")]
+        if prompt and wanted != encoded and (cache_dir / "_neg_embed.pt").exists() and get_status()["script"] != "precache":
+            encode_preview_prompt(cache_dir, *wanted)
         saved_files = [TRAIN_CONFIG.name]
 
         # 2. Guardar copia dentro de la carpeta del proyecto
@@ -535,7 +636,7 @@ def save_train():
             write_json_file(output_json_file, data)
             saved_files.append(f"{output_dir_name}/{output_json_file.name}")
 
-        return jsonify({"status": "ok", "file": saved_files[0], "all_saved": saved_files})
+        return jsonify({"status": "ok", "file": saved_files[0], "all_saved": saved_files, "encoding": encoding_stage(), "encoding_device": prompt_job["device"]})
     except Exception as exc:
         return jsonify({"status": "error", "error": str(exc)}), 500
 
@@ -546,7 +647,7 @@ def save_train():
 
 @app.route("/api/status", methods=["GET"])
 def api_status():
-    return jsonify(get_status())
+    return jsonify({**get_status(), "encoding": encoding_stage(), "encoding_device": prompt_job["device"]})
 
 
 @app.route("/api/checkpoint-info", methods=["GET"])
@@ -582,6 +683,9 @@ def run_script():
 
         if script_path is None or not script_path.exists():
             return jsonify({"status": "error", "error": f"Script not found / Script no encontrado: {script_name}"}), 404
+
+        if encoding_stage() is not None:
+            return jsonify({"status": "error", "error": "Encoding the preview prompt, wait until it finishes / Codificando el prompt de la preview, espera a que termine."}), 409
 
         with process_lock:
             if active_process is not None and active_process.poll() is None:
@@ -716,12 +820,22 @@ def serve_preview(filename):
     return send_from_directory(str(output_dir), requested.name)
 
 
+EDIT_SUFFIXES = ("_before", "_after")
+
+
 def caption_path(image_path):
+    # En un par de edición (nombre_before / nombre_after) el caption es uno solo: nombre.txt.
+    stem = image_path.stem
+    for suffix in EDIT_SUFFIXES:
+        if stem.endswith(suffix):
+            return image_path.with_name(stem[:-len(suffix)] + ".txt")
     return image_path.with_suffix(".txt")
 
 
 def dataset_caption_paths(dataset_dir):
-    return [caption_path(f) for f in sorted(dataset_dir.iterdir()) if f.is_file() and f.suffix.lower() in DATASET_EXTS]
+    # Un .txt por muestra: los dos lados de un par comparten el suyo y solo cuentan una vez.
+    return list(dict.fromkeys(caption_path(f) for f in sorted(dataset_dir.iterdir())
+                              if f.is_file() and f.suffix.lower() in DATASET_EXTS))
 
 
 @app.route("/api/dataset-info", methods=["GET"])
@@ -861,7 +975,7 @@ def clear_captions():
 
 @app.route("/api/delete-dataset-image", methods=["POST"])
 def delete_dataset_image():
-    """Borra una imagen del dataset y su .txt."""
+    """Borra una imagen del dataset y su .txt. En un par de edición borra las dos mitades: una sola no sirve."""
     try:
         filename = str(request.get_json(force=True).get("file", "")).strip()
         dataset_dir = get_dataset_dir()
@@ -873,8 +987,16 @@ def delete_dataset_image():
         if not target.is_file() or target.suffix.lower() not in DATASET_EXTS:
             return jsonify({"status": "error", "error": f"Not found / No existe: {filename}"}), 404
 
+        files = [target]
+        for suffix in EDIT_SUFFIXES:
+            if target.stem.endswith(suffix):
+                base = target.stem[:-len(suffix)]
+                files = [f for f in dataset_dir.iterdir() if f.is_file() and f.suffix.lower() in DATASET_EXTS
+                         and f.stem in (base + "_before", base + "_after")]
+        files.append(caption_path(target))
+
         removed = []
-        for f in (target, caption_path(target)):
+        for f in files:
             if f.is_file():
                 f.unlink()
                 removed.append(f.name)
@@ -942,7 +1064,7 @@ def open_browser():
 
 if __name__ == "__main__":
     print("\n" + "=" * 70)
-    print("  ACADEMIASD — LTX-2.3 LORALAB TRAINER WEB SERVER")
+    print("  ACADEMIASD — QWEN-IMAGE 2.1 LORA TRAINER WEB SERVER")
     print("=" * 70)
     print(f"  Base Dir / Carpeta  : {BASE_DIR}")
     print(f"  Python Interpreter  : {sys.executable}")

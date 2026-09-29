@@ -59,17 +59,20 @@ logging.getLogger('werkzeug').setLevel(logging.ERROR)
 # =============================================================================
 # CONFIGURACIÓN / CONFIGURATION
 # =============================================================================
-BASE_DIR = Path(__file__).resolve().parent
+SCRIPTS_DIR = Path(__file__).resolve().parent
+BASE_DIR = SCRIPTS_DIR.parent
+SETTINGS_DIR = BASE_DIR / "settings"
+SETTINGS_DIR.mkdir(exist_ok=True)
 ASSETS_DIR = BASE_DIR / "assets" / "minimaxh3"
-UI_FILE = BASE_DIR / "trainer_ui_minimaxh3.html"
+UI_FILE = BASE_DIR / "GUI" / "trainer_ui_minimaxh3.html"
 LOGO_FILE = ASSETS_DIR / "logo.png" if (ASSETS_DIR / "logo.png").exists() else BASE_DIR / "logo.png"
-PRECACHE_CONFIG = BASE_DIR / "pre_cache_settings_minimaxh3.json"
-REFMOD_CONFIG = BASE_DIR / "refmod_settings_minimaxh3.json"
-TRAIN_CONFIG = BASE_DIR / "train_settings_minimaxh3.json"
-HF_TOKEN_CONFIG = BASE_DIR / "HF_token.json"
-CAPTION_SCRIPT = BASE_DIR / "0_caption_MiniMaxH3.py"
-PRECACHE_SCRIPT = BASE_DIR / "1_pre_cache_MiniMaxH3.py"
-TRAIN_SCRIPT = BASE_DIR / "2_train_lora_MiniMaxH3.py"
+PRECACHE_CONFIG = SETTINGS_DIR / "pre_cache_settings_minimaxh3.json"
+REFMOD_CONFIG = SETTINGS_DIR / "refmod_settings_minimaxh3.json"
+TRAIN_CONFIG = SETTINGS_DIR / "train_settings_minimaxh3.json"
+HF_TOKEN_CONFIG = SETTINGS_DIR / "HF_token.json"
+CAPTION_SCRIPT = SCRIPTS_DIR / "0_caption_MiniMaxH3.py"
+PRECACHE_SCRIPT = SCRIPTS_DIR / "1_pre_cache_MiniMaxH3.py"
+TRAIN_SCRIPT = SCRIPTS_DIR / "2_train_lora_MiniMaxH3.py"
 
 app = Flask(__name__)
 active_process = None
@@ -432,8 +435,8 @@ def export_lora():
 @app.route("/")
 def index():
     if not UI_FILE.exists():
-        return f"File not found / No se encuentra: trainer_ui.html in {BASE_DIR}", 404
-    return send_from_directory(str(BASE_DIR), UI_FILE.name)
+        return f"File not found / No se encuentra: trainer_ui.html in {UI_FILE.parent}", 404
+    return send_from_directory(str(UI_FILE.parent), UI_FILE.name)
 
 
 @app.route("/assets/<path:filename>")
@@ -1542,8 +1545,8 @@ def extract_refmod():
         destino = Path(salida) if salida else (BASE_DIR / "refmods")
 
         import sys
-        if str(BASE_DIR) not in sys.path:
-            sys.path.insert(0, str(BASE_DIR))
+        if str(SCRIPTS_DIR) not in sys.path:
+            sys.path.insert(0, str(SCRIPTS_DIR))
         import refmod
 
         fuentes = [str(f) for f in sorted(carpeta.iterdir())
@@ -1720,7 +1723,7 @@ def extract_vocals():
                                      "Hay un proceso en marcha. Detenlo primero."}), 409
 
         import sys
-        sys.path.insert(0, str(BASE_DIR))
+        sys.path.insert(0, str(SCRIPTS_DIR))
         from melband import separator as sep
 
         faltan = sep.dependencias_que_faltan()
@@ -2314,7 +2317,7 @@ def save_caption_settings():
     """
     try:
         data = request.get_json(force=True)
-        path = BASE_DIR / "caption_settings_minimaxh3.json"
+        path = SETTINGS_DIR / "caption_settings_minimaxh3.json"
 
         # Se FUSIONA, no se reemplaza: la GUI solo manda el prompt y el modo, y
         # un write completo borraria max_new_tokens y max_image_side cada vez
@@ -2333,7 +2336,7 @@ def save_caption_settings():
 
 @app.route("/api/caption-settings", methods=["GET"])
 def get_caption_settings():
-    return jsonify(read_json_file(BASE_DIR / "caption_settings_minimaxh3.json", {}))
+    return jsonify(read_json_file(SETTINGS_DIR / "caption_settings_minimaxh3.json", {}))
 
 
 def open_browser():

@@ -1,8 +1,8 @@
 @echo off
 setlocal EnableExtensions
 title AcademiaSD - LTX-2.3 LoRAlab Trainer
-cd /d "%~dp0"
-set "BASE_DIR=%~dp0"
+cd /d "%~dp0.."
+set "BASE_DIR=%CD%\"
 set "PYTHON_EXE=%BASE_DIR%venv\Scripts\python.exe"
 
 echo.
@@ -21,14 +21,14 @@ if not exist "%PYTHON_EXE%" (
     exit /b 1
 )
 
-if not exist "%BASE_DIR%server_ltx23.py" (
-    echo [ERROR] No existe / Missing: server_ltx23.py
+if not exist "%BASE_DIR%scripts\server_ltx23.py" (
+    echo [ERROR] No existe / Missing: scripts\server_ltx23.py
     pause
     exit /b 1
 )
 
-if not exist "%BASE_DIR%trainer_ui_ltx23.html" (
-    echo [ERROR] No existe / Missing: trainer_ui_ltx23.html
+if not exist "%BASE_DIR%GUI\trainer_ui_ltx23.html" (
+    echo [ERROR] No existe / Missing: GUI\trainer_ui_ltx23.html
     pause
     exit /b 1
 )
@@ -39,7 +39,7 @@ echo     http://127.0.0.1:5000
 echo.
 echo Cierra esta ventana para detener el servidor / Close this window to stop the server.
 echo.
-"%PYTHON_EXE%" "%BASE_DIR%server_ltx23.py"
+"%PYTHON_EXE%" "%BASE_DIR%scripts\server_ltx23.py"
 
 echo.
 echo ================================================================

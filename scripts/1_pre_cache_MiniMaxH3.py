@@ -551,7 +551,7 @@ DEFAULTS = {
     "missing_tensors_subfolders": ["FL2VA/text_encoder", "text_encoder", ""],
 }
 
-CONFIG_PATH = "pre_cache_settings_minimaxh3.json"
+CONFIG_PATH = "settings/pre_cache_settings_minimaxh3.json"
 
 os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "0")
 os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "0")

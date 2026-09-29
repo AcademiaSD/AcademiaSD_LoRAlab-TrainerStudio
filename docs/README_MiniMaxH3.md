@@ -1,9 +1,9 @@
 # AcademiaSD LoRAlab-MiniMax-H3 Beta v0.98
 
-> Part of **AcademiaSD LoRAlab Trainer**: install once with `Install_LoRAlab.bat` and open this trainer from `Start_LoRAlab.bat` or `Run_LoRAlab-MiniMaxH3.bat`. / Parte de **AcademiaSD LoRAlab Trainer**: se instala una vez con `Install_LoRAlab.bat` y se abre desde `Start_LoRAlab.bat` o `Run_LoRAlab-MiniMaxH3.bat`.
+> Part of **AcademiaSD LoRAlab Trainer**: install once with `Install_LoRAlab.bat` and open this trainer from `Start_LoRAlab.bat` or `code\Run_LoRAlab-MiniMaxH3.bat`. / Parte de **AcademiaSD LoRAlab Trainer**: se instala una vez con `Install_LoRAlab.bat` y se abre desde `Start_LoRAlab.bat` o `code\Run_LoRAlab-MiniMaxH3.bat`.
 
 
-![AcademiaSD LoRAlab MiniMax-H3](assets/minimaxh3/portada.jpg)
+![AcademiaSD LoRAlab MiniMax-H3](../assets/minimaxh3/portada.jpg)
 
 <p align="center">
   <b>Train MiniMax-H3 character, style and video-effect LoRAs on a consumer GPU — a 33-Billion parameter joint video+audio DiT, from 8 GB of VRAM.</b>
@@ -20,7 +20,7 @@
 ---
 
 <p align="center">
-  <img src="assets/minimaxh3/interface.jpg" alt="AcademiaSD LoRAlab MiniMax-H3 interface" width="100%">
+  <img src="../assets/minimaxh3/interface.jpg" alt="AcademiaSD LoRAlab MiniMax-H3 interface" width="100%">
 </p>
 
 ---

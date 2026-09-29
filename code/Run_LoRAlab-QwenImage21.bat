@@ -1,13 +1,13 @@
 @echo off
 setlocal EnableExtensions
-title AcademiaSD - MiniMax-H3 LoRAlab Trainer
-cd /d "%~dp0"
-set "BASE_DIR=%~dp0"
+title AcademiaSD - Qwen-Image 2.1 LoRAlab Trainer
+cd /d "%~dp0.."
+set "BASE_DIR=%CD%\"
 set "PYTHON_EXE=%BASE_DIR%venv\Scripts\python.exe"
 
 echo.
 echo ================================================================
-echo        ACADEMIASD - MINIMAX-H3 LORALAB TRAINER
+echo        ACADEMIASD - QWEN-IMAGE 2.1 LORALAB TRAINER
 echo ================================================================
 echo.
 
@@ -21,14 +21,14 @@ if not exist "%PYTHON_EXE%" (
     exit /b 1
 )
 
-if not exist "%BASE_DIR%server_minimaxh3.py" (
-    echo [ERROR] No existe / Missing: server_minimaxh3.py
+if not exist "%BASE_DIR%scripts\server_qwenimage21.py" (
+    echo [ERROR] No existe / Missing: scripts\server_qwenimage21.py
     pause
     exit /b 1
 )
 
-if not exist "%BASE_DIR%trainer_ui_minimaxh3.html" (
-    echo [ERROR] No existe / Missing: trainer_ui_minimaxh3.html
+if not exist "%BASE_DIR%GUI\trainer_ui_qwenimage21.html" (
+    echo [ERROR] No existe / Missing: GUI\trainer_ui_qwenimage21.html
     pause
     exit /b 1
 )
@@ -39,7 +39,7 @@ echo     http://127.0.0.1:5000
 echo.
 echo Cierra esta ventana para detener el servidor / Close this window to stop the server.
 echo.
-"%PYTHON_EXE%" "%BASE_DIR%server_minimaxh3.py"
+"%PYTHON_EXE%" "%BASE_DIR%scripts\server_qwenimage21.py"
 
 echo.
 echo ================================================================

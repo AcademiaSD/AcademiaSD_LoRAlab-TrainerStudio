@@ -674,7 +674,7 @@ DEFAULTS = {
     "drop_audio_rows_when_unused": True,
 }
 
-CONFIG_PATH = "train_settings_minimaxh3.json"
+CONFIG_PATH = "settings/train_settings_minimaxh3.json"
 
 if os.path.exists(CONFIG_PATH):
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:

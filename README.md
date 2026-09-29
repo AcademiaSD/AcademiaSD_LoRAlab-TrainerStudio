@@ -5,10 +5,10 @@ Todos los LoRAlab de AcademiaSD en una sola carpeta, con **un solo entorno de Py
 
 | LoRAlab | Trains / Entrena | Guide / Guía |
 | :--- | :--- | :--- |
-| LTX-2.3 (also LTX-2.5 / también LTX-2.5) | Video LoRAs / LoRAs de vídeo | [README_LTX23.md](README_LTX23.md) |
-| Krea 2 | Image LoRAs / LoRAs de imagen | [README_Krea2.md](README_Krea2.md) |
-| MiniMax-H3 | Video and audio LoRAs / LoRAs de vídeo y audio | [README_MiniMaxH3.md](README_MiniMaxH3.md) |
-| Qwen-Image 2.1 | Image and edit LoRAs / LoRAs de imagen y edición | [README_QwenImage21.md](README_QwenImage21.md) |
+| LTX-2.3 (also LTX-2.5 / también LTX-2.5) | Video LoRAs / LoRAs de vídeo | [README_LTX23.md](docs/README_LTX23.md) |
+| Krea 2 | Image LoRAs / LoRAs de imagen | [README_Krea2.md](docs/README_Krea2.md) |
+| MiniMax-H3 | Video and audio LoRAs / LoRAs de vídeo y audio | [README_MiniMaxH3.md](docs/README_MiniMaxH3.md) |
+| Qwen-Image 2.1 | Image and edit LoRAs / LoRAs de imagen y edición | [README_QwenImage21.md](docs/README_QwenImage21.md) |
 
 ---
 
@@ -30,27 +30,30 @@ Each model is downloaded from Hugging Face the first time you use its LoRAlab. /
 - `Start_LoRAlab.bat` opens the launcher at `http://127.0.0.1:4990`. Click a trainer to open it; its window and its web interface (`http://127.0.0.1:5000`) open on their own.
   `Start_LoRAlab.bat` abre el lanzador. Pulsa un entrenador para abrirlo; se abren su ventana y su interfaz web.
 - Only one trainer can be open at a time (they all use port 5000). / Solo puede haber un entrenador abierto a la vez (todos usan el puerto 5000).
-- Each trainer can also be opened directly with its `Run_LoRAlab-<Model>.bat`. / También se abre cada uno directamente con su `Run_LoRAlab-<Modelo>.bat`.
+- Each trainer can also be opened directly with its `code\Run_LoRAlab-<Model>.bat`. / También se abre cada uno directamente con su `code\Run_LoRAlab-<Modelo>.bat`.
 - `Update_LoRAlab.bat` updates everything from GitHub. Your models, projects and settings are kept. / Actualiza todo desde GitHub; tus modelos, proyectos y ajustes se conservan.
 
 ## ➕ Adding a LoRAlab / Añadir un LoRAlab
 
-Add an entry to `launcher.json` (`id`, `name`, `description`, `image`, `run`). The launcher places the cards by itself: up to 3 in one row, then two rows with the extra one on top (4 → 2+2, 5 → 3+2, 6 → 3+3). `image_scale` sets the cover size (0.2 = 20 %) and `rows` can force the number of rows.
-Añade una entrada a `launcher.json`. El lanzador coloca las tarjetas solo; `image_scale` fija el tamaño de la portada y `rows` fuerza el número de filas.
+Add an entry to `GUI/launcher.json` (`id`, `name`, `description`, `image`, `run`). The launcher places the cards by itself: up to 3 in one row, then two rows with the extra one on top (4 → 2+2, 5 → 3+2, 6 → 3+3). `image_scale` sets the cover size (0.2 = 20 %) and `rows` can force the number of rows.
+Añade una entrada a `GUI/launcher.json`. El lanzador coloca las tarjetas solo; `image_scale` fija el tamaño de la portada y `rows` fuerza el número de filas.
 
 ## 📁 Structure / Estructura
 
 ```text
 AcademiaSD_LoRAlab-Trainer/
-├── Start_LoRAlab.bat, launcher.py, launcher.html, launcher.json   # Common launcher / Lanzador común
-├── Install_LoRAlab.bat, Install_Triton&SageAtten220.bat, Update_LoRAlab.bat
-├── Run_LoRAlab-<Model>.bat          # One per LoRAlab / Uno por LoRAlab
-├── server_<model>.py, trainer_ui_<model>.html
-├── 0_caption_*.py, 1_pre_cache_*.py, 2_train_lora_*.py
+├── Start_LoRAlab.bat                # Launcher / Lanzador
+├── Update_LoRAlab.bat               # Updater / Actualizador
+├── Install_LoRAlab.bat, Install_Triton&SageAtten220.bat
+├── README.md, LICENSE
+├── code/                            # Run_LoRAlab-<Model>.bat
+├── scripts/                         # launcher.py, server_<model>.py, 0_caption / 1_pre_cache / 2_train_lora, refmod.py, melband/
+├── GUI/                             # launcher.html, launcher.json, trainer_ui_<model>.html
+├── docs/                            # README_<Model>.md
 ├── assets/<model>/                  # Covers and logos / Portadas y logos
 ├── tools/<model>/                   # NF4 converters / Conversores NF4
-├── refmod.py, melband/, Example_Dataset/   # MiniMax-H3
-└── <pre_cache|train|caption>_settings_<model>.json   # Settings of each LoRAlab / Ajustes de cada LoRAlab
+├── Example_Dataset/                 # MiniMax-H3
+└── settings/                        # Your settings and HF token (created on first use) / Tus ajustes y token de HF (se crea al usarlo)
 ```
 
 ---

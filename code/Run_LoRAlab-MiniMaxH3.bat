@@ -1,13 +1,13 @@
 @echo off
 setlocal EnableExtensions
-title AcademiaSD - Krea 2 LoRAlab Trainer
-cd /d "%~dp0"
-set "BASE_DIR=%~dp0"
+title AcademiaSD - MiniMax-H3 LoRAlab Trainer
+cd /d "%~dp0.."
+set "BASE_DIR=%CD%\"
 set "PYTHON_EXE=%BASE_DIR%venv\Scripts\python.exe"
 
 echo.
 echo ================================================================
-echo        ACADEMIASD - KREA 2 LORALAB TRAINER
+echo        ACADEMIASD - MINIMAX-H3 LORALAB TRAINER
 echo ================================================================
 echo.
 
@@ -21,14 +21,14 @@ if not exist "%PYTHON_EXE%" (
     exit /b 1
 )
 
-if not exist "%BASE_DIR%server_krea2.py" (
-    echo [ERROR] No existe / Missing: server_krea2.py
+if not exist "%BASE_DIR%scripts\server_minimaxh3.py" (
+    echo [ERROR] No existe / Missing: scripts\server_minimaxh3.py
     pause
     exit /b 1
 )
 
-if not exist "%BASE_DIR%trainer_ui_krea2.html" (
-    echo [ERROR] No existe / Missing: trainer_ui_krea2.html
+if not exist "%BASE_DIR%GUI\trainer_ui_minimaxh3.html" (
+    echo [ERROR] No existe / Missing: GUI\trainer_ui_minimaxh3.html
     pause
     exit /b 1
 )
@@ -39,7 +39,7 @@ echo     http://127.0.0.1:5000
 echo.
 echo Cierra esta ventana para detener el servidor / Close this window to stop the server.
 echo.
-"%PYTHON_EXE%" "%BASE_DIR%server_krea2.py"
+"%PYTHON_EXE%" "%BASE_DIR%scripts\server_minimaxh3.py"
 
 echo.
 echo ================================================================

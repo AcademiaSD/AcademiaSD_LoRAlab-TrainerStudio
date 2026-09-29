@@ -126,7 +126,7 @@ DEFAULTS = {
     "low_ram_allow_cpu_fallback": False,
 }
 
-CONFIG_PATH = "pre_cache_settings_ltx23.json"
+CONFIG_PATH = "settings/pre_cache_settings_ltx23.json"
 
 HF_BASE_REPO_ID = "diffusers/LTX-2.3-Diffusers"
 HF_NF4_REPO_ID = "AcademiaSD/LTX23_NF4"
@@ -249,9 +249,9 @@ if LOW_RAM_MODE:
 # DESCARGA DESDE HUGGING FACE
 # ============================================================================
 def get_hf_token():
-    if os.path.exists("HF_token.json"):
+    if os.path.exists("settings/HF_token.json"):
         try:
-            with open("HF_token.json", "r", encoding="utf-8") as f:
+            with open("settings/HF_token.json", "r", encoding="utf-8") as f:
                 token_data = json.load(f)
 
             token = token_data.get("token", "").strip()

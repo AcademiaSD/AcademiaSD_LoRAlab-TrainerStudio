@@ -59,7 +59,7 @@ DEFAULTS = {
     "trigger_word": "",
 }
 
-CONFIG_PATH = "train_settings_krea2.json"
+CONFIG_PATH = "settings/train_settings_krea2.json"
 
 if os.path.exists(CONFIG_PATH):
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
@@ -138,9 +138,9 @@ def free_vram():
 
 
 def get_hf_token():
-    if os.path.exists("HF_token.json"):
+    if os.path.exists("settings/HF_token.json"):
         try:
-            with open("HF_token.json", "r", encoding="utf-8") as f:
+            with open("settings/HF_token.json", "r", encoding="utf-8") as f:
                 token_data = json.load(f)
                 token = token_data.get("token", "").strip()
                 if token:

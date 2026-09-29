@@ -1,10 +1,10 @@
 
 
-> Part of **AcademiaSD LoRAlab Trainer**: install once with `Install_LoRAlab.bat` and open this trainer from `Start_LoRAlab.bat` or `Run_LoRAlab-QwenImage21.bat`. / Parte de **AcademiaSD LoRAlab Trainer**: se instala una vez con `Install_LoRAlab.bat` y se abre desde `Start_LoRAlab.bat` o `Run_LoRAlab-QwenImage21.bat`.
+> Part of **AcademiaSD LoRAlab Trainer**: install once with `Install_LoRAlab.bat` and open this trainer from `Start_LoRAlab.bat` or `code\Run_LoRAlab-QwenImage21.bat`. / Parte de **AcademiaSD LoRAlab Trainer**: se instala una vez con `Install_LoRAlab.bat` y se abre desde `Start_LoRAlab.bat` o `code\Run_LoRAlab-QwenImage21.bat`.
 
 # AcademiaSD Qwen-Image 2.1 LoRAlab
 
-![AcademiaSD_LoRAlab-Qwen_Image21](assets/qwenimage21/portada.jpg)
+![AcademiaSD_LoRAlab-Qwen_Image21](../assets/qwenimage21/portada.jpg)
 
 <p align="center">
   <b>A fast, low-resource Web GUI & pipeline for training Qwen-Image 2.1 (NF4) LoRAs: characters, objects, styles and edits.</b>

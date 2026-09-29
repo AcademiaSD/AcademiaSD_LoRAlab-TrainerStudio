@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-server.py — Backend web para AcademiaSD Krea-2 Trainer
-Web backend for AcademiaSD Krea-2 Trainer
+server.py — Backend web para AcademiaSD Loralab Trainer
+Web backend for AcademiaSD Loralab Trainer
 """
 
 import json
@@ -68,23 +68,26 @@ logging.getLogger('werkzeug').setLevel(logging.ERROR)
 # CONFIGURACIÓN / CONFIGURATION
 # =============================================================================
 
-BASE_DIR = Path(__file__).resolve().parent
-ASSETS_DIR = BASE_DIR / "assets" / "krea2"
+SCRIPTS_DIR = Path(__file__).resolve().parent
+BASE_DIR = SCRIPTS_DIR.parent
+SETTINGS_DIR = BASE_DIR / "settings"
+SETTINGS_DIR.mkdir(exist_ok=True)
+ASSETS_DIR = BASE_DIR / "assets" / "ltx23"
 
-UI_FILE = BASE_DIR / "trainer_ui_krea2.html"
+UI_FILE = BASE_DIR / "GUI" / "trainer_ui_ltx23.html"
 LOGO_FILE = ASSETS_DIR / "logo.png" if (ASSETS_DIR / "logo.png").exists() else BASE_DIR / "logo.png"
 
-PRECACHE_CONFIG = BASE_DIR / "pre_cache_settings_krea2.json"
+PRECACHE_CONFIG = SETTINGS_DIR / "pre_cache_settings_ltx23.json"
 PREVIEW_KEYS = ("preview_custom_prompt",)
-TRAIN_CONFIG = BASE_DIR / "train_settings_krea2.json"
-HF_TOKEN_CONFIG = BASE_DIR / "HF_token.json"
-CAPTION_CONFIG = BASE_DIR / "caption_settings_krea2.json"
+TRAIN_CONFIG = SETTINGS_DIR / "train_settings_ltx23.json"
+HF_TOKEN_CONFIG = SETTINGS_DIR / "HF_token.json"
+CAPTION_CONFIG = SETTINGS_DIR / "caption_settings_ltx23.json"
 
 DATASET_EXTS = (".png", ".jpg", ".jpeg", ".webp")
 
-CAPTION_SCRIPT = BASE_DIR / "0_caption_krea2.py"
-PRECACHE_SCRIPT = BASE_DIR / "1_pre_cache_krea2.py"
-TRAIN_SCRIPT = BASE_DIR / "2_train_lora_krea2.py"
+CAPTION_SCRIPT = SCRIPTS_DIR / "0_caption_LTX23.py"
+PRECACHE_SCRIPT = SCRIPTS_DIR / "1_pre_cache_LTX23.py"
+TRAIN_SCRIPT = SCRIPTS_DIR / "2_train_lora_LTX23.py"
 
 app = Flask(__name__)
 
@@ -148,8 +151,8 @@ def get_train_output_dir():
     cfg = read_json_file(TRAIN_CONFIG, {})
     proj = cfg.get("project_name", "").strip()
     if proj:
-        return resolve_config_path(f"krea2_lora_output_{proj}", "krea2_lora_output")
-    return resolve_config_path(cfg.get("output_dir"), "krea2_lora_output")
+        return resolve_config_path(f"LTX23_lora_output_{proj}", "LTX23_lora_output")
+    return resolve_config_path(cfg.get("output_dir"), "LTX23_lora_output")
 
 
 def get_dataset_dir():
@@ -161,8 +164,8 @@ def get_precache_dir():
     cfg = read_json_file(PRECACHE_CONFIG, {})
     proj = cfg.get("project_name", "").strip()
     if proj:
-        return resolve_config_path(f"cached_data_krea2_{proj}", "cached_data_krea2")
-    return resolve_config_path(cfg.get("cache_dir"), "cached_data_krea2")
+        return resolve_config_path(f"cached_data_LTX23_{proj}", "cached_data_LTX23")
+    return resolve_config_path(cfg.get("cache_dir"), "cached_data_LTX23")
 
 
 def get_script_for_name(script_name):
@@ -375,7 +378,7 @@ def export_lora():
             return jsonify({"status": "error", "error": f"Target folder does not exist / Carpeta de destino no existe: {target_dir}"}), 400
 
         if not custom_name:
-            custom_name = "krea2_lora.safetensors"
+            custom_name = "LTX23_lora.safetensors"
         if not custom_name.lower().endswith(".safetensors"):
             custom_name += ".safetensors"
 
@@ -383,7 +386,7 @@ def export_lora():
         if not output_dir.exists():
             return jsonify({"status": "error", "error": f"Output folder does not exist / Carpeta de salida no existe: {output_dir}"}), 404
 
-        final_file = output_dir / "Krea2_FINAL_LoRA.safetensors"
+        final_file = output_dir / "LTX23_FINAL_LoRA.safetensors"
         source_file = None
 
         if final_file.exists():
@@ -422,8 +425,8 @@ def export_lora():
 @app.route("/")
 def index():
     if not UI_FILE.exists():
-        return f"File not found / No se encuentra: trainer_ui.html in {BASE_DIR}", 404
-    return send_from_directory(str(BASE_DIR), UI_FILE.name)
+        return f"File not found / No se encuentra: trainer_ui.html in {UI_FILE.parent}", 404
+    return send_from_directory(str(UI_FILE.parent), UI_FILE.name)
 
 
 @app.route("/assets/<path:filename>")
@@ -464,12 +467,12 @@ def save_precache():
             return jsonify({"status": "error", "error": "JSON object required / Objeto JSON requerido."}), 400
         
         proj = data.get("project_name", "").strip()
-        cache_dir_name = f"cached_data_krea2_{proj}" if proj else "cached_data_krea2"
-        output_dir_name = f"krea2_lora_output_{proj}" if proj else "krea2_lora_output"
+        cache_dir_name = f"cached_data_LTX23_{proj}" if proj else "cached_data_LTX23"
+        output_dir_name = f"LTX23_lora_output_{proj}" if proj else "LTX23_lora_output"
 
         data["cache_dir"] = f"./{cache_dir_name}"
 
-        # 1. Guardar en raíz con nombre genérico pre_cache_settings_krea2.json (lectura por defecto)
+        # 1. Guardar en raíz con nombre genérico pre_cache_settings_ltx23.json (lectura por defecto)
         write_json_file(PRECACHE_CONFIG, data)
         saved_files = [PRECACHE_CONFIG.name]
 
@@ -481,7 +484,7 @@ def save_precache():
             write_json_file(cache_json_file, data)
             saved_files.append(f"{cache_dir_name}/{cache_json_file.name}")
 
-        # Sincronizar train_settings_krea2.json en raíz
+        # Sincronizar train_settings_ltx23.json en raíz
         train_cfg = read_json_file(TRAIN_CONFIG, {})
         if "dataset_path" in data:
             train_cfg["dataset_path"] = data["dataset_path"]
@@ -502,43 +505,6 @@ def save_precache():
         return jsonify({"status": "error", "error": str(exc)}), 500
 
 
-prompt_job = {"process": None, "args": None, "stage": None, "device": None}
-
-
-def encoding_stage():
-    # "loading" o "prompt" mientras se codifica la preview manual; None si no hay nada en marcha.
-    process = prompt_job["process"]
-    return prompt_job["stage"] if process is not None and process.poll() is None else None
-
-
-def encode_preview_prompt(cache_dir, prompt):
-    # Un solo proceso a la vez: si se guarda otro prompt mientras codifica, gana el último.
-    # En GPU si está libre; con el entrenamiento en marcha, en CPU para no tocar su VRAM.
-    device = "cpu" if get_status()["script"] == "train" else "cuda"
-    args = [sys.executable, "-u", str(PRECACHE_SCRIPT), "--prompt-only", str(cache_dir), prompt, device]
-    if encoding_stage() is not None:
-        if prompt_job["args"] == args:
-            return
-        prompt_job["process"].terminate()
-        prompt_job["process"].wait()
-    env = {**os.environ, "CUDA_VISIBLE_DEVICES": ""} if device == "cpu" else None
-    process = subprocess.Popen(args, cwd=str(BASE_DIR), env=env,
-                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                               encoding="utf-8", errors="replace", bufsize=1)
-    prompt_job.update(process=process, args=args, stage="loading", device="GPU" if device == "cuda" else "CPU")
-
-    def follow():
-        # Reenvía la salida a la consola del servidor y actualiza la fase que muestra la GUI.
-        for line in process.stdout:
-            print(line, end="", flush=True)
-            if prompt_job["process"] is process and line.startswith("[Custom Prompt] "):
-                stage = line[len("[Custom Prompt] "):].split(":", 1)[0].lower()
-                if stage == "prompt":
-                    prompt_job["stage"] = stage
-
-    threading.Thread(target=follow, daemon=True).start()
-
-
 @app.route("/api/save-train", methods=["POST"])
 def save_train():
     try:
@@ -547,8 +513,8 @@ def save_train():
             return jsonify({"status": "error", "error": "JSON object required / Objeto JSON requerido."}), 400
         
         proj = data.get("project_name", "").strip()
-        cache_dir_name = f"cached_data_krea2_{proj}" if proj else "cached_data_krea2"
-        output_dir_name = f"krea2_lora_output_{proj}" if proj else "krea2_lora_output"
+        cache_dir_name = f"cached_data_LTX23_{proj}" if proj else "cached_data_LTX23"
+        output_dir_name = f"LTX23_lora_output_{proj}" if proj else "LTX23_lora_output"
 
         data["cache_dir"] = f"./{cache_dir_name}"
         data["output_dir"] = f"./{output_dir_name}"
@@ -562,17 +528,6 @@ def save_train():
             precache_cfg[key] = data.get(key, "")
         write_json_file(PRECACHE_CONFIG, precache_cfg)
 
-        # Si la caché no tiene el prompt de preview guardado, se codifica en paralelo (en CPU si se está
-        # entrenando, sin tocar su GPU) y el trainer lo relee antes de la siguiente preview.
-        prompt = data.get("preview_custom_prompt", "").strip()
-        trigger = data.get("trigger_word", "").strip()
-        if trigger and prompt and trigger.lower() not in prompt.lower():
-            prompt = f"{trigger}, {prompt}"
-        cache_dir = resolve_config_path(data["cache_dir"], cache_dir_name)
-        prompt_file = cache_dir / "_custom_prompt.txt"
-        encoded = prompt_file.read_text(encoding="utf-8") if prompt_file.exists() else None
-        if prompt and prompt != encoded and (cache_dir / "_neg_embed.pt").exists() and get_status()["script"] != "precache":
-            encode_preview_prompt(cache_dir, prompt)
         saved_files = [TRAIN_CONFIG.name]
 
         # 2. Guardar copia dentro de la carpeta del proyecto
@@ -583,7 +538,7 @@ def save_train():
             write_json_file(output_json_file, data)
             saved_files.append(f"{output_dir_name}/{output_json_file.name}")
 
-        return jsonify({"status": "ok", "file": saved_files[0], "all_saved": saved_files, "encoding": encoding_stage(), "encoding_device": prompt_job["device"]})
+        return jsonify({"status": "ok", "file": saved_files[0], "all_saved": saved_files})
     except Exception as exc:
         return jsonify({"status": "error", "error": str(exc)}), 500
 
@@ -594,7 +549,7 @@ def save_train():
 
 @app.route("/api/status", methods=["GET"])
 def api_status():
-    return jsonify({**get_status(), "encoding": encoding_stage(), "encoding_device": prompt_job["device"]})
+    return jsonify(get_status())
 
 
 @app.route("/api/checkpoint-info", methods=["GET"])
@@ -630,9 +585,6 @@ def run_script():
 
         if script_path is None or not script_path.exists():
             return jsonify({"status": "error", "error": f"Script not found / Script no encontrado: {script_name}"}), 404
-
-        if encoding_stage() is not None:
-            return jsonify({"status": "error", "error": "Encoding the preview prompt, wait until it finishes / Codificando el prompt de la preview, espera a que termine."}), 409
 
         with process_lock:
             if active_process is not None and active_process.poll() is None:
@@ -993,7 +945,7 @@ def open_browser():
 
 if __name__ == "__main__":
     print("\n" + "=" * 70)
-    print("  ACADEMIASD — KREA-2 LORA TRAINER WEB SERVER")
+    print("  ACADEMIASD — LTX-2.3 LORALAB TRAINER WEB SERVER")
     print("=" * 70)
     print(f"  Base Dir / Carpeta  : {BASE_DIR}")
     print(f"  Python Interpreter  : {sys.executable}")

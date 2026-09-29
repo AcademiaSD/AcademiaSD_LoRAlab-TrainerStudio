@@ -23,6 +23,7 @@ refmods/
 _offload_tmp_*/
 
 # Ajustes y credenciales / Settings and credentials
+settings/
 *_settings_*.json
 HF_token.json
 

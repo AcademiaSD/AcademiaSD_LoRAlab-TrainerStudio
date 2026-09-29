@@ -14,6 +14,6 @@ if not exist "%PYTHON_EXE%" (
     exit /b 1
 )
 
-"%PYTHON_EXE%" "%~dp0launcher.py"
+"%PYTHON_EXE%" "%~dp0scripts\launcher.py"
 pause
 endlocal

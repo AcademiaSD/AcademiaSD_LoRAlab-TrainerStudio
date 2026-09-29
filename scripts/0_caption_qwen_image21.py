@@ -76,8 +76,8 @@ DEFAULTS = {
 IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp")
 EDIT_SUFFIXES = ("_before", "_after")
 
-PRECACHE_CONFIG = "pre_cache_settings_qwenimage21.json"
-CONFIG_PATH = "caption_settings_qwenimage21.json"
+PRECACHE_CONFIG = "settings/pre_cache_settings_qwenimage21.json"
+CONFIG_PATH = "settings/caption_settings_qwenimage21.json"
 HF_REPO_ID = "AcademiaSD/Qwen-Image-2.1-NF4-for-LoRA-Training"
 
 
@@ -123,7 +123,7 @@ def load_captioner(model_id):
     if not os.path.exists(os.path.join(path, "config.json")):
         # Instalación limpia: solo hace falta el text encoder NF4 y el processor (~5 GB), no el modelo entero.
         print(f"Downloading captioner from Hugging Face / Descargando el captioner desde Hugging Face: {HF_REPO_ID}", flush=True)
-        token = read_json("HF_token.json").get("token", "").strip() or None
+        token = read_json("settings/HF_token.json").get("token", "").strip() or None
         snapshot_download(repo_id=HF_REPO_ID, local_dir=model_id, token=token, max_workers=2,
                           allow_patterns=["text_encoder_NF4/*", "processor/*"])
 
