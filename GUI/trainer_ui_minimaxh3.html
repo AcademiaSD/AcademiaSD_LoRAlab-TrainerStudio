@@ -54,8 +54,24 @@
         .progress-bar-bg { width: 100%; height: 6px; background: #334155; border-radius: 3px; overflow: hidden; }
         .progress-bar-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.5s ease, background-color 0.5s ease; }
 
-        .main-grid { display: grid; grid-template-columns: 440px 1fr; gap: 20px; flex: 1; }
-        .sidebar { display: flex; flex-direction: column; gap: 20px; }
+        .main-grid { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 20px; flex: 1; }
+
+        /* Ajustes en 2 columnas desde 1400 px (1080p al 100 % y al 125 %); por debajo, en una.
+           Cada columna se apila por su cuenta, sin depender de la altura de la otra.
+           Settings in 2 columns from 1400 px (1080p at 100 % and 125 %); below that, in one.
+           Each column stacks on its own, whatever the height of the other one. */
+        .sidebar { display: flex; flex-direction: column; gap: 20px; width: 440px; }
+        .side-group { display: contents; }
+        .side-col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+        .side-a { order: 1; }
+        .side-b { order: 2; }
+        .side-c { order: 3; }
+        .side-d { order: 4; }
+        @media (min-width: 1400px) {
+            /* Pre-Caché + Export | Training + Previews */
+            .sidebar { display: grid; grid-template-columns: repeat(2, clamp(370px, 21vw, 440px)); align-items: start; width: auto; }
+            .side-group { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+        }
         .panel { background: var(--panel-bg); border-radius: 12px; border: 1px solid var(--panel-border); padding: 20px; }
         
         /* Títulos desplegables / Collapsible Panels */
@@ -102,19 +118,6 @@
         .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
         .btn-row-3 { display: grid !important; grid-template-columns: 1fr 1fr 1fr !important; gap: 10px !important; width: 100% !important; box-sizing: border-box !important; }
 
-        /* Subseccion plegable dentro de un panel. Se usa para las previews, que
-           son ocho campos que la mayoria de la gente deja como estan.
-           Collapsible subsection inside a panel, used for the preview settings:
-           eight fields most people never touch. */
-        .subsection { border: 1px solid var(--panel-border); border-radius: 8px; margin: 4px 0 10px 0; background: #0f172a; }
-        .subsection-title { font-size: 0.82rem; font-weight: 600; color: #cbd5e1; padding: 8px 10px;
-                            display: flex; justify-content: space-between; align-items: center;
-                            cursor: pointer; user-select: none; transition: color 0.15s; }
-        .subsection-title:hover { color: #38bdf8; }
-        .subsection-body { padding: 0 10px 4px 10px; }
-        .subsection.collapsed .subsection-body { display: none; }
-        .subsection .toggle-icon { font-size: 0.7rem; }
-
         .btn { padding: 9px 14px; border-radius: 6px; font-weight: 600; cursor: pointer; border: none; font-size: 0.88rem; transition: background 0.2s, transform 0.1s; display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; }
         .btn-full { width: 100%; }
         .btn-primary { background: var(--accent); color: white; }
@@ -141,7 +144,9 @@
         .terminal-line.term-warning { color: #f59e0b; font-weight: bold; }
         .terminal-line.term-danger { color: #ef4444; font-weight: bold; }
 
-        .ds-toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+        .ds-toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; flex: 1 1 480px; justify-content: flex-end; }
+        .ds-title { flex-wrap: wrap; gap: 8px; }
+        .ds-title > span:first-child { white-space: nowrap; }
         .ds-prepare-bar { display: flex; align-items: center; gap: 10px;
                            flex-wrap: wrap; margin: 10px 0 4px 0; }
         .ds-step-hint { font-size: 0.74rem; color: var(--text-muted); }
@@ -355,6 +360,8 @@
     <div class="main-grid">
         <!-- Sidebar: Settings -->
         <div class="sidebar">
+         <div class="side-group">
+          <div class="side-col side-a">
             
             <!-- 0. Hugging Face Token Panel (CERRADO POR DEFECTO) -->
             <div id="pnl_hf" class="panel collapsed">
@@ -489,6 +496,41 @@
                 </div>
             </div>
 
+          </div>
+
+          <div class="side-col side-d">
+            <!-- 3. Export to WebUI Models Panel (ABIERTO POR DEFECTO) -->
+            <div id="pnl_export" class="panel">
+                <div class="panel-title" onclick="togglePanel(this)">
+                    <span>3. Export to WebUI / Enviar a Models</span>
+                    <span class="toggle-icon">▲</span>
+                </div>
+                
+                <div class="panel-body">
+                    <div class="form-group">
+                        <label>Final LoRA Filename / Nombre Final (.safetensors):</label>
+                        <input type="text" id="export_final_name" value="MiniMaxH3_lora.safetensors" placeholder="mi_lora_MiniMaxH3.safetensors">
+                    </div>
+
+                    <div class="form-group">
+                        <label>UI LoRA Folder / Carpeta models/lora (ComfyUI / Forge / A1111):</label>
+                        <div style="display:flex; gap:8px;">
+                            <input type="text" id="export_models_dir" value="" placeholder="C:/ComfyUI/models/loras">
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="browseFolderNative('export')">Browse / Explorar</button>
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn btn-warning btn-tall btn-full" onclick="sendToModels()" style="margin-top:5px;">
+                        <span class="main-text">🚀 Send to Models</span>
+                        <span class="sub-text">Enviar a Models</span>
+                    </button>
+                </div>
+            </div>
+          </div>
+         </div>
+
+         <div class="side-group">
+          <div class="side-col side-b">
             <!-- 2. Training Settings Panel (ABIERTO POR DEFECTO) -->
             <div id="pnl_train" class="panel">
                 <div class="panel-title" onclick="togglePanel(this)">
@@ -563,103 +605,6 @@
                                 <option value="cpu" selected>CPU (safe)</option>
                                 <option value="cuda">CUDA (+4.8 GB)</option>
                             </select>
-                        </div>
-                    </div>
-
-                    <!-- PREVIEWS: plegado por defecto. Son ocho campos que la mayoria
-                         deja como estan, y desplegados hacian el panel enorme.
-                         Previews: collapsed by default. Eight fields most people never
-                         touch, and expanded they made the panel enormous. -->
-                    <div class="subsection collapsed">
-                        <div class="subsection-title" onclick="toggleSection(this)">
-                            <span>Preview Settings / Previsualización</span>
-                            <span class="toggle-icon">▼</span>
-                        </div>
-                        <div class="subsection-body">
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Preview Every / Cada (0=OFF):</label>
-                            <input type="number" id="train_preview_every" value="0" title="Cada cuantos pasos se genera una previsualizacion. 0 la desactiva por completo y no cuesta nada. / How often to render a preview. 0 disables it entirely.">
-                        </div>
-                        <div class="form-group">
-                            <label>Caption Mode / Modo Prompt:</label>
-                            <select id="train_preview_caption_mode" onchange="toggleCaptionMode(this.value)" title="De donde sale el prompt de cada preview. / Where each preview's prompt comes from.">
-                                <option value="first" selected>First / Primero (comparable)</option>
-                                <option value="random">Random / Aleatorio (variado)</option>
-                                <option value="rotate">Rotate / Rotar (cubre el dataset)</option>
-                                <option value="custom">Custom / Prompt Manual</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- PROMPT MANUAL: solo visible en modo Custom -->
-                    <div class="form-group" id="custom_prompt_container" style="display:none; margin-top: 4px;">
-                        <label style="color:#38bdf8; font-weight:600;">Custom Preview Prompt / Prompt Manual:</label>
-                        <textarea id="train_preview_custom_prompt" rows="2" placeholder="a portrait of mrrtsgrl wearing a red coat, standing in the snow"></textarea>
-                        <span style="font-size: 0.7rem; color: var(--warning); display: block; margin-top: 4px; line-height:1.35;">
-                            ⚠ El entrenador NO lleva text encoder. Guarda el JSON de Pre-Caché y <b>relanza el Pre-Caché</b> para codificar este prompt (salta las imágenes ya cacheadas, ~2 min). /
-                            The trainer has no text encoder: save the Pre-Cache JSON and <b>re-run the Pre-Cache</b> to encode this prompt (it skips already-cached images, ~2 min).
-                        </span>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Preview Steps / Pasos Preview:</label>
-                            <input type="number" id="train_preview_steps" value="20" title="Pasos del sampler. MiniMax-H3 no esta destilado en pasos: por debajo de 10 sale sin definir, 12-30 es el rango util. / Sampler steps; the model is not step-distilled, 12-30 is the useful range.">
-                        </div>
-                        <div class="form-group">
-                            <label>Preview Seed (-1 = usa Seed):</label>
-                            <input type="number" id="train_preview_seed" value="-1" title="Fijar la semilla hace que todas las previews partan del MISMO ruido, que es lo que permite comparar un paso con otro. / A fixed seed makes every preview start from the same noise, which is what makes them comparable.">
-                        </div>
-                    </div>
-
-                    <!-- PREVIEW CFG - OCULTO DE LA INTERFAZ CON display:none;
-                         MiniMax-H3 es un checkpoint GUIDANCE-DISTILLED: no tiene rama
-                         incondicional y su muestreo oficial es UN solo forward por paso,
-                         sin CFG. Lo dicen tanto diffusers ("there is no negative prompt
-                         and no unconditional branch") como el pipeline de ai-toolkit,
-                         que acepta guidance_scale y lo IGNORA explicitamente.
-                         A diferencia de Krea2 y LTX 2.3, aqui subir el CFG no mejora
-                         nada: extrapola en una direccion que el modelo destilado no fue
-                         entrenado para producir, y ademas duplica el coste de cada
-                         preview. Se oculta para no invitar a tocarlo.
-                         NO se borra: el input sigue en el DOM con value="1.0", asi que
-                         saveTrainSettings() sigue escribiendo preview_cfg: 1 y el
-                         entrenador lo lee igual. Si algun dia sale un checkpoint de H3
-                         sin destilar, basta con quitar el display:none.
-                         / MiniMax-H3 is guidance-distilled: no unconditional branch, one
-                         forward per step, no CFG. Both diffusers and ai-toolkit say so,
-                         and ai-toolkit explicitly ignores guidance_scale. Unlike Krea2
-                         and LTX 2.3, raising CFG here only degrades the image and
-                         doubles the cost. Hidden, not removed. -->
-                    <div class="form-group" style="display: none;">
-                        <label>Preview CFG / CFG Preview:</label>
-                        <input type="number" step="0.1" id="train_preview_cfg" value="1.0">
-                    </div>
-
-                    <!-- PREVIEW SAMPLER - OCULTO DE LA INTERFAZ CON display:none;
-                         MiniMax-H3 trae UN solo sampler (MiniMaxH3Scheduler: Euler de flow
-                         rectificado, eta=0) y lo unico ajustable es su desplazamiento sigma.
-                         Se fija en 6.0, que es el valor que funciona para imagen suelta, y se
-                         quita de la vista para no invitar a tocar algo que casi siempre
-                         empeora el resultado. NO se borra: el <select> sigue en el DOM con
-                         value="6", asi que saveTrainSettings() sigue escribiendo
-                         preview_shift: 6.0 y el entrenador lo lee igual. Para recuperarlo
-                         basta con quitar el display:none.
-                         / H3 ships exactly one sampler and its sigma shift is the only knob.
-                         Pinned at 6.0 and hidden, so nobody is invited to change something
-                         that almost always makes the preview worse. Hidden, not removed. -->
-                    <div class="form-group" style="display: none;">
-                        <label>Preview Sampler / Muestreador:</label>
-                        <select id="train_preview_shift" title="MiniMax-H3 solo tiene UN sampler (MiniMaxH3Scheduler: Euler de flow rectificado, eta=0). Lo unico ajustable es su desplazamiento sigma. Para una imagen suelta, shift 12 deja TODOS los pasos por encima de sigma 0.30 y satura el color. / H3 ships exactly one sampler; its sigma shift is the only knob. For a still image, shift 12 keeps every step above sigma 0.30 and oversaturates colour.">
-                            <option value="12">Rectified Flow Euler · shift 12.0 (official video)</option>
-                            <option value="6" selected>Rectified Flow Euler · shift 6.0</option>
-							<option value="4.5">Rectified Flow Euler · shift 4.5</option>
-                            <option value="3">Rectified Flow Euler · shift 3.0 (still image)</option>
-                            <option value="1.7">Rectified Flow Euler · shift 1.7 (= matches training)</option>
-                            <option value="1">Rectified Flow Euler · shift 1.0 (unshifted)</option>
-                        </select>
-                    </div>
                         </div>
                     </div>
 
@@ -806,30 +751,107 @@
                 </div>
             </div>
 
-            <!-- 3. Export to WebUI Models Panel (ABIERTO POR DEFECTO) -->
-            <div id="pnl_export" class="panel">
-                <div class="panel-title" onclick="togglePanel(this)">
-                    <span>3. Export to WebUI / Enviar a Models</span>
-                    <span class="toggle-icon">▲</span>
-                </div>
-                
-                <div class="panel-body">
-                    <div class="form-group">
-                        <label>Final LoRA Filename / Nombre Final (.safetensors):</label>
-                        <input type="text" id="export_final_name" value="MiniMaxH3_lora.safetensors" placeholder="mi_lora_MiniMaxH3.safetensors">
-                    </div>
+          </div>
 
-                    <div class="form-group">
-                        <label>UI LoRA Folder / Carpeta models/lora (ComfyUI / Forge / A1111):</label>
-                        <div style="display:flex; gap:8px;">
-                            <input type="text" id="export_models_dir" value="" placeholder="C:/ComfyUI/models/loras">
-                            <button type="button" class="btn btn-secondary btn-sm" onclick="browseFolderNative('export')">Browse / Explorar</button>
+          <div class="side-col side-c">
+            <!-- 2b. Previews del entrenamiento (CERRADO POR DEFECTO): se guardan en el mismo train_settings_minimaxh3.json -->
+            <div id="pnl_preview" class="panel collapsed">
+                <div class="panel-title" onclick="togglePanel(this)">
+                    <span>2b. Training Previews / Previews</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+
+                <div class="panel-body">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Preview Every / Cada (0=OFF):</label>
+                            <input type="number" id="train_preview_every" value="0" title="Cada cuantos pasos se genera una previsualizacion. 0 la desactiva por completo y no cuesta nada. / How often to render a preview. 0 disables it entirely.">
+                        </div>
+                        <div class="form-group">
+                            <label>Caption Mode / Modo Prompt:</label>
+                            <select id="train_preview_caption_mode" onchange="toggleCaptionMode(this.value)" title="De donde sale el prompt de cada preview. / Where each preview's prompt comes from.">
+                                <option value="first" selected>First / Primero (comparable)</option>
+                                <option value="random">Random / Aleatorio (variado)</option>
+                                <option value="rotate">Rotate / Rotar (cubre el dataset)</option>
+                                <option value="custom">Custom / Prompt Manual</option>
+                            </select>
                         </div>
                     </div>
 
-                    <button type="button" class="btn btn-warning btn-tall btn-full" onclick="sendToModels()" style="margin-top:5px;">
-                        <span class="main-text">🚀 Send to Models</span>
-                        <span class="sub-text">Enviar a Models</span>
+                    <!-- PROMPT MANUAL: solo visible en modo Custom -->
+                    <div class="form-group" id="custom_prompt_container" style="display:none; margin-top: 4px;">
+                        <label style="color:#38bdf8; font-weight:600;">Custom Preview Prompt / Prompt Manual:</label>
+                        <textarea id="train_preview_custom_prompt" rows="2" placeholder="a portrait of mrrtsgrl wearing a red coat, standing in the snow"></textarea>
+                        <span style="font-size: 0.7rem; color: var(--warning); display: block; margin-top: 4px; line-height:1.35;">
+                            ⚠ El entrenador NO lleva text encoder. Guarda el JSON de Pre-Caché y <b>relanza el Pre-Caché</b> para codificar este prompt (salta las imágenes ya cacheadas, ~2 min). /
+                            The trainer has no text encoder: save the Pre-Cache JSON and <b>re-run the Pre-Cache</b> to encode this prompt (it skips already-cached images, ~2 min).
+                        </span>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Preview Steps / Pasos Preview:</label>
+                            <input type="number" id="train_preview_steps" value="20" title="Pasos del sampler. MiniMax-H3 no esta destilado en pasos: por debajo de 10 sale sin definir, 12-30 es el rango util. / Sampler steps; the model is not step-distilled, 12-30 is the useful range.">
+                        </div>
+                        <div class="form-group">
+                            <label>Preview Seed (-1 = usa Seed):</label>
+                            <input type="number" id="train_preview_seed" value="-1" title="Fijar la semilla hace que todas las previews partan del MISMO ruido, que es lo que permite comparar un paso con otro. / A fixed seed makes every preview start from the same noise, which is what makes them comparable.">
+                        </div>
+                    </div>
+
+                    <!-- PREVIEW CFG - OCULTO DE LA INTERFAZ CON display:none;
+                         MiniMax-H3 es un checkpoint GUIDANCE-DISTILLED: no tiene rama
+                         incondicional y su muestreo oficial es UN solo forward por paso,
+                         sin CFG. Lo dicen tanto diffusers ("there is no negative prompt
+                         and no unconditional branch") como el pipeline de ai-toolkit,
+                         que acepta guidance_scale y lo IGNORA explicitamente.
+                         A diferencia de Krea2 y LTX 2.3, aqui subir el CFG no mejora
+                         nada: extrapola en una direccion que el modelo destilado no fue
+                         entrenado para producir, y ademas duplica el coste de cada
+                         preview. Se oculta para no invitar a tocarlo.
+                         NO se borra: el input sigue en el DOM con value="1.0", asi que
+                         saveTrainSettings() sigue escribiendo preview_cfg: 1 y el
+                         entrenador lo lee igual. Si algun dia sale un checkpoint de H3
+                         sin destilar, basta con quitar el display:none.
+                         / MiniMax-H3 is guidance-distilled: no unconditional branch, one
+                         forward per step, no CFG. Both diffusers and ai-toolkit say so,
+                         and ai-toolkit explicitly ignores guidance_scale. Unlike Krea2
+                         and LTX 2.3, raising CFG here only degrades the image and
+                         doubles the cost. Hidden, not removed. -->
+                    <div class="form-group" style="display: none;">
+                        <label>Preview CFG / CFG Preview:</label>
+                        <input type="number" step="0.1" id="train_preview_cfg" value="1.0">
+                    </div>
+
+                    <!-- PREVIEW SAMPLER - OCULTO DE LA INTERFAZ CON display:none;
+                         MiniMax-H3 trae UN solo sampler (MiniMaxH3Scheduler: Euler de flow
+                         rectificado, eta=0) y lo unico ajustable es su desplazamiento sigma.
+                         Se fija en 6.0, que es el valor que funciona para imagen suelta, y se
+                         quita de la vista para no invitar a tocar algo que casi siempre
+                         empeora el resultado. NO se borra: el <select> sigue en el DOM con
+                         value="6", asi que saveTrainSettings() sigue escribiendo
+                         preview_shift: 6.0 y el entrenador lo lee igual. Para recuperarlo
+                         basta con quitar el display:none.
+                         / H3 ships exactly one sampler and its sigma shift is the only knob.
+                         Pinned at 6.0 and hidden, so nobody is invited to change something
+                         that almost always makes the preview worse. Hidden, not removed. -->
+                    <div class="form-group" style="display: none;">
+                        <label>Preview Sampler / Muestreador:</label>
+                        <select id="train_preview_shift" title="MiniMax-H3 solo tiene UN sampler (MiniMaxH3Scheduler: Euler de flow rectificado, eta=0). Lo unico ajustable es su desplazamiento sigma. Para una imagen suelta, shift 12 deja TODOS los pasos por encima de sigma 0.30 y satura el color. / H3 ships exactly one sampler; its sigma shift is the only knob. For a still image, shift 12 keeps every step above sigma 0.30 and oversaturates colour.">
+                            <option value="12">Rectified Flow Euler · shift 12.0 (official video)</option>
+                            <option value="6" selected>Rectified Flow Euler · shift 6.0</option>
+							<option value="4.5">Rectified Flow Euler · shift 4.5</option>
+                            <option value="3">Rectified Flow Euler · shift 3.0 (still image)</option>
+                            <option value="1.7">Rectified Flow Euler · shift 1.7 (= matches training)</option>
+                            <option value="1">Rectified Flow Euler · shift 1.0 (unshifted)</option>
+                        </select>
+                    </div>
+
+                    <!-- Mismo guardado que Training: durante el entrenamiento se aplica en el siguiente paso -->
+                    <button type="button" class="btn btn-secondary btn-tall btn-full" onclick="saveTrainSettings()" style="margin-top:12px;"
+                            title="Saves the training settings, previews included. While training, they apply on the next step. / Guarda los ajustes de entrenamiento, previews incluidas. Durante el entrenamiento se aplican en el siguiente paso.">
+                        <span class="main-text">Save JSON</span>
+                        <span class="sub-text">Guardar JSON</span>
                     </button>
                 </div>
             </div>
@@ -939,6 +961,8 @@
                     </div>
                 </div>
             </div>
+          </div>
+         </div>
         </div>
 
         <!-- Right Column: Terminal, Dataset Manager & Previews -->
@@ -952,7 +976,7 @@
 
             <!-- Dataset Manager -->
             <div>
-                <div class="panel-title" style="cursor:default;">
+                <div class="panel-title ds-title" style="cursor:default;">
                     <span>Dataset Manager / Gestor (<span id="ds-count">0</span> img, <span id="ds-txt-count">0</span> txt)</span>
                     <div class="ds-toolbar">
                         <input type="text" class="ds-search" id="ds-search" placeholder="Search / Buscar..." oninput="filterDatasetGrid()">
@@ -1126,21 +1150,6 @@
         let userRequestedStop = false;
         let lastExecutedStep = 0;
         let totalTargetSteps = 0;
-
-        // Plegado de subsecciones dentro de un panel (las previews). Es igual que
-        // togglePanel pero sobre .subsection, para que plegar las previews no
-        // pliegue el panel entero que las contiene.
-        // Collapses a subsection inside a panel (the previews). Same as
-        // togglePanel but scoped to .subsection, so folding the previews does not
-        // fold the whole panel around them.
-        function toggleSection(headerEl) {
-            const section = headerEl.closest('.subsection');
-            section.classList.toggle('collapsed');
-            const icon = headerEl.querySelector('.toggle-icon');
-            if (icon) {
-                icon.innerText = section.classList.contains('collapsed') ? '▼' : '▲';
-            }
-        }
 
         function togglePanel(headerEl) {
             const panel = headerEl.closest('.panel');
@@ -2576,7 +2585,7 @@
         // the only settings file which is not a script's input contract:
         // pre_cache_settings and train_settings are READ BY Python, and a UI key
         // in those would be junk handed to a script.
-        const PANELES = ['pnl_hf', 'pnl_precache', 'pnl_train', 'pnl_export', 'pnl_refmod'];
+        const PANELES = ['pnl_hf', 'pnl_precache', 'pnl_train', 'pnl_preview', 'pnl_export', 'pnl_refmod'];
 
         function estadoPaneles() {
             const out = {};
