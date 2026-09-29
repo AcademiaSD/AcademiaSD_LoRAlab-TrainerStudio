@@ -518,6 +518,10 @@
                             <input type="text" id="export_models_dir" value="" placeholder="C:/ComfyUI/models/loras">
                             <button type="button" class="btn btn-secondary btn-sm" onclick="browseFolderNative('export')">Browse / Explorar</button>
                         </div>
+                        <button type="button" class="btn btn-secondary btn-sm btn-full" onclick="saveExportPath()" style="margin-top:6px;"
+                                title="Saves this folder for all the LoRAlab trainers: they all open with it filled in. / Guarda esta carpeta para todos los entrenadores del LoRAlab: todos se abren con ella rellenada.">
+                            Save Path / Guardar Ruta
+                        </button>
                     </div>
 
                     <button type="button" class="btn btn-warning btn-tall btn-full" onclick="sendToModels()" style="margin-top:5px;">
@@ -1220,6 +1224,24 @@
             } catch (e) {}
         }
 
+        async function saveExportPath() {
+            try {
+                const res = await fetch('/api/save-export-settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ export_models_dir: document.getElementById('export_models_dir').value.trim() })
+                });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    alert('✓ LoRA folder saved for every trainer / Carpeta de LoRAs guardada para todos los entrenadores!');
+                } else {
+                    alert(`[!] Error: ${data.error}`);
+                }
+            } catch (e) {
+                alert(`[!] Network Error / Error de red: ${e}`);
+            }
+        }
+
         async function saveHfToken() {
             const token = document.getElementById('hf_token').value.trim();
             try {
@@ -1677,6 +1699,7 @@
                 await loadHfToken();
                 const res = await fetch('/api/settings');
                 const data = await res.json();
+                if (data.export && data.export.export_models_dir) document.getElementById('export_models_dir').value = data.export.export_models_dir;
                 if (data.pre_cache) {
                     const p = data.pre_cache;
                     if (p.project_name) document.getElementById('project_name').value = p.project_name;
@@ -1735,7 +1758,6 @@
 
                     if (t.use_turbo !== undefined) document.getElementById('train_use_turbo').checked = t.use_turbo;
                     if (t.turbo_lora_strength !== undefined) document.getElementById('train_turbo_strength').value = t.turbo_lora_strength;
-                    if (t.export_models_dir) document.getElementById('export_models_dir').value = t.export_models_dir;
                     if (t.export_final_name) document.getElementById('export_final_name').value = t.export_final_name;
                 }
                 updateProjectPaths();
@@ -1834,7 +1856,6 @@
 
                     if (data.use_turbo !== undefined) document.getElementById('train_use_turbo').checked = data.use_turbo;
                     if (data.turbo_lora_strength !== undefined) document.getElementById('train_turbo_strength').value = data.turbo_lora_strength;
-                    if (data.export_models_dir !== undefined) document.getElementById('export_models_dir').value = data.export_models_dir;
                     if (data.export_final_name !== undefined) document.getElementById('export_final_name').value = data.export_final_name;
 
                     updateProjectPaths();
@@ -1969,7 +1990,6 @@
                 turbo_lora_strength: parseFloat(document.getElementById('train_turbo_strength').value),
                 use_filter_bypass: false,
                 filter_bypass_strength: 0.01,
-                export_models_dir: document.getElementById('export_models_dir').value,
                 export_final_name: document.getElementById('export_final_name').value
             };
             const res = await fetch('/api/save-train', { method: 'POST', body: JSON.stringify(trainData) });

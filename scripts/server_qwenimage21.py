@@ -81,6 +81,7 @@ PRECACHE_CONFIG = SETTINGS_DIR / "pre_cache_settings_qwenimage21.json"
 PREVIEW_KEYS = ("lora_type", "preview_custom_prompt", "preview_edit_image")
 TRAIN_CONFIG = SETTINGS_DIR / "train_settings_qwenimage21.json"
 HF_TOKEN_CONFIG = SETTINGS_DIR / "HF_token.json"
+EXPORT_CONFIG = SETTINGS_DIR / "export_settings.json"  # compartido / shared by every trainer
 CAPTION_CONFIG = SETTINGS_DIR / "caption_settings_qwenimage21.json"
 
 DATASET_EXTS = (".png", ".jpg", ".jpeg", ".webp")
@@ -209,6 +210,18 @@ def save_hf_token():
         token = req.get("token", "").strip()
         write_json_file(HF_TOKEN_CONFIG, {"token": token})
         return jsonify({"status": "ok", "file": HF_TOKEN_CONFIG.name})
+    except Exception as exc:
+        return jsonify({"status": "error", "error": str(exc)}), 500
+
+
+# Carpeta de exportación: un único fichero para todos los entrenadores.
+# Export folder: one file shared by every trainer.
+@app.route("/api/save-export-settings", methods=["POST"])
+def save_export_settings():
+    try:
+        req = request.get_json(force=True) or {}
+        write_json_file(EXPORT_CONFIG, {"export_models_dir": str(req.get("export_models_dir", "")).strip()})
+        return jsonify({"status": "ok", "file": EXPORT_CONFIG.name})
     except Exception as exc:
         return jsonify({"status": "error", "error": str(exc)}), 500
 
@@ -504,6 +517,7 @@ def get_settings():
     return jsonify({
         "pre_cache": read_json_file(PRECACHE_CONFIG, {}),
         "train": read_json_file(TRAIN_CONFIG, {}),
+        "export": read_json_file(EXPORT_CONFIG, {}),
         "base_dir": str(BASE_DIR)
     })
 
