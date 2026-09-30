@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-launcher.py — Lanzador común de AcademiaSD LoRAlab Trainer
-Common launcher for AcademiaSD LoRAlab Trainer
+launcher.py — Lanzador común de AcademiaSD LoRAlab Trainer Studio
+Common launcher for AcademiaSD LoRAlab Trainer Studio
 
 Sirve GUI/launcher.html en http://127.0.0.1:4990. Los entrenadores salen de GUI/launcher.json:
 al pulsar uno se abre su code/Run_LoRAlab-*.bat en una ventana nueva, que arranca su servidor
@@ -81,7 +81,7 @@ if __name__ == "__main__":
     except Exception:
         pass
     print("=" * 70)
-    print("  ACADEMIASD — LORALAB TRAINER LAUNCHER")
+    print("  ACADEMIASD — LORALAB TRAINER STUDIO LAUNCHER")
     print("=" * 70)
     print(f"  URL : http://127.0.0.1:{PORT}")
     print("  Cierra esta ventana para cerrar el lanzador / Close this window to close the launcher.")

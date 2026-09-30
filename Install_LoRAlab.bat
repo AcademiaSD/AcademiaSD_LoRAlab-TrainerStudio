@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 
-title Instalador Venv AcademiaSD LoRAlab Trainer - NVIDIA / AcademiaSD LoRAlab Trainer Venv Installer - NVIDIA
+title Instalador Venv AcademiaSD LoRAlab Trainer Studio - NVIDIA / AcademiaSD LoRAlab Trainer Studio Venv Installer - NVIDIA
 
 :: ========================================================
 :: CONFIGURACION / CONFIGURATION
@@ -12,7 +12,7 @@ set "PYTHON_INSTALLER=%BASE_DIR%python-3.13.1-amd64.exe"
 set "PYTHON_EXE="
 
 echo ========================================================
-echo   INSTALADOR ACADEMIASD LORALAB TRAINER / ACADEMIASD LORALAB TRAINER INSTALLER
+echo   INSTALADOR ACADEMIASD LORALAB TRAINER STUDIO / ACADEMIASD LORALAB TRAINER STUDIO INSTALLER
 echo   Un solo entorno para / One environment for: LTX-2.3, Krea 2, MiniMax-H3, Qwen-Image 2.1
 echo   Entorno Python 3.13.1 + PyTorch CUDA / Python 3.13.1 + PyTorch CUDA Env
 echo   Compatible con GPUs NVIDIA modernas / Compatible with modern NVIDIA GPUs

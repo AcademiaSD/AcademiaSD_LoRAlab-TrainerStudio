@@ -1,6 +1,6 @@
 
 
-> Part of **AcademiaSD LoRAlab Trainer**: install once with `Install_LoRAlab.bat` and open this trainer from `Start_LoRAlab.bat` or `code\Run_LoRAlab-QwenImage21.bat`. / Parte de **AcademiaSD LoRAlab Trainer**: se instala una vez con `Install_LoRAlab.bat` y se abre desde `Start_LoRAlab.bat` o `code\Run_LoRAlab-QwenImage21.bat`.
+> Part of **AcademiaSD LoRAlab Trainer Studio**: install once with `Install_LoRAlab.bat` and open this trainer from `Start_LoRAlab.bat` or `code\Run_LoRAlab-QwenImage21.bat`. / Parte de **AcademiaSD LoRAlab Trainer Studio**: se instala una vez con `Install_LoRAlab.bat` y se abre desde `Start_LoRAlab.bat` o `code\Run_LoRAlab-QwenImage21.bat`.
 
 # AcademiaSD Qwen-Image 2.1 LoRAlab
 

@@ -1,4 +1,4 @@
-# AcademiaSD LoRAlab Trainer
+# AcademiaSD LoRAlab Trainer Studio
 
 All the AcademiaSD LoRAlabs in one folder, with **one shared Python environment** and **one launcher**.
 Todos los LoRAlab de AcademiaSD en una sola carpeta, con **un solo entorno de Python** y **un solo lanzador**.
@@ -16,7 +16,7 @@ Todos los LoRAlab de AcademiaSD en una sola carpeta, con **un solo entorno de Py
 
 1. Clone the repository / Clona el repositorio:
    ```bash
-   git clone https://github.com/AcademiaSD/AcademiaSD_LoRAlab-Trainer.git
+   git clone https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio.git
    ```
 2. Double-click `Install_LoRAlab.bat`. It creates one `venv` for every LoRAlab (Python 3.13 + PyTorch CUDA 13.0 + Diffusers from GitHub).
    Doble clic en `Install_LoRAlab.bat`. Crea un único `venv` para todos los LoRAlab.
@@ -41,7 +41,7 @@ Añade una entrada a `GUI/launcher.json`. El lanzador coloca las tarjetas solo; 
 ## 📁 Structure / Estructura
 
 ```text
-AcademiaSD_LoRAlab-Trainer/
+AcademiaSD_LoRAlab-TrainerStudio/
 ├── Start_LoRAlab.bat                # Launcher / Lanzador
 ├── Update_LoRAlab.bat               # Updater / Actualizador
 ├── Install_LoRAlab.bat, Install_Triton&SageAtten220.bat

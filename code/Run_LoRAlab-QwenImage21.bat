@@ -1,13 +1,13 @@
 @echo off
 setlocal EnableExtensions
-title AcademiaSD - Qwen-Image 2.1 LoRAlab Trainer
+title AcademiaSD LoRAlab Trainer Studio - Qwen-Image 2.1
 cd /d "%~dp0.."
 set "BASE_DIR=%CD%\"
 set "PYTHON_EXE=%BASE_DIR%venv\Scripts\python.exe"
 
 echo.
 echo ================================================================
-echo        ACADEMIASD - QWEN-IMAGE 2.1 LORALAB TRAINER
+echo        ACADEMIASD LORALAB TRAINER STUDIO - QWEN-IMAGE 2.1
 echo ================================================================
 echo.
 

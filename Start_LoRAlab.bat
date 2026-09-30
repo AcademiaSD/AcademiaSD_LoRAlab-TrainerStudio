@@ -1,6 +1,6 @@
 @echo off
 setlocal EnableExtensions
-title AcademiaSD - LoRAlab Trainer Launcher
+title AcademiaSD - LoRAlab Trainer Studio Launcher
 cd /d "%~dp0"
 set "PYTHON_EXE=%~dp0venv\Scripts\python.exe"
 

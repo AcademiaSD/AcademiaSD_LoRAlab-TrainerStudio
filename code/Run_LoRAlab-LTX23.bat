@@ -1,13 +1,13 @@
 @echo off
 setlocal EnableExtensions
-title AcademiaSD - LTX-2.3 LoRAlab Trainer
+title AcademiaSD LoRAlab Trainer Studio - LTX-2.3
 cd /d "%~dp0.."
 set "BASE_DIR=%CD%\"
 set "PYTHON_EXE=%BASE_DIR%venv\Scripts\python.exe"
 
 echo.
 echo ================================================================
-echo        ACADEMIASD - LTX-2.3 LORALAB TRAINER
+echo        ACADEMIASD LORALAB TRAINER STUDIO - LTX-2.3
 echo ================================================================
 echo.
 
