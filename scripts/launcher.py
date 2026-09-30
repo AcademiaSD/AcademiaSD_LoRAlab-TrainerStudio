@@ -5,7 +5,10 @@ Common launcher for AcademiaSD LoRAlab Trainer Studio
 
 Sirve GUI/launcher.html en http://127.0.0.1:4990. Los entrenadores salen de GUI/launcher.json:
 al pulsar uno se abre su code/Run_LoRAlab-*.bat en una ventana nueva, que arranca su servidor
-en http://127.0.0.1:5000. Para añadir un LoRAlab basta con una entrada más en GUI/launcher.json.
+en http://127.0.0.1:5000. Para añadir un LoRAlab basta con una entrada más en GUI/launcher.json
+(id, name, description, image, run). Las tarjetas se colocan solas: hasta 3 en una fila y, a partir
+de ahí, dos filas con la sobrante arriba (4 -> 2+2, 5 -> 3+2, 6 -> 3+3). image_scale fija el tamaño
+de la portada (0.2 = 20 %) y rows fuerza el número de filas.
 """
 import json
 import logging

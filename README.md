@@ -1,5 +1,9 @@
 # AcademiaSD LoRAlab Trainer Studio
 
+<p align="center">
+  <img src="assets/portada_LoRAlab.png" alt="AcademiaSD LoRAlab Trainer Studio" width="480">
+</p>
+
 All the AcademiaSD LoRAlabs in one folder, with **one shared Python environment** and **one launcher**.
 Todos los LoRAlab de AcademiaSD en una sola carpeta, con **un solo entorno de Python** y **un solo lanzador**.
 
@@ -32,11 +36,6 @@ Each model is downloaded from Hugging Face the first time you use its LoRAlab. /
 - Only one trainer can be open at a time (they all use port 5000). / Solo puede haber un entrenador abierto a la vez (todos usan el puerto 5000).
 - Each trainer can also be opened directly with its `code\Run_LoRAlab-<Model>.bat`. / También se abre cada uno directamente con su `code\Run_LoRAlab-<Modelo>.bat`.
 - `Update_LoRAlab.bat` updates everything from GitHub. Your models, projects and settings are kept. / Actualiza todo desde GitHub; tus modelos, proyectos y ajustes se conservan.
-
-## ➕ Adding a LoRAlab / Añadir un LoRAlab
-
-Add an entry to `GUI/launcher.json` (`id`, `name`, `description`, `image`, `run`). The launcher places the cards by itself: up to 3 in one row, then two rows with the extra one on top (4 → 2+2, 5 → 3+2, 6 → 3+3). `image_scale` sets the cover size (0.2 = 20 %) and `rows` can force the number of rows.
-Añade una entrada a `GUI/launcher.json`. El lanzador coloca las tarjetas solo; `image_scale` fija el tamaño de la portada y `rows` fuerza el número de filas.
 
 ## 📁 Structure / Estructura
 
