@@ -28,7 +28,8 @@
 
         header { text-align: center; }
         header img { display: block; margin: 0 auto; width: min(560px, 90vw); height: auto; border-radius: 12px;
-                     box-shadow: 0 0 28px rgba(99, 102, 241, 0.35); }
+                     box-shadow: 0 0 28px rgba(99, 102, 241, 0.35); transition: box-shadow 0.2s ease; }
+        header a:hover img { box-shadow: 0 0 0 1px var(--glow), 0 0 34px rgba(56, 189, 248, 0.6); }
         header p { margin-top: 6px; color: var(--text-muted); font-size: 0.95rem; }
 
         .grid { display: flex; flex-direction: column; align-items: center; gap: 28px; }
@@ -78,7 +79,9 @@
 </head>
 <body>
     <header>
-        <img id="title" src="/assets/banner_LoRAlab.png" alt="AcademiaSD LoRAlab Trainer Studio">
+        <a href="https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio" target="_blank" title="GitHub">
+            <img id="title" src="/assets/banner_LoRAlab.png" alt="AcademiaSD LoRAlab Trainer Studio">
+        </a>
         <p id="subtitle"></p>
     </header>
 

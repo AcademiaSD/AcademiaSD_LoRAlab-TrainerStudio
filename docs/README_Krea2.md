@@ -1,6 +1,6 @@
 
 
-> Part of **AcademiaSD LoRAlab Trainer Studio**: install once with `Install_LoRAlab.bat` and open this trainer from `Start_LoRAlab.bat` or `code\Run_LoRAlab-Krea2.bat`. / Parte de **AcademiaSD LoRAlab Trainer Studio**: se instala una vez con `Install_LoRAlab.bat` y se abre desde `Start_LoRAlab.bat` o `code\Run_LoRAlab-Krea2.bat`.
+> Part of **AcademiaSD LoRAlab Trainer Studio**: install once with `Install_LoRAlab-TrainerStudio.bat` and open this trainer from `Start_LoRAlab-TrainerStudio.bat` or `code\Run_LoRAlab-Krea2.bat`. / Parte de **AcademiaSD LoRAlab Trainer Studio**: se instala una vez con `Install_LoRAlab-TrainerStudio.bat` y se abre desde `Start_LoRAlab-TrainerStudio.bat` o `code\Run_LoRAlab-Krea2.bat`.
 
 # AcademiaSD Krea2 LoRAlab Beta v0.93
 

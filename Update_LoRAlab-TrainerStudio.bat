@@ -21,6 +21,8 @@ if %errorlevel% neq 0 (
     echo.
     echo [EN] Please install Git from https://git-scm.com/
     echo [ES] Por favor instala Git desde https://git-scm.com/
+    echo [EN] Or run Install_LoRAlab-TrainerStudio.bat, which installs it.
+    echo [ES] O ejecuta Install_LoRAlab-TrainerStudio.bat, que lo instala.
     echo.
     pause
     exit /b 1

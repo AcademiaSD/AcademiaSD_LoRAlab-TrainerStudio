@@ -3,6 +3,7 @@ venv/
 __pycache__/
 *.pyc
 python-3.13.1-amd64.exe
+Git-64-bit-installer.exe
 
 # Modelos / Models
 Krea-2-NF4/

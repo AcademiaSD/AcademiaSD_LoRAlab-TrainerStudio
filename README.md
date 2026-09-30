@@ -22,8 +22,8 @@ Todos los LoRAlab de AcademiaSD en una sola carpeta, con **un solo entorno de Py
    ```bash
    git clone https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio.git
    ```
-2. Double-click `Install_LoRAlab.bat`. It creates one `venv` for every LoRAlab (Python 3.13 + PyTorch CUDA 13.0 + Diffusers from GitHub).
-   Doble clic en `Install_LoRAlab.bat`. Crea un único `venv` para todos los LoRAlab.
+2. Double-click `Install_LoRAlab-TrainerStudio.bat`. It creates one `venv` for every LoRAlab (Python 3.13 + PyTorch CUDA 13.0 + Diffusers from GitHub).
+   Doble clic en `Install_LoRAlab-TrainerStudio.bat`. Crea un único `venv` para todos los LoRAlab.
 3. (Optional / Opcional) `Install_Triton&SageAtten220.bat` for SageAttention 2.2.
 4. MiniMax-H3 reads video with `ffmpeg`: it must be in the `PATH`. / MiniMax-H3 lee vídeo con `ffmpeg`: tiene que estar en el `PATH`.
 
@@ -31,28 +31,28 @@ Each model is downloaded from Hugging Face the first time you use its LoRAlab. /
 
 ## 🚀 Usage / Uso
 
-- `Start_LoRAlab.bat` opens the launcher at `http://127.0.0.1:4990`. Click a trainer to open it; its window and its web interface (`http://127.0.0.1:5000`) open on their own.
-  `Start_LoRAlab.bat` abre el lanzador. Pulsa un entrenador para abrirlo; se abren su ventana y su interfaz web.
+- `Start_LoRAlab-TrainerStudio.bat` opens the launcher at `http://127.0.0.1:4990`. Click a trainer to open it; its window and its web interface (`http://127.0.0.1:5000`) open on their own.
+  `Start_LoRAlab-TrainerStudio.bat` abre el lanzador. Pulsa un entrenador para abrirlo; se abren su ventana y su interfaz web.
 - Only one trainer can be open at a time (they all use port 5000). / Solo puede haber un entrenador abierto a la vez (todos usan el puerto 5000).
 - Each trainer can also be opened directly with its `code\Run_LoRAlab-<Model>.bat`. / También se abre cada uno directamente con su `code\Run_LoRAlab-<Modelo>.bat`.
-- `Update_LoRAlab.bat` updates everything from GitHub. Your models, projects and settings are kept. / Actualiza todo desde GitHub; tus modelos, proyectos y ajustes se conservan.
+- `Update_LoRAlab-TrainerStudio.bat` updates everything from GitHub. Your models, projects and settings are kept. / Actualiza todo desde GitHub; tus modelos, proyectos y ajustes se conservan.
 
 ## 📁 Structure / Estructura
 
 ```text
 AcademiaSD_LoRAlab-TrainerStudio/
-├── Start_LoRAlab.bat                # Launcher / Lanzador
-├── Update_LoRAlab.bat               # Updater / Actualizador
-├── Install_LoRAlab.bat, Install_Triton&SageAtten220.bat
+├── Start_LoRAlab-TrainerStudio.bat   # Launcher / Lanzador
+├── Update_LoRAlab-TrainerStudio.bat  # Updater / Actualizador
+├── Install_LoRAlab-TrainerStudio.bat, Install_Triton&SageAtten220.bat
 ├── README.md, LICENSE
-├── code/                            # Run_LoRAlab-<Model>.bat
-├── scripts/                         # launcher.py, server_<model>.py, 0_caption / 1_pre_cache / 2_train_lora, refmod.py, melband/
-├── GUI/                             # launcher.html, launcher.json, trainer_ui_<model>.html
-├── docs/                            # README_<Model>.md
-├── assets/<model>/                  # Covers and logos / Portadas y logos
-├── tools/<model>/                   # NF4 converters / Conversores NF4
-├── Example_Dataset/                 # MiniMax-H3
-└── settings/                        # Your settings and HF token (created on first use) / Tus ajustes y token de HF (se crea al usarlo)
+├── code/                             # Run_LoRAlab-<Model>.bat
+├── scripts/                          # launcher.py, server_<model>.py, 0_caption / 1_pre_cache / 2_train_lora, refmod.py, melband/
+├── GUI/                              # launcher.html, launcher.json, trainer_ui_<model>.html
+├── docs/                             # README_<Model>.md
+├── assets/<model>/                   # Covers and logos / Portadas y logos
+├── tools/<model>/                    # NF4 converters / Conversores NF4
+├── Example_Dataset/                  # MiniMax-H3
+└── settings/                         # Your settings and HF token (created on first use) / Tus ajustes y token de HF (se crea al usarlo)
 ```
 
 ---

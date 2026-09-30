@@ -10,6 +10,7 @@ title Instalador Venv AcademiaSD LoRAlab Trainer Studio - NVIDIA / AcademiaSD Lo
 set "BASE_DIR=%~dp0"
 set "PYTHON_INSTALLER=%BASE_DIR%python-3.13.1-amd64.exe"
 set "PYTHON_EXE="
+set "GIT_INSTALLER=%BASE_DIR%Git-64-bit-installer.exe"
 
 echo ========================================================
 echo   INSTALADOR ACADEMIASD LORALAB TRAINER STUDIO / ACADEMIASD LORALAB TRAINER STUDIO INSTALLER
@@ -22,7 +23,48 @@ echo Carpeta del instalador / Installer folder:
 echo %BASE_DIR%
 echo.
 
-echo [1/8] Comprobando Python 3.13 / Checking Python 3.13...
+echo [1/9] Comprobando Git / Checking Git...
+
+:: Git solo lo usa Update_LoRAlab-TrainerStudio.bat: si falla, se avisa y la instalacion sigue.
+:: Git is only used by Update_LoRAlab-TrainerStudio.bat: if it fails, warn and keep installing.
+where git >nul 2>&1
+if not errorlevel 1 goto GIT_OK
+if exist "%ProgramFiles%\Git\cmd\git.exe" (
+    set "PATH=%ProgramFiles%\Git\cmd;%PATH%"
+    goto GIT_OK
+)
+
+echo Git no esta instalado. Se descargara e instalara (Windows pedira permiso).
+echo Git is not installed. It will be downloaded and installed (Windows will ask for permission).
+echo.
+powershell -NoProfile -Command "$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $r=Invoke-RestMethod 'https://api.github.com/repos/git-for-windows/git/releases/latest'; $a=$r.assets | Where-Object { $_.name -match '^Git-[0-9.]+-64-bit\.exe$' } | Select-Object -First 1; Invoke-WebRequest -Uri $a.browser_download_url -OutFile '%GIT_INSTALLER%'"
+if not exist "%GIT_INSTALLER%" goto GIT_FAILED
+
+echo Instalando Git... / Installing Git...
+"%GIT_INSTALLER%" /VERYSILENT /NORESTART /NOCANCEL /SP- /SUPPRESSMSGBOXES
+del "%GIT_INSTALLER%" >nul 2>&1
+if exist "%ProgramFiles%\Git\cmd\git.exe" (
+    set "PATH=%ProgramFiles%\Git\cmd;%PATH%"
+    goto GIT_OK
+)
+
+:GIT_FAILED
+echo.
+echo [AVISO] No se pudo instalar Git. El entrenador funciona igual, pero para actualizar
+echo         instalalo a mano desde https://git-scm.com/download/win
+echo [WARNING] Git could not be installed. The trainer works anyway, but to update it
+echo           install Git by hand from https://git-scm.com/download/win
+echo.
+goto GIT_DONE
+
+:GIT_OK
+echo [OK] Git disponible / Git available.
+git --version
+
+:GIT_DONE
+echo.
+
+echo [2/9] Comprobando Python 3.13 / Checking Python 3.13...
 
 where python >nul 2>&1
 if errorlevel 1 goto FIND_LOCAL_PYTHON
@@ -219,7 +261,7 @@ echo [OK] Python 3.13 compatible detectado / Compatible Python 3.13 detected.
 :: ========================================================
 
 echo.
-echo [2/8] Comprobando modulo venv... / Checking venv module...
+echo [3/9] Comprobando modulo venv... / Checking venv module...
 
 "%PYTHON_EXE%" -m venv --help >nul 2>&1
 
@@ -238,13 +280,13 @@ echo [OK] Modulo venv disponible / venv module available.
 :: ========================================================
 
 echo.
-echo [3/8] Comprobando compatibilidad NVIDIA... / Checking NVIDIA compatibility...
+echo [4/9] Comprobando compatibilidad NVIDIA... / Checking NVIDIA compatibility...
 echo La deteccion de la GPU se realizara despues de instalar PyTorch / GPU detection will occur after PyTorch installation.
 echo.
 echo [OK] Continuando con la instalacion / Continuing installation.
 
 echo.
-echo [4/8] Preparando entorno virtual limpio... / Preparing clean virtual environment...
+echo [5/9] Preparando entorno virtual limpio... / Preparing clean virtual environment...
 
 if exist "%BASE_DIR%venv" (
     echo.
@@ -280,7 +322,7 @@ if errorlevel 1 (
 :: ========================================================
 
 echo.
-echo [5/8] Activando entorno virtual... / Activating virtual environment...
+echo [6/9] Activando entorno virtual... / Activating virtual environment...
 
 call "%BASE_DIR%venv\Scripts\activate.bat"
 
@@ -304,7 +346,7 @@ echo %VENV_PYTHON%
 :: ========================================================
 
 echo.
-echo [6/8] Actualizando pip, setuptools y wheel... / Upgrading pip, setuptools, and wheel...
+echo [7/9] Actualizando pip, setuptools y wheel... / Upgrading pip, setuptools, and wheel...
 
 "%VENV_PYTHON%" -m pip install --upgrade pip setuptools wheel
 
@@ -320,7 +362,7 @@ if errorlevel 1 (
 :: ========================================================
 
 echo.
-echo [7/8] Instalando PyTorch con soporte CUDA... / Installing PyTorch with CUDA support...
+echo [8/9] Instalando PyTorch con soporte CUDA... / Installing PyTorch with CUDA support...
 echo.
 echo ========================================================
 echo   IMPORTANTE / IMPORTANT
@@ -388,7 +430,7 @@ if errorlevel 1 (
 :: ========================================================
 
 echo.
-echo [8/8] Verificando instalacion completa... / Verifying installation...
+echo [9/9] Verificando instalacion completa... / Verifying installation...
 echo.
 
 :: --------------------------------------------------------
@@ -611,8 +653,8 @@ echo Version Hugging Face Hub / Hugging Face Hub version:
 echo.
 echo ========================================================
 echo.
-echo El entorno esta listo. Abre los entrenadores con Start_LoRAlab.bat
-echo Environment is ready. Open the trainers with Start_LoRAlab.bat
+echo El entorno esta listo. Abre los entrenadores con Start_LoRAlab-TrainerStudio.bat
+echo Environment is ready. Open the trainers with Start_LoRAlab-TrainerStudio.bat
 echo.
 pause
 

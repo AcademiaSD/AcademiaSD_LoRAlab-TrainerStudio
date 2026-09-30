@@ -8,7 +8,7 @@ if not exist "%PYTHON_EXE%" (
     echo [ERROR] No se ha encontrado el entorno virtual / Virtual environment not found:
     echo   %PYTHON_EXE%
     echo.
-    echo Ejecuta primero Install_LoRAlab.bat / Run Install_LoRAlab.bat first.
+    echo Ejecuta primero Install_LoRAlab-TrainerStudio.bat / Run Install_LoRAlab-TrainerStudio.bat first.
     echo.
     pause
     exit /b 1

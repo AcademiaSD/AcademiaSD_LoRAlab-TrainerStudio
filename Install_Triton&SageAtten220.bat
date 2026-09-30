@@ -16,7 +16,7 @@ echo.
 if not exist "%PYTHON_EXE%" (
     color 0C
     echo [ERROR] %PYTHON_EXE% not found.
-    echo Run Install_LoRAlab.bat first.
+    echo Run Install_LoRAlab-TrainerStudio.bat first.
     pause
     exit /b
 )
