@@ -4,58 +4,241 @@
   <img src="assets/portada_LoRAlab.png" alt="AcademiaSD LoRAlab Trainer Studio" width="480">
 </p>
 
-All the AcademiaSD LoRAlabs in one folder, with **one shared Python environment** and **one launcher**.
-Todos los LoRAlab de AcademiaSD en una sola carpeta, con **un solo entorno de Python** y **un solo lanzador**.
+<p align="center">
+  <b>Train LoRAs for the latest image and video models on consumer NVIDIA GPUs — from 8 GB of VRAM.<br>
+  One installation, one Python environment, one launcher. Every trainer in one place.</b>
+</p>
 
-| LoRAlab | Trains / Entrena | Guide / Guía |
+<p align="center">
+  <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-blue.svg" alt="Windows">
+  <img src="https://img.shields.io/badge/GPU-NVIDIA%20RTX%2020xx%2B-green.svg" alt="NVIDIA">
+  <img src="https://img.shields.io/badge/Python-3.13-blue.svg" alt="Python">
+  <img src="https://img.shields.io/badge/PyTorch-2.14%20cu130-orange.svg" alt="PyTorch">
+  <img src="https://img.shields.io/badge/UI-Flask%20%2B%20HTML5-purple.svg" alt="Web UI">
+</p>
+
+**AcademiaSD LoRAlab Trainer Studio** brings together all the AcademiaSD LoRAlab trainers. Each model is loaded in **4-bit NF4**, the text encoder and the VAE run only once in a **pre-cache** stage, and 100 % of the GPU goes to training. Every trainer has the same web interface: dataset manager with an automatic captioner, live previews, exact-step resume and one-click export to ComfyUI.
+
+New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings them to your existing installation, next to your models and projects — no new repository, no new environment.
+
+| Trainer | Trains | Minimum VRAM |
 | :--- | :--- | :--- |
-| LTX-2.3 (also LTX-2.5 / también LTX-2.5) | Video LoRAs / LoRAs de vídeo | [README_LTX23.md](docs/README_LTX23.md) |
-| Krea 2 | Image LoRAs / LoRAs de imagen | [README_Krea2.md](docs/README_Krea2.md) |
-| MiniMax-H3 | Video and audio LoRAs / LoRAs de vídeo y audio | [README_MiniMaxH3.md](docs/README_MiniMaxH3.md) |
-| Qwen-Image 2.1 | Image and edit LoRAs / LoRAs de imagen y edición | [README_QwenImage21.md](docs/README_QwenImage21.md) |
+| **Qwen-Image 2.1** | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) | 8 GB |
+| **Krea 2** | Image LoRAs (characters, objects, styles) for Krea 2 Raw and Turbo | 8 GB |
+| **LTX-2.3** (also LTX-2.5) | Character and style LoRAs for the LTX video model, trained from images | 12 GB |
+| **MiniMax-H3** | Video LoRAs from images, clips and audio, plus training-free **RefMods** | 8 GB |
 
 ---
 
-## 📦 Installation / Instalación
+## 🇪🇸 Guía rápida en español
 
-1. Clone the repository / Clona el repositorio:
-   ```bash
-   git clone https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio.git
-   ```
-2. Double-click `Install_LoRAlab-TrainerStudio.bat`. It creates one `venv` for every LoRAlab (Python 3.13 + PyTorch CUDA 13.0 + Diffusers from GitHub).
-   Doble clic en `Install_LoRAlab-TrainerStudio.bat`. Crea un único `venv` para todos los LoRAlab.
-3. (Optional / Opcional) `Install_Triton&SageAtten220.bat` for SageAttention 2.2.
-4. MiniMax-H3 reads video with `ffmpeg`: it must be in the `PATH`. / MiniMax-H3 lee vídeo con `ffmpeg`: tiene que estar en el `PATH`.
+1. **Instalar:** en la carpeta donde quieras instalarlo, escribe `cmd` en la barra de direcciones del explorador y ejecuta
+   `git clone https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio.git`
+   (o descarga el ZIP desde el botón verde **Code → Download ZIP** y descomprímelo). Después, doble clic en **`Install_LoRAlab-TrainerStudio.bat`**: instala Git si no lo tienes, Python 3.13.1 y un único entorno `venv` para todos los entrenadores.
+2. **Abrir:** doble clic en **`Start_LoRAlab-TrainerStudio.bat`** y pulsa la tarjeta del entrenador que quieras. Solo puede haber uno abierto a la vez.
+3. **Entrenar:** nombre del proyecto → carpeta del dataset → *Crear Captions* (opcional) → *Iniciar Pre-Caché* → *Iniciar / Reanudar* → *Send to Models*. El modelo se descarga solo la primera vez.
+4. **Actualizar:** doble clic en **`Update_LoRAlab-TrainerStudio.bat`**. Se conservan tus modelos, proyectos y ajustes, y los nuevos entrenadores aparecen en el lanzador.
+5. **Requisitos:** Windows 10/11, GPU NVIDIA **RTX 20xx / GTX 16xx o posterior** con driver **580 o superior**, 8 GB de VRAM (12 GB para LTX-2.3) y 16 GB de RAM (32 GB recomendados).
 
-Each model is downloaded from Hugging Face the first time you use its LoRAlab. / Cada modelo se descarga de Hugging Face la primera vez que usas su LoRAlab.
+Toda la interfaz y los mensajes de consola están en inglés y en español.
 
-## 🚀 Usage / Uso
+---
 
-- `Start_LoRAlab-TrainerStudio.bat` opens the launcher at `http://127.0.0.1:4990`. Click a trainer to open it; its window and its web interface (`http://127.0.0.1:5000`) open on their own.
-  `Start_LoRAlab-TrainerStudio.bat` abre el lanzador. Pulsa un entrenador para abrirlo; se abren su ventana y su interfaz web.
-- Only one trainer can be open at a time (they all use port 5000). / Solo puede haber un entrenador abierto a la vez (todos usan el puerto 5000).
-- Each trainer can also be opened directly with its `code\Run_LoRAlab-<Model>.bat`. / También se abre cada uno directamente con su `code\Run_LoRAlab-<Modelo>.bat`.
-- `Update_LoRAlab-TrainerStudio.bat` updates everything from GitHub. Your models, projects and settings are kept. / Actualiza todo desde GitHub; tus modelos, proyectos y ajustes se conservan.
+## 📉 Smaller downloads
 
-## 📁 Structure / Estructura
+Each trainer downloads **only what it uses**, already quantized. The table compares the official full-precision model, what the previous standalone LoRAlab downloaded, and what Trainer Studio downloads now (sizes from the Hugging Face repositories, in GB):
+
+| Trainer | Official model | LoRAlab before | **Trainer Studio now** | What changed |
+| :--- | ---: | ---: | ---: | :--- |
+| **Krea 2** | 62.0 | 43.2 | **17.0** | The BF16 transformer (26.3 GB) is no longer downloaded or used: the model is built directly from its NF4 weights. |
+| **LTX-2.3** | 101.3 | 111.1 | **32.2** | The BF16 transformer (38.0 GB) and the FP32 Gemma 3 text encoder (48.8 GB) are replaced by NF4 versions (9.8 GB + 7.8 GB). |
+| **Qwen-Image 2.1** | ~32 (BF16) | 21.9 | **21.9 / 14.4 / 11.0** | Only the text encoder you pick is downloaded: BF16 (exact, default) / INT8 / NF4. |
+| **MiniMax-H3** | 498.5 | 41.4 | **41.4** | The 33B model ships in NF4 from the start. |
+
+The automatic captioner adds, only the first time you use it: **nothing** for Krea 2 (it uses Krea 2's own text encoder), **5.5 GB** for Qwen-Image 2.1 when its text encoder is not already the NF4 one and for LTX-2.3 (Qwen3-VL-8B NF4), and **8.9 GB** for MiniMax-H3 (Qwen3-VL-4B).
+
+> **Upgrading from an old standalone LoRAlab?** Copy its model folder into Trainer Studio instead of downloading it again. Then you can delete what is no longer used: `Krea-2-NF4/transformer` (~26 GB) and, in `LTX23-NF4`, the `transformer` (~38 GB) and `text_encoder` (~49 GB) folders.
+
+---
+
+## 🖥️ Requirements
+
+| | Minimum | Recommended |
+| :--- | :--- | :--- |
+| **OS** | Windows 10 / 11 | Windows 11 |
+| **GPU** | NVIDIA **RTX 20xx / GTX 16xx or newer** (compute capability 7.5+) with **8 GB VRAM** (12 GB for LTX-2.3) | 12–24 GB VRAM |
+| **Driver** | NVIDIA **580 or newer** (CUDA 13) | Latest |
+| **RAM** | 16 GB | 32 GB |
+| **Disk** | The model of each trainer you use (table above) plus your datasets and caches | SSD |
+| **Other** | Internet the first time each model is used. MiniMax-H3 video clips need **`ffmpeg`** in the `PATH`. | |
+
+Python, Git and every library are installed by the installer. GTX 10xx and older cards are **not** supported: PyTorch for CUDA 13 starts at the RTX 20xx generation.
+
+---
+
+## 📦 Installation
+
+**Option A — Git (recommended, makes updating easy).** Open the folder where you want to install it, type `cmd` in the address bar of the Windows Explorer, press Enter and run:
+
+```bash
+git clone https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio.git
+```
+
+**Option B — ZIP.** Press the green **Code** button → **Download ZIP** and unzip it where you want to install it (the folder is called `AcademiaSD_LoRAlab-TrainerStudio-main`).
+
+Then, inside the folder:
+
+1. Double-click **`Install_LoRAlab-TrainerStudio.bat`**. It installs Git if it is missing (Windows asks for permission), Python 3.13.1 if it is missing, and one `venv` shared by every trainer: PyTorch 2.14 (CUDA 13.0), Diffusers from GitHub, Transformers, PEFT, bitsandbytes, Flask and the rest. It takes a while; at the end it shows the detected GPU and versions.
+2. *(Optional)* Double-click **`Install_Triton&SageAtten220.bat`** for Triton and SageAttention 2.2.
+
+Pick a disk with plenty of free space: every model is downloaded into this folder.
+
+## 🔄 Updating
+
+Double-click **`Update_LoRAlab-TrainerStudio.bat`**. It brings the latest version from GitHub — including any new trainer — and keeps your models, datasets, projects, LoRAs and settings, which are never part of the repository. If the installation was made from the ZIP, the updater turns it into a Git installation the first time.
+
+---
+
+## 🚀 Using it
+
+**`Start_LoRAlab-TrainerStudio.bat`** opens the launcher in your browser (`http://127.0.0.1:4990`). Click a trainer: its console window and its web interface (`http://127.0.0.1:5000`) open on their own. All trainers use port 5000, so only one can be open at a time; the launcher warns you if one is already running. Each trainer can also be started directly with its `code\Run_LoRAlab-<Model>.bat`.
+
+Every trainer follows the same five steps:
+
+1. **Project and dataset.** Type a project name, an optional trigger word, and pick the dataset folder with **Browse**. Each image needs a `.txt` caption with the same name.
+2. **Captions** *(optional)*. **Create Captions** writes a caption for every image with a vision-language model, trigger word first. The prompt is editable and **Overwrite** off only fills the missing ones. Review them in the **Dataset Manager**: click an image to edit its caption, use **Append / Replace / Remove** to change a common text in every caption, delete images, or clear all captions.
+3. **Pre-Cache.** Choose the resolution and press **Start Pre-Cache**. The text encoder and the VAE run once and their output is stored on disk; the first time, the model is downloaded. Running it again skips the images that did not change.
+4. **Train.** Set steps, learning rate, rank and alpha, and press **Start / Resume**. Watch the progress, VRAM, RAM and GPU temperature, and the previews (each trainer has its own previews panel). **Stop Training** saves the exact step: press **Start / Resume** again — even days later — to continue without losing a step. To train longer, raise the steps and press it again.
+5. **Export.** Type the final name, pick your ComfyUI / Forge / A1111 `models/loras` folder and press **Save Path** — the folder is remembered for **every** trainer — then **🚀 Send to Models**.
+
+Also in every trainer:
+
+- **Live settings:** while training, change steps, save/preview frequency, preview settings or learning rate and press **Save JSON**; the change applies on the next step.
+- **Delete Pre-Cache / Delete Training** empty the current project's folders (the dataset is never touched).
+- Exported LoRAs carry kohya-style metadata (trigger word, rank, steps, resolution) that CivitAI and LoRA managers read.
+- Optional **Hugging Face token** for faster downloads. Your settings and token are stored in `settings\`, which is never uploaded.
+- Each project uses its own folders: `cached_data_<model>_<project>` for the pre-cache and `<model>_lora_output_<project>` for checkpoints, previews and LoRAs.
+
+---
+
+## 🧪 The trainers
+
+All times were measured on an RTX 5080 16 GB.
+
+### Qwen-Image 2.1 — image and edit LoRAs
+
+- **Normal LoRAs** (characters, objects, styles): one image + one caption each.
+- **Edit LoRAs**: pairs named `name_before.png` / `name_after.png` plus the instruction in `name.txt` (for example `make it TOSTIOK style`). Choose **LoRA Type → Edit**. The "before" image goes through the text encoder with the instruction, like the ComfyUI `TextEncodeQwenImage21` node, and the loss is computed only on the "after".
+- **Captioner:** Qwen3-VL-8B, the model's own text encoder in NF4 (~6 GB VRAM, ~11 s per image), with **Normal** and **Edit** modes. For a style or effect, one common instruction in every pair usually works better than one per pair.
+- **Text encoder for the pre-cache:** BF16 with CPU offload (exact, any GPU, default), BF16 (16 GB+ VRAM), INT8 (~9 % error, 10 GB+) or NF4 (~24 % error, 6 GB+). With 8 GB of VRAM and 16 GB of RAM, choose NF4.
+- **Previews:** 30 steps / CFG 3, or **Turbo** (Viggle Turbo LoRA, 4 steps / CFG 1: ~5 s instead of ~34 s). For edit LoRAs, pick a **before** image that is **not** in the dataset: it is the only way to see whether the effect generalizes.
+- **LoRA Targets:** *Blocks* (attention + MLP of the 32 blocks, default) combines cleanly with the Turbo LoRA; *All* also trains the shared modulation and input/output layers.
+
+| Verified starting point | Characters | Edits |
+| :--- | :--- | :--- |
+| Resolution | 512×512 | 512×512 |
+| Rank / Alpha | 8 / 8 | 8 / 8 |
+| Learning rate | 4e-4 | 4e-4 |
+| Steps | 500 (~9 min 20 s) | 300 with 30 pairs (~9 min) |
+
+8 GB cards train at 512² and 768² (previews switch to a tiled VAE decode at 768²). 768²: ~2.2 s/step, ~8.4 GB VRAM; 1024²: ~4.3 s/step.
+
+### Krea 2 — image LoRAs for Krea 2 Raw and Turbo
+
+- The 12B transformer is built directly from its **NF4** weights (no BF16 copy is ever downloaded or loaded): ~7.5 GB of VRAM while training.
+- **Captioner:** Qwen3-VL-4B, Krea 2's own text encoder (NF4, ~3.5 GB VRAM, no extra download).
+- **Previews** with the Krea 2 Turbo LoRA (8 steps). A new custom preview prompt is encoded on the CPU without stopping the training.
+- 8-bit AdamW, gradient checkpointing, Krea 2's own noise-shift schedule.
+- The exported LoRA works with Krea 2 Raw and Krea 2 Turbo and carries its alpha, so ComfyUI applies it at the same strength as the previews.
+
+| Starting point | |
+| :--- | :--- |
+| Resolution | 512×512 (768×768 / 1024×1024 need more steps and VRAM) |
+| Rank / Alpha | 16 / 32 |
+| Learning rate | 3e-4 |
+| Steps | 500–1000 at 512² (~1,500 at 768², ~2,000 at 1024²) |
+| Time | 500 steps, 14 images, 512²: ~15 min (RTX 3060 12 GB: ~1 h 30 min) |
+
+### LTX-2.3 — character and style LoRAs for the LTX video model
+
+- Works with **LTX-2.3 and LTX-2.5**.
+- Trains from **images** (single frames) to teach a character or a style to the video model.
+- The 22B transformer and the Gemma 3 text encoder come pre-quantized in NF4; the BF16 / FP32 originals are never downloaded (see the table above).
+- **Captioner:** Qwen3-VL-8B NF4 (~5.5 GB VRAM, ~13 s per image).
+- Paged 8-bit AdamW and gradient checkpointing.
+
+| Default starting point | |
+| :--- | :--- |
+| Resolution | 768×768 (448 / 576 / 512 for less VRAM) |
+| Rank / Alpha | 32 / 32 |
+| Learning rate | 1e-4 |
+| Steps | 800 |
+
+### MiniMax-H3 — video, audio and RefMods
+
+MiniMax-H3 is a 33B model that generates **video and audio together**. The official checkpoint is 498.5 GB; this trainer uses a 41 GB NF4 version and fits in 8 GB of VRAM with **block swap**.
+
+- **Datasets:** images, video clips (`.mp4`, `.mov`, `.mkv`, `.webm`), audio (`.wav`, `.mp3`, `.flac`, `.m4a`) or a mix, each with its `.txt`. Images teach appearance; clips teach how something **changes over time**.
+- **Prepare clips:** one button leaves every clip at **24 fps** with a valid **17n+5** frame count, stretching time slightly instead of cutting the end. Originals are kept in `_originals\`.
+- **Captioner:** Qwen3-VL-4B (4-bit, ~4.2 GB VRAM, ~6 s per image), with one prompt per content type (image, video, audio).
+- **VRAM profiles** for 32 / 24 / 16 / 12 / 10 / 8 GB cards size the block swap to your resolution and captions; choosing a smaller card than yours simulates it. Parked blocks can live in RAM, on disk (for 16 GB of RAM) or switch automatically.
+- **RefMod:** encodes a few reference stills or clips into a file that ComfyUI's `MiniMaxH3ReferenceToVideo` node uses as a native reference. No training: seconds instead of hours.
+- **Audio** as part of video clips trains well. **Audio-only training is still experimental:** past a point it degrades the video branch.
+- fp32 LoRA and optimizer (8-bit optimizers lose the fine facial detail on this model), deterministic sampling across resumes, and a full log in `train_log.txt`.
+
+| Verified starting point | Images | Video clips |
+| :--- | :--- | :--- |
+| Resolution | 576×576 | 192×192, 124 frames |
+| Rank / Alpha | 16 / 16 | 8 / 8 |
+| Learning rate | 2e-4 | 2e-4 |
+| Steps | 600 (~37 min on 16 GB) | 600 (~1 h 10 min on 16 GB) |
+
+Rank 16 matters for characters: with rank 8 the likeness is just as good, but the model starts ignoring the prompt (ask for a beach, get a bedroom). On an 8 GB card the same image run takes ~80 minutes instead of 37.
+
+---
+
+## 📚 Technical notes
+
+Detailed measurements and the reasoning behind each design decision are in `docs\`: [Qwen-Image 2.1](docs/README_QwenImage21.md) · [Krea 2](docs/README_Krea2.md) · [LTX-2.3](docs/README_LTX23.md) · [MiniMax-H3](docs/README_MiniMaxH3.md) (VRAM tables, block swap, video and audio datasets, RefMods and every setting).
+
+## 🛠️ Tools for advanced users
+
+`tools\` contains the scripts used to build the NF4 models from the originals (`Run_Conversor_Krea2.bat`, `Run_Conversor_LTX23.bat`, `5_conversor_QwenImage21_NF4.py`) and a `.parquet` dataset extractor for Qwen-Image 2.1 (`6_extract_parquet.py`). They are not needed to train: the trainers download the ready-made NF4 models.
+
+## 📁 Structure
 
 ```text
 AcademiaSD_LoRAlab-TrainerStudio/
-├── Start_LoRAlab-TrainerStudio.bat   # Launcher / Lanzador
-├── Update_LoRAlab-TrainerStudio.bat  # Updater / Actualizador
+├── Start_LoRAlab-TrainerStudio.bat   # Launcher
+├── Update_LoRAlab-TrainerStudio.bat  # Updater
 ├── Install_LoRAlab-TrainerStudio.bat, Install_Triton&SageAtten220.bat
-├── README.md, LICENSE
 ├── code/                             # Run_LoRAlab-<Model>.bat
 ├── scripts/                          # launcher.py, server_<model>.py, 0_caption / 1_pre_cache / 2_train_lora, refmod.py, melband/
 ├── GUI/                              # launcher.html, launcher.json, trainer_ui_<model>.html
-├── docs/                             # README_<Model>.md
-├── assets/<model>/                   # Covers and logos / Portadas y logos
-├── tools/<model>/                    # NF4 converters / Conversores NF4
-├── Example_Dataset/                  # MiniMax-H3
-└── settings/                         # Your settings and HF token (created on first use) / Tus ajustes y token de HF (se crea al usarlo)
+├── docs/                             # Technical notes per trainer
+├── assets/                           # Covers and logos
+├── tools/<model>/                    # NF4 converters and dataset tools
+├── Example_Dataset/                  # Small example dataset (MiniMax-H3)
+└── settings/                         # Your settings and HF token (created on first use, never uploaded)
 ```
 
+Models (`Krea-2-NF4`, `LTX23-NF4`, `MiniMax-H3-NF4`, `Qwen-Image21-NF4`, captioners), caches and LoRA outputs are created next to these folders on first use.
+
 ---
+
+## 📜 Licenses
+
+The code is released under the **MIT License**. The models keep their own licenses, which also apply to the NF4 versions and to the LoRAs you train — check them before using or sharing results:
+
+| Model | License |
+| :--- | :--- |
+| Qwen-Image 2.1 (and the Viggle Turbo LoRA) | Qwen Research License — non-commercial |
+| Krea 2 | Krea 2 Community License |
+| LTX-2.3 | LTX-2 Open-Source License |
+| MiniMax-H3 | MiniMax-H3 Community License Agreement |
+| Qwen3-VL-4B (MiniMax-H3 captioner) | Apache 2.0 |
+
+Built with PyTorch, Diffusers, Transformers, PEFT, bitsandbytes, Flask and the Hugging Face Hub.
 
 ## 💬 Community & Support
 
@@ -64,4 +247,4 @@ AcademiaSD_LoRAlab-TrainerStudio/
 - 💬 **Discord**: [discord.gg/Syuaduy678](https://discord.gg/Syuaduy678)
 - ☕ **Ko-Fi**: [ko-fi.com/academiasd](https://ko-fi.com/academiasd)
 
-Developed with ❤️ by **AcademiaSD**. MIT License.
+Developed with ❤️ by **AcademiaSD**.

@@ -1,8 +1,8 @@
 
 
-> Part of **AcademiaSD LoRAlab Trainer Studio**: install once with `Install_LoRAlab-TrainerStudio.bat` and open this trainer from `Start_LoRAlab-TrainerStudio.bat` or `code\Run_LoRAlab-QwenImage21.bat`. / Parte de **AcademiaSD LoRAlab Trainer Studio**: se instala una vez con `Install_LoRAlab-TrainerStudio.bat` y se abre desde `Start_LoRAlab-TrainerStudio.bat` o `code\Run_LoRAlab-QwenImage21.bat`.
+> **Technical notes** for the Qwen-Image 2.1 trainer of **AcademiaSD LoRAlab Trainer Studio**. Installation, updating and everyday use are in the [main README](../README.md).
 
-# AcademiaSD Qwen-Image 2.1 LoRAlab
+# Qwen-Image 2.1 trainer — technical notes
 
 ![AcademiaSD_LoRAlab-Qwen_Image21](../assets/qwenimage21/portada.jpg)
 
@@ -69,14 +69,6 @@ All measurements below were taken on an **RTX 5080 (16 GB)**.
 | Metadata tags (`ss_*` kohya convention, trigger word for CivitAI) | ✅ Verified |
 | One-click "Send to Models" | ✅ Verified |
 
-### Install & update
-| Feature | Status |
-| :--- | :--- |
-| `Install_LoRAlab-Qwen_Image21.bat` (Python 3.13 venv, PyTorch cu130, diffusers from GitHub) | ✅ Verified |
-| `Run_LoRAlab-Qwen_Image21.bat` | ✅ Verified |
-| Automatic model download from Hugging Face | ✅ Verified |
-| `Update_LoRAlab-Qwen_Image21.bat` | ✅ Verified |
-
 ---
 
 ## 🔬 How it works
@@ -96,55 +88,6 @@ All measurements below were taken on an **RTX 5080 (16 GB)**.
 | **GPU** | NVIDIA, **8 GB VRAM minimum** ✅ verified | Developed on an RTX 5080 16 GB |
 | **RAM** | **16 GB minimum** (measured) | Training +4 GB, captioner +3 GB. Pre-Cache with 8 GB VRAM: NF4 text encoder +3 GB; the default BF16 needs ~12 GB free (32 GB RAM recommended). INT8 needs ≥ 10 GB VRAM. |
 | **Python** | 3.13 (inside `venv`) | Installed automatically if missing |
-
-Qwen-Image 2.1 needs `transformers>=5.17` and diffusers from GitHub, so this project uses its own virtual environment.
-
----
-
-## 📦 Installation
-
-1. Clone or download the repository.
-2. Run `Install_LoRAlab-Qwen_Image21.bat`.
-3. (Optional) Run `Install_Triton&SageAtten220.bat`.
-
----
-
-## ⚡ Usage
-
-1. Run `Run_LoRAlab-Qwen_Image21.bat` and open `http://127.0.0.1:5000`.
-2. **Dataset**: pick the folder. For edit LoRAs, name the pairs `name_before.png` / `name_after.png` and write the instruction in `name.txt`.
-3. **Captions** (optional): Create Captions in Normal or Edit mode, then review them in the Dataset Manager.
-4. **Pre-Cache**: choose resolution and text encoder, then Start Pre-Cache.
-5. **Train**: Start / Resume. Settings can be changed while training with Save JSON.
-6. **Export**: Send to Models, or copy the `.safetensors` from the output folder.
-
-### Starting point that worked
-| | Characters | Edits |
-| :--- | :--- | :--- |
-| Resolution | 512×512 | 512×512 |
-| Rank / Alpha | 8 / 8 | 8 / 8 |
-| LR | 4e-4 | 4e-4 |
-| Steps | 500 | 300 |
-| LoRA Targets | Blocks | Blocks |
-
----
-
-## 📁 Project Structure
-
-```text
-AcademiaSD_LoRAlab-Qwen_Image21/
-├── 0_caption_qwen_image21.py        # Auto-captioner (Normal / Edit)
-├── 1_pre_cache_qwen_image21.py      # Text embeddings + VAE latents
-├── 2_train_lora_qwen_image21.py     # NF4 LoRA training
-├── 5_conversor_QwenImage21_NF4.py   # Builds the NF4 model folder from the original
-├── 6_extract_parquet.py             # Extracts datasets from .parquet files
-├── server.py                        # Flask backend
-├── trainer_ui.html                  # Web GUI
-├── Install_LoRAlab-Qwen_Image21.bat
-├── Install_Triton&SageAtten220.bat
-├── Run_LoRAlab-Qwen_Image21.bat
-└── Update_LoRAlab-Qwen_Image21.bat
-```
 
 ---
 

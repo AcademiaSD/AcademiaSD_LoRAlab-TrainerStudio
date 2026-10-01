@@ -1,8 +1,8 @@
 
 
-> Part of **AcademiaSD LoRAlab Trainer Studio**: install once with `Install_LoRAlab-TrainerStudio.bat` and open this trainer from `Start_LoRAlab-TrainerStudio.bat` or `code\Run_LoRAlab-Krea2.bat`. / Parte de **AcademiaSD LoRAlab Trainer Studio**: se instala una vez con `Install_LoRAlab-TrainerStudio.bat` y se abre desde `Start_LoRAlab-TrainerStudio.bat` o `code\Run_LoRAlab-Krea2.bat`.
+> **Technical notes** for the Krea 2 trainer of **AcademiaSD LoRAlab Trainer Studio**. Installation, updating and everyday use are in the [main README](../README.md).
 
-# AcademiaSD Krea2 LoRAlab Beta v0.93
+# Krea 2 trainer — technical notes
 
 ![AcademiaSD_LoRAlab-Krea2](../assets/krea2/portada.jpg)
 
@@ -11,8 +11,8 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python Version">
-  <img src="https://img.shields.io/badge/PyTorch-2.0%2B-orange.svg" alt="PyTorch">
+  <img src="https://img.shields.io/badge/Python-3.13-blue.svg" alt="Python Version">
+  <img src="https://img.shields.io/badge/PyTorch-2.14%20cu130-orange.svg" alt="PyTorch">
   <img src="https://img.shields.io/badge/CUDA-NVIDIA-green.svg" alt="CUDA">
   <img src="https://img.shields.io/badge/UI-Flask%20%2B%20HTML5-purple.svg" alt="Web UI">
 </p>
@@ -67,13 +67,12 @@ Here is the exact architectural breakdown of how this is achieved:
 ## ✨ Features
 
 - **🌐 Modern Web GUI**: Control pre-caching, dataset editing, training, checkpointing, and model export from a sleek single-page web app powered by Flask.
-- **🚀 1-Click Auto Launch**: Double-click `Run_LoRAlab-Krea2.bat` to automatically launch the server and open `http://127.0.0.1:5000` in your default browser.
-- **🖼️ Fast previews with Turbo Lora.
+- **🖼️ Fast previews** with the Krea 2 Turbo LoRA.
 - **📊 Real-Time Hardware Telemetry**:
   - System **RAM** usage.
   - Physical **GPU VRAM** usage (via `nvidia-smi` / `torch`).
   - **GPU Temperature (°C)** with dynamic color coding (Green <70°C, Orange 70–79°C, Red >80°C).
-- **🔑 Hugging Face Token Support**: Optional HF token management (`HF_token.json`) for faster model downloads with live progress bars (MBs, transfer speed, ETA).
+- **🔑 Hugging Face Token Support**: Optional HF token (stored in `settings\HF_token.json`) for faster model downloads with live progress bars (MBs, transfer speed, ETA).
 - **✍️ Auto-Captions**: **Create Captions** writes one `.txt` per image with Qwen3-VL-4B, the Krea-2 text encoder itself (NF4, ~3.5 GB VRAM, no extra download), with the trigger word first. The prompt is editable and **Overwrite** off only fills the missing captions.
 - **🖼️ Dataset Manager & Inline Caption Editor**:
   - Visual grid with status badges (🟢 **Green** = Caption present, 🔴 **Red** = Missing caption), resizable by dragging.
@@ -86,91 +85,6 @@ Here is the exact architectural breakdown of how this is achieved:
 - **📂 Automatic Project Folder Management**: Dynamically routes cache and outputs to `./cached_data_krea2_<project>` and `./krea2_lora_output_<project>` based on your project name.
 - **🚀 One-Click WebUI Export ("Send to Models")**: Export the best `.safetensors` LoRA directly to your preferred WebUI folder (ComfyUI, Forge, Automatic1111).
 - **🌐 Fully Bilingual (English / Español)**: All buttons, console logs, dialogs, and progress bars display labels in both English and Spanish.
-
----
-
-## 🖥️ System Requirements
-
-| Requirement | Minimum | Recommended |
-| :--- | :--- | :--- |
-| **OS** | Windows 10/11 or Linux | Windows 11 / Ubuntu 22.04 |
-For Linux and Mac, please consult: https://github.com/xd43vild69/AcademiaSD_LoRAlab-Krea2
-| **GPU** | NVIDIA GPU with **8 GB VRAM** | NVIDIA GPU with **12 GB–24 GB VRAM** |
-| **Python** | Python 3.10+ (inside `venv`) | Python 3.10 / 3.11 |
-| **CUDA Toolkit** | CUDA 11.8 or 12.1+ | CUDA 12.1+ |
-
----
-
-## 📦 Installation
-
-1. **Clone or download the repository**:
-   ```bash
-   git clone https://github.com/AcademiaSD/AcademiaSD_LoRAlab-Krea2.git
-   cd AcademiaSD_LoRAlab-Krea2
-   ```
-
-2. **Install virtual environment & dependencies**:
-   Double-click `Install_LoRAlab-Krea2.bat` to automatically set up the Python virtual environment (`venv`) and install all required core libraries.
-
-3. **(Optional) Install Triton & SageAttention 2.2**:
-   Double-click `Install_Triton&SageAtten220.bat` to install Triton and SageAttention 2.2 for enhanced attention speedup and memory optimization.
-
-4. **Update the application**:
-   You can check for and apply updates at any time by running `Update_LoRAlab-Krea2.bat`.
-
-> **Updating from v0.76:** the trainer now loads only the NF4 transformer. The first training downloads `Krea-2-NF4/others.safetensors` (4 MB) and you can delete the old BF16 folder `Krea-2-NF4/transformer` (~25 GB). LoRAs exported now include alpha: with alpha ≠ rank they look stronger in ComfyUI than the ones exported before, and match the previews.
-
----
-
-## ⚡ Usage Guide
-
-### 1. Launch the Application
-Simply double-click the launcher:
-```cmd
-Run_LoRAlab-Krea2.bat
-```
-The server will start, and your web browser will automatically open `http://127.0.0.1:5000`.
-
-### 2. Captions (optional)
-1. Enter a **Project Name** (e.g., `cherry2`) and a **Trigger Word**.
-2. Select your image folder using the native Windows file requester (**Browse / Explorar**).
-3. In the Dataset Manager, click **Create Captions / Crear Captions** and review them before pre-caching.
-
-### 3. Pre-Cache Dataset
-1. Set your target resolution (e.g., `768x768`) and **Multiple** (`8`, `16`, `32`, or `64`).
-2. Click **Start Pre-Cache / Iniciar Pre-Caché**. Running it again only re-encodes the texts; unchanged images are skipped.
-
-### 4. Train LoRA
-1. Configure **Total Steps** (e.g., `1200`), **Learning Rate** (e.g., `0.0003`), **LoRA Rank/Alpha**, and **Save Every**.
-2. Click **Start / Resume**.
-3. You can stop training at any time by clicking **Stop Training**; exact step state will be saved automatically for seamless resuming.
-
-### 5. Export to ComfyUI / WebUI
-1. Enter your preferred **Final LoRA Filename** (e.g., `my_character.safetensors`).
-2. Select your ComfyUI / Forge / A1111 `models/loras` directory using **Browse / Explorar**.
-3. Click **🚀 Send to Models**.
-
----
-
-## 📁 Project Structure
-
-```text
-AcademiaSD_Krea2_LoRAlab/
-├── assets/
-│   ├── banner.png             # Web GUI top header banner
-│   └── logo.png               # Logo & browser favicon
-├── 0_caption_krea2.py          # Dataset auto-captioning (Qwen3-VL-4B)
-├── 1_pre_cache_krea2.py        # Latent VAE & Text Embedding pre-caching script
-├── 2_train_lora_krea2.py       # DiT 12B NF4 LoRA training script
-├── server.py                   # Flask backend web server
-├── trainer_ui.html             # HTML5 / CSS3 / JS Web GUI
-├── Run_LoRAlab-Krea2.bat       # Windows 1-click launcher
-├── Update_LoRAlab-Krea2.bat    # Updater
-├── pre_cache_settings.json     # Active pre-cache configuration
-├── train_settings.json         # Active training configuration
-├── caption_settings.json       # Auto-caption prompt and options
-└── HF_token.json               # Optional Hugging Face access token
-```
 
 ---
 

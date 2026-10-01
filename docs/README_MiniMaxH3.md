@@ -1,6 +1,6 @@
-# AcademiaSD LoRAlab-MiniMax-H3 Beta v0.98
+# MiniMax-H3 trainer — technical notes
 
-> Part of **AcademiaSD LoRAlab Trainer Studio**: install once with `Install_LoRAlab-TrainerStudio.bat` and open this trainer from `Start_LoRAlab-TrainerStudio.bat` or `code\Run_LoRAlab-MiniMaxH3.bat`. / Parte de **AcademiaSD LoRAlab Trainer Studio**: se instala una vez con `Install_LoRAlab-TrainerStudio.bat` y se abre desde `Start_LoRAlab-TrainerStudio.bat` o `code\Run_LoRAlab-MiniMaxH3.bat`.
+> **Technical notes** for the MiniMax-H3 trainer of **AcademiaSD LoRAlab Trainer Studio**. Installation, updating and everyday use are in the [main README](../README.md).
 
 
 ![AcademiaSD LoRAlab MiniMax-H3](../assets/minimaxh3/portada.jpg)
@@ -10,8 +10,8 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python Version">
-  <img src="https://img.shields.io/badge/PyTorch-2.0%2B-orange.svg" alt="PyTorch">
+  <img src="https://img.shields.io/badge/Python-3.13-blue.svg" alt="Python Version">
+  <img src="https://img.shields.io/badge/PyTorch-2.14%20cu130-orange.svg" alt="PyTorch">
   <img src="https://img.shields.io/badge/CUDA-NVIDIA-green.svg" alt="CUDA">
   <img src="https://img.shields.io/badge/UI-Flask%20%2B%20HTML5-purple.svg" alt="Web UI">
   <img src="https://img.shields.io/badge/Model-MiniMax--H3%2033B-red.svg" alt="MiniMax-H3">
@@ -75,7 +75,6 @@ This trainer takes **images, video clips, or both in the same folder**. Images t
 
 ### Training
 - **🌐 Modern Web GUI** — pre-cache, dataset editing, training, previews, checkpoints and export from a single-page Flask app.
-- **🚀 1-Click launch** — `Run_LoRAlab-MiniMaxH3.bat` starts the server and opens `http://127.0.0.1:5000`.
 - **🎛️ VRAM profiles** — a dropdown with presets for **32, 24, 16, 12, 10 and 8 GB** cards. Every field stays editable by hand; the dropdown switches to *Custom* the moment you type, so it never advertises a preset that does not match your values.
 - **💽 Block swap storage** — parked blocks live in **RAM** (default), on **disk** as a memory-mapped file, or **Auto**, which keeps them in RAM until a system-RAM ceiling you set would be crossed and spills the rest. Disk is not a speed option — it measured the same as RAM — but the memory it uses is evictable, so a machine short on RAM degrades instead of running out. The file is sized to the blocks actually parked and deleted when training ends.
 - **⏱️ Exact-step resume** — stop at any step and continue from it. The checkpoint is written atomically with a strict invariant (weights → optimizer → step file, and the step file only if the first two succeeded), so a kill mid-write can never leave an inconsistent resume point.
@@ -103,7 +102,7 @@ This trainer takes **images, video clips, or both in the same folder**. Images t
 
 ### System
 - **📊 Real-time telemetry** — RAM, VRAM and GPU temperature with colour coding.
-- **🔑 Hugging Face token support** — optional `HF_token.json` for faster downloads with live progress.
+- **🔑 Hugging Face token support** — optional, stored in `settings\HF_token.json`, for faster downloads with live progress.
 - **📂 Automatic project folders** — `./cached_data_minimaxh3_<project>` and `./minimaxh3_lora_output_<project>`.
 - **🚀 One-click export** — send the finished `.safetensors` to your ComfyUI / Forge / A1111 `models/loras` folder.
 - **🌐 Fully bilingual (English / Español)** — every message is `English / Español` on the same line, English first.
@@ -118,8 +117,7 @@ This trainer takes **images, video clips, or both in the same folder**. Images t
 | **GPU** | NVIDIA, **8 GB VRAM** | NVIDIA, **16–24 GB VRAM** |
 | **System RAM** | **16 GB** with disk swap (see below) | **32 GB** |
 | **Disk** | **45 GB** for the NF4 model, **+8 GB** if you use auto-captioning | 60 GB+ |
-| **Python** | 3.10+ (inside `venv`) | 3.11 / 3.13 |
-| **CUDA** | 12.1+ | 12.8 / 13.0 |
+| **Driver** | NVIDIA 580+ (CUDA 13), RTX 20xx or newer | Latest |
 
 ### VRAM profiles
 
@@ -229,31 +227,10 @@ Reference timing: **~3.7 s/it** on an RTX 5080 16 GB at the default 576×576 —
 
 ---
 
-## 📦 Installation
-
-1. **Clone or download the repository**:
-   ```bash
-   git clone https://github.com/AcademiaSD/AcademiaSD_LoRAlab-MiniMaxH3.git
-   cd AcademiaSD_LoRAlab-MiniMaxH3
-   ```
-
-2. **Install the virtual environment and dependencies**:
-   Double-click `Install_LoRAlab-venv-Minimax.bat`.
-
-3. **(Optional) Install Triton & SageAttention 2.2**:
-   Double-click `Install_Triton&SageAtten220.bat`.
-
-4. **The model downloads itself.** On the first pre-cache run, the quantized repo **`AcademiaSD/MiniMax-H3-NF4`** (~39 GB) is fetched automatically into `./MiniMax-H3-NF4`. You do **not** need the 498 GB official checkpoint. Everything — training, previews and the VAE decoder — runs from the quantized repo.
-
----
-
 ## ⚡ Usage Guide
 
 ### 1. Launch
-```cmd
-Run_LoRAlab-MiniMaxH3.bat
-```
-The server starts and your browser opens `http://127.0.0.1:5000`.
+Open `Start_LoRAlab-TrainerStudio.bat` and click **MiniMax-H3** (or run `code\Run_LoRAlab-MiniMaxH3.bat`). The model (`AcademiaSD/MiniMax-H3-NF4`, ~41 GB) downloads itself on the first pre-cache; the 498 GB official checkpoint is never needed.
 
 ### 2. Prepare the dataset
 
@@ -889,44 +866,6 @@ Most settings live in the `DEFAULTS` dictionary at the top of each script, docum
 
 ---
 
-## 📁 Project Structure
-
-```text
-AcademiaSD_LoRAlab-MiniMaxH3/
-├── assets/
-│   ├── portada.jpg                 # Web GUI header banner
-│   ├── audio_solo.png              # Dataset badge: sample carries audio
-│   ├── audio_mute.png              # Dataset badge: sample is mute
-│   └── logo_128.png                # Browser favicon
-├── 0_caption_MiniMaxH3.py          # Auto-captioning with Qwen3-VL-4B (optional)
-├── 1_pre_cache_MiniMaxH3.py        # Text encoder (layer 50) + VAE latent pre-caching
-├── 2_train_lora_MiniMaxH3.py       # 33B NF4 LoRA trainer, block swap, previews, export
-├── refmod.py                       # RefMod extraction (VAEs only, no DiT, no training)
-├── melband/                        # Mel-Band RoFormer vocal separation (vendored model code)
-├── server.py                       # Flask backend
-├── trainer_ui.html                 # Web GUI
-├── Run_LoRAlab-MiniMaxH3.bat       # 1-click launcher
-├── Install_LoRAlab-venv-Minimax.bat
-├── Install_Triton&SageAtten220.bat
-├── caption_settings.json           # Auto-captioning configuration
-├── pre_cache_settings.json         # Active pre-cache configuration
-├── train_settings.json             # Active training configuration
-├── HF_token.json                   # Optional Hugging Face token
-├── MiniMax-H3-NF4/                 # Quantized model (auto-downloaded, ~41 GB; RefMod needs only its 5.8 GB of VAEs)
-├── Qwen3-VL-4B-Instruct/           # Captioning model (auto-downloaded, ~8 GB)
-├── MelBandRoFormer/                # Vocal separation weights (auto-downloaded, ~600 MB, optional)
-├── refmods/                        # RefMods, when no models/refmods folder is given
-├── cached_data_minimaxh3_<project>/
-└── minimaxh3_lora_output_<project>/
-    ├── MiniMaxH3_LoRA_step_<N>.safetensors
-    ├── MiniMaxH3_FINAL_LoRA.safetensors
-    ├── preview_step_<N>.png
-    ├── train_log.txt
-    └── resume_checkpoint/
-```
-
----
-
 ## ⚠️ Beta notes & known limitations
 
 * **Audio-only training is in development and does not work properly yet.** The LoRA lives entirely in the shared transformer blocks — all 416 tensors, none of them touching `audio_proj_in` or `audio_proj_out` — so training audio moves weights the video branch depends on, and on an audio-only dataset that branch gets no gradient of its own. It drifts, and past a point it stops producing anything coherent. The timbre gets there (0.240 spectral distance measured); the crossing arrives first. Anchor clips move the crossing and the section above says how, but nothing removes it, and no learning rate or schedule avoids it — lowering the rate only takes longer to reach the same place. Audio inside a video+audio clip is a different case and behaves well.
@@ -936,7 +875,7 @@ AcademiaSD_LoRAlab-MiniMaxH3/
 * **8 GB is the floor.** For images, even at 448×448 there are 5.90 GB that stay resident no matter how many blocks you swap out. For clips at 192×192 the floor is 6.3 GB. A 6 GB card has nowhere left for the desktop either way, and 4 GB does not fit at any resolution.
 * **The plan sizes blocks, not geometry.** It computes how many blocks fit the clips you have already cached. It will tell you 448×448 at 124 frames does not fit — correctly — but it will not lower the resolution or shorten the clip for you.
 * **Tested with Turbo LoRAs.** The exported LoRAs load and behave correctly in ComfyUI alongside several Turbo LoRAs, with no key clashes or strength interference.
-* **Windows-focused.** The launchers are `.bat` files. The three Python scripts carry no platform-specific code and `server.py` already has POSIX branches, so a Linux port is mostly writing `.sh` files — but note that Linux has **no VRAM-to-RAM overflow**: a budget that merely runs slow on Windows will hard-OOM there, so the profiles would need revalidating.
+* **Windows-focused.** The launchers are `.bat` files. The three Python scripts carry no platform-specific code and `server_minimaxh3.py` already has POSIX branches, so a Linux port is mostly writing `.sh` files — but note that Linux has **no VRAM-to-RAM overflow**: a budget that merely runs slow on Windows will hard-OOM there, so the profiles would need revalidating.
 
 ---
 
@@ -954,5 +893,3 @@ AcademiaSD_LoRAlab-MiniMaxH3/
 Developed with ❤️ by **AcademiaSD**. Built on PyTorch, Diffusers, PEFT, bitsandbytes and Hugging Face Hub.
 
 Model: **MiniMax-H3** by MiniMaxAI. Quantized weights: **AcademiaSD/MiniMax-H3-NF4**.
-
-Sister projects: [LoRAlab-Krea2](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-Krea2) · [LoRAlab-LTX23](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-LTX23)

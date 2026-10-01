@@ -58,7 +58,7 @@ from safetensors.torch import save_file
 # CONFIGURACIÓN
 # ============================================================================
 
-MODEL_ID = r"F:\models\Qwen-Image-2.1"
+MODEL_ID = "./Qwen-Image21-Raw"  # modelo original en formato diffusers
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Qwen-Image21-NF4")
 
 DTYPE = torch.bfloat16

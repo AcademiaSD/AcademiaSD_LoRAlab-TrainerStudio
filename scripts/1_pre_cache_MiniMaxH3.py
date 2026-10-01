@@ -506,7 +506,7 @@ DEFAULTS = {
     "nf4_model_id": "./MiniMax-H3-NF4",
     "dataset_path": "./dataset",
     "cache_dir": "./cached_data_minimaxh3_v3",
-    "target_area": 512 * 512,
+    "target_area": 576 * 576,
     "max_side": 1024,
     "multiple": 32,
     # Tokens de texto por caption. 100 son unas 75 palabras: de sobra para
