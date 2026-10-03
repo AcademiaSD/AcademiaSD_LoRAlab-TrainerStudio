@@ -168,14 +168,16 @@ All times were measured on an RTX 5080 16 GB.
 - **Captioner:** Qwen3-VL-8B NF4, shared with LTX-2.3 (~5.5 GB VRAM, ~10 s per image).
 - **Previews:** 28 steps / CFG 5 (CFG as in ComfyUI: 1 = off), or **Turbo** with Alibaba PAI's **Z-Image-Fun-Lora-Distill** (made for Z-Image base, 4 steps / CFG 1, about 10 times faster; downloaded the first time, ~570 MB). **Preview Size** renders them at the training size or at 768 / 1024 with the same proportions, to see what you will get in ComfyUI even when training at 512 (1024 with Turbo: ~5 s, ~6.4 GB of VRAM).
 - **LoRA Targets:** *Blocks* (attention + MLP of the 30 blocks and the 4 refiners, default) or *All*. ComfyUI loads the exported LoRA directly.
+- **Steps count micro-steps:** with Grad Accum 4 the LoRA is updated once every 4 steps, so 1,500 steps are 375 updates. The likeness shows in the previews much earlier, but a 900-step LoRA still needed a strength of ~2.6 in ComfyUI.
 
 | Verified starting point | |
 | :--- | :--- |
 | Resolution | 512×512 |
 | Rank / Alpha | 8 / 8 |
 | Learning rate | 4e-4 |
-| Steps | 500 (the likeness appears around 300–400 steps) |
-| Time | ~0.9 s/step at 512²: 800 steps, 14 images, preview every 20 steps: ~22 min |
+| Steps | 1,500 (14 images) |
+| Time | ~0.9 s/step at 512²: ~23 min plus previews |
+| LoRA strength in ComfyUI | **Z-Image: 1.0–1.5** · **Z-Image-Turbo: 1.5–2.5** |
 
 ### LTX-2.3 — character and style LoRAs for the LTX video model
 

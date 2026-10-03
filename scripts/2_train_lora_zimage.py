@@ -43,7 +43,7 @@ DEFAULTS = {
     "model_id": "Z-Image_NF4",
     "cache_dir": "./cached_data_zimage",
     "output_dir": "./zimage_lora_output",
-    "total_steps": 500,
+    "total_steps": 1500,
     "batch_size": 1,
     "grad_accum_steps": 4,
     "lr": 4e-4,
