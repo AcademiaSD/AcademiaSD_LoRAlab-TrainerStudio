@@ -15,6 +15,8 @@ import re
 import string
 import logging
 import webbrowser
+
+from console_stream import read_console
 from pathlib import Path
 
 
@@ -775,10 +777,6 @@ def run_script():
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                bufsize=1,
                 creationflags=creation_flags
             )
 
@@ -793,61 +791,8 @@ def run_script():
 
             try:
                 if process.stdout is not None:
-                    buffer = ""
-
-                    while True:
-                        char = process.stdout.read(1)
-
-                        if not char:
-                            if buffer:
-                                yield (
-                                    "data: "
-                                    + json.dumps(
-                                        {
-                                            "type": "output",
-                                            "text": buffer,
-                                            "replace": False
-                                        },
-                                        ensure_ascii=False
-                                    )
-                                    + "\n\n"
-                                )
-                            break
-
-                        if char == "\r":
-                            if buffer:
-                                yield (
-                                    "data: "
-                                    + json.dumps(
-                                        {
-                                            "type": "output",
-                                            "text": buffer,
-                                            "replace": True
-                                        },
-                                        ensure_ascii=False
-                                    )
-                                    + "\n\n"
-                                )
-                                buffer = ""
-
-                        elif char == "\n":
-                            if buffer:
-                                yield (
-                                    "data: "
-                                    + json.dumps(
-                                        {
-                                            "type": "output",
-                                            "text": buffer,
-                                            "replace": False
-                                        },
-                                        ensure_ascii=False
-                                    )
-                                    + "\n\n"
-                                )
-                                buffer = ""
-
-                        else:
-                            buffer += char
+                    for text, replace in read_console(process.stdout):
+                        yield f"data: {json.dumps({'type': 'output', 'text': text, 'replace': replace}, ensure_ascii=False)}\n\n"
 
                 return_code = process.wait()
 

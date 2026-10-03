@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-2_train_lora_qwen_image21.py — Entrenamiento LoRA para Qwen-Image 2.1 (Transformer NF4)
-LoRA training for Qwen-Image 2.1 (NF4 Transformer)
+2_train_lora_zimage.py — Entrenamiento LoRA para Z-Image (Transformer NF4)
+LoRA training for Z-Image (NF4 Transformer)
 
-Lee configuración desde train_settings_qwenimage21.json si existe.
-Reads configuration from train_settings_qwenimage21.json if present.
+Se entrena sobre Z-Image (base, sin destilar). El LoRA también carga en Z-Image-Turbo:
+la arquitectura y los nombres de las capas son los mismos.
+
+Lee configuración desde train_settings_zimage.json si existe.
+Reads configuration from train_settings_zimage.json if present.
 """
 import os
 import gc
@@ -21,8 +24,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from accelerate import init_empty_weights
-from diffusers import AutoencoderKLQwenImage21, FlowMatchEulerDiscreteScheduler, QwenImage21Transformer2DModel
-from diffusers.models.transformers.transformer_qwenimage21 import QwenImage21KVCache
+from diffusers import AutoencoderKL, FlowMatchEulerDiscreteScheduler, ZImageTransformer2DModel
 from peft import LoraConfig, get_peft_model, get_peft_model_state_dict, set_peft_model_state_dict
 from safetensors import safe_open
 from safetensors.torch import save_file, load, load_file
@@ -35,29 +37,31 @@ try:
 except Exception:
     pass
 
-HF_REPO_ID = "AcademiaSD/Qwen-Image-2.1-NF4-for-LoRA-Training"
+HF_REPO_ID = "AcademiaSD/Z-Image-NF4-for-LoRA-Training"
 
 DEFAULTS = {
-    "model_id": "Qwen-Image21-NF4",
-    "cache_dir": "./cached_data_qwen_image21",
-    "output_dir": "./qwen_image21_lora_output",
+    "model_id": "Z-Image_NF4",
+    "cache_dir": "./cached_data_zimage",
+    "output_dir": "./zimage_lora_output",
     "total_steps": 500,
     "batch_size": 1,
     "grad_accum_steps": 4,
     "lr": 4e-4,
     "min_lr_ratio": 0.1,
-    "warmup_steps": 100,
+    "warmup_steps": 50,
     "lora_rank": 8,
     "lora_alpha": 8,
     "lora_targets": "blocks",
     "weight_decay": 0.0,
     "max_grad_norm": 1.0,
-    "save_every": 25,
+    "save_every": 50,
     "seed": 42,
     "timestep_sampling": "shift",
+    "train_shift": 3.0,
     "preview_every": 0,
-    "preview_steps": 30,
-    "preview_cfg": 3.0,
+    "preview_steps": 28,
+    "preview_cfg": 5.0,
+    "preview_size": 0,
     "use_turbo": False,
     "turbo_lora_strength": 1.0,
     "preview_caption_mode": "first",
@@ -66,7 +70,7 @@ DEFAULTS = {
     "trigger_word": "",
 }
 
-CONFIG_PATH = "settings/train_settings_qwenimage21.json"
+CONFIG_PATH = "settings/train_settings_zimage.json"
 
 if os.path.exists(CONFIG_PATH):
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
@@ -91,23 +95,28 @@ MAX_GRAD_NORM     = cfg.get("max_grad_norm",     DEFAULTS["max_grad_norm"])
 SAVE_EVERY        = cfg.get("save_every",        DEFAULTS["save_every"])
 SEED              = cfg.get("seed",              DEFAULTS["seed"])
 TIMESTEP_SAMPLING = cfg.get("timestep_sampling", DEFAULTS["timestep_sampling"])
+TRAIN_SHIFT       = cfg.get("train_shift",       DEFAULTS["train_shift"])
 PREVIEW_EVERY     = cfg.get("preview_every",     DEFAULTS["preview_every"])
 PREVIEW_STEPS     = cfg.get("preview_steps",     DEFAULTS["preview_steps"])
 PREVIEW_CFG       = cfg.get("preview_cfg",       DEFAULTS["preview_cfg"])
+# Lado de la preview en píxeles (área size², proporción de la muestra); 0 = tamaño de entrenamiento.
+PREVIEW_SIZE      = cfg.get("preview_size",      DEFAULTS["preview_size"])
 PREVIEW_CAPTION_MODE  = cfg.get("preview_caption_mode",  DEFAULTS["preview_caption_mode"])
 PREVIEW_CUSTOM_PROMPT = cfg.get("preview_custom_prompt", DEFAULTS["preview_custom_prompt"]).strip()
 
-# Previews rápidas: 4 pasos, sin CFG.
+# Previews rápidas: Z-Image-Fun-Lora-Distill (Alibaba PAI, Apache 2.0), entrenado sobre Z-Image
+# base sin pesos de Turbo. Destila pasos y CFG: 4 pasos sin CFG, ~10 veces más rápido.
 USE_TURBO           = cfg.get("use_turbo",           DEFAULTS["use_turbo"])
 TURBO_LORA_STRENGTH = cfg.get("turbo_lora_strength", DEFAULTS["turbo_lora_strength"])
-TURBO_LORA_PATH     = os.path.join(MODEL_ID, "LoRAs", "Qwen-Image-2.1-viggle-turbo-4step-lora-r64.safetensors")
+TURBO_LORA_REPO     = "alibaba-pai/Z-Image-Fun-Lora-Distill"
+TURBO_LORA_FILE     = "Z-Image-Fun-Lora-Distill-4-Steps-2603-ComfyUI.safetensors"
 
 TRIGGER_WORD      = cfg.get("trigger_word", "")
 PROJECT_NAME      = cfg.get("project_name", "").strip()
 
 if PROJECT_NAME:
-    CACHE_DIR  = f"./cached_data_qwen_image21_{PROJECT_NAME}"
-    OUTPUT_DIR = f"./qwen_image21_lora_output_{PROJECT_NAME}"
+    CACHE_DIR  = f"./cached_data_zimage_{PROJECT_NAME}"
+    OUTPUT_DIR = f"./zimage_lora_output_{PROJECT_NAME}"
 else:
     CACHE_DIR  = cfg.get("cache_dir",  DEFAULTS["cache_dir"])
     OUTPUT_DIR = cfg.get("output_dir", DEFAULTS["output_dir"])
@@ -122,8 +131,9 @@ print(f"  Learning Rate / LR       : {LR}")
 print(f"  LoRA Rank/Alpha          : {LORA_RANK}/{LORA_ALPHA}")
 print(f"  LoRA Targets             : {LORA_TARGETS}")
 print(f"  Batch / Grad Accum       : {BATCH_SIZE}/{GRAD_ACCUM_STEPS}")
+print(f"  Timesteps / Shift        : {TIMESTEP_SAMPLING} / {TRAIN_SHIFT}")
 print(f"  Preview Mode / Prompt    : Mode={PREVIEW_CAPTION_MODE} | Custom='{PREVIEW_CUSTOM_PROMPT}'")
-print(f"  Preview Every / Steps / CFG: {PREVIEW_EVERY} / {PREVIEW_STEPS} / {PREVIEW_CFG}")
+print(f"  Preview Every / Steps / CFG / Size: {PREVIEW_EVERY} / {PREVIEW_STEPS} / {PREVIEW_CFG} / {PREVIEW_SIZE or 'training'}")
 print(f"  Seed Configured / Semilla: {SEED} ({'RANDOM' if SEED <= 0 else 'FIXED'})")
 print(f"  Turbo LoRA Previews      : {'ON (Strength=' + str(TURBO_LORA_STRENGTH) + ')' if USE_TURBO else 'OFF'}")
 
@@ -196,10 +206,7 @@ def ensure_model_downloaded(local_path, repo_id):
 
     enable_hf_file_progress()
 
-    try:
-        from huggingface_hub import snapshot_download
-    except ImportError:
-        raise ImportError("huggingface_hub is required. Install with pip install huggingface_hub")
+    from huggingface_hub import snapshot_download
 
     # El entrenamiento no usa el text encoder: ya está todo en el pre-cache.
     downloaded_path = snapshot_download(
@@ -207,67 +214,32 @@ def ensure_model_downloaded(local_path, repo_id):
         local_dir=local_path,
         token=get_hf_token(),
         max_workers=2,
-        ignore_patterns=["text_encoder_*/*"],
+        ignore_patterns=["text_encoder/*"],
     )
 
     print(f"[OK] Model downloaded to / Modelo descargado en: {downloaded_path}")
     return downloaded_path
 
 
-def calculate_shift(image_seq_len, base_seq_len=256, max_seq_len=8192,
-                    base_shift=0.5, max_shift=0.9):
-    m = (max_shift - base_shift) / (max_seq_len - base_seq_len)
-    b = base_shift - m * base_seq_len
-    return image_seq_len * m + b
-
-
-def sample_sigma(batch_size, image_seq_len, device, shift_cfg):
+def sample_sigma(batch_size, device):
+    # Desplazamiento fijo como el scheduler de Z-Image (que usa 6.0 en inferencia): con 3.0 el
+    # entrenamiento cubre también los niveles de ruido bajos, donde se aprenden caras y detalle.
     if TIMESTEP_SAMPLING == "logit_normal":
         u = torch.sigmoid(torch.randn(batch_size, device=device))
     else:
         u = torch.rand(batch_size, device=device)
-    mu = calculate_shift(image_seq_len, *shift_cfg)
-    e_mu = math.exp(mu)
-    sigma = e_mu / (e_mu + (1.0 / u.clamp(1e-6, 1 - 1e-6) - 1.0))
-    sigma = sigma.clamp(1e-4, 1.0 - 1e-4)
-    # Mismo redondeo que en inferencia: el modelo recibe bf16(t * 1000) / 1000.
-    return (sigma * 1000).to(torch.bfloat16).float() / 1000
+    sigma = TRAIN_SHIFT * u / (1 + (TRAIN_SHIFT - 1) * u)
+    return sigma.clamp(1e-4, 1.0 - 1e-4)
 
 
-def pack_latents(x):
-    # Qwen-Image 2.1 no usa parches: cada latente 16x16 px es un token.
-    B, C, H, W = x.shape
-    return x.view(B, C, H * W).transpose(1, 2)
-
-
-def unpack_latents(x, H, W):
-    B, _, C = x.shape
-    return x.transpose(1, 2).reshape(B, C, H, W)
-
-
-def make_img_mask(sample, H, W, device):
-    # Cada ranura de imagen del text encoder representa un grupo 2x2 de latentes. En edición el
-    # texto ya trae marcadas las ranuras del antes (imgmask); el objetivo va siempre al final.
-    # Con batch > 1 el texto viene rellenado a la derecha: el relleno no son ranuras de imagen.
-    text = torch.zeros(sample["emb"].shape[1], dtype=torch.bool, device=device)
-    if "imgmask" in sample:
-        text[:sample["imgmask"].shape[1]] = sample["imgmask"][0].to(device)
-    return torch.cat([text, torch.ones(H * W // 4, dtype=torch.bool, device=device)]).unsqueeze(0)
-
-
-def model_inputs(sample, latents, H, W, device):
+def predict(model, latents, sigma, embeds):
     """
-    Secuencia de imagen del transformer: en edición el antes va delante, LIMPIO (sin ruido),
-    y el objetivo detrás; img_shapes y la máscara siguen ese orden. La predicción es siempre
-    la del objetivo: los últimos H*W tokens.
+    Z-Image recibe listas: un latente [C, 1, H, W] y un texto [tokens, 2560] por imagen, cada texto
+    con su longitud (el modelo rellena por dentro). El tiempo va al revés que sigma (1 = imagen
+    limpia) y la salida es x0 - ruido, el opuesto de la velocidad que usa el scheduler.
     """
-    if "ctrl" in sample:
-        ctrl = sample["ctrl"].to(device, non_blocking=True)
-        hidden = torch.cat([pack_latents(ctrl).expand(latents.shape[0], -1, -1), latents], dim=1)
-        shapes = [(1, ctrl.shape[2], ctrl.shape[3]), (1, H, W)]
-    else:
-        hidden, shapes = latents, [(1, H, W)]
-    return hidden, [shapes] * latents.shape[0], make_img_mask(sample, H, W, device).expand(latents.shape[0], -1)
+    out = model(x=list(latents.unsqueeze(2).unbind(0)), t=1.0 - sigma, cap_feats=embeds, return_dict=False)[0]
+    return torch.stack(out).squeeze(2)
 
 
 def load_nf4_transformer(model_dir):
@@ -285,7 +257,7 @@ def load_nf4_transformer(model_dir):
         index = json.load(f)
 
     with init_empty_weights():
-        transformer = QwenImage21Transformer2DModel.from_config(QwenImage21Transformer2DModel.load_config(cache_dir))
+        transformer = ZImageTransformer2DModel.from_config(ZImageTransformer2DModel.load_config(cache_dir))
 
     weights_dir = os.path.join(cache_dir, "weights")
 
@@ -296,22 +268,24 @@ def load_nf4_transformer(model_dir):
     for name, info in index["quantized"].items():
         with safe_open(os.path.join(weights_dir, info["file"]), framework="pt", device="cpu") as f:
             weight_data = f.get_tensor("weight")
+            bias = f.get_tensor("bias") if info["bias"] else None
             qs_dict = {k[len("quant_state."):]: f.get_tensor(k) for k in f.keys() if k.startswith("quant_state.")}
 
         weight = Params4bit(weight_data, requires_grad=False, quant_type="nf4", quant_storage=torch.uint8)
         weight.quant_state = QuantState.from_dict(qs_dict, device="cpu")
         weight.bnb_quantized = True
 
-        # En meta: nn.Linear.__init__ reserva y rellena con kaiming una matriz FP32 que se tira
-        # en la línea siguiente. Era casi todo el tiempo de carga (~25 s de ~28 s).
+        # En meta: nn.Linear.__init__ reserva y rellena con kaiming una matriz FP32 que se tira enseguida.
         with torch.device("meta"):
-            layer = Linear4bit(info["in_features"], info["out_features"], bias=False, quant_type="nf4", compute_dtype=torch.bfloat16)
+            layer = Linear4bit(info["in_features"], info["out_features"], bias=info["bias"], quant_type="nf4", compute_dtype=torch.bfloat16)
         layer.weight = weight
+        if bias is not None:
+            layer.bias = torch.nn.Parameter(bias, requires_grad=False)
         set_module(name, layer)
 
     for name, info in index["unquantized"].items():
         with torch.device("meta"):
-            layer = torch.nn.Linear(info["in_features"], info["out_features"], bias=False, dtype=torch.bfloat16)
+            layer = torch.nn.Linear(info["in_features"], info["out_features"], bias=info["bias"], dtype=torch.bfloat16)
         layer.load_state_dict(load_file(os.path.join(weights_dir, info["file"])), assign=True)
         layer.requires_grad_(False)
         set_module(name, layer)
@@ -334,9 +308,9 @@ def build_lora_metadata(step):
     """
     meta = {
         "format": "pt",
-        "trained_with": "AcademiaSD LoRAlab Qwen-Image 2.1",
-        "ss_sd_model_name": "Qwen-Image-2.1",
-        "ss_base_model_version": "Qwen-Image-2.1",
+        "trained_with": "AcademiaSD LoRAlab Z-Image",
+        "ss_sd_model_name": "Z-Image",
+        "ss_base_model_version": "Z-Image",
         "ss_network_module": "peft.LoraModel",
         "ss_network_dim": LORA_RANK,
         "ss_network_alpha": LORA_ALPHA,
@@ -358,7 +332,7 @@ def build_lora_metadata(step):
         meta["ss_tag_frequency"] = json.dumps({"dataset": {trigger: 1}})
     if PROJECT_NAME:
         meta["project_name"] = PROJECT_NAME
-    meta["ss_output_name"] = PROJECT_NAME or trigger or "qwen_image21_lora"
+    meta["ss_output_name"] = PROJECT_NAME or trigger or "zimage_lora"
 
     # La resolución la fija el pre-caché del proyecto.
     pc_json = os.path.join(CACHE_DIR, f"pre_cache_settings_{PROJECT_NAME}.json")
@@ -374,8 +348,8 @@ def build_lora_metadata(step):
 
 
 def _export_lora(model, path, step):
-    # Formato PEFT/diffusers que carga ComfyUI. Se incluye alpha por capa: sin él,
-    # ComfyUI aplicaría el LoRA con escala 1 en lugar de alpha/rank.
+    # Formato PEFT/diffusers que carga ComfyUI (une to_q/to_k/to_v en su qkv). Se incluye alpha
+    # por capa: sin él, ComfyUI aplicaría el LoRA con escala 1 en lugar de alpha/rank.
     clean = {}
     for k, v in get_peft_model_state_dict(model).items():
         k = "transformer." + k.replace("base_model.model.", "")
@@ -390,48 +364,28 @@ class VaeHolder:
     @classmethod
     def get(cls):
         if cls.vae is None:
-            cls.vae = AutoencoderKLQwenImage21.from_pretrained(
-                MODEL_ID, subfolder="vae", dtype=torch.bfloat16)
+            cls.vae = AutoencoderKL.from_pretrained(MODEL_ID, subfolder="vae", dtype=torch.bfloat16)
         return cls.vae
 
 
-def denoise(model, scheduler, sample, H, W, generator, neg=None):
+def denoise(model, scheduler, embed, neg, H, W, generator):
+    # Mismo muestreo que ZImagePipeline: sigmas lineales con el shift del scheduler. El CFG sigue la
+    # convención de ComfyUI (1 = sin guía): pred = neg + cfg * (pos - neg), cond y negativo en la misma pasada.
     device = "cuda"
-    latents = pack_latents(torch.randn((1, 64, H, W), generator=generator, device=device, dtype=torch.bfloat16))
-    embed, mask = sample["emb"].to(device), sample["msk"].to(device)
+    latents = torch.randn((1, 16, H, W), generator=generator, device=device, dtype=torch.float32)
 
     sigmas = np.linspace(1.0, 1.0 / PREVIEW_STEPS, PREVIEW_STEPS)
-    scheduler.set_timesteps(sigmas=sigmas, device=device, mu=calculate_shift(H * W))
+    scheduler.set_timesteps(sigmas=sigmas, device=device)
     scheduler.set_begin_index(0)
 
-    # El prefijo (texto) no depende del paso: se calcula en el primer paso y se reutiliza, como el pipeline oficial.
-    # En edición el antes también es prefijo: se cachea con el texto en el primer paso.
-    conds = [(sample, QwenImage21KVCache(len(model.transformer_blocks)))]
-    # Sin CFG en edición: el negativo tendría que codificarse con la misma imagen de antes.
-    use_cfg = neg is not None and PREVIEW_CFG > 1.0 and "ctrl" not in sample
-    if use_cfg:
-        conds.append(({"emb": neg[0], "msk": neg[1]}, QwenImage21KVCache(len(model.transformer_blocks))))
+    use_cfg = PREVIEW_CFG > 1.0
+    texts = [embed.to(device)] + ([neg.to(device)] if use_cfg else [])
 
-    for i, t in enumerate(scheduler.timesteps):
-        timestep = t.expand(1).to(torch.bfloat16) / 1000
-        preds = []
-        for cond, cache in conds:
-            msk = cond["msk"].to(device)
-            hidden, shapes, img_mask = model_inputs(cond, latents, H, W, device)
-            out = model(
-                hidden_states=hidden,
-                encoder_hidden_states=cond["emb"].to(device),
-                encoder_hidden_states_mask=None if msk.all() else msk,
-                timestep=timestep,
-                img_shapes=shapes,
-                img_mask=img_mask,
-                kv_cache=cache,
-                kv_cache_mode="extract" if i == 0 else "cached",
-                return_dict=False,
-            )[0]
-            preds.append(out[:, -H * W:])
-        pred = preds[0] if not use_cfg else preds[1] + PREVIEW_CFG * (preds[0] - preds[1])
-        latents = scheduler.step(pred, t, latents, return_dict=False)[0]
+    for t in scheduler.timesteps:
+        sigma = (t / 1000).expand(len(texts))
+        out = predict(model, latents.to(torch.bfloat16).expand(len(texts), -1, -1, -1), sigma, texts).float()
+        pred = out[1:] + PREVIEW_CFG * (out[:1] - out[1:]) if use_cfg else out
+        latents = scheduler.step(-pred, t, latents, return_dict=False)[0]
 
     return latents
 
@@ -439,34 +393,37 @@ def denoise(model, scheduler, sample, H, W, generator, neg=None):
 class TurboHolder:
     # Se lee del disco una sola vez; queda en RAM (no en VRAM) entre previews.
     layers = None
-    alpha_over_rank = 1.0
 
     @classmethod
     def load(cls):
-        with safe_open(TURBO_LORA_PATH, framework="pt", device="cpu") as f:
-            meta = json.loads((f.metadata() or {}).get("lora_adapter_metadata", "{}"))
-            cls.layers = {
-                k[len("transformer."):-len(".lora_A.weight")]: (
-                    f.get_tensor(k).to(torch.bfloat16).pin_memory(),
-                    f.get_tensor(k.replace(".lora_A.", ".lora_B.")).to(torch.bfloat16).pin_memory(),
-                )
-                for k in f.keys() if k.endswith(".lora_A.weight")
-            }
-        cls.alpha_over_rank = meta.get("transformer.lora_alpha", 1) / meta.get("transformer.r", 1)
+        path = os.path.join(MODEL_ID, "LoRAs", TURBO_LORA_FILE)
+        if not os.path.exists(path):
+            from huggingface_hub import hf_hub_download
+            print(f"  Downloading Turbo LoRA / Descargando Turbo LoRA (~570 MB): {TURBO_LORA_REPO}")
+            path = hf_hub_download(TURBO_LORA_REPO, TURBO_LORA_FILE, local_dir=os.path.join(MODEL_ID, "LoRAs"))
+
+        # Claves diffusion_model.<capa de diffusers>.lora_down/lora_up/alpha; alpha/rank va dentro de up.
+        with safe_open(path, framework="pt", device="cpu") as f:
+            cls.layers = {}
+            for k in f.keys():
+                if not k.endswith(".lora_down.weight"):
+                    continue
+                name = k[len("diffusion_model."):-len(".lora_down.weight")]
+                down = f.get_tensor(k)
+                scale = f.get_tensor(k.replace(".lora_down.weight", ".alpha")).item() / down.shape[0]
+                up = f.get_tensor(k.replace(".lora_down.", ".lora_up.")).float() * scale
+                cls.layers[name] = (down.to(torch.bfloat16).pin_memory(), up.to(torch.bfloat16).pin_memory())
 
 
 def apply_turbo_lora(model):
     """
-    Suma el LoRA turbo a la salida de cada capa durante la preview, sin tocar el LoRA
-    que se entrena. Devuelve los hooks para quitarlos al terminar.
+    Suma el LoRA turbo a la salida de cada capa durante la preview, sin tocar el LoRA que se
+    entrena. Devuelve los hooks para quitarlos al terminar.
     """
     if TurboHolder.layers is None:
-        if not os.path.exists(TURBO_LORA_PATH):
-            print(f"  [!] Turbo LoRA not found / No se encuentra el Turbo LoRA: {TURBO_LORA_PATH}")
-            return []
         TurboHolder.load()
 
-    scale = TURBO_LORA_STRENGTH * TurboHolder.alpha_over_rank
+    scale = TURBO_LORA_STRENGTH
 
     def make_hook(a, b):
         def hook(module, args, output):
@@ -483,7 +440,7 @@ def apply_turbo_lora(model):
     return hooks
 
 
-def run_preview(model, scheduler, sample, neg, size, step):
+def run_preview(model, scheduler, embed, neg, size, step):
     H, W = size
     was_training = model.training
     model.eval()
@@ -491,35 +448,27 @@ def run_preview(model, scheduler, sample, neg, size, step):
     actual_seed = random.randint(1, 2147483647) if SEED <= 0 else SEED
     print(f"  ↳ Preview Seed used / Semilla utilizada: {actual_seed}")
 
-    hooks = []
-    if USE_TURBO:
-        hooks = apply_turbo_lora(model)
-        # El Turbo LoRA se entrenó sin shift_terminal: el 0.02 de la configuración base estropea el último paso.
-        scheduler = FlowMatchEulerDiscreteScheduler.from_config(scheduler.config, shift_terminal=None)
-
+    hooks = apply_turbo_lora(model) if USE_TURBO else []
     try:
         with torch.no_grad():
             g = torch.Generator(device="cuda").manual_seed(actual_seed)
-            latents = denoise(model, scheduler, sample, H, W, g, neg)
+            latents = denoise(model, scheduler, embed, neg, H, W, g)
             # Los pesos del Turbo LoRA en la GPU ya no hacen falta: se liberan antes del VAE.
             for h in hooks:
                 h.remove()
             hooks = []
 
             vae = VaeHolder.get().to("cuda")
-            lat = unpack_latents(latents, H, W).to(vae.dtype).unsqueeze(2)
-            mean = torch.tensor(vae.config.latents_mean, device="cuda", dtype=lat.dtype).view(1, -1, 1, 1, 1)
-            std  = torch.tensor(vae.config.latents_std,  device="cuda", dtype=lat.dtype).view(1, -1, 1, 1, 1)
-            # El VAE devuelve RGBA; en las previews solo interesa el color.
+            lat = latents.to(vae.dtype) / vae.config.scaling_factor + vae.config.shift_factor
             try:
-                img = vae.decode(lat * std + mean, return_dict=False)[0][:, :3, 0]
+                img = vae.decode(lat, return_dict=False)[0]
             except torch.OutOfMemoryError:
-                # Con 8 GB y el entrenamiento cargado (768² o más) no cabe entera: por mosaicos usa ~1 GB
-                # en vez de ~4.4 GB, a cambio de alguna marca leve en las uniones. Sigue así el resto del run.
+                # Con 8 GB y el entrenamiento cargado puede no caber entera: por mosaicos usa mucha menos
+                # VRAM, a cambio de alguna marca leve en las uniones. Sigue así el resto del run.
                 print("  ↳ Low VRAM: tiled VAE decode for previews / Poca VRAM: decodificación por mosaicos en las previews")
                 torch.cuda.empty_cache()
                 vae.enable_tiling()
-                img = vae.decode(lat * std + mean, return_dict=False)[0][:, :3, 0]
+                img = vae.decode(lat, return_dict=False)[0]
             img = ((img.float() / 2 + 0.5).clamp(0, 1)[0].cpu().permute(1, 2, 0).numpy() * 255).astype("uint8")
             vae.to("cpu")
 
@@ -566,14 +515,14 @@ _live_mtime = None
 
 def reload_live_settings():
     """
-    Ajustes en caliente: si train_settings_qwenimage21.json ha cambiado (la GUI lo reescribe con
+    Ajustes en caliente: si train_settings_zimage.json ha cambiado (la GUI lo reescribe con
     Save JSON aunque el entrenamiento esté en marcha), aplica la lista de abajo en el
     paso siguiente. El coste por paso es un getmtime. Rank, alpha, batch, resolución y
     carpetas se fijan al arrancar y siguen necesitando Stop -> Resume.
     """
     global _live_mtime, TOTAL_STEPS, SAVE_EVERY, LR, MAX_GRAD_NORM
-    global PREVIEW_EVERY, PREVIEW_STEPS, PREVIEW_CFG, PREVIEW_CAPTION_MODE, PREVIEW_CUSTOM_PROMPT
-    global USE_TURBO, TURBO_LORA_STRENGTH, SEED
+    global PREVIEW_EVERY, PREVIEW_STEPS, PREVIEW_CFG, PREVIEW_SIZE, PREVIEW_CAPTION_MODE, PREVIEW_CUSTOM_PROMPT, SEED
+    global USE_TURBO, TURBO_LORA_STRENGTH
 
     try:
         mtime = os.path.getmtime(CONFIG_PATH)
@@ -611,6 +560,7 @@ def reload_live_settings():
     PREVIEW_EVERY         = fresh("preview_every",         int,   PREVIEW_EVERY)
     PREVIEW_STEPS         = fresh("preview_steps",         int,   PREVIEW_STEPS)
     PREVIEW_CFG           = fresh("preview_cfg",           float, PREVIEW_CFG)
+    PREVIEW_SIZE          = fresh("preview_size",          int,   PREVIEW_SIZE)
     PREVIEW_CAPTION_MODE  = fresh("preview_caption_mode",  str,   PREVIEW_CAPTION_MODE)
     PREVIEW_CUSTOM_PROMPT = fresh("preview_custom_prompt", lambda v: str(v).strip(), PREVIEW_CUSTOM_PROMPT)
     USE_TURBO             = fresh("use_turbo",             bool,  USE_TURBO)
@@ -619,17 +569,16 @@ def reload_live_settings():
     return changes
 
 
-def collate_text(embeds, masks):
-    # Con batch > 1 los prompts tienen longitudes distintas: se rellenan a la derecha y se enmascaran.
-    max_len = max(e.shape[1] for e in embeds)
-    if all(e.shape[1] == max_len for e in embeds):
-        return torch.cat(embeds), None
-    emb = torch.cat([F.pad(e, (0, 0, 0, max_len - e.shape[1])) for e in embeds])
-    msk = torch.cat([F.pad(m, (0, max_len - m.shape[1]), value=False) for m in masks])
-    return emb, msk
+def is_target(name, module):
+    if not isinstance(module, (torch.nn.Linear, Linear4bit)):
+        return False
+    if LORA_TARGETS == "all":
+        return True
+    # "blocks": atención + MLP de los 30 bloques y de los refinadores de imagen y texto.
+    return name.startswith(("layers.", "noise_refiner.", "context_refiner.")) and "adaLN_modulation" not in name
 
 
-def train_qwen_image21():
+def train_zimage():
     global LORA_RANK, LORA_ALPHA  # al reanudar se toman del checkpoint (el alpha se exporta con el LoRA)
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.benchmark = True
@@ -641,29 +590,20 @@ def train_qwen_image21():
 
     ensure_model_downloaded(local_path=MODEL_ID, repo_id=HF_REPO_ID)
 
-    print("Loading Qwen-Image 2.1 Transformer (NF4)... / Cargando Transformer de Qwen-Image 2.1 (NF4)...")
+    print("Loading Z-Image Transformer (NF4)... / Cargando Transformer de Z-Image (NF4)...")
     t0 = time.time()
     transformer = load_nf4_transformer(MODEL_ID)
     transformer.to("cuda")
     free_vram()
-    print(f"Transformer 7B loaded in / cargado en {time.time() - t0:.1f}s. VRAM: {torch.cuda.memory_allocated()/1e9:.1f} GB", flush=True)
+    print(f"Transformer 6B loaded in / cargado en {time.time() - t0:.1f}s. VRAM: {torch.cuda.memory_allocated()/1e9:.1f} GB", flush=True)
 
     scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(MODEL_ID, subfolder="scheduler")
-    shift_cfg = (
-        scheduler.config.get("base_image_seq_len", 256),
-        scheduler.config.get("max_image_seq_len", 8192),
-        scheduler.config.get("base_shift", 0.5),
-        scheduler.config.get("max_shift", 0.9),
-    )
 
     transformer.enable_gradient_checkpointing()
 
-    # "blocks": atención + MLP de los 32 bloques. La modulación, el timestep y las capas de
-    # entrada/salida se dejan intactas: no hacen falta para una cara o un estilo, y tocarlas
-    # rompe la combinación con LoRAs destilados como el turbo (que ajustan justo esas capas).
-    target_modules = [name for name, m in transformer.named_modules()
-                      if isinstance(m, (torch.nn.Linear, Linear4bit))
-                      and (LORA_TARGETS == "all" or name.startswith("transformer_blocks."))]
+    # "blocks" deja intactas la modulación adaLN, el timestep y las capas de entrada/salida:
+    # no hacen falta para una cara o un estilo y así el LoRA combina mejor con otros.
+    target_modules = [name for name, m in transformer.named_modules() if is_target(name, m)]
     print(f"Target LoRA Layers / Capas LoRA objetivo: {len(target_modules)} ({LORA_TARGETS})")
 
     # Reanudar es continuar EL MISMO LoRA: capas, rank y alpha salen del checkpoint, no de la GUI.
@@ -705,14 +645,13 @@ def train_qwen_image21():
         return LR * (MIN_LR_RATIO + (1 - MIN_LR_RATIO) * 0.5 * (1 + math.cos(math.pi * prog)))
 
     start_step = 0
-    lora_weights_path = os.path.join(RESUME_DIR, "adapter_model.safetensors")
-    if os.path.exists(STEP_FILE) and os.path.exists(OPT_FILE) and os.path.exists(lora_weights_path):
+    if os.path.exists(STEP_FILE) and os.path.exists(OPT_FILE) and os.path.exists(resume_weights):
         print("=" * 65)
         print("¡Checkpoint detected! Restoring state... / ¡Checkpoint detectado! Restaurando estado...")
         try:
             with open(STEP_FILE, "r", encoding="utf-8") as f:
                 start_step = int(f.read().strip())
-            with open(lora_weights_path, "rb") as f:
+            with open(resume_weights, "rb") as f:
                 set_peft_model_state_dict(model, {k: v.float() for k, v in load(f.read()).items()})
             optimizer.load_state_dict(torch.load(OPT_FILE, weights_only=False))
             print(f"Resuming training from step / Reanudando entrenamiento desde el paso {start_step}...")
@@ -732,7 +671,7 @@ def train_qwen_image21():
         torch.save(optimizer.state_dict(), OPT_FILE)
         with open(STEP_FILE, "w", encoding="utf-8") as f:
             f.write(str(current_s))
-        ckpt = os.path.join(OUTPUT_DIR, f"QwenImage21_LoRA_step_{current_s}.safetensors")
+        ckpt = os.path.join(OUTPUT_DIR, f"ZImage_LoRA_step_{current_s}.safetensors")
         _export_lora(model, ckpt, current_s)
         print(f"✓ Checkpoint saved successfully at step / Checkpoint guardado en paso {current_s}: {ckpt}")
 
@@ -754,39 +693,26 @@ def train_qwen_image21():
     optimizer.zero_grad(set_to_none=True)
 
     pin = torch.cuda.is_available()
+
+    def load_tensor(path):
+        t = torch.load(path, weights_only=True).to(torch.bfloat16)
+        return t.pin_memory() if pin else t
+
     cache_data, buckets = {}, defaultdict(list)
-
-    def load_sample(nombre):
-        # lat: objetivo (en _custom no existe: solo aporta el tamaño). En edición además
-        # ctrl (latente del antes) e imgmask (huecos del antes en el texto).
-        sample = {}
-        for key, suffix, cast in (("lat", "latent", torch.bfloat16), ("emb", "embed", torch.bfloat16),
-                                  ("msk", "mask", torch.bool), ("ctrl", "ctrl", torch.bfloat16),
-                                  ("imgmask", "imgmask", torch.bool)):
-            path = f"{CACHE_DIR}/{nombre}_{suffix}.pt"
-            if os.path.exists(path):
-                t = torch.load(path, weights_only=True).to(cast)
-                sample[key] = t.pin_memory() if pin else t
-        return sample
-
     for f in os.listdir(CACHE_DIR):
         if not f.endswith("_latent.pt"):
             continue
         nombre = f.replace("_latent.pt", "")
-        cache_data[nombre] = load_sample(nombre)
+        cache_data[nombre] = {"lat": load_tensor(f"{CACHE_DIR}/{f}"), "emb": load_tensor(f"{CACHE_DIR}/{nombre}_embed.pt")}
         buckets[tuple(cache_data[nombre]["lat"].shape[2:])].append(nombre)
 
-    edit_mode = any("ctrl" in v for v in cache_data.values())
-
-    if os.path.exists(f"{CACHE_DIR}/_custom_embed.pt"):
-        cache_data["_custom"] = load_sample("_custom")
+    custom_path = f"{CACHE_DIR}/_custom_embed.pt"
+    if os.path.exists(custom_path):
+        cache_data["_custom"] = {"emb": load_tensor(custom_path)}
     check_custom_prompt("_custom" in cache_data)
-    custom_mtime = [os.path.getmtime(f"{CACHE_DIR}/_custom_embed.pt") if "_custom" in cache_data else None]
+    custom_mtime = [os.path.getmtime(custom_path) if "_custom" in cache_data else None]
 
-    neg = None
-    if os.path.exists(f"{CACHE_DIR}/_neg_embed.pt"):
-        neg = (torch.load(f"{CACHE_DIR}/_neg_embed.pt", weights_only=True).to(torch.bfloat16),
-               torch.load(f"{CACHE_DIR}/_neg_mask.pt",  weights_only=True).bool())
+    neg = load_tensor(f"{CACHE_DIR}/_neg_embed.pt")
 
     all_preview_names = sorted(k for k in cache_data.keys() if not k.startswith("_"))
 
@@ -802,8 +728,7 @@ def train_qwen_image21():
             return all_preview_names[0]
 
     running_loss, t_step_avg, grad_norm = 0.0, 0.0, 0.0
-    kind = "before/after pairs / pares antes/después" if edit_mode else "images / imágenes"
-    print(f"\nSTARTING TRAINING / ¡ARRANCANDO ENTRENAMIENTO! {len(all_preview_names)} {kind} in {len(buckets)} buckets.")
+    print(f"\nSTARTING TRAINING / ¡ARRANCANDO ENTRENAMIENTO! {len(all_preview_names)} images / imágenes in {len(buckets)} buckets.")
 
     reload_live_settings()
     step = start_step
@@ -827,40 +752,19 @@ def train_qwen_image21():
 
             size = random.choice(list(buckets))
             names = [random.choice(buckets[size]) for _ in range(BATCH_SIZE)]
-            latents = torch.cat([cache_data[n]["lat"] for n in names]).to("cuda", non_blocking=True)
-            embeds, masks = collate_text([cache_data[n]["emb"] for n in names], [cache_data[n]["msk"] for n in names])
-            embeds = embeds.to("cuda", non_blocking=True)
-            masks = None if masks is None else masks.to("cuda", non_blocking=True)
+            latents = torch.cat([cache_data[n]["lat"] for n in names]).to("cuda", non_blocking=True).float()
+            embeds = [cache_data[n]["emb"].to("cuda", non_blocking=True) for n in names]
 
-            H, W = size
-            latent_packed = pack_latents(latents)
-            B = latent_packed.shape[0]
+            sigma = sample_sigma(len(names), "cuda")
+            noise = torch.randn_like(latents)
+            t_exp = sigma.view(-1, 1, 1, 1)
 
-            sigma  = sample_sigma(B, H * W, "cuda", shift_cfg)
-            noise  = torch.randn_like(latent_packed)
-            t_exp  = sigma.view(-1, 1, 1)
+            noisy = ((1 - t_exp) * latents + t_exp * noise).to(torch.bfloat16)
+            target = latents - noise
 
-            noisy = ((1 - t_exp) * latent_packed + t_exp * noise).to(torch.bfloat16)
-            target = noise - latent_packed
+            pred = predict(model, noisy, sigma, embeds)
 
-            # En edición el antes de cada muestra va delante, limpio. El modelo usa una sola fila de
-            # img_mask para todo el batch: vale porque la imagen va antes de la instrucción, así que en
-            # un mismo bucket las ranuras del antes caen en las mismas posiciones en todos los pares.
-            batch = {**cache_data[names[0]], "emb": embeds}
-            if edit_mode:
-                batch["ctrl"] = torch.cat([cache_data[n]["ctrl"] for n in names])
-            hidden, shapes, img_mask = model_inputs(batch, noisy, H, W, "cuda")
-            pred = model(
-                hidden_states=hidden,
-                encoder_hidden_states=embeds,
-                encoder_hidden_states_mask=masks,
-                timestep=sigma,
-                img_shapes=shapes,
-                img_mask=img_mask,
-                return_dict=False,
-            )[0][:, -H * W:]
-
-            loss = F.mse_loss(pred.float(), target.float()) / GRAD_ACCUM_STEPS
+            loss = F.mse_loss(pred.float(), target) / GRAD_ACCUM_STEPS
             loss.backward()
             running_loss += loss.item() * GRAD_ACCUM_STEPS
 
@@ -893,28 +797,30 @@ def train_qwen_image21():
 
             if PREVIEW_EVERY > 0 and step % PREVIEW_EVERY == 0:
                 # El servidor codifica en CPU los prompts nuevos: aquí solo se relee el embedding si cambió.
-                custom_path = f"{CACHE_DIR}/_custom_embed.pt"
                 if os.path.exists(custom_path) and os.path.getmtime(custom_path) != custom_mtime[0]:
                     custom_mtime[0] = os.path.getmtime(custom_path)
-                    cache_data["_custom"] = load_sample("_custom")
+                    cache_data["_custom"] = {"emb": load_tensor(custom_path)}
                     check_custom_prompt(True)
                 p_name = get_preview_sample(step)
-                sample = cache_data[p_name]
-                # Tamaño de la preview: el del objetivo; en edición, el de la imagen de antes
-                # (como en ComfyUI, la salida hereda el tamaño de la referencia).
-                ref = sample.get("ctrl", sample.get("lat", next(iter(cache_data.values()))["lat"]))
+                # El prompt manual no tiene imagen: la preview usa el tamaño de la primera del dataset.
+                ref = cache_data[p_name if p_name != "_custom" else all_preview_names[0]]["lat"]
                 print(f"\n  [Preview] Mode: {PREVIEW_CAPTION_MODE} | Sample: {p_name}")
-                run_preview(model, scheduler, sample, neg, (ref.shape[2], ref.shape[3]), step)
+                H, W = ref.shape[2], ref.shape[3]
+                if PREVIEW_SIZE > 0:
+                    # Latente 8x y parches 2x2: lados múltiplos de 2 en el latente (16 px).
+                    s = PREVIEW_SIZE / 8 / math.sqrt(H * W)
+                    H, W = max(2, round(H * s / 2) * 2), max(2, round(W * s / 2) * 2)
+                run_preview(model, scheduler, cache_data[p_name]["emb"], neg, (H, W), step)
 
     except (KeyboardInterrupt, SystemExit):
         save_checkpoint_now(last_step_executed)
         return
 
     print("\n\nTraining completed! / ¡Entrenamiento finalizado!")
-    final = os.path.join(OUTPUT_DIR, "QwenImage21_FINAL_LoRA.safetensors")
+    final = os.path.join(OUTPUT_DIR, "ZImage_FINAL_LoRA.safetensors")
     _export_lora(model, final, min(last_step_executed, TOTAL_STEPS))
     print(f"✓ Final LoRA saved to / Tu LoRA definitivo está en: {final}")
 
 
 if __name__ == "__main__":
-    train_qwen_image21()
+    train_zimage()

@@ -1247,7 +1247,7 @@ def train_krea2():
         else:
             return all_preview_names[0]
 
-    running_loss, t_step_avg = 0.0, 0.0
+    running_loss, t_step_avg, grad_norm = 0.0, 0.0, 0.0
     print(f"\nSTARTING TRAINING / ¡ARRANCANDO ENTRENAMIENTO! {len(all_preview_names)} images in {len(buckets)} buckets.")
 
     reload_live_settings()
@@ -1302,7 +1302,7 @@ def train_krea2():
             loss.backward()
             running_loss += loss.item() * GRAD_ACCUM_STEPS
 
-            grad_norm = 0.0
+            # La norma solo existe al aplicar el optimizador: entre medias se muestra la última.
             if step % GRAD_ACCUM_STEPS == 0:
                 grad_norm = torch.nn.utils.clip_grad_norm_(trainable, MAX_GRAD_NORM).item()
                 for gparam in optimizer.param_groups:

@@ -2750,6 +2750,7 @@ def train_ltx23():
 
     running_loss = 0.0
     avg_time = 0.0
+    grad_norm = 0.0
 
     print()
     print("STARTING TRAINING / ARRANCANDO ENTRENAMIENTO! {} entradas cacheadas.".format(len(entries)))
@@ -2944,7 +2945,7 @@ def train_ltx23():
                 optimizer.step()
                 optimizer.zero_grad(set_to_none=True)
             else:
-                grad_norm = 0.0
+                # La norma solo existe al aplicar el optimizador: entre medias se muestra la última.
                 current_lr = lr_at(step)
 
             elapsed = time.time() - t0

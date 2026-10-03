@@ -25,6 +25,7 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 | :--- | :--- | :--- |
 | **Qwen-Image 2.1** | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) | 8 GB |
 | **Krea 2** | Image LoRAs (characters, objects, styles) for Krea 2 Raw and Turbo | 8 GB |
+| **Z-Image** | Image LoRAs (characters, objects, styles) for Z-Image and Z-Image-Turbo | 8 GB |
 | **LTX-2.3** (also LTX-2.5) | Character and style LoRAs for the LTX video model, trained from images | 12 GB |
 | **MiniMax-H3** | Video LoRAs from images, clips and audio, plus training-free **RefMods** | 8 GB |
 
@@ -54,8 +55,9 @@ Each trainer downloads **only what it uses**, already quantized. The table compa
 | **LTX-2.3** | 101.3 | 111.1 | **32.2** | The BF16 transformer (38.0 GB) and the FP32 Gemma 3 text encoder (48.8 GB) are replaced by NF4 versions (9.8 GB + 7.8 GB). |
 | **Qwen-Image 2.1** | ~32 (BF16) | 21.9 | **21.9 / 14.4 / 11.0** | Only the text encoder you pick is downloaded: BF16 (exact, default) / INT8 / NF4. |
 | **MiniMax-H3** | 498.5 | 41.4 | **41.4** | The 33B model ships in NF4 from the start. |
+| **Z-Image** | 20.5 | — | **5.9** | New trainer: the 6B transformer (12.3 GB) and the Qwen3-4B text encoder (8.0 GB) in NF4 (3.4 GB + 2.7 GB). |
 
-The automatic captioner adds, only the first time you use it: **nothing** for Krea 2 (it uses Krea 2's own text encoder), **5.5 GB** for Qwen-Image 2.1 when its text encoder is not already the NF4 one and for LTX-2.3 (Qwen3-VL-8B NF4), and **8.9 GB** for MiniMax-H3 (Qwen3-VL-4B).
+The automatic captioner adds, only the first time you use it: **nothing** for Krea 2 (it uses Krea 2's own text encoder), **5.5 GB** for Qwen-Image 2.1 when its text encoder is not already the NF4 one and for LTX-2.3 and Z-Image (Qwen3-VL-8B NF4, shared by both), and **8.9 GB** for MiniMax-H3 (Qwen3-VL-4B).
 
 > **Upgrading from an old standalone LoRAlab?** Copy its model folder into Trainer Studio instead of downloading it again. Then you can delete what is no longer used: `Krea-2-NF4/transformer` (~26 GB) and, in `LTX23-NF4`, the `transformer` (~38 GB) and `text_encoder` (~49 GB) folders.
 
@@ -159,6 +161,22 @@ All times were measured on an RTX 5080 16 GB.
 | Steps | 500–1000 at 512² (~1,500 at 768², ~2,000 at 1024²) |
 | Time | 500 steps, 14 images, 512²: ~15 min (RTX 3060 12 GB: ~1 h 30 min) |
 
+### Z-Image — image LoRAs for Z-Image and Z-Image-Turbo
+
+- Trains on **Z-Image** (the undistilled base model, the one meant for fine-tuning). The LoRA has the same layers as **Z-Image-Turbo** and also loads there.
+- The 6B transformer is built directly from its **NF4** weights, and the Qwen3-4B text encoder of the pre-cache is NF4 too: ~5.5 GB of VRAM while training at 512².
+- **Captioner:** Qwen3-VL-8B NF4, shared with LTX-2.3 (~5.5 GB VRAM, ~10 s per image).
+- **Previews:** 28 steps / CFG 5 (CFG as in ComfyUI: 1 = off), or **Turbo** with Alibaba PAI's **Z-Image-Fun-Lora-Distill** (made for Z-Image base, 4 steps / CFG 1, about 10 times faster; downloaded the first time, ~570 MB). **Preview Size** renders them at the training size or at 768 / 1024 with the same proportions, to see what you will get in ComfyUI even when training at 512 (1024 with Turbo: ~5 s, ~6.4 GB of VRAM).
+- **LoRA Targets:** *Blocks* (attention + MLP of the 30 blocks and the 4 refiners, default) or *All*. ComfyUI loads the exported LoRA directly.
+
+| Verified starting point | |
+| :--- | :--- |
+| Resolution | 512×512 |
+| Rank / Alpha | 8 / 8 |
+| Learning rate | 4e-4 |
+| Steps | 500 (the likeness appears around 300–400 steps) |
+| Time | ~0.9 s/step at 512²: 800 steps, 14 images, preview every 20 steps: ~22 min |
+
 ### LTX-2.3 — character and style LoRAs for the LTX video model
 
 - Works with **LTX-2.3 and LTX-2.5**.
@@ -203,7 +221,7 @@ Detailed measurements and the reasoning behind each design decision are in `docs
 
 ## 🛠️ Tools for advanced users
 
-`tools\` contains the scripts used to build the NF4 models from the originals (`Run_Conversor_Krea2.bat`, `Run_Conversor_LTX23.bat`, `5_conversor_QwenImage21_NF4.py`) and a `.parquet` dataset extractor for Qwen-Image 2.1 (`6_extract_parquet.py`). They are not needed to train: the trainers download the ready-made NF4 models.
+`tools\` contains the scripts used to build the NF4 models from the originals (`Run_Conversor_Krea2.bat`, `Run_Conversor_LTX23.bat`, `5_conversor_QwenImage21_NF4.py`, `5_conversor_ZImage_NF4.py`) and a `.parquet` dataset extractor for Qwen-Image 2.1 (`6_extract_parquet.py`). They are not needed to train: the trainers download the ready-made NF4 models.
 
 ## 📁 Structure
 
@@ -222,7 +240,7 @@ AcademiaSD_LoRAlab-TrainerStudio/
 └── settings/                         # Your settings and HF token (created on first use, never uploaded)
 ```
 
-Models (`Krea-2-NF4`, `LTX23-NF4`, `MiniMax-H3-NF4`, `Qwen-Image21-NF4`, captioners), caches and LoRA outputs are created next to these folders on first use.
+Models (`Krea-2-NF4`, `LTX23-NF4`, `MiniMax-H3-NF4`, `Qwen-Image21-NF4`, `Z-Image_NF4`, captioners), caches and LoRA outputs are created next to these folders on first use.
 
 ---
 
@@ -236,6 +254,7 @@ The code is released under the **MIT License**. The models keep their own licens
 | Krea 2 | Krea 2 Community License |
 | LTX-2.3 | LTX-2 Open-Source License |
 | MiniMax-H3 | MiniMax-H3 Community License Agreement |
+| Z-Image (and the Z-Image-Fun-Lora-Distill preview LoRA) | Apache 2.0 |
 | Qwen3-VL-4B (MiniMax-H3 captioner) | Apache 2.0 |
 
 Built with PyTorch, Diffusers, Transformers, PEFT, bitsandbytes, Flask and the Hugging Face Hub.

@@ -16,6 +16,11 @@ Qwen-Image21-NF4/
 Krea-2-Raw/
 LTX23-Raw/
 LTX23-NF4_weights/
+Z-Image-Turbo_NF4/
+Z-Image-Turbo-Raw/
+Z-Image_NF4/
+Z-Image-Raw/
+Ideogram4-NF4/
 
 # Ejecuciones / Runs
 cached_data_*/

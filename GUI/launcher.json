@@ -31,6 +31,13 @@
       "description": "LoRAs de imagen y edición / Image and edit LoRAs",
       "image": "assets/qwenimage21/portada.jpg",
       "run": "Run_LoRAlab-QwenImage21.bat"
+    },
+    {
+      "id": "zimage",
+      "name": "Z-Image",
+      "description": "LoRAs de imagen (también Z-Image-Turbo) / Image LoRAs (also Z-Image-Turbo)",
+      "image": "assets/zimage/portada.jpg",
+      "run": "Run_LoRAlab-ZImage.bat"
     }
   ]
 }
