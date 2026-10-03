@@ -1,0 +1,2 @@
+# Los scripts de Linux tienen que conservar LF aunque se editen o se clonen en Windows.
+*.sh text eol=lf

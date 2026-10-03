@@ -3,6 +3,11 @@
 # Equivalente Linux de / Linux equivalent of: code/Run_LoRAlab-LTX23.bat
 set -euo pipefail
 
+# Como el "pause" del .bat: la terminal no se cierra sin dejar leer el error o el final.
+# Like the .bat "pause": the terminal does not close before the error or the end can be read.
+pause_on_exit() { if [ -t 0 ]; then read -r -p "Pulsa Enter para cerrar / Press Enter to close..." _ || true; fi; }
+trap pause_on_exit EXIT
+
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 BASE_DIR="$(pwd)/"
 PYTHON_EXE="${BASE_DIR}venv/bin/python"

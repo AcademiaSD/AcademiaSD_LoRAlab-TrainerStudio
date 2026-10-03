@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# AcademiaSD LoRAlab Trainer Studio - MiniMax-H3 (Linux)
-# Equivalente Linux de / Linux equivalent of: code/Run_LoRAlab-MiniMaxH3.bat
+# AcademiaSD LoRAlab Trainer Studio - Z-Image (Linux)
+# Equivalente Linux de / Linux equivalent of: code/Run_LoRAlab-ZImage.bat
 set -euo pipefail
 
 # Como el "pause" del .bat: la terminal no se cierra sin dejar leer el error o el final.
@@ -14,7 +14,7 @@ PYTHON_EXE="${BASE_DIR}venv/bin/python"
 
 echo
 echo "================================================================"
-echo "       ACADEMIASD LORALAB TRAINER STUDIO - MINIMAX-H3"
+echo "       ACADEMIASD LORALAB TRAINER STUDIO - Z-IMAGE"
 echo "================================================================"
 echo
 
@@ -26,13 +26,13 @@ if [ ! -x "${PYTHON_EXE}" ]; then
     exit 1
 fi
 
-if [ ! -f "${BASE_DIR}scripts/server_minimaxh3.py" ]; then
-    echo "[ERROR] No existe / Missing: scripts/server_minimaxh3.py"
+if [ ! -f "${BASE_DIR}scripts/server_zimage.py" ]; then
+    echo "[ERROR] No existe / Missing: scripts/server_zimage.py"
     exit 1
 fi
 
-if [ ! -f "${BASE_DIR}GUI/trainer_ui_minimaxh3.html" ]; then
-    echo "[ERROR] No existe / Missing: GUI/trainer_ui_minimaxh3.html"
+if [ ! -f "${BASE_DIR}GUI/trainer_ui_zimage.html" ]; then
+    echo "[ERROR] No existe / Missing: GUI/trainer_ui_zimage.html"
     exit 1
 fi
 
@@ -42,7 +42,7 @@ echo "    http://127.0.0.1:5000"
 echo
 echo "Pulsa Ctrl+C para detener el servidor / Press Ctrl+C to stop the server."
 echo
-"${PYTHON_EXE}" "${BASE_DIR}scripts/server_minimaxh3.py"
+"${PYTHON_EXE}" "${BASE_DIR}scripts/server_zimage.py"
 
 echo
 echo "================================================================"

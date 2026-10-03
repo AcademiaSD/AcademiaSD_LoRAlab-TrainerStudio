@@ -291,6 +291,8 @@ def select_folder_native():
             initial_dir = str(BASE_DIR)
 
         selected_path = None
+        # Sin diálogo nativo (Linux sin tkinter): la web abre su propio explorador de carpetas.
+        dialog_shown = False
 
         try:
             import tkinter as tk
@@ -305,6 +307,7 @@ def select_folder_native():
                 initialdir=initial_dir
             )
             root.destroy()
+            dialog_shown = True
             if chosen:
                 selected_path = str(Path(chosen).resolve())
         except Exception:
@@ -320,6 +323,7 @@ def select_folder_native():
                 )
                 creation_flag = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
                 output = subprocess.check_output(["powershell", "-command", ps_cmd], text=True, errors="ignore", creationflags=creation_flag).strip()
+                dialog_shown = True
                 if output:
                     selected_path = str(Path(output).resolve())
             except Exception:
@@ -327,6 +331,8 @@ def select_folder_native():
 
         if selected_path:
             return jsonify({"status": "ok", "path": selected_path})
+        if not dialog_shown:
+            return jsonify({"status": "error", "error": "No native folder dialog / Sin diálogo nativo de carpetas"})
         else:
             return jsonify({"status": "cancelled", "path": None})
 

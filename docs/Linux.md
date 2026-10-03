@@ -42,6 +42,7 @@ stops the trainer, same as `start` does with the `.bat` on Windows. Over SSH
 ./code/Run_LoRAlab-LTX23.sh
 ./code/Run_LoRAlab-MiniMaxH3.sh
 ./code/Run_LoRAlab-QwenImage21.sh
+./code/Run_LoRAlab-ZImage.sh
 ```
 
 ## [EN] Notes / [ES] Notas
@@ -56,3 +57,8 @@ stops the trainer, same as `start` does with the `.bat` on Windows. Over SSH
   each `Run_LoRAlab-*.bat` entry to its `.sh`. No Windows file was modified in
   behavior; all Python changes are `os.name == "nt"` branches.
 - Out of scope: `tools/*.bat` model converters (advanced use, Windows-only for now).
+- If a trainer stops with an error, its terminal stays open until you press Enter, like the
+  `pause` at the end of the `.bat` files.
+- **Browse** buttons open the system folder dialog through `tkinter`; without it (e.g. no
+  `python3.13-tk` package) they open the web interface's own folder browser instead.
+- Edit the `.sh` files with LF line endings (`.gitattributes` enforces it on checkout).
