@@ -4,7 +4,8 @@ launcher.py — Lanzador común de AcademiaSD LoRAlab Trainer Studio
 Common launcher for AcademiaSD LoRAlab Trainer Studio
 
 Sirve GUI/launcher.html en http://127.0.0.1:4990. Los entrenadores salen de GUI/launcher.json:
-al pulsar uno se abre su code/Run_LoRAlab-*.bat en una ventana nueva, que arranca su servidor
+al pulsar uno se abre su code/Run_LoRAlab-* (.bat en Windows, .sh equivalente en Linux)
+en una ventana nueva, que arranca su servidor
 en http://127.0.0.1:5000. Para añadir un LoRAlab basta con una entrada más en GUI/launcher.json
 (id, name, description, image, run). Las tarjetas se colocan solas: hasta 3 en una fila y, a partir
 de ahí, dos filas con la sobrante arriba (4 -> 2+2, 5 -> 3+2, 6 -> 3+3). image_scale fija el tamaño
@@ -12,6 +13,8 @@ de la portada (0.2 = 20 %) y rows fuerza el número de filas.
 """
 import json
 import logging
+import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -44,6 +47,44 @@ def trainer_running():
         return s.connect_ex(("127.0.0.1", TRAINER_PORT)) == 0
 
 
+def _launch_linux(run: Path):
+    # Abre el .sh en su propia terminal (cerrarla detiene ese entrenador),
+    # igual que "start" hace con el .bat en Windows.
+    # Opens the .sh in its own terminal (closing it stops that trainer),
+    # just like "start" does with the .bat on Windows.
+    terminals = [
+        (["konsole", "-e"], True),
+        (["gnome-terminal", "--"], True),
+        (["xfce4-terminal", "-e"], True),
+        (["x-terminal-emulator", "-e"], True),
+        (["xterm", "-e"], True),
+    ]
+    for cmd, append in terminals:
+        if shutil.which(cmd[0]) is not None:
+            try:
+                subprocess.Popen(
+                    cmd + ["bash", str(run)] if append else [cmd[0], "bash", str(run)],
+                    cwd=str(BASE_DIR),
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                return
+            except OSError:
+                continue
+    # Sin terminal grafica (p. ej. SSH): proceso independiente con log.
+    # No graphical terminal (e.g. SSH): detached process with log file.
+    log = BASE_DIR / "settings" / "trainer_console.log"
+    log.parent.mkdir(exist_ok=True)
+    fh = log.open("ab")
+    subprocess.Popen(
+        ["bash", str(run)],
+        cwd=str(BASE_DIR),
+        stdout=fh,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+    )
+
+
 @app.route("/")
 def index():
     return send_from_directory(str(GUI_DIR), "launcher.html")
@@ -66,15 +107,24 @@ def launch():
     if trainer is None:
         abort(404)
 
-    run = (CODE_DIR / trainer["run"]).resolve()
-    if run.parent != CODE_DIR or run.suffix.lower() != ".bat" or not run.is_file():
-        return jsonify({"status": "error", "error": f"Not found / No existe: {trainer['run']}"}), 404
+    if os.name == "nt":
+        run = (CODE_DIR / trainer["run"]).resolve()
+        if run.parent != CODE_DIR or run.suffix.lower() != ".bat" or not run.is_file():
+            return jsonify({"status": "error", "error": f"Not found / No existe: {trainer['run']}"}), 404
+    else:
+        # En Linux se usa el .sh con el mismo nombre / On Linux use the same-named .sh
+        run = (CODE_DIR / Path(trainer["run"]).with_suffix(".sh")).resolve()
+        if run.parent != CODE_DIR or run.suffix.lower() != ".sh" or not run.is_file():
+            return jsonify({"status": "error", "error": f"Not found / No existe: {run.name}"}), 404
 
     if trainer_running():
         return jsonify({"status": "busy", "url": f"http://127.0.0.1:{TRAINER_PORT}"})
 
-    # "start" abre el .bat en su propia consola: cerrarla detiene ese entrenador.
-    subprocess.Popen(["cmd", "/c", "start", "", str(run)], cwd=str(BASE_DIR))
+    if os.name == "nt":
+        # "start" abre el .bat en su propia consola: cerrarla detiene ese entrenador.
+        subprocess.Popen(["cmd", "/c", "start", "", str(run)], cwd=str(BASE_DIR))
+    else:
+        _launch_linux(run)
     return jsonify({"status": "ok"})
 
 
