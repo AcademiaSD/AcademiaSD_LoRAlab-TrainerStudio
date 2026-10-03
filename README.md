@@ -43,6 +43,8 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 
 Toda la interfaz y los mensajes de consola están en inglés y en español.
 
+> ⚠️ **Sobre los valores por defecto:** las pruebas se han hecho para comprobar que cada entrenamiento funciona, no para buscar el mejor rendimiento ni la mejor calidad. Haz tus propias pruebas con distintas configuraciones (pasos, learning rate, rank, resolución, captions) para mejorar la calidad de tus LoRAs.
+
 ---
 
 ## 📉 Smaller downloads
@@ -124,6 +126,8 @@ Also in every trainer:
 ---
 
 ## 🧪 The trainers
+
+> ⚠️ **About the default settings:** the tests were made to check that every training works, not to find the best performance or quality. Run your own tests with different settings (steps, learning rate, rank, resolution, captions) to improve the quality of your LoRAs.
 
 All times were measured on an RTX 5080 16 GB.
 
