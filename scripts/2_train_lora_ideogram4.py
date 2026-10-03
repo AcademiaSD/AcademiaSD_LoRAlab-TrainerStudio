@@ -36,7 +36,9 @@ try:
 except Exception:
     pass
 
-HF_REPO_ID = "ideogram-ai/ideogram-4-nf4-diffusers"
+# Réplica sin gate de unsloth del repo oficial ideogram-ai/ideogram-4-nf4-diffusers: mismos pesos
+# (SHA-256 idénticos) y la misma licencia, sin tener que aceptarla en Hugging Face ni usar token.
+HF_REPO_ID = "unsloth/ideogram-4-nf4-diffusers"
 
 DEFAULTS = {
     "model_id": "Ideogram4-NF4",

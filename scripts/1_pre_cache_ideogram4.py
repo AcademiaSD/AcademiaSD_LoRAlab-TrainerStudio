@@ -28,7 +28,9 @@ except Exception:
 # NF4 en CPU (prompt manual durante el entrenamiento): bitsandbytes avisa de que no usa el kernel rápido.
 warnings.filterwarnings("ignore", message=".*is not aligned for fast kernel.*")
 
-HF_REPO_ID = "ideogram-ai/ideogram-4-nf4-diffusers"
+# Réplica sin gate de unsloth del repo oficial ideogram-ai/ideogram-4-nf4-diffusers: mismos pesos
+# (SHA-256 idénticos) y la misma licencia, sin tener que aceptarla en Hugging Face ni usar token.
+HF_REPO_ID = "unsloth/ideogram-4-nf4-diffusers"
 
 # ── DEFAULTS / VALORES POR DEFECTO ──────────────────────────────────────────
 DEFAULTS = {
@@ -156,8 +158,6 @@ def ensure_model_downloaded(local_path, repo_id):
 
     print(f"⚠ Local model not found at / No se encontró modelo local en: {local_path}")
     print(f"  Downloading from Hugging Face / Descargando desde Hugging Face: {repo_id}")
-    print("  The repository is gated: accept its license on Hugging Face and set your HF token. / "
-          "El repositorio requiere aceptar su licencia en Hugging Face y poner tu token de HF.")
 
     enable_hf_file_progress()
 
