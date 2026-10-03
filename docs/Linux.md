@@ -9,7 +9,7 @@
 ## [EN] Requirements / [ES] Requisitos
 
 - Linux 64-bit (tested on Nobara/Fedora 44, should work on Ubuntu/Debian/Arch).
-- NVIDIA GPU RTX 20xx / GTX 16xx or newer, driver 580+, 8 GB VRAM (12 GB for LTX-2.3).
+- NVIDIA GPU RTX 20xx / GTX 16xx or newer, driver 580+, 8 GB VRAM (4 GB for Anima in NF4, 12 GB for LTX-2.3).
 - Git, Python 3.13 (`Install_LoRAlab-TrainerStudio.sh` tries to install it via
   `apt`/`dnf`/`pacman`, sudo asked), CUDA Toolkit with `nvcc` (only needed to
   build SageAttention), and `ffmpeg` (needed for MiniMax-H3 video clips).

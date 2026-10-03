@@ -11,6 +11,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-blue.svg" alt="Windows">
+  <img src="https://img.shields.io/badge/Linux-supported-yellow.svg" alt="Linux">
   <img src="https://img.shields.io/badge/GPU-NVIDIA%20RTX%2020xx%2B-green.svg" alt="NVIDIA">
   <img src="https://img.shields.io/badge/Python-3.13-blue.svg" alt="Python">
   <img src="https://img.shields.io/badge/PyTorch-2.14%20cu130-orange.svg" alt="PyTorch">
@@ -42,6 +43,8 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 4. **Actualizar:** doble clic en **`Update_LoRAlab-TrainerStudio.bat`**. Se conservan tus modelos, proyectos y ajustes, y los nuevos entrenadores aparecen en el lanzador.
 5. **Requisitos:** Windows 10/11, GPU NVIDIA **RTX 20xx / GTX 16xx o posterior** con driver **580 o superior**, 8 GB de VRAM (4 GB para Anima en NF4, 12 GB para LTX-2.3) y 16 GB de RAM (32 GB recomendados).
 
+**Linux:** ya tiene soporte para Linux. Cada `.bat` tiene su `.sh` equivalente; la instalación y el uso están en [docs/Linux.md](docs/Linux.md). Gracias a **[Jonathan Hecl (@jonathanhecl)](https://github.com/jonathanhecl)** por aportarlo.
+
 Toda la interfaz y los mensajes de consola están en inglés y en español.
 
 > ⚠️ **Sobre los valores por defecto:** las pruebas se han hecho para comprobar que cada entrenamiento funciona, no para buscar el mejor rendimiento ni la mejor calidad. Haz tus propias pruebas con distintas configuraciones (pasos, learning rate, rank, resolución, captions) para mejorar la calidad de tus LoRAs.
@@ -71,7 +74,7 @@ The automatic captioner adds, only the first time you use it: **nothing** for Kr
 
 | | Minimum | Recommended |
 | :--- | :--- | :--- |
-| **OS** | Windows 10 / 11 | Windows 11 |
+| **OS** | Windows 10 / 11, or 64-bit Linux ([docs/Linux.md](docs/Linux.md)) | Windows 11 |
 | **GPU** | NVIDIA **RTX 20xx / GTX 16xx or newer** (compute capability 7.5+) with **8 GB VRAM** (4 GB for Anima in NF4, 12 GB for LTX-2.3) | 12–24 GB VRAM |
 | **Driver** | NVIDIA **580 or newer** (CUDA 13) | Latest |
 | **RAM** | 16 GB | 32 GB |
@@ -98,6 +101,8 @@ Then, inside the folder:
 2. *(Optional)* Double-click **`Install_Triton&SageAtten220.bat`** for Triton and SageAttention 2.2.
 
 Pick a disk with plenty of free space: every model is downloaded into this folder.
+
+**Linux.** Every `.bat` has a `.sh` equivalent with the same name (`Install_LoRAlab-TrainerStudio.sh`, `Start_LoRAlab-TrainerStudio.sh`, `code/Run_LoRAlab-<Model>.sh`…) and the launcher picks the right one. Install and usage steps are in [docs/Linux.md](docs/Linux.md).
 
 ## 🔄 Updating
 
@@ -241,7 +246,7 @@ Rank 16 matters for characters: with rank 8 the likeness is just as good, but th
 
 ## 📚 Technical notes
 
-Detailed measurements and the reasoning behind each design decision are in `docs\`: [Qwen-Image 2.1](docs/README_QwenImage21.md) · [Krea 2](docs/README_Krea2.md) · [LTX-2.3](docs/README_LTX23.md) · [MiniMax-H3](docs/README_MiniMaxH3.md) (VRAM tables, block swap, video and audio datasets, RefMods and every setting).
+Detailed measurements and the reasoning behind each design decision are in `docs\`: [Qwen-Image 2.1](docs/README_QwenImage21.md) · [Krea 2](docs/README_Krea2.md) · [LTX-2.3](docs/README_LTX23.md) · [MiniMax-H3](docs/README_MiniMaxH3.md) (VRAM tables, block swap, video and audio datasets, RefMods and every setting) · [Linux](docs/Linux.md).
 
 ## 🛠️ Tools for advanced users
 
@@ -251,10 +256,10 @@ Detailed measurements and the reasoning behind each design decision are in `docs
 
 ```text
 AcademiaSD_LoRAlab-TrainerStudio/
-├── Start_LoRAlab-TrainerStudio.bat   # Launcher
-├── Update_LoRAlab-TrainerStudio.bat  # Updater
-├── Install_LoRAlab-TrainerStudio.bat, Install_Triton&SageAtten220.bat
-├── code/                             # Run_LoRAlab-<Model>.bat
+├── Start_LoRAlab-TrainerStudio.bat   # Launcher (.sh on Linux)
+├── Update_LoRAlab-TrainerStudio.bat  # Updater (.sh on Linux)
+├── Install_LoRAlab-TrainerStudio.bat, Install_Triton&SageAtten220.bat (and their .sh)
+├── code/                             # Run_LoRAlab-<Model>.bat / .sh
 ├── scripts/                          # launcher.py, server_<model>.py, 0_caption / 1_pre_cache / 2_train_lora, refmod.py, melband/
 ├── GUI/                              # launcher.html, launcher.json, trainer_ui_<model>.html
 ├── docs/                             # Technical notes per trainer
@@ -283,6 +288,10 @@ The code is released under the **MIT License**. The models keep their own licens
 | Qwen3-VL-4B (MiniMax-H3 captioner) | Apache 2.0 |
 
 Built with PyTorch, Diffusers, Transformers, PEFT, bitsandbytes, Flask and the Hugging Face Hub.
+
+## 🙏 Contributors
+
+- **[Jonathan Hecl (@jonathanhecl)](https://github.com/jonathanhecl)** — Linux support ([PR #1](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/pull/1)). Thank you!
 
 ## 💬 Community & Support
 
