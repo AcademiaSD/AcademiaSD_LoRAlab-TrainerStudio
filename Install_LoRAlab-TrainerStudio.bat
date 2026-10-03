@@ -14,7 +14,7 @@ set "GIT_INSTALLER=%BASE_DIR%Git-64-bit-installer.exe"
 
 echo ========================================================
 echo   INSTALADOR ACADEMIASD LORALAB TRAINER STUDIO / ACADEMIASD LORALAB TRAINER STUDIO INSTALLER
-echo   Un solo entorno para / One environment for: LTX-2.3, Krea 2, MiniMax-H3, Qwen-Image 2.1, Z-Image, Anima, FLUX.2 Klein 9B
+echo   Un solo entorno para / One environment for: LTX-2.3, Krea 2, MiniMax-H3, Qwen-Image 2.1, Z-Image, Anima, FLUX.2 Klein 9B, Ideogram 4
 echo   Entorno Python 3.13.1 + PyTorch CUDA / Python 3.13.1 + PyTorch CUDA Env
 echo   Compatible con GPUs NVIDIA modernas / Compatible with modern NVIDIA GPUs
 echo ========================================================
@@ -458,7 +458,7 @@ echo ========================================================
 echo Diffusers
 echo ========================================================
 
-"%VENV_PYTHON%" -c "import diffusers; print('Diffusers:', diffusers.__version__); from diffusers import LTX2VideoTransformer3DModel; print('LTX-2.3: OK'); from diffusers import Krea2Transformer2DModel, AutoencoderKLQwenImage; print('Krea 2: OK'); from diffusers import AutoencoderKLMiniMaxH3, MiniMaxH3Scheduler; from diffusers.models.transformers import transformer_minimax_h3; print('MiniMax-H3: OK'); from diffusers import QwenImage21Pipeline, QwenImage21Transformer2DModel, AutoencoderKLQwenImage21; print('Qwen-Image 2.1: OK'); from diffusers import ZImagePipeline, ZImageTransformer2DModel; print('Z-Image: OK'); from diffusers import AnimaModularPipeline, AnimaTextConditioner, CosmosTransformer3DModel; print('Anima: OK'); from diffusers import Flux2KleinPipeline, Flux2Transformer2DModel, AutoencoderKLFlux2; print('FLUX.2 Klein 9B: OK')"
+"%VENV_PYTHON%" -c "import diffusers; print('Diffusers:', diffusers.__version__); from diffusers import LTX2VideoTransformer3DModel; print('LTX-2.3: OK'); from diffusers import Krea2Transformer2DModel, AutoencoderKLQwenImage; print('Krea 2: OK'); from diffusers import AutoencoderKLMiniMaxH3, MiniMaxH3Scheduler; from diffusers.models.transformers import transformer_minimax_h3; print('MiniMax-H3: OK'); from diffusers import QwenImage21Pipeline, QwenImage21Transformer2DModel, AutoencoderKLQwenImage21; print('Qwen-Image 2.1: OK'); from diffusers import ZImagePipeline, ZImageTransformer2DModel; print('Z-Image: OK'); from diffusers import AnimaModularPipeline, AnimaTextConditioner, CosmosTransformer3DModel; print('Anima: OK'); from diffusers import Flux2KleinPipeline, Flux2Transformer2DModel, AutoencoderKLFlux2; print('FLUX.2 Klein 9B: OK'); from diffusers import Ideogram4Pipeline, Ideogram4Transformer2DModel; print('Ideogram 4: OK')"
 
 if errorlevel 1 (
     echo.

@@ -29,6 +29,7 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 | **Z-Image** | Image LoRAs (characters, objects, styles) for Z-Image and Z-Image-Turbo | 8 GB |
 | **Anima** | Anime and illustration LoRAs (characters, styles) | **4 GB** (NF4) / 6 GB (BF16) |
 | **FLUX.2 Klein 9B** | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) | 12 GB |
+| **Ideogram 4** | Image LoRAs (characters, objects, styles), with JSON captions | 12 GB (16 GB for previews with CFG) |
 | **LTX-2.3** (also LTX-2.5) | Character and style LoRAs for the LTX video model, trained from images | 12 GB |
 | **MiniMax-H3** | Video LoRAs from images, clips and audio, plus training-free **RefMods** | 8 GB |
 
@@ -42,7 +43,7 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 2. **Abrir:** doble clic en **`Start_LoRAlab-TrainerStudio.bat`** y pulsa la tarjeta del entrenador que quieras. Solo puede haber uno abierto a la vez.
 3. **Entrenar:** nombre del proyecto → carpeta del dataset → *Crear Captions* (opcional) → *Iniciar Pre-Caché* → *Iniciar / Reanudar* → *Send to Models*. El modelo se descarga solo la primera vez.
 4. **Actualizar:** doble clic en **`Update_LoRAlab-TrainerStudio.bat`**. Se conservan tus modelos, proyectos y ajustes, y los nuevos entrenadores aparecen en el lanzador.
-5. **Requisitos:** Windows 10/11, GPU NVIDIA **RTX 20xx / GTX 16xx o posterior** con driver **580 o superior**, 8 GB de VRAM (4 GB para Anima en NF4, 12 GB para LTX-2.3 y FLUX.2 Klein 9B) y 16 GB de RAM (32 GB recomendados).
+5. **Requisitos:** Windows 10/11, GPU NVIDIA **RTX 20xx / GTX 16xx o posterior** con driver **580 o superior**, 8 GB de VRAM (4 GB para Anima en NF4, 12 GB para LTX-2.3, FLUX.2 Klein 9B e Ideogram 4) y 16 GB de RAM (32 GB recomendados).
 
 **Linux:** ya tiene soporte para Linux. Cada `.bat` tiene su `.sh` equivalente; la instalación y el uso están en [docs/Linux.md](docs/Linux.md). Gracias a **[Jonathan Hecl (@jonathanhecl)](https://github.com/jonathanhecl)** por aportarlo.
 
@@ -64,9 +65,10 @@ Each trainer downloads **only what it uses**, already quantized. The table compa
 | **MiniMax-H3** | 498.5 | 41.4 | **41.4** | The 33B model ships in NF4 from the start. |
 | **Z-Image** | 20.5 | — | **5.9** | New trainer: the 6B transformer (12.3 GB) and the Qwen3-4B text encoder (8.0 GB) in NF4 (3.4 GB + 2.7 GB). |
 | **Anima** | 5.6 | — | **5.6** | New trainer: the official diffusers version of Anima-Base. The 2B model trains in BF16, or in NF4 quantized when loading (nothing extra to download). |
+| **Ideogram 4** | 16.1 (NF4) | — | **16.1** | New trainer: the official NF4 release, which includes the unconditional transformer used only by the previews. The repository is gated: accept its license on Hugging Face and set your HF token first. |
 | **FLUX.2 Klein 9B** | 34.7 | — | **8.8** | New trainer: the 9B transformer (18.2 GB) and the Qwen3-8B text encoder (16.4 GB) in NF4 (4.9 GB + 3.8 GB; only the 28 text encoder layers Klein reads). |
 
-The automatic captioner adds, only the first time you use it: **nothing** for Krea 2 (it uses Krea 2's own text encoder), **5.5 GB** for Qwen-Image 2.1 when its text encoder is not already the NF4 one and for LTX-2.3, Z-Image, Anima and FLUX.2 Klein 9B (Qwen3-VL-8B NF4, shared by the four), and **8.9 GB** for MiniMax-H3 (Qwen3-VL-4B).
+The automatic captioner adds, only the first time you use it: **nothing** for Krea 2 (it uses Krea 2's own text encoder), **5.5 GB** for Qwen-Image 2.1 when its text encoder is not already the NF4 one and for LTX-2.3, Z-Image, Anima, FLUX.2 Klein 9B and Ideogram 4 (Qwen3-VL-8B NF4, shared by all of them), and **8.9 GB** for MiniMax-H3 (Qwen3-VL-4B).
 
 > **Upgrading from an old standalone LoRAlab?** Copy its model folder into Trainer Studio instead of downloading it again. Then you can delete what is no longer used: `Krea-2-NF4/transformer` (~26 GB) and, in `LTX23-NF4`, the `transformer` (~38 GB) and `text_encoder` (~49 GB) folders.
 
@@ -77,7 +79,7 @@ The automatic captioner adds, only the first time you use it: **nothing** for Kr
 | | Minimum | Recommended |
 | :--- | :--- | :--- |
 | **OS** | Windows 10 / 11, or 64-bit Linux ([docs/Linux.md](docs/Linux.md)) | Windows 11 |
-| **GPU** | NVIDIA **RTX 20xx / GTX 16xx or newer** (compute capability 7.5+) with **8 GB VRAM** (4 GB for Anima in NF4, 12 GB for LTX-2.3 and FLUX.2 Klein 9B) | 12–24 GB VRAM |
+| **GPU** | NVIDIA **RTX 20xx / GTX 16xx or newer** (compute capability 7.5+) with **8 GB VRAM** (4 GB for Anima in NF4, 12 GB for LTX-2.3, FLUX.2 Klein 9B and Ideogram 4) | 12–24 GB VRAM |
 | **Driver** | NVIDIA **580 or newer** (CUDA 13) | Latest |
 | **RAM** | 16 GB | 32 GB |
 | **Disk** | The model of each trainer you use (table above) plus your datasets and caches | SSD |
@@ -223,8 +225,27 @@ All times were measured on an RTX 5080 16 GB.
 | Rank / Alpha | 16 / 16 |
 | Learning rate | 3e-4 |
 | Steps | 1,000 (14 images): the likeness shows from ~500, but in ComfyUI the 1,000-step LoRA looks better than the 600 and 700 ones |
-| LoRA strength in ComfyUI | 1.0 (1,000 steps) |
+| LoRA strength in ComfyUI | 1.0 for characters (1,000 steps) · 1.0–1.5 for edit LoRAs |
 | Speed and VRAM | 512²: ~1.5 s/step, ~8 GB · 768²: ~2.6 s/step, ~10 GB · edit at 512²: ~2.3 s/step, ~8 GB · edit at 768²: ~5.7 s/step, ~11 GB |
+
+### Ideogram 4 — image LoRAs
+
+- Trains on the official **Ideogram 4 NF4** release (9.3B, diffusers). It is a single-stream transformer: text and image tokens share one sequence.
+- **Captioner:** Qwen3-VL-8B NF4 (the same model as Ideogram's text encoder), with two styles: **Ideogram JSON** (default), the structured caption the model was trained on (`high_level_description` + `compositional_deconstruction`), or **natural language**. JSON captions are validated and saved on one line, with the trigger word at the start of the description.
+- **Use JSON for captions and preview prompts.** Ideogram 4 depends on its JSON format: in our tests a short plain prompt ("a woman with blonde hair in a green sweater reading in a library") gave odd crops or was blocked, while the same scene written as a JSON caption came out right. For the custom preview prompt, copy a caption from the dataset and edit it.
+- **Previews:** 28 steps / CFG 7 with the last 3 steps at CFG 3, as in the official pipeline. Ideogram's guidance uses a second, **unconditional transformer** (4.3 GB): it is loaded only for the previews and moved to the GPU while each one runs, so previews with CFG need ~15 GB at 1024². On 12 GB cards set **Preview CFG to 1**. **Preview Size** as in Z-Image.
+- **Built-in safety filter:** Ideogram 4 was trained to output a grey "Image blocked by safety filter" image for some prompts (for example a woman at the beach). It is the model itself, not the trainer, and its license forbids circumventing it: change the preview prompt if it happens.
+- **LoRA Targets:** *Blocks* (attention + MLP of the 34 blocks, default) or *All*. The LoRA is exported with ComfyUI's own layer names (q, k and v merged into `attention.qkv`), so ComfyUI loads it directly.
+
+| Tested starting point | |
+| :--- | :--- |
+| Captions | Ideogram JSON |
+| Resolution | 1024×1024 |
+| Rank / Alpha | 16 / 16 |
+| Learning rate | 3e-4 |
+| Steps | 1,000 (14 images): the likeness shows from ~500 |
+| LoRA strength in ComfyUI | 1.0 |
+| Speed and VRAM | ~5.7 s/step (~1 h 35 min for 1,000 steps plus previews) and ~10 GB at 1024²; ~15 GB during previews with CFG |
 
 ### LTX-2.3 — character and style LoRAs for the LTX video model
 
@@ -289,7 +310,7 @@ AcademiaSD_LoRAlab-TrainerStudio/
 └── settings/                         # Your settings and HF token (created on first use, never uploaded)
 ```
 
-Models (`Krea-2-NF4`, `LTX23-NF4`, `MiniMax-H3-NF4`, `Qwen-Image21-NF4`, `Z-Image_NF4`, `Anima-Base`, `FLUX.2-Klein-9B_NF4`, captioners), caches and LoRA outputs are created next to these folders on first use.
+Models (`Krea-2-NF4`, `LTX23-NF4`, `MiniMax-H3-NF4`, `Qwen-Image21-NF4`, `Z-Image_NF4`, `Anima-Base`, `FLUX.2-Klein-9B_NF4`, `Ideogram4-NF4`, captioners), caches and LoRA outputs are created next to these folders on first use.
 
 ---
 
@@ -306,6 +327,7 @@ The code is released under the **MIT License**. The models keep their own licens
 | Z-Image (and the Z-Image-Fun-Lora-Distill preview LoRA) | Apache 2.0 |
 | Anima | CircleStone Labs Non-Commercial License (plus the NVIDIA Open Model License for Cosmos). Images you generate can be used commercially |
 | FLUX.2 Klein 9B (and the Klein 9B turbo preview LoRA) | FLUX Non-Commercial License — non-commercial |
+| Ideogram 4 | Ideogram Non-Commercial Model Agreement — non-commercial; LoRAs are model derivatives under the same license |
 | Qwen3-VL-4B (MiniMax-H3 captioner) | Apache 2.0 |
 
 Built with PyTorch, Diffusers, Transformers, PEFT, bitsandbytes, Flask and the Hugging Face Hub.

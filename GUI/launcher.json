@@ -52,6 +52,13 @@
       "description": "LoRAs de imagen y edición / Image and edit LoRAs",
       "image": "assets/klein9b/portada.jpg",
       "run": "Run_LoRAlab-Klein9B.bat"
+    },
+    {
+      "id": "ideogram4",
+      "name": "Ideogram 4",
+      "description": "LoRAs de imagen / Image LoRAs",
+      "image": "assets/ideogram4/portada.jpg",
+      "run": "Run_LoRAlab-Ideogram4.bat"
     }
   ]
 }

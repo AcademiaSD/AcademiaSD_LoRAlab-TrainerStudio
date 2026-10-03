@@ -9,7 +9,7 @@
 ## [EN] Requirements / [ES] Requisitos
 
 - Linux 64-bit (tested on Nobara/Fedora 44, should work on Ubuntu/Debian/Arch).
-- NVIDIA GPU RTX 20xx / GTX 16xx or newer, driver 580+, 8 GB VRAM (4 GB for Anima in NF4, 12 GB for LTX-2.3 and FLUX.2 Klein 9B).
+- NVIDIA GPU RTX 20xx / GTX 16xx or newer, driver 580+, 8 GB VRAM (4 GB for Anima in NF4, 12 GB for LTX-2.3, FLUX.2 Klein 9B and Ideogram 4).
 - Git, Python 3.13 (`Install_LoRAlab-TrainerStudio.sh` tries to install it via
   `apt`/`dnf`/`pacman`, sudo asked), CUDA Toolkit with `nvcc` (only needed to
   build SageAttention), and `ffmpeg` (needed for MiniMax-H3 video clips).
@@ -45,6 +45,7 @@ stops the trainer, same as `start` does with the `.bat` on Windows. Over SSH
 ./code/Run_LoRAlab-ZImage.sh
 ./code/Run_LoRAlab-Anima.sh
 ./code/Run_LoRAlab-Klein9B.sh
+./code/Run_LoRAlab-Ideogram4.sh
 ```
 
 ## [EN] Notes / [ES] Notas
