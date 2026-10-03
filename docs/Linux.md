@@ -43,6 +43,7 @@ stops the trainer, same as `start` does with the `.bat` on Windows. Over SSH
 ./code/Run_LoRAlab-MiniMaxH3.sh
 ./code/Run_LoRAlab-QwenImage21.sh
 ./code/Run_LoRAlab-ZImage.sh
+./code/Run_LoRAlab-Anima.sh
 ```
 
 ## [EN] Notes / [ES] Notas

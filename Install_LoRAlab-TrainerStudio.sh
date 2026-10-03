@@ -2,7 +2,7 @@
 # ========================================================
 # INSTALADOR ACADEMIASD LORALAB TRAINER STUDIO (Linux)
 # ACADEMIASD LORALAB TRAINER STUDIO INSTALLER (Linux)
-# Un solo entorno para / One environment for: LTX-2.3, Krea 2, MiniMax-H3, Qwen-Image 2.1, Z-Image
+# Un solo entorno para / One environment for: LTX-2.3, Krea 2, MiniMax-H3, Qwen-Image 2.1, Z-Image, Anima
 # Entorno Python 3.13 + PyTorch CUDA / Python 3.13 + PyTorch CUDA Env
 # Compatible con GPUs NVIDIA modernas / Compatible with modern NVIDIA GPUs
 # Equivalente Linux de / Linux equivalent of: Install_LoRAlab-TrainerStudio.bat
@@ -16,7 +16,7 @@ PYTHON_EXE=""
 
 echo "========================================================"
 echo "  INSTALADOR ACADEMIASD LORALAB TRAINER STUDIO / INSTALLER"
-echo "  Un solo entorno para / One environment for: LTX-2.3, Krea 2, MiniMax-H3, Qwen-Image 2.1, Z-Image"
+echo "  Un solo entorno para / One environment for: LTX-2.3, Krea 2, MiniMax-H3, Qwen-Image 2.1, Z-Image, Anima"
 echo "  Entorno Python 3.13 + PyTorch CUDA / Python 3.13 + PyTorch CUDA Env"
 echo "========================================================"
 echo
@@ -291,7 +291,7 @@ echo
 echo "========================================================"
 echo "Diffusers"
 echo "========================================================"
-"${VENV_PYTHON}" -c "import diffusers; print('Diffusers:', diffusers.__version__); from diffusers import LTX2VideoTransformer3DModel; print('LTX-2.3: OK'); from diffusers import Krea2Transformer2DModel, AutoencoderKLQwenImage; print('Krea 2: OK'); from diffusers import AutoencoderKLMiniMaxH3, MiniMaxH3Scheduler; from diffusers.models.transformers import transformer_minimax_h3; print('MiniMax-H3: OK'); from diffusers import QwenImage21Pipeline, QwenImage21Transformer2DModel, AutoencoderKLQwenImage21; print('Qwen-Image 2.1: OK'); from diffusers import ZImagePipeline, ZImageTransformer2DModel; print('Z-Image: OK')" || {
+"${VENV_PYTHON}" -c "import diffusers; print('Diffusers:', diffusers.__version__); from diffusers import LTX2VideoTransformer3DModel; print('LTX-2.3: OK'); from diffusers import Krea2Transformer2DModel, AutoencoderKLQwenImage; print('Krea 2: OK'); from diffusers import AutoencoderKLMiniMaxH3, MiniMaxH3Scheduler; from diffusers.models.transformers import transformer_minimax_h3; print('MiniMax-H3: OK'); from diffusers import QwenImage21Pipeline, QwenImage21Transformer2DModel, AutoencoderKLQwenImage21; print('Qwen-Image 2.1: OK'); from diffusers import ZImagePipeline, ZImageTransformer2DModel; print('Z-Image: OK'); from diffusers import AnimaModularPipeline, AnimaTextConditioner, CosmosTransformer3DModel; print('Anima: OK')" || {
     echo "[ERROR] Diffusers no incluye todos los modelos / Diffusers does not include every model."
     exit 1
 }

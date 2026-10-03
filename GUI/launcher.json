@@ -38,6 +38,13 @@
       "description": "LoRAs de imagen (también Z-Image-Turbo) / Image LoRAs (also Z-Image-Turbo)",
       "image": "assets/zimage/portada.jpg",
       "run": "Run_LoRAlab-ZImage.bat"
+    },
+    {
+      "id": "anima",
+      "name": "Anima",
+      "description": "LoRAs de anime e ilustración / Anime and illustration LoRAs",
+      "image": "assets/anima/portada.jpg",
+      "run": "Run_LoRAlab-Anima.bat"
     }
   ]
 }

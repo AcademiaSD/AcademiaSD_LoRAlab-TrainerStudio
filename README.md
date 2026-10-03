@@ -26,6 +26,7 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 | **Qwen-Image 2.1** | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) | 8 GB |
 | **Krea 2** | Image LoRAs (characters, objects, styles) for Krea 2 Raw and Turbo | 8 GB |
 | **Z-Image** | Image LoRAs (characters, objects, styles) for Z-Image and Z-Image-Turbo | 8 GB |
+| **Anima** | Anime and illustration LoRAs (characters, styles) | **4 GB** (NF4) / 6 GB (BF16) |
 | **LTX-2.3** (also LTX-2.5) | Character and style LoRAs for the LTX video model, trained from images | 12 GB |
 | **MiniMax-H3** | Video LoRAs from images, clips and audio, plus training-free **RefMods** | 8 GB |
 
@@ -39,7 +40,7 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 2. **Abrir:** doble clic en **`Start_LoRAlab-TrainerStudio.bat`** y pulsa la tarjeta del entrenador que quieras. Solo puede haber uno abierto a la vez.
 3. **Entrenar:** nombre del proyecto → carpeta del dataset → *Crear Captions* (opcional) → *Iniciar Pre-Caché* → *Iniciar / Reanudar* → *Send to Models*. El modelo se descarga solo la primera vez.
 4. **Actualizar:** doble clic en **`Update_LoRAlab-TrainerStudio.bat`**. Se conservan tus modelos, proyectos y ajustes, y los nuevos entrenadores aparecen en el lanzador.
-5. **Requisitos:** Windows 10/11, GPU NVIDIA **RTX 20xx / GTX 16xx o posterior** con driver **580 o superior**, 8 GB de VRAM (12 GB para LTX-2.3) y 16 GB de RAM (32 GB recomendados).
+5. **Requisitos:** Windows 10/11, GPU NVIDIA **RTX 20xx / GTX 16xx o posterior** con driver **580 o superior**, 8 GB de VRAM (4 GB para Anima en NF4, 12 GB para LTX-2.3) y 16 GB de RAM (32 GB recomendados).
 
 Toda la interfaz y los mensajes de consola están en inglés y en español.
 
@@ -58,8 +59,9 @@ Each trainer downloads **only what it uses**, already quantized. The table compa
 | **Qwen-Image 2.1** | ~32 (BF16) | 21.9 | **21.9 / 14.4 / 11.0** | Only the text encoder you pick is downloaded: BF16 (exact, default) / INT8 / NF4. |
 | **MiniMax-H3** | 498.5 | 41.4 | **41.4** | The 33B model ships in NF4 from the start. |
 | **Z-Image** | 20.5 | — | **5.9** | New trainer: the 6B transformer (12.3 GB) and the Qwen3-4B text encoder (8.0 GB) in NF4 (3.4 GB + 2.7 GB). |
+| **Anima** | 5.6 | — | **5.6** | New trainer: the official diffusers version of Anima-Base. The 2B model trains in BF16, or in NF4 quantized when loading (nothing extra to download). |
 
-The automatic captioner adds, only the first time you use it: **nothing** for Krea 2 (it uses Krea 2's own text encoder), **5.5 GB** for Qwen-Image 2.1 when its text encoder is not already the NF4 one and for LTX-2.3 and Z-Image (Qwen3-VL-8B NF4, shared by both), and **8.9 GB** for MiniMax-H3 (Qwen3-VL-4B).
+The automatic captioner adds, only the first time you use it: **nothing** for Krea 2 (it uses Krea 2's own text encoder), **5.5 GB** for Qwen-Image 2.1 when its text encoder is not already the NF4 one and for LTX-2.3, Z-Image and Anima (Qwen3-VL-8B NF4, shared by the three), and **8.9 GB** for MiniMax-H3 (Qwen3-VL-4B).
 
 > **Upgrading from an old standalone LoRAlab?** Copy its model folder into Trainer Studio instead of downloading it again. Then you can delete what is no longer used: `Krea-2-NF4/transformer` (~26 GB) and, in `LTX23-NF4`, the `transformer` (~38 GB) and `text_encoder` (~49 GB) folders.
 
@@ -70,7 +72,7 @@ The automatic captioner adds, only the first time you use it: **nothing** for Kr
 | | Minimum | Recommended |
 | :--- | :--- | :--- |
 | **OS** | Windows 10 / 11 | Windows 11 |
-| **GPU** | NVIDIA **RTX 20xx / GTX 16xx or newer** (compute capability 7.5+) with **8 GB VRAM** (12 GB for LTX-2.3) | 12–24 GB VRAM |
+| **GPU** | NVIDIA **RTX 20xx / GTX 16xx or newer** (compute capability 7.5+) with **8 GB VRAM** (4 GB for Anima in NF4, 12 GB for LTX-2.3) | 12–24 GB VRAM |
 | **Driver** | NVIDIA **580 or newer** (CUDA 13) | Latest |
 | **RAM** | 16 GB | 32 GB |
 | **Disk** | The model of each trainer you use (table above) plus your datasets and caches | SSD |
@@ -183,6 +185,22 @@ All times were measured on an RTX 5080 16 GB.
 | Time | ~0.9 s/step at 512²: ~23 min plus previews |
 | LoRA strength in ComfyUI | **Z-Image: 1.0–1.5** · **Z-Image-Turbo: 1.5–2.5** |
 
+### Anima — anime and illustration LoRAs
+
+- **Anima** is a 2B anime / illustration model by CircleStone Labs and Comfy Org, built on NVIDIA Cosmos-Predict2. The trainer uses **Anima-Base**, the version its author recommends for LoRAs, downloaded from the official diffusers repository.
+- **Model Precision:** *BF16* (full quality, ~5.6 GB of VRAM while training at 512²) or *NF4* (attention and MLP quantized when loading, ~3.1 GB at 512²: it fits **4 GB** cards). Images from the NF4 transformer look like the BF16 ones.
+- The text goes through Qwen3-0.6B and Anima's **LLM adapter** in the pre-cache. The adapter is **never trained**, as the author advises: it holds a lot of the model's knowledge and degrades easily.
+- **Captioner:** Qwen3-VL-8B NF4, shared with LTX-2.3 and Z-Image, with two styles: **natural language** or **Danbooru tags** (lowercase, spaces instead of underscores). Anima was trained on both.
+- **Previews:** 30 steps / CFG 4 with the author's recommended negative prompt, and **Preview Size** as in Z-Image.
+- The LoRA is exported with Anima's own layer names (`diffusion_model.blocks.N.self_attn.q_proj`…), which ComfyUI loads directly.
+
+| Starting point (author's recommendation) | |
+| :--- | :--- |
+| Resolution | 768×768 (Anima works from 512² to 1536²) |
+| Rank / Alpha | 32 / 32 |
+| Learning rate | 2e-5 |
+| Speed | ~0.65 s/step at 512² in BF16, ~0.8 s/step in NF4 (under 4 GB of VRAM); ~1.6 s/step at 1024² in BF16 |
+
 ### LTX-2.3 — character and style LoRAs for the LTX video model
 
 - Works with **LTX-2.3 and LTX-2.5**.
@@ -246,7 +264,7 @@ AcademiaSD_LoRAlab-TrainerStudio/
 └── settings/                         # Your settings and HF token (created on first use, never uploaded)
 ```
 
-Models (`Krea-2-NF4`, `LTX23-NF4`, `MiniMax-H3-NF4`, `Qwen-Image21-NF4`, `Z-Image_NF4`, captioners), caches and LoRA outputs are created next to these folders on first use.
+Models (`Krea-2-NF4`, `LTX23-NF4`, `MiniMax-H3-NF4`, `Qwen-Image21-NF4`, `Z-Image_NF4`, `Anima-Base`, captioners), caches and LoRA outputs are created next to these folders on first use.
 
 ---
 
@@ -261,6 +279,7 @@ The code is released under the **MIT License**. The models keep their own licens
 | LTX-2.3 | LTX-2 Open-Source License |
 | MiniMax-H3 | MiniMax-H3 Community License Agreement |
 | Z-Image (and the Z-Image-Fun-Lora-Distill preview LoRA) | Apache 2.0 |
+| Anima | CircleStone Labs Non-Commercial License (plus the NVIDIA Open Model License for Cosmos). Images you generate can be used commercially |
 | Qwen3-VL-4B (MiniMax-H3 captioner) | Apache 2.0 |
 
 Built with PyTorch, Diffusers, Transformers, PEFT, bitsandbytes, Flask and the Hugging Face Hub.
