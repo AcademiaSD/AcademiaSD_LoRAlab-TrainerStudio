@@ -385,7 +385,7 @@ def convert_transformer(output_dir):
     quantized_count, unquantized_count, others_count = extract_nf4_cache(transformer, output_dir)
 
     metadata = {
-        "format": "ZImageTurbo-NF4",
+        "format": "ZImage-NF4",
         "version": 1,
         "model_id": REPO_ID,
         "dtype": "bfloat16",
