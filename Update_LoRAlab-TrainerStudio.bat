@@ -78,4 +78,16 @@ echo.
 echo [EN] Update process completed.
 echo [ES] Proceso de actualizacion completado.
 echo.
+
+rem 6. Librerias nuevas o actualizadas de requirements.txt / New or updated libraries from requirements.txt
+echo Actualizando librerias de Python... / Updating Python libraries...
+set "PY_EXE=%~dp0venv\Scripts\python.exe"
+if defined LORALAB_PYTHON set "PY_EXE=%LORALAB_PYTHON%"
+if exist "!PY_EXE!" (
+    "!PY_EXE!" -m pip install -r "%~dp0requirements.txt"
+    if errorlevel 1 echo [AVISO] No se pudieron actualizar las librerias / [WARNING] Could not update the libraries.
+) else (
+    echo [AVISO] No hay entorno: ejecuta Install_LoRAlab-TrainerStudio.bat / [WARNING] No environment: run Install_LoRAlab-TrainerStudio.bat
+)
+echo.
 pause

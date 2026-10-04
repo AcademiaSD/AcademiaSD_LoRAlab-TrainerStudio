@@ -76,3 +76,13 @@ echo "[ES] Proceso de actualizacion completado."
 echo
 echo "[EN] Your models, datasets, projects, LoRAs and settings were kept."
 echo "[ES] Tus modelos, datasets, proyectos, LoRAs y ajustes se han conservado."
+
+# 6. Librerias nuevas o actualizadas de requirements.txt / New or updated libraries from requirements.txt
+PY_EXE="${LORALAB_PYTHON:-./venv/bin/python}"
+echo
+echo "Actualizando librerias de Python... / Updating Python libraries..."
+if [ -x "${PY_EXE}" ]; then
+    "${PY_EXE}" -m pip install -r requirements.txt || echo "[AVISO] No se pudieron actualizar las librerias / [WARNING] Could not update the libraries."
+else
+    echo "[AVISO] No hay entorno: ejecuta ./Install_LoRAlab-TrainerStudio.sh / [WARNING] No environment: run ./Install_LoRAlab-TrainerStudio.sh"
+fi

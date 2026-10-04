@@ -229,25 +229,10 @@ echo
 }
 
 echo
-echo "Instalando Diffusers desde GitHub (Qwen-Image 2.1 y MiniMax-H3 aun no estan en una version publicada)..."
-echo "Installing Diffusers from GitHub (Qwen-Image 2.1 and MiniMax-H3 are not in a released version yet)..."
-"${VENV_PYTHON}" -m pip install https://github.com/huggingface/diffusers/archive/refs/heads/main.zip || {
-    echo "[ERROR] Error instalando Diffusers / Error installing Diffusers."
-    exit 1
-}
-
-echo
-echo "Instalando Transformers 5.17+, PEFT, Accelerate, Safetensors y Hugging Face Hub..."
-echo "Installing Transformers 5.17+, PEFT, Accelerate, Safetensors, and Hugging Face Hub..."
-"${VENV_PYTHON}" -m pip install "transformers>=5.17" peft accelerate safetensors huggingface_hub || {
+echo "Instalando Diffusers, Transformers, PEFT, BitsAndBytes y utilidades (requirements.txt)..."
+echo "Installing Diffusers, Transformers, PEFT, BitsAndBytes and utilities (requirements.txt)..."
+"${VENV_PYTHON}" -m pip install -r "${BASE_DIR}requirements.txt" || {
     echo "[ERROR] Error instalando dependencias / Error installing dependencies."
-    exit 1
-}
-
-echo
-echo "Instalando BitsAndBytes y utilidades... / Installing BitsAndBytes and utilities..."
-"${VENV_PYTHON}" -m pip install bitsandbytes sentencepiece protobuf pyarrow einops rotary_embedding_torch flask psutil || {
-    echo "[ERROR] Error instalando BitsAndBytes o utilidades / Error installing BitsAndBytes or utilities."
     exit 1
 }
 
