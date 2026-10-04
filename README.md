@@ -16,6 +16,7 @@
   <img src="https://img.shields.io/badge/Python-3.13-blue.svg" alt="Python">
   <img src="https://img.shields.io/badge/PyTorch-2.14%20cu130-orange.svg" alt="PyTorch">
   <img src="https://img.shields.io/badge/UI-Flask%20%2B%20HTML5-purple.svg" alt="Web UI">
+  <a href="https://console.runpod.io/deploy?template=lfxvtg5rrb&ref=jbvdshm0"><img src="https://img.shields.io/badge/Deploy%20on-RunPod-673ab7.svg" alt="Deploy on RunPod"></a>
 </p>
 
 > 🧪 **Aviso:** se ha añadido soporte a muchos modelos de forma casi simultánea. Es posible que haya bugs, ajustes pendientes o que las configuraciones de entrenamiento y de previsualización por defecto no sean las adecuadas. Por favor, escribe en [Issues](../../issues) contando los problemas que encuentres o los ajustes con los que has conseguido mejores resultados. ¡Gracias!
@@ -53,7 +54,8 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 3. **Entrenar:** nombre del proyecto → carpeta del dataset → *Crear Captions* (opcional) → *Iniciar Pre-Caché* → *Iniciar / Reanudar* → *Send to Models*. El modelo se descarga solo la primera vez.
 4. **Actualizar:** doble clic en **`Update_LoRAlab-TrainerStudio.bat`**. Se conservan tus modelos, proyectos y ajustes, los nuevos entrenadores aparecen en el lanzador y se instalan las librerías nuevas que hagan falta.
 5. **Desde otro equipo:** el botón **🌐 Remote access** del lanzador abre el entrenador a tu red con usuario y contraseña. Con **⬆ Subir** (o arrastrando archivos o un `.zip` al Dataset Manager) mandas el dataset desde ese equipo, y con **⬇ Descargar LoRA** te bajas el resultado.
-6. **Requisitos:** Windows 10/11, GPU NVIDIA **RTX 20xx / GTX 16xx o posterior** con driver **580 o superior**, 8 GB de VRAM (4 GB para Anima y SDXL en NF4, 12 GB para LTX-2.3, FLUX.2 Klein 9B, Ideogram 4 y SDXL en BF16) y 16 GB de RAM (32 GB recomendados).
+6. **Sin GPU potente:** entrena en la nube con **[RunPod](https://console.runpod.io/deploy?template=lfxvtg5rrb&ref=jbvdshm0)**. Es una plantilla ya preparada: eliges una GPU con CUDA 13, entras con el usuario `loralab` y la contraseña que aparece en *Logs → Container*, y al terminar paras y borras el pod. Detalles en la sección *RunPod*.
+7. **Requisitos:** Windows 10/11, GPU NVIDIA **RTX 20xx / GTX 16xx o posterior** con driver **580 o superior**, 8 GB de VRAM (4 GB para Anima y SDXL en NF4, 12 GB para LTX-2.3, FLUX.2 Klein 9B, Ideogram 4 y SDXL en BF16) y 16 GB de RAM (32 GB recomendados).
 
 **Linux:** ya tiene soporte para Linux. Cada `.bat` tiene su `.sh` equivalente; la instalación y el uso están en [docs/Linux.md](docs/Linux.md). Gracias a **[Jonathan Hecl (@jonathanhecl)](https://github.com/jonathanhecl)** por aportarlo.
 
@@ -329,6 +331,20 @@ MiniMax-H3 is a 33B model that generates **video and audio together**. The offic
 Rank 16 matters for characters: with rank 8 the likeness is just as good, but the model starts ignoring the prompt (ask for a beach, get a bedroom). On an 8 GB card the same image run takes ~80 minutes instead of 37.
 
 ---
+
+## ☁️ RunPod
+
+No suitable GPU at home? Train in the cloud with the ready-made template:
+
+<a href="https://console.runpod.io/deploy?template=lfxvtg5rrb&ref=jbvdshm0"><img src="https://img.shields.io/badge/Deploy%20on-RunPod-673ab7.svg?style=for-the-badge" alt="Deploy on RunPod"></a>
+
+1. Pick a GPU (the template only allows machines with **CUDA 13**). 24 GB or more is comfortable; SDXL and Anima also train on 16 GB. Cheap cards cost around $0.25–0.50 per hour.
+2. Keep the 100 GB volume: models, datasets and LoRAs are stored in `/workspace`.
+3. Open **Logs → Container** and wait for `Open / Abre: https://<pod>-4990.proxy.runpod.net` (the first start takes a few minutes). Log in with user `loralab` and the password printed just above it, or set `LORALAB_PASSWORD` when deploying to choose your own.
+4. Pick a trainer, upload your dataset with **⬆ Upload** (images and captions, or a `.zip`), pre-cache, train and save the result with **⬇ Download LoRA**.
+5. **When you finish, Stop and then Terminate the pod.** Closing the browser does not stop billing, and a stopped pod still pays for its volume.
+
+The image ([`ghcr.io/academiasd/loralab-trainerstudio`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/pkgs/container/loralab-trainerstudio)) only holds the environment; the code comes from this repository on every start, so the pod always runs the latest version. `LORALAB_REF` pins a branch or tag. The image is built from `docker/` by GitHub Actions. The deploy link includes the AcademiaSD referral code, which gives the channel RunPod credit at no cost to you.
 
 ## 🌐 Remote access
 
