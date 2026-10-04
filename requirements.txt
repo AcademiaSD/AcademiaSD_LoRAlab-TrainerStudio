@@ -1,0 +1,31 @@
+# AcademiaSD LoRAlab Trainer Studio — dependencies for your own environment (conda, uv, venv...).
+# The installers (Install_LoRAlab-TrainerStudio.bat / .sh) install exactly this; use this file only
+# if you manage the environment yourself, then point LORALAB_PYTHON at its python (see README).
+#
+# Python 3.13, NVIDIA GPU. PyTorch must be the CUDA 13.0 build:
+#   pip install -r requirements.txt
+# picks it from the PyTorch index below. ffmpeg (MiniMax-H3 video clips) must be on PATH.
+
+--extra-index-url https://download.pytorch.org/whl/cu130
+torch
+torchvision
+torchaudio
+
+# diffusers from the main branch: Klein 9B, Ideogram 4 and MiniMax-H3 are not in a release yet.
+diffusers @ https://github.com/huggingface/diffusers/archive/refs/heads/main.zip
+transformers>=5.17
+peft
+accelerate
+safetensors
+huggingface_hub
+
+bitsandbytes
+sentencepiece
+protobuf
+pyarrow
+einops
+rotary_embedding_torch
+flask
+psutil
+
+# Optional, faster attention on Windows: Install_Triton&SageAtten220.bat

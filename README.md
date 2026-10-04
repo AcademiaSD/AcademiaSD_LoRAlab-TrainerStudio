@@ -344,6 +344,21 @@ The launcher and the trainers are web pages, so you can train from a laptop, a t
 - The settings can only be changed from the training PC and are saved in `settings/network.json` (the password as a hash).
 - It is plain HTTP, meant for your home network. **Do not open these ports to the Internet**: to connect from outside, use [Tailscale](https://tailscale.com) or an SSH tunnel (`ssh -L 4990:localhost:4990 -L 5000:localhost:5000 user@training-pc`).
 
+## 🐍 Using your own Python environment
+
+The installers create `venv\` and install everything there. To use your own environment instead (conda, uv...), install `requirements.txt` in it and set **`LORALAB_PYTHON`** to its python before starting; every launcher uses it instead of `venv\`:
+
+```bat
+set LORALAB_PYTHON=C:\Users\you\miniconda3\envs\loralab\python.exe
+Start_LoRAlab-TrainerStudio.bat
+```
+
+```bash
+LORALAB_PYTHON=~/miniconda3/envs/loralab/bin/python ./Start_LoRAlab-TrainerStudio.sh
+```
+
+It needs Python 3.13, the CUDA 13.0 build of PyTorch (`requirements.txt` takes it from the PyTorch index), diffusers from its main branch and, for MiniMax-H3 clips, ffmpeg on the PATH.
+
 ## 📚 Technical notes
 
 Detailed measurements and the reasoning behind each design decision are in `docs\`: [Qwen-Image 2.1](docs/README_QwenImage21.md) · [Krea 2](docs/README_Krea2.md) · [LTX-2.3](docs/README_LTX23.md) · [MiniMax-H3](docs/README_MiniMaxH3.md) (VRAM tables, block swap, video and audio datasets, RefMods and every setting) · [Linux](docs/Linux.md).

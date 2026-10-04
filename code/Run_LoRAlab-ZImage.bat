@@ -4,6 +4,8 @@ title AcademiaSD LoRAlab Trainer Studio - Z-Image
 cd /d "%~dp0.."
 set "BASE_DIR=%CD%\"
 set "PYTHON_EXE=%BASE_DIR%venv\Scripts\python.exe"
+:: LORALAB_PYTHON: el python de tu propio entorno (conda, uv...) en lugar del venv / your own environment's python instead of the venv
+if defined LORALAB_PYTHON set "PYTHON_EXE=%LORALAB_PYTHON%"
 
 echo.
 echo ================================================================
@@ -34,8 +36,6 @@ if not exist "%BASE_DIR%GUI\trainer_ui_zimage.html" (
 )
 
 echo Iniciando servidor web / Starting web server...
-echo.
-echo     http://127.0.0.1:5000
 echo.
 echo Cierra esta ventana para detener el servidor / Close this window to stop the server.
 echo.

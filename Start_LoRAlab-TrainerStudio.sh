@@ -5,7 +5,8 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
-PYTHON_EXE="./venv/bin/python"
+# LORALAB_PYTHON: el python de tu propio entorno (conda, uv...) / your own environment's python
+PYTHON_EXE="${LORALAB_PYTHON:-./venv/bin/python}"
 
 if [ ! -x "${PYTHON_EXE}" ]; then
     echo "[ERROR] No se ha encontrado el entorno virtual / Virtual environment not found:"

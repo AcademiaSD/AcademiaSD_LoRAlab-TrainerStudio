@@ -10,7 +10,8 @@ trap pause_on_exit EXIT
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 BASE_DIR="$(pwd)/"
-PYTHON_EXE="${BASE_DIR}venv/bin/python"
+# LORALAB_PYTHON: el python de tu propio entorno (conda, uv...) / your own environment's python
+PYTHON_EXE="${LORALAB_PYTHON:-${BASE_DIR}venv/bin/python}"
 
 echo
 echo "================================================================"
@@ -37,8 +38,6 @@ if [ ! -f "${BASE_DIR}GUI/trainer_ui_qwenimage21.html" ]; then
 fi
 
 echo "Iniciando servidor web / Starting web server..."
-echo
-echo "    http://127.0.0.1:5000"
 echo
 echo "Pulsa Ctrl+C para detener el servidor / Press Ctrl+C to stop the server."
 echo
