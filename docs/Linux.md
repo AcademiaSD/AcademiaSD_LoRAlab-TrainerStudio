@@ -49,6 +49,13 @@ stops the trainer, same as `start` does with the `.bat` on Windows. Over SSH
 ./code/Run_LoRAlab-SDXL.sh
 ```
 
+On a headless server, enable **🌐 Remote access** in the launcher (or edit
+`settings/network.json`) to open the launcher and trainers from another device,
+with a password or behind your own reverse proxy: see *Remote access* in the
+README. To use your own conda/uv environment instead of `venv/`, install
+`requirements.txt` in it and start with
+`LORALAB_PYTHON=/path/to/env/bin/python ./Start_LoRAlab-TrainerStudio.sh`.
+
 ## [EN] Notes / [ES] Notas
 
 - SageAttention 2.2.0 is **not** on PyPI (only 1.x there) and its Windows `.whl`

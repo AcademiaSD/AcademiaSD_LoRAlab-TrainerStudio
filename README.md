@@ -374,14 +374,15 @@ AcademiaSD_LoRAlab-TrainerStudio/
 ├── Start_LoRAlab-TrainerStudio.bat   # Launcher (.sh on Linux)
 ├── Update_LoRAlab-TrainerStudio.bat  # Updater (.sh on Linux)
 ├── Install_LoRAlab-TrainerStudio.bat, Install_Triton&SageAtten220.bat (and their .sh)
+├── requirements.txt                  # Dependencies, for your own environment (LORALAB_PYTHON)
 ├── code/                             # Run_LoRAlab-<Model>.bat / .sh
-├── scripts/                          # launcher.py, server_<model>.py, 0_caption / 1_pre_cache / 2_train_lora, refmod.py, melband/
+├── scripts/                          # launcher.py, server_<model>.py, 0_caption / 1_pre_cache / 2_train_lora, remote_access.py, refmod.py, melband/
 ├── GUI/                              # launcher.html, launcher.json, trainer_ui_<model>.html
 ├── docs/                             # Technical notes per trainer
 ├── assets/                           # Covers and logos
 ├── tools/<model>/                    # NF4 converters and dataset tools
 ├── Example_Dataset/                  # Small example dataset (MiniMax-H3)
-└── settings/                         # Your settings and HF token (created on first use, never uploaded)
+└── settings/                         # Your settings, HF token and network.json (created on first use, never uploaded)
 ```
 
 Models (`Krea-2-NF4`, `LTX23-NF4`, `MiniMax-H3-NF4`, `Qwen-Image21-NF4`, `Z-Image_NF4`, `Anima-Base`, `FLUX.2-Klein-9B_NF4`, `Ideogram4-NF4`, `SDXL-Models`, captioners), caches and LoRA outputs are created next to these folders on first use.
