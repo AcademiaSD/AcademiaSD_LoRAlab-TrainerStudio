@@ -2,6 +2,10 @@
 """
 1_pre_cache_MiniMaxH3.py  (v3 - diagnostics build)
 
+Adapted code: MiniMaxH3VideoVAEEncoder (MiniMax H3 video VAE encoder) is adapted from Fizgig v3.2.0
+(src/fizgig/minimax/vae.py) by @shootthesound (https://github.com/shootthesound/Fizgig), Apache-2.0,
+itself a port of ComfyUI's VAE.
+
 MiniMax-H3 pre-cache for LoRA training (image dataset).
 Pre-cache de MiniMax-H3 para entrenamiento LoRA (dataset de imagenes).
 

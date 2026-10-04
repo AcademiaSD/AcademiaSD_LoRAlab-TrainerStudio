@@ -2,6 +2,9 @@
 """
 2_train_lora_MiniMaxH3.py
 
+Adapted code: sample_sigmas (MiniMax H3 sigma sampling) is adapted from Fizgig v3.2.0 by
+@shootthesound (https://github.com/shootthesound/Fizgig), Apache-2.0.
+
 Versión v5: NF4 CPU + presupuesto VRAM manual + single-swap seguro con checkpoint/bitsandbytes.
 CORRECCIÓN: Las capas "no-convert" se cargan en CUDA primero, se dequantizan,
 y luego se mueven a CPU como bf16.

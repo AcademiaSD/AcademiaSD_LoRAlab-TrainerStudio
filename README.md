@@ -430,6 +430,7 @@ Built with PyTorch, Diffusers, Transformers, PEFT, bitsandbytes, Flask and the H
 
 ## 🙏 Contributors
 
+- MiniMax H3 sigma sampling and the video VAE encoder are adapted from **[Fizgig](https://github.com/shootthesound/Fizgig)** by **[@shootthesound](https://github.com/shootthesound)** (Apache-2.0).
 - **[Jonathan Hecl (@jonathanhecl)](https://github.com/jonathanhecl)** — Linux support ([PR #1](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/pull/1)). Thank you!
 
 ## 💬 Community & Support
