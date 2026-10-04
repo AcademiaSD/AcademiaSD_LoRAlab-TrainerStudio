@@ -430,8 +430,24 @@ Built with PyTorch, Diffusers, Transformers, PEFT, bitsandbytes, Flask and the H
 
 ## 🙏 Contributors
 
-- MiniMax H3 sigma sampling and the video VAE encoder are adapted from **[Fizgig](https://github.com/shootthesound/Fizgig)** by **[@shootthesound](https://github.com/shootthesound)** (Apache-2.0).
 - **[Jonathan Hecl (@jonathanhecl)](https://github.com/jonathanhecl)** — Linux support ([PR #1](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/pull/1)). Thank you!
+
+## 🧩 Third-party code and credits
+
+Code adapted or copied from other projects, and the work it builds on:
+
+| Project | Used for | License |
+| :--- | :--- | :--- |
+| [Fizgig](https://github.com/shootthesound/Fizgig) by [@shootthesound](https://github.com/shootthesound) | MiniMax H3 sigma sampling (`sample_sigmas`) and the video VAE encoder (`MiniMaxH3VideoVAEEncoder`), adapted | Apache-2.0 |
+| [ComfyUI](https://github.com/Comfy-Org/ComfyUI) | Origin of the MiniMax H3 video VAE that Fizgig ported; native layer names and LoRA layouts the exports follow | GPL-3.0 |
+| [Diffusers](https://github.com/huggingface/diffusers) | Model classes and pipelines; MiniMax H3 audio positions copied from `build_packed_sequence` | Apache-2.0 |
+| [Mel-Band-Roformer-Vocal-Model](https://github.com/KimberleyJensen/Mel-Band-Roformer-Vocal-Model) by KimberleyJensen | `scripts/melband/mel_band_roformer.py`, vendored with its source header (vocal separation for MiniMax H3 audio datasets) | not stated |
+| [BS-RoFormer](https://github.com/lucidrains/BS-RoFormer) by lucidrains | Architecture the Mel-Band RoFormer code derives from | MIT |
+| [librosa](https://github.com/librosa/librosa) | Mel filter bank reimplemented in `scripts/melband/mel_converter.py` | ISC |
+| [ai-toolkit](https://github.com/ostris/ai-toolkit) by ostris | Reference for the MiniMax H3 LoRA key layout and the caption text-encoder allowlist | MIT |
+| [kohya-ss sd-scripts](https://github.com/kohya-ss/sd-scripts) | `ss_*` LoRA metadata convention, SDXL LoRA key format and 75-token caption chunking | Apache-2.0 |
+
+Models and LoRAs downloaded at run time (not part of this repository): MelBandRoFormer weights by [Kijai](https://huggingface.co/Kijai/MelBandRoFormer_comfy), the Klein 9B turbo preview LoRA by [kalle07](https://huggingface.co/kalle07/FLUX.2-klein-9B-turbo-lora-set), the Qwen-Image 2.1 turbo LoRA by [Viggle](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo), Z-Image-Fun-Lora-Distill by [Alibaba PAI](https://huggingface.co/alibaba-pai/Z-Image-Fun-Lora-Distill), and the ungated Ideogram 4 NF4 mirror by [Unsloth](https://huggingface.co/unsloth/ideogram-4-nf4-diffusers). Thanks to all of them.
 
 ## 💬 Community & Support
 
