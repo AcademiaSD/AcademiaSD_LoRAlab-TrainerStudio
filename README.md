@@ -1,7 +1,7 @@
 # AcademiaSD LoRAlab Trainer Studio
 
 <p align="center">
-  <img src="assets/portada_LoRAlab.png" alt="AcademiaSD LoRAlab Trainer Studio" width="480">
+  <img src="assets/launcher_LoRAlab.jpg" alt="AcademiaSD LoRAlab Trainer Studio" width="900">
 </p>
 
 <p align="center">
