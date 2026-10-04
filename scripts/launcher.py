@@ -3,10 +3,10 @@
 launcher.py — Lanzador común de AcademiaSD LoRAlab Trainer Studio
 Common launcher for AcademiaSD LoRAlab Trainer Studio
 
-Sirve GUI/launcher.html en http://127.0.0.1:4990. Los entrenadores salen de GUI/launcher.json:
+Sirve GUI/launcher.html en http://127.0.0.1:4990 (IP y puertos en settings/network.json, ver remote_access.py). Los entrenadores salen de GUI/launcher.json:
 al pulsar uno se abre su code/Run_LoRAlab-* (.bat en Windows, .sh equivalente en Linux)
 en una ventana nueva, que arranca su servidor
-en http://127.0.0.1:5000. Para añadir un LoRAlab basta con una entrada más en GUI/launcher.json
+en el puerto 5000. Para añadir un LoRAlab basta con una entrada más en GUI/launcher.json
 (id, name, description, image, run). Las tarjetas se colocan solas: hasta 3 en una fila y, a partir
 de ahí, dos filas con la sobrante arriba (4 -> 2+2, 5 -> 3+2, 6 -> 3+3). image_scale fija el tamaño
 de la portada (0.2 = 20 %) y rows fuerza el número de filas.
@@ -24,12 +24,12 @@ from pathlib import Path
 
 from flask import Flask, abort, jsonify, request, send_from_directory
 
+import remote_access
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 GUI_DIR = BASE_DIR / "GUI"
 CODE_DIR = BASE_DIR / "code"
 CONFIG_FILE = GUI_DIR / "launcher.json"
-PORT = 4990
-TRAINER_PORT = 5000
 
 app = Flask(__name__)
 logging.getLogger("werkzeug").setLevel(logging.ERROR)
@@ -41,10 +41,15 @@ def load_config():
 
 
 def trainer_running():
-    # Todos los entrenadores usan el puerto 5000: solo puede haber uno abierto a la vez.
+    # Todos los entrenadores usan el mismo puerto: solo puede haber uno abierto a la vez.
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.settimeout(0.3)
-        return s.connect_ex(("127.0.0.1", TRAINER_PORT)) == 0
+        return s.connect_ex(("127.0.0.1", remote_access.load()["trainer_port"])) == 0
+
+
+def trainer_url():
+    # La misma dirección con la que se abrió el lanzador, para que sirva también desde otro equipo.
+    return f"http://{request.host.rsplit(':', 1)[0]}:{remote_access.load()['trainer_port']}"
 
 
 def _launch_linux(run: Path):
@@ -118,14 +123,37 @@ def launch():
             return jsonify({"status": "error", "error": f"Not found / No existe: {run.name}"}), 404
 
     if trainer_running():
-        return jsonify({"status": "busy", "url": f"http://127.0.0.1:{TRAINER_PORT}"})
+        return jsonify({"status": "busy", "url": trainer_url()})
 
     if os.name == "nt":
         # "start" abre el .bat en su propia consola: cerrarla detiene ese entrenador.
         subprocess.Popen(["cmd", "/c", "start", "", str(run)], cwd=str(BASE_DIR))
     else:
         _launch_linux(run)
-    return jsonify({"status": "ok"})
+    return jsonify({"status": "ok", "url": trainer_url(), "remote": not remote_access.is_local()})
+
+
+# La configuración de red solo se cambia desde este PC: un equipo remoto no puede abrir más el acceso.
+@app.route("/api/network", methods=["GET", "POST"])
+def network():
+    if not remote_access.is_local():
+        abort(403)
+    if request.method == "POST":
+        req = request.get_json(force=True) or {}
+        try:
+            ports = int(req.get("launcher_port", 4990)), int(req.get("trainer_port", 5000))
+        except (TypeError, ValueError):
+            return jsonify({"status": "error", "error": "Invalid port / Puerto inválido"}), 400
+        if not all(1024 <= p <= 65535 for p in ports) or ports[0] == ports[1]:
+            return jsonify({"status": "error", "error": "Ports: 1024-65535 and different / Puertos: 1024-65535 y distintos"}), 400
+        listen, user, password = bool(req.get("listen")), str(req.get("user", "")).strip(), str(req.get("password", ""))
+        if listen and (not user or not (password or remote_access.load()["password_hash"])):
+            return jsonify({"status": "error", "error": "Network access needs a user and a password / El acceso en red necesita usuario y contraseña"}), 400
+        remote_access.save(listen, ports[0], ports[1], user, password)
+    cfg = remote_access.load()
+    return jsonify({"status": "ok", "listen": cfg["listen"], "launcher_port": cfg["launcher_port"],
+                    "trainer_port": cfg["trainer_port"], "user": cfg["user"],
+                    "has_password": bool(cfg["password_hash"]), "lan_ip": remote_access.lan_address()})
 
 
 if __name__ == "__main__":
@@ -136,8 +164,9 @@ if __name__ == "__main__":
     print("=" * 70)
     print("  ACADEMIASD — LORALAB TRAINER STUDIO LAUNCHER")
     print("=" * 70)
-    print(f"  URL : http://127.0.0.1:{PORT}")
+    url = remote_access.local_url("launcher_port")
+    print(f"  URL : {url}")
     print("  Cierra esta ventana para cerrar el lanzador / Close this window to close the launcher.")
     print("=" * 70)
-    threading.Timer(1.0, lambda: webbrowser.open(f"http://127.0.0.1:{PORT}")).start()
-    app.run(host="127.0.0.1", port=PORT, debug=False, threaded=True)
+    threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+    remote_access.serve(app, "launcher_port")

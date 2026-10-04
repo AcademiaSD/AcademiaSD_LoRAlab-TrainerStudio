@@ -75,6 +75,28 @@
             transition: border-color 0.2s;
         }
         footer a:hover { border-color: var(--accent); }
+        footer button { font: inherit; font-size: 0.8rem; font-weight: 600; padding: 6px 12px; border-radius: 6px; cursor: pointer;
+                        color: var(--text-main); background: var(--bg-dark); border: 1px solid var(--panel-border); }
+        footer button:hover { border-color: var(--accent); }
+
+        #net { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(2, 6, 23, 0.75); z-index: 10; }
+        #net.open { display: flex; }
+        #net form { width: min(440px, 92vw); display: flex; flex-direction: column; gap: 12px; padding: 22px;
+                    background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 14px; }
+        #net h2 { font-size: 1.1rem; }
+        #net label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--text-muted); }
+        #net label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--text-main); font-size: 0.9rem; }
+        #net input[type=text], #net input[type=password], #net input[type=number] {
+            padding: 7px 9px; border-radius: 6px; border: 1px solid var(--panel-border); background: var(--bg-dark); color: var(--text-main); }
+        #net .pair { display: flex; gap: 10px; }
+        #net .pair label { flex: 1; }
+        #net .note { font-size: 0.78rem; color: var(--text-muted); line-height: 1.4; }
+        #net .note.warn { color: #f59e0b; }
+        #net .actions { display: flex; gap: 10px; justify-content: flex-end; }
+        #net .actions button { padding: 7px 14px; border-radius: 6px; border: 1px solid var(--panel-border); cursor: pointer;
+                               color: var(--text-main); background: var(--bg-dark); font-weight: 600; }
+        #net .actions button.primary { background: var(--accent); border-color: var(--accent); }
+        #net-msg { font-size: 0.8rem; min-height: 1.2em; }
     </style>
 </head>
 <body>
@@ -93,7 +115,34 @@
         <a href="https://twitter.com/Academia_S_D" target="_blank">𝕏 X (Twitter)</a>
         <a href="https://discord.gg/Syuaduy678" target="_blank">💬 Discord</a>
         <a href="https://ko-fi.com/academiasd" target="_blank">☕ Ko-Fi</a>
+        <button type="button" id="net-open" onclick="openNetwork()" hidden>🌐 Remote access / Acceso remoto</button>
     </footer>
+
+    <!-- Acceso desde otros equipos de la red. Solo se edita desde este PC (/api/network). -->
+    <div id="net" onclick="if (event.target === this) closeNetwork()">
+        <form onsubmit="saveNetwork(event)">
+            <h2>🌐 Remote access / Acceso remoto</h2>
+            <label class="check"><input type="checkbox" id="net-listen"> Allow other devices on the network / Permitir otros equipos de la red</label>
+            <div class="pair">
+                <label>Launcher port / Puerto lanzador<input type="number" id="net-lport" min="1024" max="65535"></label>
+                <label>Trainer port / Puerto entrenador<input type="number" id="net-tport" min="1024" max="65535"></label>
+            </div>
+            <div class="pair">
+                <label>User / Usuario<input type="text" id="net-user" autocomplete="off"></label>
+                <label>Password / Contraseña<input type="password" id="net-pass" autocomplete="new-password"></label>
+            </div>
+            <div class="note" id="net-url"></div>
+            <div class="note">This PC never asks for the password; other devices always do. Changes apply after restarting the launcher and the trainer. /
+                Este PC nunca pide contraseña; los demás equipos siempre. Los cambios se aplican al reiniciar el lanzador y el entrenador.</div>
+            <div class="note warn">Plain HTTP: for your home network only. To connect from the Internet use Tailscale or an SSH tunnel, never an open port. /
+                HTTP sin cifrar: solo para la red de casa. Para entrar desde Internet usa Tailscale o un túnel SSH, nunca un puerto abierto.</div>
+            <div id="net-msg"></div>
+            <div class="actions">
+                <button type="button" onclick="closeNetwork()">Close / Cerrar</button>
+                <button type="submit" class="primary">Save / Guardar</button>
+            </div>
+        </form>
+    </div>
 
     <script>
         // Filas: hasta 3 entrenadores en una fila; con más, dos filas y la de arriba con el sobrante
@@ -127,7 +176,10 @@
                     body: JSON.stringify({ id: trainer.id })
                 });
                 const data = await res.json();
-                if (data.status === 'ok') {
+                if (data.status === 'ok' && data.remote) {
+                    setStatus(`✓ ${trainer.name}: arrancando en el PC de entrenamiento; ábrelo en unos segundos en / starting on the training PC; open it in a few seconds at `
+                        + `<a href="${data.url}" target="_blank">${data.url}</a>`, 'ok');
+                } else if (data.status === 'ok') {
                     setStatus(`✓ ${trainer.name}: se abrirá en una ventana nueva y en el navegador / will open in a new window and in the browser.`, 'ok');
                 } else if (data.status === 'busy') {
                     setStatus(`Ya hay un entrenador abierto en <a href="${data.url}" target="_blank">${data.url}</a>. Ciérralo antes de abrir otro. / `
@@ -175,7 +227,65 @@
                 grid.appendChild(row);
             }
         }
+        let netInfo = null;
+
+        function netUrl() {
+            const listen = document.getElementById('net-listen').checked;
+            document.getElementById('net-url').innerHTML = listen
+                ? `From other devices / Desde otros equipos: <b>http://${netInfo.lan_ip}:${document.getElementById('net-lport').value}</b>`
+                : 'Only this PC / Solo este PC (127.0.0.1).';
+        }
+
+        async function loadNetwork() {
+            const res = await fetch('/api/network');
+            if (!res.ok) return;  // 403 desde otro equipo: el botón queda oculto
+            netInfo = await res.json();
+            document.getElementById('net-open').hidden = false;
+        }
+
+        function openNetwork() {
+            document.getElementById('net-listen').checked = netInfo.listen;
+            document.getElementById('net-lport').value = netInfo.launcher_port;
+            document.getElementById('net-tport').value = netInfo.trainer_port;
+            document.getElementById('net-user').value = netInfo.user;
+            const pass = document.getElementById('net-pass');
+            pass.value = '';
+            pass.placeholder = netInfo.has_password ? '(unchanged / sin cambios)' : '';
+            document.getElementById('net-msg').innerText = '';
+            netUrl();
+            document.getElementById('net').classList.add('open');
+        }
+
+        function closeNetwork() { document.getElementById('net').classList.remove('open'); }
+
+        async function saveNetwork(event) {
+            event.preventDefault();
+            const msg = document.getElementById('net-msg');
+            const res = await fetch('/api/network', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    listen: document.getElementById('net-listen').checked,
+                    launcher_port: document.getElementById('net-lport').value,
+                    trainer_port: document.getElementById('net-tport').value,
+                    user: document.getElementById('net-user').value,
+                    password: document.getElementById('net-pass').value
+                })
+            });
+            const data = await res.json();
+            if (data.status !== 'ok') { msg.style.color = '#f59e0b'; msg.innerText = '[!] ' + data.error; return; }
+            netInfo = data;
+            document.getElementById('net-pass').value = '';
+            document.getElementById('net-pass').placeholder = data.has_password ? '(unchanged / sin cambios)' : '';
+            msg.style.color = '#10b981';
+            msg.innerText = '✓ Saved. Restart the launcher to apply. / Guardado. Reinicia el lanzador para aplicarlo.';
+            netUrl();
+        }
+
+        document.getElementById('net-listen').onchange = netUrl;
+        document.getElementById('net-lport').oninput = netUrl;
         init();
+        loadNetwork();
     </script>
 </body>
 </html>

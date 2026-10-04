@@ -18,6 +18,7 @@ import logging
 import webbrowser
 
 from console_stream import read_console
+import remote_access
 from pathlib import Path
 
 
@@ -988,7 +989,7 @@ def save_caption_settings():
 
 def open_browser():
     try:
-        webbrowser.open("http://127.0.0.1:5000")
+        webbrowser.open(remote_access.local_url("trainer_port"))
     except Exception:
         pass
 
@@ -999,9 +1000,9 @@ if __name__ == "__main__":
     print("=" * 70)
     print(f"  Base Dir / Carpeta  : {BASE_DIR}")
     print(f"  Python Interpreter  : {sys.executable}")
-    print(f"  URL                 : http://127.0.0.1:5000")
+    print(f"  URL                 : {remote_access.local_url('trainer_port')}")
     print("=" * 70 + "\n")
 
     threading.Timer(1.2, open_browser).start()
 
-    app.run(host="127.0.0.1", port=5000, debug=False, threaded=True)
+    remote_access.serve(app, "trainer_port")

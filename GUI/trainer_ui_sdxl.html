@@ -932,6 +932,7 @@
                 });
                 const data = await res.json();
                 if (data.status === 'ok' && data.path) input.value = data.path;
+                else if (data.status === 'error') alert(data.error);
             } catch (e) { alert('Error: ' + e); }
         }
 

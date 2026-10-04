@@ -329,6 +329,20 @@ Rank 16 matters for characters: with rank 8 the likeness is just as good, but th
 
 ---
 
+## 🌐 Remote access
+
+The launcher and the trainers are web pages, so you can train from a laptop, a tablet or a phone while the GPU works on another PC. By default they only answer this PC (`127.0.0.1`).
+
+1. On the training PC, click **🌐 Remote access** at the bottom of the launcher.
+2. Tick **Allow other devices on the network**, set a **user and password** and, if you need them, other ports (4990 for the launcher, 5000 for the trainers).
+3. Restart the launcher. The panel shows the address to open from the other device, e.g. `http://192.168.1.20:4990`.
+
+- The training PC never asks for the password; other devices always do. Without a password, network access is refused.
+- On Windows, allow Python through the firewall the first time it asks (private networks).
+- **Browse** buttons open a dialog on the training PC's screen, so from another device the folder ones switch to the web folder browser, and for files you type the path.
+- The settings can only be changed from the training PC and are saved in `settings/network.json` (the password as a hash).
+- It is plain HTTP, meant for your home network. **Do not open these ports to the Internet**: to connect from outside, use [Tailscale](https://tailscale.com) or an SSH tunnel (`ssh -L 4990:localhost:4990 -L 5000:localhost:5000 user@training-pc`).
+
 ## 📚 Technical notes
 
 Detailed measurements and the reasoning behind each design decision are in `docs\`: [Qwen-Image 2.1](docs/README_QwenImage21.md) · [Krea 2](docs/README_Krea2.md) · [LTX-2.3](docs/README_LTX23.md) · [MiniMax-H3](docs/README_MiniMaxH3.md) (VRAM tables, block swap, video and audio datasets, RefMods and every setting) · [Linux](docs/Linux.md).

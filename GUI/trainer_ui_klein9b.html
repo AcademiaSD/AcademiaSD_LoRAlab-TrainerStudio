@@ -984,6 +984,7 @@
                 });
                 const data = await res.json();
                 if (data.status === 'ok' && data.path) document.getElementById('preview_edit_image').value = data.path;
+                else if (data.status === 'error') alert(data.error);
             } catch (e) { alert('Error: ' + e); }
         }
 
