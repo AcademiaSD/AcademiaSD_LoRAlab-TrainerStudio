@@ -356,6 +356,10 @@
                         <span class="main-text">🚀 Send to Models</span>
                         <span class="sub-text">Enviar a Models</span>
                     </button>
+                    <button type="button" class="btn btn-secondary btn-sm btn-full" onclick="ftDownload()" style="margin-top:6px;"
+                            title="Downloads the LoRA to the device you are browsing from (another PC, RunPod...). / Descarga el LoRA al equipo desde el que navegas (otro PC, RunPod...).">
+                        ⬇ Download LoRA / Descargar LoRA
+                    </button>
                 </div>
             </div>
           </div>
@@ -560,6 +564,9 @@
                     <span>Dataset Manager / Gestor (<span id="ds-count">0</span> img, <span id="ds-txt-count">0</span> txt)</span>
                     <div class="ds-toolbar">
                         <input type="text" class="ds-search" id="ds-search" placeholder="Search / Buscar..." oninput="filterDatasetGrid()">
+                        <input type="file" id="ds-upload" multiple hidden>
+                        <button type="button" class="btn btn-primary btn-sm" id="btn-ds-upload" onclick="ftUpload()"
+                                title="Uploads files or a .zip into the dataset folder (you can also drag them here). Useful from another device or RunPod. / Sube archivos o un .zip a la carpeta del dataset (también puedes arrastrarlos aquí). Útil desde otro equipo o RunPod.">⬆ Upload / Subir</button>
                         <button type="button" class="btn btn-secondary btn-sm" onclick="setGridMode('compact')">Compact / Pequeño</button>
                         <button type="button" class="btn btn-secondary btn-sm" onclick="setGridMode('normal')">Normal</button>
                         <button type="button" class="btn btn-secondary btn-sm" onclick="setGridMode('large')">Expand / Grande</button>
@@ -1627,5 +1634,6 @@ AÑADIR ese texto al final de cada caption. Lo que ya estaba escrito se conserva
             document.getElementById('folder-modal').classList.remove('active');
         }
     </script>
+    <script src="/file_transfer.js"></script>
 </body>
 </html>

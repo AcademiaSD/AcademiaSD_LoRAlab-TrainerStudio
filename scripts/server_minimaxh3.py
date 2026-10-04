@@ -18,6 +18,7 @@ import webbrowser
 
 from console_stream import read_console
 import remote_access
+import file_transfer
 from pathlib import Path
 
 
@@ -2310,6 +2311,9 @@ def open_browser():
         webbrowser.open(remote_access.local_url("trainer_port"))
     except Exception:
         pass
+
+
+file_transfer.register(app, get_dataset_dir, get_train_output_dir, DATASET_EXTS)
 
 
 if __name__ == "__main__":
