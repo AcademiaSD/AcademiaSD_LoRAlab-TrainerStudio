@@ -72,6 +72,7 @@ DEFAULTS = {
     "project_name": "",
     "trigger_word": "",
     "preview_custom_prompt": "",
+    "quality_prefix": False,
 }
 
 # ── CARGAR CONFIGURACIÓN / LOAD CONFIG ──────────────────────────────────────
@@ -94,6 +95,8 @@ MULTIPLE     = cfg.get("multiple",     DEFAULTS["multiple"])
 TRIGGER_WORD = cfg.get("trigger_word", "")
 PROJECT_NAME = cfg.get("project_name", "").strip()
 PREVIEW_CUSTOM_PROMPT = cfg.get("preview_custom_prompt", "").strip()
+# Prefijo de calidad del preset (score_9... en Pony) delante de los captions y del prompt de preview.
+QUALITY_PREFIX = bool(cfg.get("quality_prefix", DEFAULTS["quality_prefix"]))
 
 if PROJECT_NAME:
     CACHE_DIR = f"./cached_data_sdxl_{PROJECT_NAME}"
@@ -112,6 +115,7 @@ if MODEL_PRESET != "custom" and MODEL_PRESET not in PRESETS:
 print(f"  Model / Modelo              : {CUSTOM_CHECKPOINT if MODEL_PRESET == 'custom' else PRESETS[MODEL_PRESET]['name']}")
 print(f"  Project Name / Proyecto     : {PROJECT_NAME if PROJECT_NAME else '(Default)'}")
 print(f"  Trigger Word / Palabra      : {TRIGGER_WORD}")
+print(f"  Quality Prefix / Prefijo    : {'yes / sí' if QUALITY_PREFIX else 'no'}")
 print(f"  Dataset Path / Ruta Dataset : {DATASET_PATH}")
 print(f"  Cache Dir / Carpeta Caché   : {CACHE_DIR}")
 print(f"  Target Area / Área Objetivo : {TARGET_AREA} px²")
@@ -188,7 +192,7 @@ def resolve_model():
     else:
         print(f"✓ Local model found at / Modelo local encontrado en: {path}")
     return {"preset": MODEL_PRESET, "name": p["name"], "checkpoint": os.path.abspath(path),
-            "prefix": p["prefix"], "negative": p["negative"], "cfg": p["cfg"]}
+            "prefix": p["prefix"] if QUALITY_PREFIX else "", "negative": p["negative"], "cfg": p["cfg"]}
 
 
 def bucket_size(w: int, h: int):
@@ -336,7 +340,7 @@ def preprocess_sdxl():
                 os.remove(os.path.join(CACHE_DIR, f))
 
     for idx, (name, _) in enumerate(samples, 1):
-        caption = with_trigger(read_caption(name))
+        caption = model["prefix"] + with_trigger(read_caption(name))
         data = encode_text(pipe, caption, "cuda")
         torch.save(data, os.path.join(CACHE_DIR, f"{name}_embed.pt"))
         print(f"[{idx}/{len(samples)}] Text / Texto: {name} | {data['emb'].shape[0] // 77} block(s) / bloque(s)")

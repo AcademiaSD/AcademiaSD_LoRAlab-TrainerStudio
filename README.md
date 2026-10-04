@@ -257,7 +257,7 @@ All times were measured on an RTX 5080 16 GB.
 
 - **Base Model** picks what the LoRA is trained on. Each preset is downloaded the first time (~7 GB) into `SDXL-Models/`:
 
-  | Preset | Best for | Captions | Previews use |
+  | Preset | Best for | Captions | Quality prefix (optional) · Preview CFG |
   | :--- | :--- | :--- | :--- |
   | SDXL Base 1.0 | general, realistic | natural | CFG 6 |
   | Juggernaut XI v11 | photorealistic | natural | CFG 5 |
@@ -271,7 +271,8 @@ All times were measured on an RTX 5080 16 GB.
 - **Captioner:** Qwen3-VL-8B NF4 (shared), with **natural language** or **Danbooru tags**. Long captions are encoded in blocks of 75 tokens (up to 225), as kohya does.
 - **Model Precision:** *BF16* or *NF4*, which quantizes the transformer blocks to 4 bits when loading and fits in a **4 GB GPU**. The first training run on a model saves its converted UNet in `SDXL-Models/unet_cache/` (~5 GB on disk); from then on it loads with ~5.5 GB of RAM instead of ~14 GB.
 - **Training:** the UNet with gradient checkpointing, noise prediction with Min-SNR weighting (γ = 5). **LoRA Targets:** *Blocks* (attention, MLP and projections of the transformer blocks, kohya's default) or *All* (+ the resnet convolutions, LoCon).
-- **Previews:** Euler, 28 steps, with the preset's quality prefix and negative prompt. **Preview CFG 0** uses the preset's recommended value.
+- **Quality prefix in captions** (Pony, Illustrious, NoobAI; off by default): puts the preset's prefix (`score_9, score_8_up, score_7_up` for Pony) before every caption and the preview prompt. Off, the previews show the LoRA alone; on, use the LoRA with that prefix in ComfyUI.
+- **Previews:** Euler, 28 steps, with the preset's negative prompt. **Preview CFG 0** uses the preset's recommended value.
 - The LoRA is exported in **kohya format** (`lora_unet_…`), which ComfyUI, Forge, A1111 and CivitAI load.
 - **Grad Accum** multiplies the steps: with Grad Accum 4, 800 steps are only 200 LoRA updates. Style LoRAs on SDXL usually need around 1,000–3,000 updates.
 

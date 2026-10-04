@@ -287,6 +287,11 @@
                             <option value="custom">Custom checkpoint / Checkpoint propio (.safetensors)</option>
                         </select>
                         <input type="text" id="custom_checkpoint" value="" placeholder="F:\ComfyUI\models\checkpoints\juggernautXL.safetensors" style="margin-top:6px; display:none;">
+                        <label class="ds-inline-label" id="quality_prefix_label" style="margin-top:6px; display:none;"
+                               title="Off (default): captions and previews without a prefix; the preview shows the LoRA alone. On: the preset's quality prefix (score_9, score_8_up, score_7_up for Pony; masterpiece, best quality for Illustrious and NoobAI) goes before every caption and the preview prompt. Then use the LoRA with that prefix in ComfyUI. Run the Pre-Cache again after changing it. / Desactivado (por defecto): captions y previews sin prefijo; la preview muestra solo el LoRA. Activado: el prefijo de calidad del preset (score_9, score_8_up, score_7_up en Pony; masterpiece, best quality en Illustrious y NoobAI) va delante de cada caption y del prompt de preview. Luego usa el LoRA con ese prefijo en ComfyUI. Repite el Pre-Caché después de cambiarlo.">
+                            <input type="checkbox" id="quality_prefix">
+                            Quality prefix in captions / Prefijo de calidad en captions
+                        </label>
                     </div>
 
                     <div class="form-group">
@@ -673,6 +678,7 @@
 
         function toggleCustomCheckpoint(value) {
             document.getElementById('custom_checkpoint').style.display = value === 'custom' ? 'block' : 'none';
+            document.getElementById('quality_prefix_label').style.display = ['pony_v6', 'illustrious_v01', 'noobai_v11'].includes(value) ? 'flex' : 'none';
         }
 
         function toggleCaptionMode(mode) {
@@ -808,6 +814,7 @@
                     if (p.max_side) document.getElementById('precache_max_side').value = p.max_side;
                     if (p.model_preset) { document.getElementById('model_preset').value = p.model_preset; toggleCustomCheckpoint(p.model_preset); }
                     if (p.custom_checkpoint !== undefined) document.getElementById('custom_checkpoint').value = p.custom_checkpoint;
+                    if (p.quality_prefix !== undefined) document.getElementById('quality_prefix').checked = p.quality_prefix;
                 }
                 if (data.train) {
                     const t = data.train;
@@ -871,6 +878,7 @@
                     if (data.max_side !== undefined) document.getElementById('precache_max_side').value = data.max_side;
                     if (data.model_preset !== undefined) { document.getElementById('model_preset').value = data.model_preset; toggleCustomCheckpoint(data.model_preset); }
                     if (data.custom_checkpoint !== undefined) document.getElementById('custom_checkpoint').value = data.custom_checkpoint;
+                    if (data.quality_prefix !== undefined) document.getElementById('quality_prefix').checked = data.quality_prefix;
                     
                     if (data.total_steps !== undefined) document.getElementById('train_total_steps').value = data.total_steps;
                     if (data.lr !== undefined) document.getElementById('train_lr').value = data.lr;
@@ -957,6 +965,7 @@
                 max_side: parseInt(document.getElementById('precache_max_side').value),
                 model_preset: document.getElementById('model_preset').value,
                 custom_checkpoint: document.getElementById('custom_checkpoint').value.trim(),
+                quality_prefix: document.getElementById('quality_prefix').checked,
                 cache_dir: document.getElementById('precache_cache_dir').value,
                 preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim()
             };
