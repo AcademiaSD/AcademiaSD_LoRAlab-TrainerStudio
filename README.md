@@ -20,7 +20,11 @@
 
 > 🧪 **Aviso:** se ha añadido soporte a muchos modelos de forma casi simultánea. Es posible que haya bugs, ajustes pendientes o que las configuraciones de entrenamiento y de previsualización por defecto no sean las adecuadas. Por favor, escribe en [Issues](../../issues) contando los problemas que encuentres o los ajustes con los que has conseguido mejores resultados. ¡Gracias!
 >
+> Las previsualizaciones no tienen por qué tener la calidad del LoRA final: sirven para seguir la evolución del entrenamiento y el parecido del personaje, objeto o estilo. La calidad final del LoRA compruébala en su interfaz (ComfyUI, Forge...), después de ajustar la fuerza del LoRA y con los ajustes de calidad del modelo que uses.
+>
 > 🧪 **Notice:** support for many models has been added almost at the same time. There may be bugs or rough edges, or the default training and preview settings may not be the right ones. Please open an [issue](../../issues) with the problems you find or the settings that gave you better results. Thank you!
+>
+> The previews do not have to reach the quality of the final LoRA: they are there to follow the training and the likeness of the character, object or style. Judge the final quality in the matching interface (ComfyUI, Forge...), after adjusting the LoRA strength and with the quality settings of the model you use.
 
 **AcademiaSD LoRAlab Trainer Studio** brings together all the AcademiaSD LoRAlab trainers. Each model is loaded in **4-bit NF4**, the text encoder and the VAE run only once in a **pre-cache** stage, and 100 % of the GPU goes to training. Every trainer has the same web interface: dataset manager with an automatic captioner, live previews, exact-step resume and one-click export to ComfyUI.
 
