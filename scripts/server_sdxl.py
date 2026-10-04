@@ -231,6 +231,55 @@ def save_export_settings():
 # REQUESTER NATIVO DE WINDOWS (POPUP SELECCIONAR CARPETA)
 # =============================================================================
 
+@app.route("/api/select-file", methods=["POST"])
+def select_file_native():
+    """Diálogo nativo para elegir el checkpoint propio (.safetensors)."""
+    try:
+        initial = str((request.get_json(force=True) or {}).get("initial_path", "")).strip()
+        initial_dir = os.path.dirname(initial) if initial and os.path.exists(os.path.dirname(initial)) else str(BASE_DIR)
+
+        selected_path = None
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes('-topmost', True)
+            chosen = filedialog.askopenfilename(
+                title="Select SDXL checkpoint / Seleccionar checkpoint SDXL",
+                initialdir=initial_dir,
+                filetypes=[("Safetensors", "*.safetensors"), ("All files", "*.*")],
+            )
+            root.destroy()
+            if chosen:
+                selected_path = str(Path(chosen).resolve())
+        except Exception:
+            pass
+
+        if not selected_path:
+            try:
+                ps_cmd = (
+                    '[System.Reflection.Assembly]::LoadWithPartialName("System.windows.forms") | Out-Null; '
+                    '$dialog = New-Object System.Windows.Forms.OpenFileDialog; '
+                    '$dialog.Filter = "Safetensors|*.safetensors"; '
+                    f'$dialog.InitialDirectory = "{initial_dir}"; '
+                    'if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { $dialog.FileName }'
+                )
+                creation_flag = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+                output = subprocess.check_output(["powershell", "-command", ps_cmd], text=True, errors="ignore", creationflags=creation_flag).strip()
+                if output:
+                    selected_path = str(Path(output).resolve())
+            except Exception:
+                pass
+
+        if selected_path:
+            return jsonify({"status": "ok", "path": selected_path})
+        return jsonify({"status": "cancelled", "path": None})
+    except Exception as exc:
+        return jsonify({"status": "error", "error": str(exc)}), 500
+
+
 @app.route("/api/select-folder", methods=["POST"])
 def select_folder_native():
     try:
