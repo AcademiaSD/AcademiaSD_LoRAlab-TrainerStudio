@@ -59,6 +59,13 @@
       "description": "LoRAs de imagen / Image LoRAs",
       "image": "assets/ideogram4/portada.jpg",
       "run": "Run_LoRAlab-Ideogram4.bat"
+    },
+    {
+      "id": "sdxl",
+      "name": "SDXL",
+      "description": "SDXL Base, Pony, Illustrious, NoobAI, Juggernaut, RealVis y checkpoints propios / and custom checkpoints",
+      "image": "assets/sdxl/portada.jpg",
+      "run": "Run_LoRAlab-SDXL.bat"
     }
   ]
 }

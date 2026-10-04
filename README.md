@@ -18,6 +18,10 @@
   <img src="https://img.shields.io/badge/UI-Flask%20%2B%20HTML5-purple.svg" alt="Web UI">
 </p>
 
+> 🧪 **Aviso:** se ha añadido soporte a muchos modelos de forma casi simultánea. Es posible que haya bugs, ajustes pendientes o que las configuraciones de entrenamiento y de previsualización por defecto no sean las adecuadas. Por favor, escribe en [Issues](../../issues) contando los problemas que encuentres o los ajustes con los que has conseguido mejores resultados. ¡Gracias!
+>
+> 🧪 **Notice:** support for many models has been added almost at the same time. There may be bugs or rough edges, or the default training and preview settings may not be the right ones. Please open an [issue](../../issues) with the problems you find or the settings that gave you better results. Thank you!
+
 **AcademiaSD LoRAlab Trainer Studio** brings together all the AcademiaSD LoRAlab trainers. Each model is loaded in **4-bit NF4**, the text encoder and the VAE run only once in a **pre-cache** stage, and 100 % of the GPU goes to training. Every trainer has the same web interface: dataset manager with an automatic captioner, live previews, exact-step resume and one-click export to ComfyUI.
 
 New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings them to your existing installation, next to your models and projects — no new repository, no new environment.
@@ -30,6 +34,7 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 | **Anima** | Anime and illustration LoRAs (characters, styles) | **4 GB** (NF4) / 6 GB (BF16) |
 | **FLUX.2 Klein 9B** | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) | 12 GB |
 | **Ideogram 4** | Image LoRAs (characters, objects, styles), with JSON captions | 12 GB (16 GB for previews with CFG) |
+| **SDXL** | Image LoRAs for SDXL Base, Pony, Illustrious, NoobAI, Juggernaut, RealVis or your own SDXL checkpoint | **4 GB** (NF4) / 12 GB (BF16) |
 | **LTX-2.3** (also LTX-2.5) | Character and style LoRAs for the LTX video model, trained from images | 12 GB |
 | **MiniMax-H3** | Video LoRAs from images, clips and audio, plus training-free **RefMods** | 8 GB |
 
@@ -43,7 +48,7 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 2. **Abrir:** doble clic en **`Start_LoRAlab-TrainerStudio.bat`** y pulsa la tarjeta del entrenador que quieras. Solo puede haber uno abierto a la vez.
 3. **Entrenar:** nombre del proyecto → carpeta del dataset → *Crear Captions* (opcional) → *Iniciar Pre-Caché* → *Iniciar / Reanudar* → *Send to Models*. El modelo se descarga solo la primera vez.
 4. **Actualizar:** doble clic en **`Update_LoRAlab-TrainerStudio.bat`**. Se conservan tus modelos, proyectos y ajustes, y los nuevos entrenadores aparecen en el lanzador.
-5. **Requisitos:** Windows 10/11, GPU NVIDIA **RTX 20xx / GTX 16xx o posterior** con driver **580 o superior**, 8 GB de VRAM (4 GB para Anima en NF4, 12 GB para LTX-2.3, FLUX.2 Klein 9B e Ideogram 4) y 16 GB de RAM (32 GB recomendados).
+5. **Requisitos:** Windows 10/11, GPU NVIDIA **RTX 20xx / GTX 16xx o posterior** con driver **580 o superior**, 8 GB de VRAM (4 GB para Anima y SDXL en NF4, 12 GB para LTX-2.3, FLUX.2 Klein 9B, Ideogram 4 y SDXL en BF16) y 16 GB de RAM (32 GB recomendados).
 
 **Linux:** ya tiene soporte para Linux. Cada `.bat` tiene su `.sh` equivalente; la instalación y el uso están en [docs/Linux.md](docs/Linux.md). Gracias a **[Jonathan Hecl (@jonathanhecl)](https://github.com/jonathanhecl)** por aportarlo.
 
@@ -65,6 +70,7 @@ Each trainer downloads **only what it uses**, already quantized. The table compa
 | **MiniMax-H3** | 498.5 | 41.4 | **41.4** | The 33B model ships in NF4 from the start. |
 | **Z-Image** | 20.5 | — | **5.9** | New trainer: the 6B transformer (12.3 GB) and the Qwen3-4B text encoder (8.0 GB) in NF4 (3.4 GB + 2.7 GB). |
 | **Anima** | 5.6 | — | **5.6** | New trainer: the official diffusers version of Anima-Base. The 2B model trains in BF16, or in NF4 quantized when loading (nothing extra to download). |
+| **SDXL** | ~7 per model | — | **~7 per model** | New trainer: only the preset you pick is downloaded (one `.safetensors` file); your own checkpoint downloads nothing. |
 | **Ideogram 4** | 16.1 (NF4) | — | **16.1** | New trainer: the official NF4 release, which includes the unconditional transformer used only by the previews. It is downloaded from Unsloth's ungated mirror (same weights, no license gate or token needed); the Ideogram license still applies. |
 | **FLUX.2 Klein 9B** | 34.7 | — | **8.8** | New trainer: the 9B transformer (18.2 GB) and the Qwen3-8B text encoder (16.4 GB) in NF4 (4.9 GB + 3.8 GB; only the 28 text encoder layers Klein reads). |
 
@@ -79,7 +85,7 @@ The automatic captioner adds, only the first time you use it: **nothing** for Kr
 | | Minimum | Recommended |
 | :--- | :--- | :--- |
 | **OS** | Windows 10 / 11, or 64-bit Linux ([docs/Linux.md](docs/Linux.md)) | Windows 11 |
-| **GPU** | NVIDIA **RTX 20xx / GTX 16xx or newer** (compute capability 7.5+) with **8 GB VRAM** (4 GB for Anima in NF4, 12 GB for LTX-2.3, FLUX.2 Klein 9B and Ideogram 4) | 12–24 GB VRAM |
+| **GPU** | NVIDIA **RTX 20xx / GTX 16xx or newer** (compute capability 7.5+) with **8 GB VRAM** (4 GB for Anima and SDXL in NF4, 12 GB for LTX-2.3, FLUX.2 Klein 9B, Ideogram 4 and SDXL in BF16) | 12–24 GB VRAM |
 | **Driver** | NVIDIA **580 or newer** (CUDA 13) | Latest |
 | **RAM** | 16 GB | 32 GB |
 | **Disk** | The model of each trainer you use (table above) plus your datasets and caches | SSD |
@@ -231,7 +237,7 @@ All times were measured on an RTX 5080 16 GB.
 ### Ideogram 4 — image LoRAs
 
 - Trains on the official **Ideogram 4 NF4** release (9.3B, diffusers). It is a single-stream transformer: text and image tokens share one sequence.
-- **Captioner:** Qwen3-VL-8B NF4 (the same model as Ideogram's text encoder), with two styles: **Ideogram JSON** (default), the structured caption the model was trained on (`high_level_description` + `compositional_deconstruction`), or **natural language**. JSON captions are validated and saved on one line, with the trigger word at the start of the description.
+- **Captioner:** Qwen3-VL-8B NF4 (the same model as Ideogram's text encoder) writes Ideogram's native JSON caption with a **bounding box for every subject, object and piece of text** — the format Ideogram 4.5 and FLUX.3 Image will also use. A second **OCR pass** reads every sign with its box (in one pass the model misses many texts in busy scenes). **JSON detailed** also boxes each part of every person or animal (face, nose, ears, hands, legs...), each garment and accessory, for edit LoRAs. Captions are saved in the official format (key order, `[y1, x1, y2, x2]` boxes in 0–1000, no repeated elements) with the trigger word at the start of the description. **Natural language** is also available.
 - **Use JSON for captions and preview prompts.** Ideogram 4 depends on its JSON format: in our tests a short plain prompt ("a woman with blonde hair in a green sweater reading in a library") gave odd crops or was blocked, while the same scene written as a JSON caption came out right. For the custom preview prompt, copy a caption from the dataset and edit it.
 - **Previews:** 28 steps / CFG 7 with the last 3 steps at CFG 3, as in the official pipeline. Ideogram's guidance uses a second, **unconditional transformer** (4.3 GB): it is loaded only for the previews and moved to the GPU while each one runs, so previews with CFG need ~15 GB at 1024². On 12 GB cards set **Preview CFG to 1**. **Preview Size** as in Z-Image.
 - **Built-in safety filter:** Ideogram 4 was trained to output a grey "Image blocked by safety filter" image for some prompts (for example a woman at the beach). It is the model itself, not the trainer, and its license forbids circumventing it: change the preview prompt if it happens.
@@ -246,6 +252,39 @@ All times were measured on an RTX 5080 16 GB.
 | Steps | 1,000 (14 images): the likeness shows from ~500 |
 | LoRA strength in ComfyUI | 1.0 |
 | Speed and VRAM | ~5.7 s/step (~1 h 35 min for 1,000 steps plus previews) and ~10 GB at 1024²; ~15 GB during previews with CFG |
+
+### SDXL — Base, Pony, Illustrious, NoobAI, Juggernaut, RealVis or your own checkpoint
+
+- **Base Model** picks what the LoRA is trained on. Each preset is downloaded the first time (~7 GB) into `SDXL-Models/`:
+
+  | Preset | Best for | Captions | Previews use |
+  | :--- | :--- | :--- | :--- |
+  | SDXL Base 1.0 | general, realistic | natural | CFG 6 |
+  | Juggernaut XI v11 | photorealistic | natural | CFG 5 |
+  | RealVisXL V5.0 | photorealistic | natural | CFG 5 |
+  | Pony Diffusion V6 XL | anime, cartoon, furry | tags | `score_9, score_8_up, score_7_up` · CFG 7 |
+  | Illustrious XL v0.1 | anime | Danbooru tags | `masterpiece, best quality` · CFG 6 |
+  | NoobAI-XL 1.1 | anime | Danbooru tags | `masterpiece, best quality, newest` · CFG 5 |
+  | Custom checkpoint | any SDXL `.safetensors` (Juggernaut Ragnarok, WAI...) | either | CFG 6 |
+
+  A LoRA works best on the model it was trained on and on models derived from it: train on Illustrious v0.1 for Illustrious-based checkpoints such as WAI or NoobAI.
+- **Captioner:** Qwen3-VL-8B NF4 (shared), with **natural language** or **Danbooru tags**. Long captions are encoded in blocks of 75 tokens (up to 225), as kohya does.
+- **Model Precision:** *BF16* or *NF4*, which quantizes the transformer blocks to 4 bits when loading and fits in a **4 GB GPU**. The first training run on a model saves its converted UNet in `SDXL-Models/unet_cache/` (~5 GB on disk); from then on it loads with ~5.5 GB of RAM instead of ~14 GB.
+- **Training:** the UNet with gradient checkpointing, noise prediction with Min-SNR weighting (γ = 5). **LoRA Targets:** *Blocks* (attention, MLP and projections of the transformer blocks, kohya's default) or *All* (+ the resnet convolutions, LoCon).
+- **Previews:** Euler, 28 steps, with the preset's quality prefix and negative prompt. **Preview CFG 0** uses the preset's recommended value.
+- The LoRA is exported in **kohya format** (`lora_unet_…`), which ComfyUI, Forge, A1111 and CivitAI load.
+- **Grad Accum** multiplies the steps: with Grad Accum 4, 800 steps are only 200 LoRA updates. Style LoRAs on SDXL usually need around 1,000–3,000 updates.
+
+| Tested on Pony (Greg Rutkowski style, 153 images) | BF16 | NF4 (low VRAM) |
+| :--- | :--- | :--- |
+| Resolution | 1024×1024 | 512×512 |
+| Rank / Alpha | 16 / 16 | 8 / 8 |
+| Steps / Grad Accum / LR | 1000 / 1 / 1e-4 | same (quality not yet compared) |
+| Speed | ~1.1 s/step | ~1.5 s/step |
+| VRAM | ~10.8 GB with the previews | ~3.5 GB, previews at 768² included |
+| RAM | ~5.5 GB | ~5.5 GB |
+
+The LoRA works at strength 0.8–1.2; at 2.0 it breaks anatomy.
 
 ### LTX-2.3 — character and style LoRAs for the LTX video model
 
@@ -310,7 +349,7 @@ AcademiaSD_LoRAlab-TrainerStudio/
 └── settings/                         # Your settings and HF token (created on first use, never uploaded)
 ```
 
-Models (`Krea-2-NF4`, `LTX23-NF4`, `MiniMax-H3-NF4`, `Qwen-Image21-NF4`, `Z-Image_NF4`, `Anima-Base`, `FLUX.2-Klein-9B_NF4`, `Ideogram4-NF4`, captioners), caches and LoRA outputs are created next to these folders on first use.
+Models (`Krea-2-NF4`, `LTX23-NF4`, `MiniMax-H3-NF4`, `Qwen-Image21-NF4`, `Z-Image_NF4`, `Anima-Base`, `FLUX.2-Klein-9B_NF4`, `Ideogram4-NF4`, `SDXL-Models`, captioners), caches and LoRA outputs are created next to these folders on first use.
 
 ---
 
@@ -328,6 +367,9 @@ The code is released under the **MIT License**. The models keep their own licens
 | Anima | CircleStone Labs Non-Commercial License (plus the NVIDIA Open Model License for Cosmos). Images you generate can be used commercially |
 | FLUX.2 Klein 9B (and the Klein 9B turbo preview LoRA) | FLUX Non-Commercial License — non-commercial |
 | Ideogram 4 | Ideogram Non-Commercial Model Agreement — non-commercial; LoRAs are model derivatives under the same license |
+| SDXL Base 1.0, RealVisXL V5.0 | CreativeML Open RAIL++-M |
+| Pony Diffusion V6 XL, Illustrious XL v0.1, NoobAI-XL 1.1 | Fair AI Public License 1.0-SD |
+| Juggernaut XI v11 | CC BY-NC-ND 4.0 — non-commercial |
 | Qwen3-VL-4B (MiniMax-H3 captioner) | Apache 2.0 |
 
 Built with PyTorch, Diffusers, Transformers, PEFT, bitsandbytes, Flask and the Hugging Face Hub.
