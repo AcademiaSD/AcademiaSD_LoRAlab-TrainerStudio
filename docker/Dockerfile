@@ -3,6 +3,7 @@
 # se clona o actualiza en /workspace en cada arranque (bootstrap.sh), así que las actualizaciones normales
 # no necesitan una imagen nueva. La GPU necesita driver 580 o superior (CUDA 13).
 FROM nvidia/cuda:13.0.1-base-ubuntu24.04
+LABEL org.opencontainers.image.source=https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \

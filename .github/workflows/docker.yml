@@ -1,0 +1,45 @@
+# Construye la imagen de RunPod (docker/Dockerfile) y la publica en ghcr.io/academiasd/loralab-trainerstudio.
+# Solo cuando cambia el entorno: el código lo actualiza cada pod al arrancar (docker/bootstrap.sh).
+name: Docker image (RunPod)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docker/**
+      - requirements.txt
+      - .github/workflows/docker.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # PyTorch con CUDA ocupa varios GB: el disco libre del runner por defecto no basta.
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: true
+
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/academiasd/loralab-trainerstudio:latest
+            ghcr.io/academiasd/loralab-trainerstudio:${{ github.sha }}

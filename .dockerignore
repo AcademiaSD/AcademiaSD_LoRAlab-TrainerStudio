@@ -1,0 +1,4 @@
+# La imagen solo necesita esto: sin la lista, construir desde una instalacion copiaria los modelos (cientos de GB).
+*
+!requirements.txt
+!docker/
