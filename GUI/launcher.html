@@ -131,6 +131,12 @@
                 <label>User / Usuario<input type="text" id="net-user" autocomplete="off"></label>
                 <label>Password / Contraseña<input type="password" id="net-pass" autocomplete="new-password"></label>
             </div>
+            <label class="check" title="Only if a reverse proxy in front already asks for a login (Authelia, Authentik, Cloudflare Access...). / Solo si un proxy inverso delante ya pide inicio de sesión (Authelia, Authentik, Cloudflare Access...).">
+                <input type="checkbox" id="net-extauth"> I use my own authentication (reverse proxy) / Uso mi propia autenticación (proxy inverso)</label>
+            <div class="note warn" id="net-extauth-warn" hidden>No login from here: without a proxy with authentication in front, anyone on the network can control this PC. /
+                Sin login desde aquí: sin un proxy con autenticación delante, cualquiera de la red puede controlar este PC.</div>
+            <label>Trainer public URL (optional, behind a proxy) / URL pública del entrenador (opcional, tras un proxy)
+                <input type="text" id="net-turl" placeholder="https://trainer.example.com" autocomplete="off"></label>
             <div class="note" id="net-url"></div>
             <div class="note">This PC never asks for the password; other devices always do. Changes apply after restarting the launcher and the trainer. /
                 Este PC nunca pide contraseña; los demás equipos siempre. Los cambios se aplican al reiniciar el lanzador y el entrenador.</div>
@@ -231,6 +237,7 @@
 
         function netUrl() {
             const listen = document.getElementById('net-listen').checked;
+            document.getElementById('net-extauth-warn').hidden = !document.getElementById('net-extauth').checked;
             document.getElementById('net-url').innerHTML = listen
                 ? `From other devices / Desde otros equipos: <b>http://${netInfo.lan_ip}:${document.getElementById('net-lport').value}</b>`
                 : 'Only this PC / Solo este PC (127.0.0.1).';
@@ -248,6 +255,8 @@
             document.getElementById('net-lport').value = netInfo.launcher_port;
             document.getElementById('net-tport').value = netInfo.trainer_port;
             document.getElementById('net-user').value = netInfo.user;
+            document.getElementById('net-extauth').checked = netInfo.external_auth;
+            document.getElementById('net-turl').value = netInfo.trainer_url;
             const pass = document.getElementById('net-pass');
             pass.value = '';
             pass.placeholder = netInfo.has_password ? '(unchanged / sin cambios)' : '';
@@ -269,7 +278,9 @@
                     launcher_port: document.getElementById('net-lport').value,
                     trainer_port: document.getElementById('net-tport').value,
                     user: document.getElementById('net-user').value,
-                    password: document.getElementById('net-pass').value
+                    password: document.getElementById('net-pass').value,
+                    external_auth: document.getElementById('net-extauth').checked,
+                    trainer_url: document.getElementById('net-turl').value
                 })
             });
             const data = await res.json();
@@ -283,6 +294,7 @@
         }
 
         document.getElementById('net-listen').onchange = netUrl;
+        document.getElementById('net-extauth').onchange = netUrl;
         document.getElementById('net-lport').oninput = netUrl;
         init();
         loadNetwork();

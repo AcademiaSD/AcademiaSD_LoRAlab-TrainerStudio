@@ -48,8 +48,10 @@ def trainer_running():
 
 
 def trainer_url():
-    # La misma dirección con la que se abrió el lanzador, para que sirva también desde otro equipo.
-    return f"http://{request.host.rsplit(':', 1)[0]}:{remote_access.load()['trainer_port']}"
+    # La URL pública si hay un proxy delante; si no, la misma dirección con la que se abrió el
+    # lanzador, para que sirva también desde otro equipo.
+    cfg = remote_access.load()
+    return cfg["trainer_url"] or f"http://{request.host.rsplit(':', 1)[0]}:{cfg['trainer_port']}"
 
 
 def _launch_linux(run: Path):
@@ -147,13 +149,17 @@ def network():
         if not all(1024 <= p <= 65535 for p in ports) or ports[0] == ports[1]:
             return jsonify({"status": "error", "error": "Ports: 1024-65535 and different / Puertos: 1024-65535 y distintos"}), 400
         listen, user, password = bool(req.get("listen")), str(req.get("user", "")).strip(), str(req.get("password", ""))
-        if listen and (not user or not (password or remote_access.load()["password_hash"])):
+        external_auth, public_url = bool(req.get("external_auth")), str(req.get("trainer_url", "")).strip()
+        if public_url and not public_url.startswith(("http://", "https://")):
+            return jsonify({"status": "error", "error": "Trainer URL must start with http:// or https:// / La URL del entrenador debe empezar por http:// o https://"}), 400
+        if listen and not external_auth and (not user or not (password or remote_access.load()["password_hash"])):
             return jsonify({"status": "error", "error": "Network access needs a user and a password / El acceso en red necesita usuario y contraseña"}), 400
-        remote_access.save(listen, ports[0], ports[1], user, password)
+        remote_access.save(listen, ports[0], ports[1], user, password, external_auth, public_url)
     cfg = remote_access.load()
     return jsonify({"status": "ok", "listen": cfg["listen"], "launcher_port": cfg["launcher_port"],
                     "trainer_port": cfg["trainer_port"], "user": cfg["user"],
-                    "has_password": bool(cfg["password_hash"]), "lan_ip": remote_access.lan_address()})
+                    "has_password": bool(cfg["password_hash"]), "external_auth": cfg["external_auth"],
+                    "trainer_url": cfg["trainer_url"], "lan_ip": remote_access.lan_address()})
 
 
 if __name__ == "__main__":

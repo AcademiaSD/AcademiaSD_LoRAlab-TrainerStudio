@@ -338,6 +338,7 @@ The launcher and the trainers are web pages, so you can train from a laptop, a t
 3. Restart the launcher. The panel shows the address to open from the other device, e.g. `http://192.168.1.20:4990`.
 
 - The training PC never asks for the password; other devices always do. Without a password, network access is refused.
+- **Behind a reverse proxy** that already asks for a login (Authelia, Authentik, Cloudflare Access...), tick **I use my own authentication** to drop the built-in login, and set **Trainer public URL** (e.g. `https://trainer.example.com`) so the launcher links there instead of `host:5000`. Without a proxy with authentication in front, that option leaves the PC open to anyone on the network.
 - On Windows, allow Python through the firewall the first time it asks (private networks).
 - **Browse** buttons open a dialog on the training PC's screen, so from another device the folder ones switch to the web folder browser, and for files you type the path.
 - The settings can only be changed from the training PC and are saved in `settings/network.json` (the password as a hash).
