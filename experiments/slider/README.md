@@ -39,6 +39,7 @@ The sad side breaks earlier because the generated sad faces are milder than the 
 | `make_slider_trainer.py` | Writes `work/train_slider_klein9b.py`: a copy of `scripts/2_train_lora_klein9b.py` with the slider changes (about 20 lines) |
 | `test_slider.py` | Strength sweep of a trained LoRA on the 4 held-out people → one sheet |
 | `prepare_run.py` | Builds a training folder from `data/` (or `work/`): pairs, captions, settings and the model link |
+| `make_dataset.py` | Copies `data/` with the names of the trainer's Slider type (`pXX_-100/0/100`, `aXX_anc`), people 20–23 left out |
 | `data/` | The dataset of these tests: `pairs/pXX_neutral|happy|sad.jpg` (24 people) and `anchors/aXX.jpg` (12 scenes) |
 | `results/` | Sheets of every test, and `dataset_pairs.jpg` (the 24 triplets) |
 
