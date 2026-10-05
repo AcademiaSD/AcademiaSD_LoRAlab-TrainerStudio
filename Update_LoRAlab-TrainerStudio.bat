@@ -44,22 +44,29 @@ echo [EN] Syncing latest updates from GitHub...
 echo [ES] Sincronizando ultimas actualizaciones desde GitHub...
 echo.
 
-rem 4. Fetch changes
-git fetch origin main >nul 2>&1
+rem 4. Rama a actualizar: la de esta carpeta (main, dev...); main si no hay ninguna
+rem    Branch to update: this folder's branch (main, dev...); main if there is none
+set "BRANCH="
+for /f "delims=" %%b in ('git symbolic-ref --short -q HEAD 2^>nul') do set "BRANCH=%%b"
+if not defined BRANCH set "BRANCH=main"
+
+git fetch origin !BRANCH! >nul 2>&1
 if errorlevel 1 (
-    git fetch origin master >nul 2>&1
+    set "BRANCH=main"
+    git fetch origin main >nul 2>&1
+    if errorlevel 1 (
+        set "BRANCH=master"
+        git fetch origin master >nul 2>&1
+    )
 )
+
+echo [EN] Branch: !BRANCH!
+echo [ES] Rama: !BRANCH!
+echo.
 
 rem 5. Force reset
-git checkout -f main >nul 2>&1
-if errorlevel 1 (
-    git checkout -f master >nul 2>&1
-)
-
-git reset --hard origin/main >nul 2>&1
-if errorlevel 1 (
-    git reset --hard origin/master >nul 2>&1
-)
+git checkout -f !BRANCH! >nul 2>&1
+git reset --hard origin/!BRANCH! >nul 2>&1
 
 if errorlevel 1 (
     echo.

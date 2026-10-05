@@ -43,19 +43,26 @@ echo "[EN] Syncing latest updates from GitHub..."
 echo "[ES] Sincronizando ultimas actualizaciones desde GitHub..."
 echo
 
-# 4. Fetch changes (try main, then master)
-BRANCH=""
-if git fetch origin main 2>/dev/null; then
-    BRANCH="main"
-elif git fetch origin master 2>/dev/null; then
-    BRANCH="master"
-else
-    echo
-    echo "[ERROR] Failed to update repository from GitHub (fetch failed)."
-    echo "[ERROR] No se pudo actualizar el repositorio desde GitHub (fallo fetch)."
-    echo "Revisa tu conexion a internet / Check your internet connection."
-    exit 1
+# 4. Rama a actualizar: la de esta carpeta (main, dev...); main si no hay ninguna, master como ultimo recurso
+#    Branch to update: this folder's branch (main, dev...); main if there is none, master as a last resort
+BRANCH="$(git symbolic-ref --short -q HEAD 2>/dev/null || true)"
+BRANCH="${BRANCH:-main}"
+if ! git fetch origin "${BRANCH}" 2>/dev/null; then
+    if git fetch origin main 2>/dev/null; then
+        BRANCH="main"
+    elif git fetch origin master 2>/dev/null; then
+        BRANCH="master"
+    else
+        echo
+        echo "[ERROR] Failed to update repository from GitHub (fetch failed)."
+        echo "[ERROR] No se pudo actualizar el repositorio desde GitHub (fallo fetch)."
+        echo "Revisa tu conexion a internet / Check your internet connection."
+        exit 1
+    fi
 fi
+echo "[EN] Branch: ${BRANCH}"
+echo "[ES] Rama: ${BRANCH}"
+echo
 
 # 5. Force reset to remote branch
 git checkout -f "${BRANCH}"
