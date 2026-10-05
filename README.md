@@ -39,6 +39,7 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 | **Anima** | Anime and illustration LoRAs (characters, styles) | **4 GB** (NF4) / 6 GB (BF16) |
 | **FLUX.2 Klein 9B** | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) | 12 GB |
 | **Ideogram 4** | Image LoRAs (characters, objects, styles), with JSON captions | 12 GB (16 GB for previews with CFG) |
+| **FLUX 3 Image** 🧪 *(preview)* | Getting ready for FLUX 3 Image's open weights: for now it trains FLUX.2 Klein 9B, with FLUX 3 layout captions (boxes) | 12 GB |
 | **SDXL** | Image LoRAs for SDXL Base, Pony, Illustrious, NoobAI, Juggernaut, RealVis or your own SDXL checkpoint | **4 GB** (NF4) / 12 GB (BF16) |
 | **LTX-2.3** (also LTX-2.5) | Character and style LoRAs for the LTX video model, trained from images | 12 GB |
 | **MiniMax-H3** | Video LoRAs from images, clips and audio, plus training-free **RefMods** | 8 GB |
@@ -260,10 +261,17 @@ All times were measured on an RTX 5080 16 GB.
 | LoRA strength in ComfyUI | 1.0 for characters (1,000 steps) · 1.0–1.5 for edit LoRAs |
 | Speed and VRAM | 512²: ~1.5 s/step, ~8 GB · 768²: ~2.6 s/step, ~10 GB · edit at 512²: ~2.3 s/step, ~8 GB · edit at 768²: ~5.7 s/step, ~11 GB |
 
+### FLUX 3 Image — preview 🧪
+
+FLUX 3 Image has no open weights yet. This trainer gets ready for them: for now it is a copy of the FLUX.2 Klein 9B trainer (it trains and exports **Klein 9B LoRAs**, with its own settings, cache and output folders), and the FLUX 3 parts are added here as they become possible.
+
+- **FLUX 3 layout captions** (`scripts/flux3_caption.py`), the format of the [FLUX 3 docs](https://docs.bfl.ai/flux_3/flux3_image_bounding_boxes): one paragraph that cites every element by its id in angle brackets (`a woman <person_1> holding a dog <animal_1>`), then a JSON list of rows `{"id", "bbox", "desc"}` with `bbox = [top, left, bottom, right]` on a 0–1000 grid. Text goes in quotes inside its row's `desc` (one row per text block, ids such as `En_Text_1`), the background can be a row, and exact colors are hex codes tied to one element. **Create Captions → FLUX 3 layout** writes them with Qwen3-VL-8B in two passes (caption with boxes, then an OCR pass that fixes or adds the texts), reusing the Ideogram 4 captioner. `flux3_caption.from_ideogram()` also converts Ideogram 4 JSON captions.
+- Until there are FLUX 3 weights, the Klein 9B text encoder reads at most 512 tokens: the pre-cache warns about layout captions that are longer.
+
 ### Ideogram 4 — image LoRAs
 
 - Trains on the official **Ideogram 4 NF4** release (9.3B, diffusers). It is a single-stream transformer: text and image tokens share one sequence.
-- **Captioner:** Qwen3-VL-8B NF4 (the same model as Ideogram's text encoder) writes Ideogram's native JSON caption with a **bounding box for every subject, object and piece of text** — the format Ideogram 4.5 and FLUX.3 Image will also use. A second **OCR pass** reads every sign with its box (in one pass the model misses many texts in busy scenes). **JSON detailed** also boxes each part of every person or animal (face, nose, ears, hands, legs...), each garment and accessory, for edit LoRAs. Captions are saved in the official format (key order, `[y1, x1, y2, x2]` boxes in 0–1000, no repeated elements) with the trigger word at the start of the description. **Natural language** is also available.
+- **Captioner:** Qwen3-VL-8B NF4 (the same model as Ideogram's text encoder) writes Ideogram's native JSON caption with a **bounding box for every subject, object and piece of text** — a format the Ideogram 4.5 API also accepts (FLUX 3 Image uses a different layout format, see *FLUX 3 Image — preview*). A second **OCR pass** reads every sign with its box (in one pass the model misses many texts in busy scenes). **JSON detailed** also boxes each part of every person or animal (face, nose, ears, hands, legs...), each garment and accessory, for edit LoRAs. Captions are saved in the official format (key order, `[y1, x1, y2, x2]` boxes in 0–1000, no repeated elements) with the trigger word at the start of the description. **Natural language** is also available.
 - **Use JSON for captions and preview prompts.** Ideogram 4 depends on its JSON format: in our tests a short plain prompt ("a woman with blonde hair in a green sweater reading in a library") gave odd crops or was blocked, while the same scene written as a JSON caption came out right. For the custom preview prompt, copy a caption from the dataset and edit it.
 - **Previews:** 28 steps / CFG 7 with the last 3 steps at CFG 3, as in the official pipeline. Ideogram's guidance uses a second, **unconditional transformer** (4.3 GB): it is loaded only for the previews and moved to the GPU while each one runs, so previews with CFG need ~15 GB at 1024². On 12 GB cards set **Preview CFG to 1**. **Preview Size** as in Z-Image.
 - **Built-in safety filter:** Ideogram 4 was trained to output a grey "Image blocked by safety filter" image for some prompts (for example a woman at the beach). It is the model itself, not the trainer, and its license forbids circumventing it: change the preview prompt if it happens.

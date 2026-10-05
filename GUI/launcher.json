@@ -54,6 +54,13 @@
       "run": "Run_LoRAlab-Klein9B.bat"
     },
     {
+      "id": "flux3image",
+      "name": "FLUX 3 Image (preview)",
+      "description": "En preparación: entrena FLUX.2 Klein 9B hasta que haya pesos abiertos / In preparation: trains FLUX.2 Klein 9B until open weights",
+      "image": "assets/flux3image/portada.jpg",
+      "run": "Run_LoRAlab-Flux3Image.bat"
+    },
+    {
       "id": "ideogram4",
       "name": "Ideogram 4",
       "description": "LoRAs de imagen / Image LoRAs",

@@ -7,8 +7,8 @@ Un .txt por imagen. La palabra trigger va siempre al principio.
 One .txt per image. The trigger word always goes first.
 
 Tres estilos / Three styles:
-  json           el caption estructurado nativo de Ideogram 4 (el formato de Ideogram 4.5 y FLUX.3
-                 Image), con una caja por cada sujeto, objeto y texto.
+  json           el caption estructurado nativo de Ideogram 4 (la API de Ideogram 4.5
+                 también lo acepta; FLUX 3 Image usa otro formato: flux3_caption.py), con una caja por cada sujeto, objeto y texto.
   json_detailed  lo mismo, y además una caja por cada parte de cada persona o animal (cara, nariz,
                  orejas, manos, piernas...), prenda y accesorio: para LoRAs de edición.
   natural        un párrafo de descripción.

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AcademiaSD Ideogram 4 LoRAlab</title>
+    <title>AcademiaSD FLUX 3 Image LoRAlab</title>
 
     <!-- Favicon de la pestaña del navegador -->
     <link rel="icon" type="image/png" href="/assets/logo_128.png">
@@ -181,14 +181,15 @@
     <header>
         <!-- Banner de la cabecera -->
         <div class="banner-container">
-            <img src="/assets/logo.jpg" alt="AcademiaSD Ideogram 4 LoRAlab" class="banner-img" onerror="this.src='/assets/logo.jpg'; this.onerror=null;">
+            <img src="/assets/logo.jpg" alt="AcademiaSD FLUX 3 Image LoRAlab" class="banner-img" onerror="this.src='/assets/logo.jpg'; this.onerror=null;">
         </div>
 
         <div class="header-content">
             <div class="logo-title">
                 <div>
-                    <h1>AcademiaSD Ideogram 4 LoRAlab</h1>
+                    <h1>AcademiaSD FLUX 3 Image LoRAlab</h1>
                     <span>Web GUI & Automation / Interfaz Web y Automatización</span>
+                    <span style="color:var(--warning); font-weight:600;" title="FLUX 3 Image has no open weights yet. This trainer is a copy of FLUX.2 Klein 9B (it trains and exports Klein 9B LoRAs) where the FLUX 3 integrations are prepared, starting with layout captions with boxes. / FLUX 3 Image aún no tiene pesos abiertos. Este entrenador es una copia de FLUX.2 Klein 9B (entrena y exporta LoRAs de Klein 9B) donde se preparan las integraciones de FLUX 3, empezando por los captions de layout con cajas.">🧪 Preview: trains FLUX.2 Klein 9B until FLUX 3 Image has open weights / Entrena FLUX.2 Klein 9B hasta que FLUX 3 Image tenga pesos abiertos</span>
                 </div>
             </div>
 
@@ -271,16 +272,24 @@
                     </div>
 
                     <div class="form-group">
+                        <label title="Normal: one image + caption per sample. Edit: name_before / name_after pairs + instruction in name.txt. / Normal: una imagen + caption por muestra. Edición: pares nombre_before / nombre_after + instrucción en nombre.txt.">LoRA Type / Tipo de LoRA:</label>
+                        <select id="lora_type" onchange="applyLoraType()">
+                            <option value="normal">Normal LoRA (image + caption / imagen + caption)</option>
+                            <option value="edit">Edit LoRA (before / after pairs / pares antes / después)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
                         <label>Cache Folder / Carpeta Caché (Auto):</label>
-                        <input type="text" id="precache_cache_dir" value="./cached_data_ideogram4" readonly title="Ruta informativa generada automáticamente">
+                        <input type="text" id="precache_cache_dir" value="./cached_data_flux3image" readonly title="Ruta informativa generada automáticamente">
                     </div>
 
                     <div class="form-group">
                         <label>Resolution / Resolución (px²):</label>
                         <select id="target_area_select" onchange="syncResolution(this.value)">
                             <option value="262144">512 x 512 (262,144 px²)</option>
-                            <option value="589824">768 x 768 (589,824 px²)</option>
-                            <option value="1048576" selected>1024 x 1024 (1,048,576 px²)</option>
+                            <option value="589824" selected>768 x 768 (589,824 px²)</option>
+                            <option value="1048576">1024 x 1024 (1,048,576 px²)</option>
                             <option value="custom">Custom / Personalizada</option>
                         </select>
                         <input type="number" id="precache_target_area" value="589824" style="margin-top:6px; display:none;">
@@ -297,7 +306,7 @@
                         </div>
                         <div class="form-group">
                             <label>Max Side / Lado Máx:</label>
-                            <input type="number" id="precache_max_side" value="2048">
+                            <input type="number" id="precache_max_side" value="1536">
                         </div>
                     </div>
 
@@ -337,7 +346,7 @@
                 <div class="panel-body">
                     <div class="form-group">
                         <label>Final LoRA Filename / Nombre Final (.safetensors):</label>
-                        <input type="text" id="export_final_name" value="ideogram4_lora.safetensors" placeholder="mi_lora_ideogram4.safetensors">
+                        <input type="text" id="export_final_name" value="flux3image_lora.safetensors" placeholder="mi_lora_flux3image.safetensors">
                     </div>
 
                     <div class="form-group">
@@ -380,7 +389,7 @@
                 <div class="panel-body">
                     <div class="form-group">
                         <label>Output Dir / Carpeta Salida (Auto):</label>
-                        <input type="text" id="train_output_dir" value="./ideogram4_lora_output" readonly title="Ruta informativa generada automáticamente">
+                        <input type="text" id="train_output_dir" value="./flux3image_lora_output" readonly title="Ruta informativa generada automáticamente">
                     </div>
 
                     <div class="form-row">
@@ -408,7 +417,7 @@
                     <div class="form-group">
                         <label>LoRA Targets / Capas LoRA:</label>
                         <select id="train_lora_targets"
-                                title="Blocks trains attention and MLP of the 34 blocks: enough for characters, objects and styles, and it combines well with other LoRAs. All also trains the adaLN modulation, timestep, text projection and input/output layers. / Blocks entrena la atención y el MLP de los 34 bloques: suficiente para personajes, objetos y estilos, y combina bien con otros LoRAs. All entrena además la modulación adaLN, el timestep, la proyección del texto y las capas de entrada/salida.">
+                                title="Blocks trains attention and MLP of the 8 double and 24 single blocks: enough for characters, objects and styles, and it combines well with other LoRAs such as the Turbo LoRA. All also trains the shared modulation, timestep and input/output layers; it can clash with distilled LoRAs. / Blocks entrena la atención y el MLP de los 8 bloques dobles y los 24 simples: suficiente para personajes, objetos y estilos, y combina bien con otros LoRAs como el Turbo. All entrena además la modulación compartida, el timestep y las capas de entrada/salida; puede chocar con LoRAs destilados.">
                             <option value="blocks" selected>Blocks: attention + MLP (recommended / recomendado)</option>
                             <option value="all">All linear layers / Todas las capas</option>
                         </select>
@@ -477,6 +486,23 @@
                 </div>
 
                 <div class="panel-body">
+                    <!-- TURBO LORA: kalle07/FLUX.2-klein-9B-turbo-lora-set, 4 pasos sin CFG -->
+                    <div class="form-group" style="background: #0f172a; padding: 10px; border-radius: 8px; border: 1px solid var(--panel-border); margin-top: 6px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <label style="margin: 0; font-weight: 600; color: #38bdf8; cursor: pointer;" for="train_use_turbo">
+                                🚀 Turbo LoRA (Fast Previews)
+                            </label>
+                            <input type="checkbox" id="train_use_turbo" onchange="toggleTurboMode(this.checked)" style="width: 18px; height: 18px; cursor: pointer;">
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
+                            <label style="font-size:0.75rem; color:var(--text-muted); margin:0; white-space:nowrap;">Strength / Potencia:</label>
+                            <input type="number" step="0.05" id="train_turbo_strength" value="1.0" style="padding:3px 8px; font-size:0.8rem; width:80px;">
+                        </div>
+                        <span style="font-size: 0.7rem; color: var(--text-muted); display: block; margin-top: 4px;">
+                            kalle07/FLUX.2-klein-9B-turbo-lora-set (rank 64, ~350 MB, downloaded on first use / se descarga la primera vez)
+                        </span>
+                    </div>
+
                     <div class="form-row">
                         <div class="form-group">
                             <label>Preview Every / Preview Cada:</label>
@@ -496,7 +522,16 @@
                     <!-- CAMPO PROMPT MANUAL (SE MUESTRA SOLO EN MODO CUSTOM) -->
                     <div class="form-group" id="custom_prompt_container" style="display:none; margin-top: 4px;">
                         <label style="color:#38bdf8; font-weight:600;">Custom Preview Prompt / Prompt Manual:</label>
-                        <textarea id="train_preview_custom_prompt" rows="2" placeholder="Best as an Ideogram JSON caption (copy one from the dataset and edit it) / Mejor como caption JSON de Ideogram (copia uno del dataset y edítalo)"></textarea>
+                        <textarea id="train_preview_custom_prompt" rows="2" placeholder="Escribe aquí tu prompt personalizado para la previsualización..."></textarea>
+                        <div id="edit_image_container" style="display:none;">
+                        <label style="color:#38bdf8; font-weight:600; margin-top:6px;"
+                               title="Edit datasets (name_before / name_after) only. The preview applies the instruction above to this image. Use one that is NOT in the dataset: it is the only way to see whether the effect generalizes. Empty = the 'before' of the first pair. Encoded by Pre-Cache. / Solo datasets de edición (nombre_before / nombre_after). La preview aplica la instrucción de arriba a esta imagen. Usa una que NO esté en el dataset: es la única forma de ver si el efecto generaliza. Vacío = el 'antes' del primer par. Lo codifica el Pre-Caché.">
+                            Edit Preview Image (before) / Imagen de antes (edición):</label>
+                        <div style="display:flex; gap:8px;">
+                            <input type="text" id="preview_edit_image" value="" placeholder="(empty = first pair / vacío = primer par)">
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="browseImageNative()">Browse / Explorar</button>
+                        </div>
+                        </div>
                     </div>
 
                     <div class="form-row">
@@ -505,13 +540,13 @@
                             <input type="number" id="train_preview_steps" value="28">
                         </div>
                         <div class="form-group">
-                            <label title="Above 1, the preview also uses Ideogram's unconditional transformer (+4.3 GB of VRAM while it runs: ~15 GB at 1024²). On 12 GB cards use 1 (no guidance, faster, lower quality). The last 3 steps use CFG 3, as in the official pipeline. / Por encima de 1, la preview usa también el transformer incondicional de Ideogram (+4,3 GB de VRAM mientras dura: ~15 GB a 1024²). En tarjetas de 12 GB usa 1 (sin guía, más rápida, menos calidad). Los 3 últimos pasos van con CFG 3, como en el pipeline oficial.">Preview CFG / CFG Preview:</label>
-                            <input type="number" step="0.1" id="train_preview_cfg" value="7">
+                            <label>Preview CFG / CFG Preview:</label>
+                            <input type="number" step="0.1" id="train_preview_cfg" value="4">
                         </div>
                     </div>
 
                     <div class="form-group">
-                        <label title="Training = the size of the sample image in the pre-cache. 768 / 1024 keep its proportions; 768 is about twice as fast as 1024. / Training = el tamaño de la imagen de muestra en la pre-caché. 768 / 1024 mantienen su proporción; 768 es unas dos veces más rápida que 1024.">Preview Size / Tamaño Preview:</label>
+                        <label title="Training = the size of the sample image in the pre-cache (in edit LoRAs, the size of the before image). 768 / 1024 keep its proportions and show what you will get in ComfyUI, even when training at 512. 1024 takes about 4 times longer than 512. / Training = el tamaño de la imagen de muestra en la pre-caché (en LoRAs de edición, el de la imagen de antes). 768 / 1024 mantienen su proporción y muestran lo que obtendrás en ComfyUI, aunque entrenes a 512. 1024 tarda unas 4 veces más que 512.">Preview Size / Tamaño Preview:</label>
                         <select id="train_preview_size">
                             <option value="0" selected>Training / Entrenamiento</option>
                             <option value="768">768 x 768 (area / área)</option>
@@ -571,17 +606,17 @@
                     </div>
                 </div>
 
-                <!-- Auto-caption con Qwen3-VL-8B, compartido con los demás entrenadores (Captioner-Qwen3-VL-8B/). -->
+                <!-- Auto-caption con Qwen3-VL-8B NF4: el captioner compartido con LTX-2.3, Z-Image y Anima. -->
                 <div class="ds-caption-bar">
                     <button type="button" class="btn btn-primary btn-sm" id="btn-caption" onclick="runCaption()"
-                            title="Writes one .txt per image with Qwen3-VL-8B (NF4, ~5.5 GB VRAM), with the trigger word first. The first time it downloads ~5 GB to Captioner-Qwen3-VL-8B/ (shared with the other trainers). / Escribe un .txt por imagen con Qwen3-VL-8B (NF4, ~5.5 GB de VRAM), con la palabra clave delante. La primera vez descarga ~5 GB a Captioner-Qwen3-VL-8B/ (compartido con los demás entrenadores).">
+                            title="Writes one .txt per image with Qwen3-VL-8B (NF4, ~5.5 GB VRAM), with the trigger word first. Shared with LTX-2.3, Z-Image and Anima: the first time it downloads ~5 GB. / Escribe un .txt por imagen con Qwen3-VL-8B (NF4, ~5.5 GB de VRAM), con la palabra clave delante. Compartido con LTX-2.3, Z-Image y Anima: la primera vez descarga ~5 GB.">
                         <span id="btn-caption-label">Create Captions / Crear Captions</span>
                     </button>
-                    <select class="ds-mode-select" id="caption_style" onchange="switchCaptionStyle()"
-                            title="Ideogram 4 was trained on structured JSON captions with bounding boxes, a format the Ideogram 4.5 API also accepts. JSON + boxes: one box per subject, object and piece of text (an OCR pass reads the signs). Detailed: also one box per part of each person or animal (face, nose, ears, hands, legs...), garment and accessory, for edit LoRAs. Natural: one description per image. Each style keeps its own prompt. / Ideogram 4 se entrenó con captions JSON con cajas, un formato que también acepta la API de Ideogram 4.5. JSON + cajas: una caja por sujeto, objeto y texto (una pasada de OCR lee los rótulos). Detallado: además una caja por cada parte de cada persona o animal (cara, nariz, orejas, manos, piernas...), prenda y accesorio, para LoRAs de edición. Natural: una descripción por imagen. Cada estilo guarda su propio prompt.">
-                        <option value="json">JSON + boxes (native, recommended / nativo, recomendado)</option>
-                        <option value="json_detailed">JSON + boxes, detailed: face, hands, clothes... (edit LoRAs / LoRAs de edición)</option>
-                        <option value="natural">Natural language / Descripción</option>
+                    <select class="ds-mode-select" id="caption_mode" onchange="switchCaptionMode()"
+                            title="Normal: one description per image, for characters, objects and styles. Edit: one imperative instruction per name_before / name_after pair, saved as name.txt. Each mode keeps its own prompt. / Normal: una descripción por imagen, para personajes, objetos y estilos. Edit: una instrucción en imperativo por cada par nombre_before / nombre_after, guardada como nombre.txt. Cada modo guarda su propio prompt.">
+                        <option value="layout">FLUX 3 layout: caption + boxes (recommended / recomendado)</option>
+                        <option value="normal">Normal (character / object / style)</option>
+                        <option value="edit">Edit (before → after)</option>
                     </select>
                     <span class="ds-step-hint">Qwen3-VL-8B · before Pre-Cache / antes del Pre-Caché</span>
                     <label class="ds-inline-label" title="Off = only images with no caption are processed. / Desactivado = solo se procesan las imágenes sin caption.">
@@ -658,6 +693,25 @@
             if (icon) {
                 icon.innerText = panel.classList.contains('collapsed') ? '▼' : '▲';
             }
+        }
+
+        function toggleTurboMode(isTurbo) {
+            const stepsInput = document.getElementById('train_preview_steps');
+            const cfgInput = document.getElementById('train_preview_cfg');
+            const strengthInput = document.getElementById('train_turbo_strength');
+            if (isTurbo) {
+                stepsInput.value = 4;
+                cfgInput.value = 1;
+                if (strengthInput) strengthInput.value = 1.0;
+            } else {
+                stepsInput.value = 28;
+                cfgInput.value = 4;
+            }
+        }
+
+        function applyLoraType() {
+            const edit = document.getElementById('lora_type').value === 'edit';
+            document.getElementById('edit_image_container').style.display = edit ? 'block' : 'none';
         }
 
         function toggleCaptionMode(mode) {
@@ -746,14 +800,14 @@
 
         function updateProjectPaths() {
             const proj = document.getElementById('project_name').value.trim();
-            const cacheDir = proj ? `./cached_data_ideogram4_${proj}` : './cached_data_ideogram4';
-            const outputDir = proj ? `./ideogram4_lora_output_${proj}` : './ideogram4_lora_output';
+            const cacheDir = proj ? `./cached_data_flux3image_${proj}` : './cached_data_flux3image';
+            const outputDir = proj ? `./flux3image_lora_output_${proj}` : './flux3image_lora_output';
             
             document.getElementById('precache_cache_dir').value = cacheDir;
             document.getElementById('train_output_dir').value = outputDir;
             
             if (proj) {
-                document.getElementById('export_final_name').value = `ideogram4_lora_${proj}.safetensors`;
+                document.getElementById('export_final_name').value = `flux3image_lora_${proj}.safetensors`;
             }
             checkCheckpointInfo();
         }
@@ -779,6 +833,8 @@
                     if (p.project_name) document.getElementById('project_name').value = p.project_name;
                     if (p.trigger_word) document.getElementById('trigger_word').value = p.trigger_word;
                     if (p.dataset_path) document.getElementById('dataset_path').value = p.dataset_path;
+                    document.getElementById('lora_type').value = p.lora_type || 'normal';
+                    applyLoraType();
                     if (p.target_area) {
                         document.getElementById('precache_target_area').value = p.target_area;
                         const sel = document.getElementById('target_area_select');
@@ -809,9 +865,12 @@
                         toggleCaptionMode(t.preview_caption_mode);
                     }
                     if (t.preview_custom_prompt !== undefined) document.getElementById('train_preview_custom_prompt').value = t.preview_custom_prompt;
+                    if (t.preview_edit_image !== undefined) document.getElementById('preview_edit_image').value = t.preview_edit_image;
                     if (t.preview_steps !== undefined) document.getElementById('train_preview_steps').value = t.preview_steps;
                     if (t.preview_cfg !== undefined) document.getElementById('train_preview_cfg').value = t.preview_cfg;
                     if (t.preview_size !== undefined) document.getElementById('train_preview_size').value = String(t.preview_size);
+                    if (t.use_turbo !== undefined) document.getElementById('train_use_turbo').checked = t.use_turbo;
+                    if (t.turbo_lora_strength !== undefined) document.getElementById('train_turbo_strength').value = t.turbo_lora_strength;
                     if (t.export_final_name) document.getElementById('export_final_name').value = t.export_final_name;
                 }
                 updateProjectPaths();
@@ -837,6 +896,10 @@
                     if (data.project_name !== undefined) document.getElementById('project_name').value = data.project_name;
                     if (data.trigger_word !== undefined) document.getElementById('trigger_word').value = data.trigger_word;
                     if (data.dataset_path !== undefined) document.getElementById('dataset_path').value = data.dataset_path;
+                    if (data.lora_type !== undefined) {
+                        document.getElementById('lora_type').value = data.lora_type;
+                        applyLoraType();
+                    }
                     
                     if (data.target_area !== undefined) {
                         document.getElementById('precache_target_area').value = data.target_area;
@@ -867,9 +930,12 @@
                         toggleCaptionMode(data.preview_caption_mode);
                     }
                     if (data.preview_custom_prompt !== undefined) document.getElementById('train_preview_custom_prompt').value = data.preview_custom_prompt;
+                    if (data.preview_edit_image !== undefined) document.getElementById('preview_edit_image').value = data.preview_edit_image;
                     if (data.preview_steps !== undefined) document.getElementById('train_preview_steps').value = data.preview_steps;
                     if (data.preview_cfg !== undefined) document.getElementById('train_preview_cfg').value = data.preview_cfg;
                     if (data.preview_size !== undefined) document.getElementById('train_preview_size').value = String(data.preview_size);
+                    if (data.use_turbo !== undefined) document.getElementById('train_use_turbo').checked = data.use_turbo;
+                    if (data.turbo_lora_strength !== undefined) document.getElementById('train_turbo_strength').value = data.turbo_lora_strength;
                     if (data.export_final_name !== undefined) document.getElementById('export_final_name').value = data.export_final_name;
 
                     updateProjectPaths();
@@ -919,7 +985,21 @@
             }
         }
 
-        // El servidor lee la ruta del dataset de pre_cache_settings_ideogram4.json: hay que guardarla ANTES de
+        async function browseImageNative() {
+            const current = document.getElementById('preview_edit_image').value;
+            try {
+                const res = await fetch('/api/select-file', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ initial_path: current })
+                });
+                const data = await res.json();
+                if (data.status === 'ok' && data.path) document.getElementById('preview_edit_image').value = data.path;
+                else if (data.status === 'error') alert(data.error);
+            } catch (e) { alert('Error: ' + e); }
+        }
+
+        // El servidor lee la ruta del dataset de pre_cache_settings_flux3image.json: hay que guardarla ANTES de
         // refrescar el Dataset Manager, o seguiría mostrando la carpeta anterior.
         async function datasetPathChanged() {
             await savePrecacheSettings(true);
@@ -935,7 +1015,9 @@
                 multiple: parseInt(document.getElementById('precache_multiple').value),
                 max_side: parseInt(document.getElementById('precache_max_side').value),
                 cache_dir: document.getElementById('precache_cache_dir').value,
-                preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim()
+                lora_type: document.getElementById('lora_type').value,
+                preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim(),
+                preview_edit_image: document.getElementById('preview_edit_image').value.trim()
             };
             const res = await fetch('/api/save-precache', { method: 'POST', body: JSON.stringify(precacheData) });
             const data = await res.json();
@@ -966,9 +1048,15 @@
                 preview_every: parseInt(document.getElementById('train_preview_every').value),
                 preview_caption_mode: document.getElementById('train_preview_caption_mode').value,
                 preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim(),
+                preview_edit_image: document.getElementById('preview_edit_image').value.trim(),
+                lora_type: document.getElementById('lora_type').value,
                 preview_steps: parseInt(document.getElementById('train_preview_steps').value),
                 preview_cfg: parseFloat(document.getElementById('train_preview_cfg').value),
                 preview_size: parseInt(document.getElementById('train_preview_size').value),
+                use_turbo: document.getElementById('train_use_turbo').checked,
+                turbo_lora_strength: parseFloat(document.getElementById('train_turbo_strength').value),
+                use_filter_bypass: false,
+                filter_bypass_strength: 0.01,
                 export_final_name: document.getElementById('export_final_name').value
             };
             const res = await fetch('/api/save-train', { method: 'POST', body: JSON.stringify(trainData) });
@@ -978,10 +1066,10 @@
                 const listStr = data.all_saved ? data.all_saved.join('\n • ') : data.file;
                 // Con el entrenamiento en marcha, el trainer aplica los ajustes en caliente en el paso siguiente.
                 const live = document.getElementById('status-badge').classList.contains('badge-running')
-                    ? '\n\nTraining is running: steps, save/preview every, preview settings (size included), caption mode, prompt and LR apply on the next step. Rank, alpha, batch and resolution need Stop -> Resume.\nEl entrenamiento está en marcha: pasos, guardar/preview cada, ajustes de preview (tamaño incluido), modo, prompt y LR se aplican en el paso siguiente. Rank, alpha, batch y resolución necesitan Detener -> Reanudar.'
+                    ? '\n\nTraining is running: steps, save/preview every, preview settings (size included), caption mode, prompt, turbo and LR apply on the next step. Rank, alpha, batch and resolution need Stop -> Resume.\nEl entrenamiento está en marcha: pasos, guardar/preview cada, ajustes de preview (tamaño incluido), modo, prompt, turbo y LR se aplican en el paso siguiente. Rank, alpha, batch y resolución necesitan Detener -> Reanudar.'
                     : '';
                 const encoding = data.encoding
-                    ? `\n\nThe preview prompt is being encoded on ${data.encoding_device}. Start/Resume and Stop are disabled until it finishes.\nSe está codificando en ${data.encoding_device} el prompt de la preview. Iniciar/Reanudar y Detener quedan desactivados hasta que termine.`
+                    ? `\n\nThe preview prompt/image is being encoded on ${data.encoding_device}. Start/Resume and Stop are disabled until it finishes.\nSe está codificando en ${data.encoding_device} el prompt/imagen de la preview. Iniciar/Reanudar y Detener quedan desactivados hasta que termine.`
                     : '';
                 alert(`✓ Train Settings saved / Configuración de Entrenamiento guardada en:\n • ${listStr}${live}${encoding}`);
             }
@@ -1170,10 +1258,11 @@
             }
         }
 
-        // Mientras el servidor codifica el prompt de la preview no se puede lanzar ni detener nada.
+        // Mientras el servidor codifica en CPU el prompt/imagen de la preview no se puede lanzar ni detener nada.
         let isRunning = false, encodingStage = null, startAfterEncoding = false;
         const ENCODING_TEXT = {
-            loading: d => `⏳ Loading text encoder on ${d}... / Cargando text encoder en ${d}...`,
+            loading: d => `⏳ Loading encoders on ${d}... / Cargando codificadores en ${d}...`,
+            image: d => `⏳ Encoding reference image latent on ${d}... / Codificando latente de la imagen de referencia en ${d}...`,
             prompt: d => `⏳ Encoding custom prompt on ${d}... / Codificando custom prompt en ${d}...`
         };
 
@@ -1270,7 +1359,11 @@
         }
 
         async function deleteDatasetImage(file) {
-            const what = `"${file}" and its .txt caption\n\n¿Eliminar "${file}" y su caption .txt`;
+            // En un par de edición se borran las dos mitades y el caption compartido: una sola no sirve.
+            const pair = file.match(/^(.*)_(before|after)\.[^.]+$/);
+            const what = pair
+                ? `the whole pair "${pair[1]}" (before + after) and its caption ${pair[1]}.txt\n\n¿Eliminar el par completo "${pair[1]}" (antes + después) y su caption ${pair[1]}.txt`
+                : `"${file}" and its .txt caption\n\n¿Eliminar "${file}" y su caption .txt`;
             if (!confirm(`Remove ${what} del dataset?\n\nThe files are deleted from disk. / Los ficheros se borran del disco.`)) return;
             try {
                 const res = await fetch('/api/delete-dataset-image', {
@@ -1341,23 +1434,29 @@
             } catch (e) { alert('Error: ' + e); }
         }
 
-        // Prompts por defecto del captioner; el elegido se guarda en caption_settings_ideogram4.json al ejecutar.
+        // Mismos prompts por defecto que 0_caption_flux3image.py; se guardan en caption_settings_flux3image.json al ejecutar.
         const DEFAULT_CAPTION_PROMPTS = {
-            natural: 'Describe this image for training a text-to-image model, in at most 150 words. '
+            normal: 'Describe this image for training a text-to-image model, in at most 150 words. '
                 + 'One single paragraph of plain prose, no lists and no preamble. Cover the main subject and what they are doing, '
                 + 'their appearance, hair and clothing, the pose, the framing and camera angle, the setting and background, '
                 + 'the lighting and the colors. Do not invent a name and do not mention that this is an image or a photo.',
-            json: "Write a structured JSON caption of this image for the Ideogram 4 image model. Output ONE minified JSON object on a single line (no line breaks, no indentation, no markdown, no comments), with the keys in this order:\n{\"high_level_description\":\"...\",\"style_description\":{...},\"compositional_deconstruction\":{\"background\":\"...\",\"elements\":[...]}}\n\nhigh_level_description: one sentence, at most 50 words, that starts with the main subject and names the medium (photograph, illustration, painting, 3D render, graphic design...). No \"this image shows\".\n\nstyle_description: for a photograph use exactly the keys aesthetics, lighting, photo, medium, color_palette, with medium \"photograph\" and photo describing the camera, lens and framing you see, e.g. \"50mm lens, eye-level, medium shot, shallow depth of field\". For anything else use exactly aesthetics, lighting, medium, art_style, color_palette, with medium one of illustration, painting, 3d_render, graphic_design, anime, pixel_art. color_palette: 3 to 8 uppercase #RRGGBB colors that dominate the image.\n\nbackground: only the scene shell: sky, clouds, horizon, distant scenery, weather, the floor or ground surface, walls or studio backdrop, ambient light. Never people, animals, furniture, vehicles, signs or other objects that could be placed one by one.\n\nelements: one element for every distinct person, animal, object and every piece of legible text you can see, the main subject first, then every text element, then the other objects from most to least important. Include small secondary objects too (cups, glasses, bags, plants, lamps, vehicles, signs, icons). Every sign, poster, label, shop name or screen with readable characters is a text element, with the characters copied exactly in their own script (Korean, Chinese, Japanese and Arabic stay as they are). At most 40 elements, and each one appears only once: never repeat an element, a box or a description; when every element is written, close the list. A dense group of similar things (a crowd far away, a shelf of books, a row of identical vases, a pile of fruit) is ONE element for the whole group, and the repeated parts of one thing (fence posts, windows of a facade, tiles, bricks, steps, lights of a chandelier) are described inside one element, never listed one by one. No element covers the whole frame or describes the whole scene: that is the background or the high_level_description. A single subject is ONE element: a person's hair, clothes, accessories and anything they hold go inside that person's desc, not as separate elements. Never make elements for the sky, the ground or the walls.\n- Object: {\"type\":\"obj\",\"bbox_2d\":[x1,y1,x2,y2],\"desc\":\"...\"}\n- Text: {\"type\":\"text\",\"bbox_2d\":[x1,y1,x2,y2],\"text\":\"exact characters, use \\n for line breaks\",\"desc\":\"font style, weight, color and position\"}\ndesc: 25 to 60 words (never more than 60), starting with what the element is, then color, material, shape, pose, expression and position relative to other elements. Describe what is physically visible; avoid words like stunning, vibrant, radiant, luminous; do not mention shadows, bokeh, focus or lens inside a desc.\n\nbbox_2d: the tight box around the element in THIS image, [x1, y1, x2, y2] with x from left (0) to right (1000) and y from top (0) to bottom (1000) of the image. Every box must match where the element really is.",
-            json_detailed: "Write a structured JSON caption of this image for the Ideogram 4 image model. Output ONE minified JSON object on a single line (no line breaks, no indentation, no markdown, no comments), with the keys in this order:\n{\"high_level_description\":\"...\",\"style_description\":{...},\"compositional_deconstruction\":{\"background\":\"...\",\"elements\":[...]}}\n\nhigh_level_description: one sentence, at most 50 words, that starts with the main subject and names the medium (photograph, illustration, painting, 3D render, graphic design...). No \"this image shows\".\n\nstyle_description: for a photograph use exactly the keys aesthetics, lighting, photo, medium, color_palette, with medium \"photograph\" and photo describing the camera, lens and framing you see, e.g. \"50mm lens, eye-level, medium shot, shallow depth of field\". For anything else use exactly aesthetics, lighting, medium, art_style, color_palette, with medium one of illustration, painting, 3d_render, graphic_design, anime, pixel_art. color_palette: 3 to 8 uppercase #RRGGBB colors that dominate the image.\n\nbackground: only the scene shell: sky, clouds, horizon, distant scenery, weather, the floor or ground surface, walls or studio backdrop, ambient light. Never people, animals, furniture, vehicles, signs or other objects that could be placed one by one.\n\nelements: one element for every distinct person, animal, object and every piece of legible text you can see, the main subject first, then every text element, then the other objects from most to least important. Include small secondary objects too (cups, glasses, bags, plants, lamps, vehicles, signs, icons). Every sign, poster, label, shop name or screen with readable characters is a text element, with the characters copied exactly in their own script (Korean, Chinese, Japanese and Arabic stay as they are). At most 60 elements, and each one appears only once: never repeat an element, a box or a description; when every element is written, close the list. A dense group of similar things (a crowd far away, a shelf of books, a row of identical vases, a pile of fruit) is ONE element for the whole group, and the repeated parts of one thing (fence posts, windows of a facade, tiles, bricks, steps, lights of a chandelier) are described inside one element, never listed one by one. No element covers the whole frame or describes the whole scene: that is the background or the high_level_description. For every person and animal, first add ONE element for the whole subject, then a separate element with its own tight box for EACH visible part: head, face, hair, eyes, eyebrows, nose, mouth, ears, neck, each hand, each arm, each leg, each foot, tail, wings; then one element for EACH clothing item (shirt, jacket, dress, trousers, shoes, hat...) and EACH accessory (glasses, earrings, necklace, watch, bag...). Name in each desc whose part it is, e.g. 'Nose of the woman in the red dress'. Large objects can also be split into their main parts (wheels and doors of a car, screen of a laptop). Never make elements for the sky, the ground or the walls.\n- Object: {\"type\":\"obj\",\"bbox_2d\":[x1,y1,x2,y2],\"desc\":\"...\"}\n- Text: {\"type\":\"text\",\"bbox_2d\":[x1,y1,x2,y2],\"text\":\"exact characters, use \\n for line breaks\",\"desc\":\"font style, weight, color and position\"}\ndesc: 25 to 60 words (never more than 60), starting with what the element is, then color, material, shape, pose, expression and position relative to other elements. Describe what is physically visible; avoid words like stunning, vibrant, radiant, luminous; do not mention shadows, bokeh, focus or lens inside a desc.\n\nbbox_2d: the tight box around the element in THIS image, [x1, y1, x2, y2] with x from left (0) to right (1000) and y from top (0) to bottom (1000) of the image. Every box must match where the element really is."
+            edit: 'The first image is the original and the second image is the edited result. Write ONE '
+                + 'imperative instruction, in at most 40 words, that turns the first image into the second. '
+                + 'Start with a verb such as Colorize, Remove, Replace, Change, Add or Make. Say what changes '
+                + 'and, briefly, what must stay the same. Do not describe content that does not change, do '
+                + "not mention 'first image' or 'second image', and write no preamble."
         };
-        // Los prompts viven en memoria; el textarea muestra el del estilo elegido.
+        // El prompt del modo layout es el de scripts/flux3_caption.py (lo manda el servidor): una sola fuente.
+        DEFAULT_CAPTION_PROMPTS.layout = '';
+        const CAPTION_PROMPT_KEYS = { layout: 'caption_layout_prompt', normal: 'caption_prompt', edit: 'caption_edit_prompt' };
+        // Los dos prompts viven en memoria; el textarea muestra el del modo elegido.
         const captionPrompts = { ...DEFAULT_CAPTION_PROMPTS };
-        let captionStyleShown = 'json';
+        let captionModeShown = 'layout';
 
-        function switchCaptionStyle() {
-            captionPrompts[captionStyleShown] = document.getElementById('caption_prompt_text').value;
-            captionStyleShown = document.getElementById('caption_style').value;
-            document.getElementById('caption_prompt_text').value = captionPrompts[captionStyleShown];
+        function switchCaptionMode() {
+            captionPrompts[captionModeShown] = document.getElementById('caption_prompt_text').value;
+            captionModeShown = document.getElementById('caption_mode').value;
+            document.getElementById('caption_prompt_text').value = captionPrompts[captionModeShown];
         }
 
         async function loadCaptionSettings() {
@@ -1365,12 +1464,13 @@
             try {
                 data = await (await fetch('/api/caption-settings')).json();
             } catch (e) {}
-            for (const style in captionPrompts) {
-                if (data['caption_prompt_' + style]) captionPrompts[style] = data['caption_prompt_' + style];
+            if (data.default_layout_prompt) captionPrompts.layout = data.default_layout_prompt;
+            for (const mode in CAPTION_PROMPT_KEYS) {
+                if (data[CAPTION_PROMPT_KEYS[mode]]) captionPrompts[mode] = data[CAPTION_PROMPT_KEYS[mode]];
             }
-            captionStyleShown = data.caption_style in captionPrompts ? data.caption_style : 'json';
-            document.getElementById('caption_style').value = captionStyleShown;
-            document.getElementById('caption_prompt_text').value = captionPrompts[captionStyleShown];
+            captionModeShown = data.caption_mode in CAPTION_PROMPT_KEYS ? data.caption_mode : 'layout';
+            document.getElementById('caption_mode').value = captionModeShown;
+            document.getElementById('caption_prompt_text').value = captionPrompts[captionModeShown];
             if (data.overwrite !== undefined) document.getElementById('caption_overwrite').checked = !!data.overwrite;
         }
         loadCaptionSettings();
@@ -1381,19 +1481,18 @@
             if (captioned > 0 && overwrite) {
                 if (!confirm(`This will OVERWRITE the ${captioned} caption(s) that already exist.\n\nEsto SOBRESCRIBIRÁ los ${captioned} caption(s) que ya existen.\n\nContinue? / ¿Continuar?`)) return;
             }
-            // El captioner lee la carpeta del dataset y la palabra clave de pre_cache_settings_ideogram4.json.
+            // El captioner lee la carpeta del dataset y la palabra clave de pre_cache_settings_flux3image.json.
             await savePrecacheSettings();
-            switchCaptionStyle();  // guarda en memoria lo que haya en el textarea
+            switchCaptionMode();  // guarda en memoria lo que haya en el textarea
             try {
                 await fetch('/api/save-caption-settings', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        caption_style: captionStyleShown,
-                        caption_prompt: captionPrompts[captionStyleShown].trim(),
-                        caption_prompt_natural: captionPrompts.natural.trim(),
-                        caption_prompt_json: captionPrompts.json.trim(),
-                        caption_prompt_json_detailed: captionPrompts.json_detailed.trim(),
+                        caption_mode: captionModeShown,
+                        caption_prompt: captionPrompts.normal.trim(),
+                        caption_edit_prompt: captionPrompts.edit.trim(),
+                        caption_layout_prompt: captionPrompts.layout.trim(),
                         overwrite: overwrite
                     })
                 });
