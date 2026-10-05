@@ -570,6 +570,8 @@
                         <button type="button" class="btn btn-warning btn-sm" onclick="addTriggerToAllCaptions()">Apply to All / Aplicar a todos</button>
                         <button type="button" class="btn btn-danger btn-sm" onclick="clearAllCaptions()"
                                 title="Deletes the .txt of every image. There is no undo. / Borra el .txt de todas las imágenes. No hay deshacer.">Clear Captions / Borrar</button>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="clearDataset()"
+                                title="Deletes every file of the dataset folder and its .txt captions (subfolders are kept). There is no undo. / Borra todos los ficheros de la carpeta del dataset y sus captions .txt (las subcarpetas se conservan). No hay deshacer.">Clear Dataset / Vaciar Dataset</button>
                         <button type="button" class="btn btn-secondary btn-sm" onclick="loadDatasetInfo()">Refresh / Actualizar</button>
                     </div>
                 </div>
@@ -1313,6 +1315,23 @@
                 const data = await res.json();
                 if (data.status === 'error') { alert('Error: ' + (data.error || 'unknown')); return; }
                 appendTerminal(`[CAPTIONS] ${data.removed || 0} .txt deleted / borrados`, false, 'term-warning');
+                (data.errors || []).forEach(x => appendTerminal('   ' + x, false, 'term-danger'));
+                loadDatasetInfo();
+            } catch (e) { alert('Error: ' + e); }
+        }
+
+        async function clearDataset() {
+            const n = parseInt(document.getElementById('ds-count').innerText) || 0;
+            const path = document.getElementById('dataset_path').value;
+            if (!n) { alert('The dataset is already empty. / El dataset ya está vacío.'); return; }
+            // Se pide escribir el número: un confirm normal se acepta por reflejo y esto no tiene deshacer.
+            const resp = prompt(`This DELETES the ${n} files of the dataset and their .txt captions:\n${path}\nThere is no undo.\n\nEsto BORRA los ${n} ficheros del dataset y sus captions .txt. No hay deshacer.\n\nType ${n} to confirm / Escribe ${n} para confirmar:`);
+            if (String(resp || '').trim() !== String(n)) return;
+            try {
+                const res = await fetch('/api/clear-dataset', { method: 'POST' });
+                const data = await res.json();
+                if (data.status === 'error') { alert('Error: ' + (data.error || 'unknown')); return; }
+                appendTerminal(`[DATASET] ${data.removed || 0} file(s) deleted / fichero(s) borrado(s): ${data.path}`, false, 'term-warning');
                 (data.errors || []).forEach(x => appendTerminal('   ' + x, false, 'term-danger'));
                 loadDatasetInfo();
             } catch (e) { alert('Error: ' + e); }

@@ -938,6 +938,31 @@ def batch_caption():
         return jsonify({"status": "error", "error": str(exc)}), 500
 
 
+@app.route("/api/clear-dataset", methods=["POST"])
+def clear_dataset():
+    """
+    Vacía la carpeta del dataset: sus imágenes (y vídeos y audios donde los hay) y sus .txt. Las
+    subcarpetas y los demás ficheros no se tocan. Con un proceso en marcha no se borra nada (lo estaría leyendo).
+    La GUI pide escribir el número de ficheros antes de llamar aquí.
+    """
+    try:
+        if get_status()["running"]:
+            return jsonify({"status": "error", "error": "A process is running / Hay un proceso en marcha"}), 409
+        dataset_dir = get_dataset_dir()
+        removed, errors = 0, []
+        if dataset_dir.is_dir():
+            for f in dataset_dir.iterdir():
+                if f.is_file() and f.suffix.lower() in DATASET_EXTS + (".txt",):
+                    try:
+                        f.unlink()
+                        removed += 1
+                    except Exception as exc:
+                        errors.append(f"{f.name}: {exc}")
+        return jsonify({"status": "ok" if not errors else "partial", "removed": removed, "errors": errors, "path": str(dataset_dir)})
+    except Exception as exc:
+        return jsonify({"status": "error", "error": str(exc)}), 500
+
+
 @app.route("/api/clear-captions", methods=["POST"])
 def clear_captions():
     """
