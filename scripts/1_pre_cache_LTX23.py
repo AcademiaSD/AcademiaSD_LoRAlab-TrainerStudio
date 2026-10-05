@@ -144,10 +144,10 @@ except Exception:
 if os.path.exists(CONFIG_PATH):
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         cfg = json.load(f)
-    print(f"[OK] Configuración cargada: {CONFIG_PATH}")
+    print("[OK] " + t("Configuration loaded from {path}", path=CONFIG_PATH))
 else:
     cfg = {}
-    print(f"[!] No existe {CONFIG_PATH}; usando valores por defecto.")
+    print("[!] " + t("{path} not found, using default values.", path=CONFIG_PATH))
 
 
 def cfg_get(key, default):
@@ -239,10 +239,10 @@ if LOW_RAM_MODE:
 
     print()
     print("=" * 80)
-    print("[LOW-RAM] Modo conservador activado")
-    print(f"[LOW-RAM] RAM detectada: {SYSTEM_RAM_GB:.1f} GB")
-    print(f"[LOW-RAM] Umbral: {LOW_RAM_THRESHOLD_GB:.1f} GB")
-    print("[LOW-RAM] Se forzará sequential offload + límite de CPU + disk offload.")
+    print("[LOW-RAM] " + t("Conservative mode on"))
+    print("[LOW-RAM] " + t("RAM detected: {gb:.1f} GB", gb=SYSTEM_RAM_GB))
+    print("[LOW-RAM] " + t("Threshold: {gb:.1f} GB", gb=LOW_RAM_THRESHOLD_GB))
+    print("[LOW-RAM] " + t("Forcing sequential offload + CPU limit + disk offload."))
     print("=" * 80)
 
 
@@ -278,21 +278,20 @@ def ensure_ltx23_model_downloaded(local_path):
     has_nf4 = os.path.exists(os.path.join(local_path, "index.json"))
 
     if has_base and has_nf4:
-        print(f"[OK] Modelo local encontrado en / Local model found at: {local_path}")
+        print("[OK] " + t("Local model found at: {path}", path=local_path))
         if not os.path.exists(os.path.join(local_path, "text_encoder_NF4", "config.json")):
             # Instalaciones anteriores traían el text encoder en FP32 en vez del NF4 ya cuantizado.
             from huggingface_hub import snapshot_download
-            print("Downloading / Descargando: {}/text_encoder_NF4 (~8 GB)".format(HF_NF4_REPO_ID))
+            print(t("Downloading from Hugging Face: {repo}", repo=f"{HF_NF4_REPO_ID}/text_encoder_NF4") + " (~8 GB)")
             snapshot_download(repo_id=HF_NF4_REPO_ID, local_dir=local_path, token=get_hf_token(),
                               max_workers=4, allow_patterns=["text_encoder_NF4/*"])
         return local_path
 
     print()
     print("=" * 80)
-    print("WARNING / ATENCIÓN")
+    print(t("WARNING"))
     print("=" * 80)
-    print("This will download about 32 GB. This may take several minutes.")
-    print("Esto descargará unos 32 GB. Esto puede tardar varios minutos.")
+    print(t("This will download about {gb} GB. This may take several minutes.", gb=32))
     print("=" * 80)
 
     auto = os.environ.get("LTX_AUTO_CONFIRM_DOWNLOAD", "0").strip().lower()
@@ -305,9 +304,7 @@ def ensure_ltx23_model_downloaded(local_path):
     try:
         from huggingface_hub import snapshot_download
     except ImportError:
-        raise ImportError(
-            "huggingface_hub is required. Install with: pip install huggingface_hub"
-        )
+        raise ImportError(t("huggingface_hub is required. Install it with: pip install huggingface_hub"))
 
     token = get_hf_token()
     if token:
@@ -317,7 +314,7 @@ def ensure_ltx23_model_downloaded(local_path):
 
     print()
     # El Transformer BF16 (~38 GB) y el text encoder FP32 (~49 GB) no se usan: salen ya cuantizados del repo NF4.
-    print("Downloading / Descargando:", HF_BASE_REPO_ID)
+    print(t("Downloading from Hugging Face: {repo}", repo=HF_BASE_REPO_ID))
     snapshot_download(
         repo_id=HF_BASE_REPO_ID,
         local_dir=local_path,
@@ -327,7 +324,7 @@ def ensure_ltx23_model_downloaded(local_path):
     )
 
     print()
-    print("Downloading / Descargando:", HF_NF4_REPO_ID)
+    print(t("Downloading from Hugging Face: {repo}", repo=HF_NF4_REPO_ID))
     snapshot_download(
         repo_id=HF_NF4_REPO_ID,
         local_dir=local_path,
@@ -336,17 +333,13 @@ def ensure_ltx23_model_downloaded(local_path):
     )
 
     if not os.path.exists(os.path.join(local_path, "model_index.json")):
-        raise RuntimeError(
-            f"Descarga incompleta: falta model_index.json en {local_path}"
-        )
+        raise RuntimeError(t("Incomplete download: {name} missing in {path}", name="model_index.json", path=local_path))
 
     if not os.path.exists(os.path.join(local_path, "index.json")):
-        raise RuntimeError(
-            f"Descarga incompleta: falta index.json en {local_path}"
-        )
+        raise RuntimeError(t("Incomplete download: {name} missing in {path}", name="index.json", path=local_path))
 
     print()
-    print(f"[OK] Modelo descargado en / Model downloaded to: {local_path}")
+    print("[OK] " + t("Model downloaded to: {path}", path=local_path))
     return local_path
 
 
@@ -426,7 +419,7 @@ def read_model_index_components(model_id):
         return out
 
     except Exception as exc:
-        print("[LIGHT] No se pudo leer model_index.json: {}".format(exc))
+        print("[LIGHT] " + t("Could not read model_index.json: {error}", error=exc))
         return {}
 
 
@@ -443,13 +436,7 @@ def resolve_component_class(model_id, component_name, current_object=None):
             module = importlib.import_module(module_name)
             return getattr(module, class_name)
         except Exception as exc:
-            print(
-                "[LIGHT] No se pudo importar {}.{}: {}".format(
-                    module_name,
-                    class_name,
-                    exc
-                )
-            )
+            print("[LIGHT] " + t("Could not import {name}: {error}", name=f"{module_name}.{class_name}", error=exc))
 
     if current_object is not None:
         return type(current_object)
@@ -565,8 +552,8 @@ def load_precache_pipeline_light(model_id, skip_text_encoders=True):
         return pipe
 
     except TypeError as exc:
-        print("[LIGHT] Overrides no aceptados por el pipeline ({}).".format(exc))
-        print("[LIGHT] Fallback: cargando solo sin transformer.")
+        print("[LIGHT] " + t("Overrides not accepted by the pipeline ({error}).", error=exc))
+        print("[LIGHT] " + t("Fallback: loading without the transformer only."))
         return DiffusionPipeline.from_pretrained(
             model_id,
             transformer=None,
@@ -592,17 +579,17 @@ def quantize_one_text_encoder_4bit(pipe, component_name):
     )
 
     if component_class is None:
-        print("[4bit] No se pudo resolver la clase de {}.".format(component_name))
+        print("[4bit] " + t("Could not resolve the class of {name}.", name=component_name))
         return False, None
 
     # CLAVE: liberar el original antes de cargar el cuantizado
-    print("[4bit] Liberando {} de RAM antes de cuantizar...".format(component_name))
+    print("[4bit] " + t("Freeing {name} from RAM before quantizing...", name=component_name))
     unload_pipeline_component(pipe, component_name)
 
     try:
         from transformers import BitsAndBytesConfig
     except Exception as exc:
-        print("[4bit] BitsAndBytesConfig no disponible: {}".format(exc))
+        print("[4bit] " + t("BitsAndBytesConfig not available: {error}", error=exc))
         return False, None
 
     bnb_cfg = BitsAndBytesConfig(
@@ -657,7 +644,7 @@ def quantize_one_text_encoder_4bit(pipe, component_name):
         kwargs.update(extra_kwargs)
 
         try:
-            print("[4bit] {} -> intentando {}...".format(component_name, label))
+            print("[4bit] " + t("{name} -> trying {label}...", name=component_name, label=label))
 
             new_object = component_class.from_pretrained(
                 MODEL_ID,
@@ -666,8 +653,8 @@ def quantize_one_text_encoder_4bit(pipe, component_name):
 
             setattr(pipe, component_name, new_object)
 
-            print("[4bit] {} cuantizado OK con {}.".format(component_name, label))
-            print("[4bit] VRAM actual: {:.2f} GB".format(vram_gb()))
+            print("[4bit] " + t("{name} quantized OK with {label}.", name=component_name, label=label))
+            print("[4bit] " + t("Current VRAM: {gb:.2f} GB", gb=vram_gb()))
 
             # No borramos la carpeta si la estrategia usó offload,
             # porque podría contener datos necesarios durante la ejecución.
@@ -680,7 +667,7 @@ def quantize_one_text_encoder_4bit(pipe, component_name):
             return True, label
 
         except Exception as exc:
-            print("[4bit] {} fallo con {}: {}".format(component_name, label, exc))
+            print("[4bit] " + t("{name} failed with {label}: {error}", name=component_name, label=label, error=exc))
             gc.collect()
 
             if torch.cuda.is_available():
@@ -697,11 +684,7 @@ def quantize_one_text_encoder_4bit(pipe, component_name):
     # ------------------------------------------------------------------------
     if LOW_RAM_MODE:
         try:
-            print(
-                "[4bit] {} -> LOW_RAM fallback: bf16 con device_map auto + offload a disco...".format(
-                    component_name
-                )
-            )
+            print("[4bit] " + t("{name} -> LOW_RAM fallback: bf16 with device_map auto + disk offload...", name=component_name))
 
             fallback_object = component_class.from_pretrained(
                 MODEL_ID,
@@ -715,21 +698,12 @@ def quantize_one_text_encoder_4bit(pipe, component_name):
 
             setattr(pipe, component_name, fallback_object)
 
-            print(
-                "[4bit] {} cargado en modo bf16 auto/disk offload (lento pero bajo en RAM).".format(
-                    component_name
-                )
-            )
+            print("[4bit] " + t("{name} loaded in bf16 auto/disk offload mode (slow but low on RAM).", name=component_name))
 
             return True, "bf16 auto/disk offload"
 
         except Exception as exc:
-            print(
-                "[4bit] LOW_RAM fallback falló para {}: {}".format(
-                    component_name,
-                    exc
-                )
-            )
+            print("[4bit] " + t("LOW_RAM fallback failed for {name}: {error}", name=component_name, error=exc))
 
             gc.collect()
 
@@ -740,11 +714,7 @@ def quantize_one_text_encoder_4bit(pipe, component_name):
             # pero si el sistema tiene pagefile/swap suficiente podría funcionar.
             if LOW_RAM_ALLOW_CPU_FALLBACK:
                 try:
-                    print(
-                        "[4bit] {} -> último recurso LOW_RAM: bf16 completo en CPU...".format(
-                            component_name
-                        )
-                    )
+                    print("[4bit] " + t("{name} -> LOW_RAM last resort: full bf16 on CPU...", name=component_name))
 
                     fallback_object = component_class.from_pretrained(
                         MODEL_ID,
@@ -755,31 +725,18 @@ def quantize_one_text_encoder_4bit(pipe, component_name):
 
                     setattr(pipe, component_name, fallback_object)
 
-                    print(
-                        "[4bit] {} cargado en CPU como último recurso.".format(
-                            component_name
-                        )
-                    )
+                    print("[4bit] " + t("{name} loaded on CPU as a last resort.", name=component_name))
 
                     return True, "bf16 CPU fallback"
 
                 except Exception as exc2:
-                    print(
-                        "[4bit] CRITICO: último recurso CPU falló para {}: {}".format(
-                            component_name,
-                            exc2
-                        )
-                    )
+                    print("[4bit] " + t("CRITICAL: CPU last resort failed for {name}: {error}", name=component_name, error=exc2))
 
             return False, None
 
     # En máquinas con suficiente RAM sí podemos mantener el fallback original.
     try:
-        print(
-            "[4bit] {} -> recargando original bf16 en CPU como fallback...".format(
-                component_name
-            )
-        )
+        print("[4bit] " + t("{name} -> reloading the original bf16 on CPU as a fallback...", name=component_name))
 
         fallback_object = component_class.from_pretrained(
             MODEL_ID,
@@ -791,12 +748,7 @@ def quantize_one_text_encoder_4bit(pipe, component_name):
         setattr(pipe, component_name, fallback_object)
 
     except Exception as exc:
-        print(
-            "[4bit] CRITICO: no se pudo restaurar {}: {}".format(
-                component_name,
-                exc
-            )
-        )
+        print("[4bit] " + t("CRITICAL: could not restore {name}: {error}", name=component_name, error=exc))
 
     return False, None
 
@@ -811,10 +763,10 @@ def try_quantize_text_encoders_4bit(pipe):
     names = list_text_encoder_components(pipe)
 
     if not names:
-        print("[4bit] No se detectaron text encoders; se omite.")
+        print("[4bit] " + t("No text encoders detected; skipped."))
         return False, "cpu"
 
-    print("[4bit] Text encoders detectados: {}".format(", ".join(names)))
+    print("[4bit] " + t("Text encoders detected: {names}", names=", ".join(names)))
 
     all_ok = True
 
@@ -830,7 +782,7 @@ def try_quantize_text_encoders_4bit(pipe):
             torch.cuda.empty_cache()
 
     if not all_ok:
-        print("[4bit] Algun text encoder no se pudo cuantizar; se usara fallback/offload.")
+        print("[4bit] " + t("Some text encoder could not be quantized; fallback/offload will be used."))
         return False, "cpu"
 
     return True, "cuda"
@@ -885,8 +837,8 @@ def setup_offload(pipe, mode):
     if mode == "none":
         # Comportamiento original: todo en VRAM (solo con VRAM de sobra).
         pipe.to("cuda")
-        print("[OFFLOAD] none -> pipeline completo en VRAM.")
-        print(f"[VRAM] tras pipe.to(cuda): {vram_gb():.2f} GB")
+        print("[OFFLOAD] " + t("none -> whole pipeline in VRAM."))
+        print("[VRAM] " + t("after pipe.to(cuda): {gb:.2f} GB", gb=vram_gb()))
         return "cuda"
 
     if mode == "cpu":
@@ -894,18 +846,18 @@ def setup_offload(pipe, mode):
         if vae is not None:
             vae.to("cuda")
 
-        print("[OFFLOAD] cpu -> text encoder en CPU, VAE en VRAM.")
-        print(f"[VRAM] tras mover VAE: {vram_gb():.2f} GB")
+        print("[OFFLOAD] " + t("cpu -> text encoder on CPU, VAE in VRAM."))
+        print("[VRAM] " + t("after moving the VAE: {gb:.2f} GB", gb=vram_gb()))
         return "cpu"
 
     if mode == "model":
         try:
             pipe.enable_model_cpu_offload(device="cuda")
-            print("[OFFLOAD] model -> 1 componente en VRAM cada vez.")
-            print("[OFFLOAD] (solo válido si cada componente cabe solo en VRAM)")
+            print("[OFFLOAD] " + t("model -> one component in VRAM at a time."))
+            print("[OFFLOAD] " + t("(only valid if each component fits in VRAM on its own)"))
             return "cuda"
         except Exception as e:
-            print("[OFFLOAD] model falló, fallback a sequential:", e)
+            print("[OFFLOAD] " + t("model failed, falling back to sequential:"), e)
             mode = "sequential"
 
     # mode == "sequential"
@@ -919,7 +871,7 @@ def setup_offload(pipe, mode):
         return "cuda"
 
     except Exception as e:
-        print("[OFFLOAD] sequential falló, fallback a cpu:", e)
+        print("[OFFLOAD] " + t("sequential failed, falling back to cpu:"), e)
 
         if vae is not None:
             vae.to("cuda")
@@ -1092,7 +1044,7 @@ def encode_video_latent(vae, image):
     elif isinstance(encoded, tuple):
         latent = encoded[0]
     else:
-        raise RuntimeError("Salida desconocida de VAE.encode(): " + str(type(encoded)))
+        raise RuntimeError(t("Unknown output of VAE.encode(): {name}", name=type(encoded)))
 
     latent = latent.detach()
 
@@ -1139,7 +1091,7 @@ def preprocess_ltx23():
     global MODEL_ID
 
     if not torch.cuda.is_available():
-        raise RuntimeError("CUDA no está disponible.")
+        raise RuntimeError(t("CUDA is not available."))
 
     # ------------------------------------------------------------------
     # Descargar modelo antes de buscar la carpeta local
@@ -1147,19 +1099,13 @@ def preprocess_ltx23():
     MODEL_ID = ensure_ltx23_model_downloaded(MODEL_ID)
 
     if not os.path.isdir(MODEL_ID):
-        raise FileNotFoundError(f"No existe el modelo: {MODEL_ID}")
+        raise FileNotFoundError(t("Model not found: {path}", path=MODEL_ID))
 
     if not os.path.exists(os.path.join(MODEL_ID, "model_index.json")):
-        raise FileNotFoundError(
-            f"Falta model_index.json en: {MODEL_ID}. "
-            "La descarga del modelo base puede haber quedado incompleta."
-        )
+        raise FileNotFoundError(t("{name} missing in: {path}. The download of the {model} model may be incomplete.", name="model_index.json", path=MODEL_ID, model="base"))
 
     if not os.path.exists(os.path.join(MODEL_ID, "index.json")):
-        raise FileNotFoundError(
-            f"Falta index.json en: {MODEL_ID}. "
-            "La descarga del modelo NF4 puede haber quedado incompleta."
-        )
+        raise FileNotFoundError(t("{name} missing in: {path}. The download of the {model} model may be incomplete.", name="index.json", path=MODEL_ID, model="NF4"))
 
     os.makedirs(DATASET_PATH, exist_ok=True)
     os.makedirs(CACHE_DIR, exist_ok=True)
@@ -1170,17 +1116,17 @@ def preprocess_ltx23():
     )
 
     if not images:
-        raise RuntimeError(f"No hay imágenes en {DATASET_PATH}")
+        raise RuntimeError(t("No images found in '{path}'. Please add images.", path=DATASET_PATH))
 
     print()
     print("=" * 80)
     print(" LTX-2.3 PRE-CACHE")
     print("=" * 80)
-    print("Model        :", os.path.abspath(MODEL_ID))
+    print(f"{t('Model'):<13}:", os.path.abspath(MODEL_ID))
     print("Dataset      :", os.path.abspath(DATASET_PATH))
     print("Cache        :", os.path.abspath(CACHE_DIR))
-    print("Target area  :", TARGET_AREA)
-    print("Multiple     :", MULTIPLE)
+    print(f"{t('Target Area'):<13}:", TARGET_AREA)
+    print(f"{t('Multiple'):<13}:", MULTIPLE)
     print("Frames       :", NUM_FRAMES)
     print("FPS          :", FRAME_RATE)
     print("Max seq len  :", MAX_SEQ_LEN)
@@ -1191,7 +1137,7 @@ def preprocess_ltx23():
     if SYSTEM_RAM_GB is not None:
         print("System RAM   : {:.1f} GB".format(SYSTEM_RAM_GB))
     else:
-        print("System RAM   : desconocida")
+        print("System RAM   :", t("unknown"))
 
     print("=" * 80)
 
@@ -1205,9 +1151,9 @@ def preprocess_ltx23():
     print()
 
     if TEXT_ENCODER_4BIT:
-        print("Cargando LTX-2.3 en CPU (sin transformer y SIN text encoders)...")
+        print(t("Loading LTX-2.3 on CPU (without the transformer and WITHOUT text encoders)..."))
     else:
-        print("Cargando LTX-2.3 en CPU (sin transformer)...")
+        print(t("Loading LTX-2.3 on CPU (without the transformer)..."))
 
     pipe = load_precache_pipeline_light(
         MODEL_ID,
@@ -1221,7 +1167,7 @@ def preprocess_ltx23():
         te_obj = getattr(pipe, te_name, None)
 
         if te_obj is None:
-            print("{}: None (se cargara cuantizado)".format(te_name))
+            print("{}: None ({})".format(te_name, t("will be loaded quantized")))
         else:
             print("{}: {}".format(te_name, type(te_obj).__name__))
 
@@ -1251,8 +1197,8 @@ def preprocess_ltx23():
 
         text_device = "cuda"
 
-        print("[OFFLOAD] 4bit activo -> text encoder(s) 4-bit + VAE en VRAM.")
-        print("[VRAM] tras 4bit + VAE: {:.2f} GB".format(vram_gb()))
+        print("[OFFLOAD] " + t("4bit on -> 4-bit text encoder(s) + VAE in VRAM."))
+        print("[VRAM] " + t("after 4bit + VAE: {gb:.2f} GB", gb=vram_gb()))
 
     else:
         text_device = setup_offload(pipe, PRECACHE_OFFLOAD)
@@ -1262,7 +1208,7 @@ def preprocess_ltx23():
     # ------------------------------------------------------------------
     # NEGATIVE PROMPT
     # ------------------------------------------------------------------
-    print("\nEncoding negative/empty prompt...")
+    print("\n" + t("Encoding negative/empty prompt..."))
 
     with torch.inference_mode():
         neg_result = encode_prompt(pipe, "", text_device)
@@ -1273,7 +1219,7 @@ def preprocess_ltx23():
     for path, tensor in extract_prompt_tensors(neg_result):
         print(" ", path, tuple(tensor.shape), tensor.dtype)
 
-    print(f"[VRAM] pico tras neg prompt: {vram_peak_gb():.2f} GB")
+    print("[VRAM] " + t("peak after the negative prompt: {gb:.2f} GB", gb=vram_peak_gb()))
 
     free_vram(neg_result)
 
@@ -1286,7 +1232,7 @@ def preprocess_ltx23():
         if TRIGGER_WORD and TRIGGER_WORD.lower() not in custom_prompt.lower():
             custom_prompt = f"{TRIGGER_WORD}, {custom_prompt}".strip(", ")
 
-        print("\nEncoding custom prompt:", custom_prompt)
+        print("\n" + t("Encoding: '{prompt}'", prompt=custom_prompt))
 
         with torch.inference_mode():
             custom_result = encode_prompt(pipe, custom_prompt, text_device)
@@ -1309,7 +1255,7 @@ def preprocess_ltx23():
             and os.path.exists(audio_path)
             and os.path.exists(prompt_structure_path)
         ):
-            print(f"[{idx}/{len(images)}] SKIP {filename}")
+            print(f"[{idx}/{len(images)}] {t('SKIP')} {filename}")
             continue
 
         print()
@@ -1335,7 +1281,7 @@ def preprocess_ltx23():
         print("Bucket:", f"{bw}x{bh}")
 
         # VIDEO VAE
-        print("Encoding video latent...")
+        print(t("Encoding video latent..."))
 
         with torch.inference_mode():
             video_latent = encode_video_latent(pipe.vae, image)
@@ -1364,7 +1310,7 @@ def preprocess_ltx23():
         for path, tensor in extract_prompt_tensors(prompt_result):
             print(" ", path, tuple(tensor.shape), tensor.dtype)
 
-        print(f"[VRAM] pico acumulado: {vram_peak_gb():.2f} GB")
+        print("[VRAM] " + t("accumulated peak: {gb:.2f} GB", gb=vram_peak_gb()))
 
         atomic_json(
             {
@@ -1414,11 +1360,11 @@ def preprocess_ltx23():
 
     print()
     print("=" * 80)
-    print("LTX-2.3 PRE-CACHE COMPLETADO")
+    print(t("LTX-2.3 PRE-CACHE COMPLETED"))
     print("=" * 80)
     print("Cache:", os.path.abspath(CACHE_DIR))
-    print("Imágenes:", len(images))
-    print(f"VRAM pico total: {vram_peak_gb():.2f} GB")
+    print(t("Images") + ":", len(images))
+    print(t("Total VRAM peak: {gb:.2f} GB", gb=vram_peak_gb()))
     print("=" * 80)
 
 
@@ -1428,7 +1374,7 @@ if __name__ == "__main__":
     except Exception:
         print()
         print("=" * 80)
-        print("ERROR EN PRE-CACHE LTX-2.3")
+        print(t("ERROR IN LTX-2.3 PRE-CACHE"))
         print("=" * 80)
         traceback.print_exc()
         raise

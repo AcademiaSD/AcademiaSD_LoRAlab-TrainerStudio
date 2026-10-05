@@ -65,10 +65,11 @@ def strings(lang=None):
     return _load(lang) if lang != DEFAULT else {}
 
 
-def t(key, **kw):
+def t(key, *args, **kw):
+    """Traduce key y le aplica format: t("Step {n}", n=3) o, con posicionales, t("{0} of {1}", 3, 9)."""
     text = strings().get(key) or key
     try:
-        return text.format(**kw) if kw else text
+        return text.format(*args, **kw) if args or kw else text
     except (KeyError, IndexError, ValueError):
         return text
 

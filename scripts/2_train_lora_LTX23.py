@@ -55,6 +55,9 @@ from safetensors.torch import save_file, load_file
 from PIL import Image
 from i18n import t
 
+# La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
+STEP_WORD = t("Step")
+
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
@@ -152,10 +155,10 @@ HF_NF4_REPO_ID = "AcademiaSD/LTX23_NF4"
 if os.path.exists(CONFIG_PATH):
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         cfg = json.load(f)
-    print("[OK] Configuración cargada: {}".format(CONFIG_PATH))
+    print("[OK] " + t("Configuration loaded from {path}", path=CONFIG_PATH))
 else:
     cfg = {}
-    print("[!] No existe {}; usando valores por defecto.".format(CONFIG_PATH))
+    print("[!] " + t("{path} not found, using default values.", path=CONFIG_PATH))
 
 
 def cfg_get(key, default):
@@ -258,15 +261,15 @@ print()
 print("=" * 80)
 print(" LTX-2.3 LoRA TRAINER ")
 print("=" * 80)
-print("  Model ID / ID Modelo        : {}".format(MODEL_ID))
+print(f"  {t('Model ID'):<28}: {MODEL_ID}")
 print("  Base Repo                   : {}".format(HF_BASE_REPO_ID))
 print("  NF4 Repo                    : {}".format(HF_NF4_REPO_ID))
-print("  Project / Proyecto          : {}".format(PROJECT_NAME if PROJECT_NAME else "(Default)"))
-print("  Trigger Word / Palabra      : {}".format(TRIGGER_WORD))
-print("  Cache Dir / Carpeta Cache   : {}".format(CACHE_DIR))
-print("  Output Dir / Salida         : {}".format(OUTPUT_DIR))
-print("  Total Steps / Pasos         : {}".format(TOTAL_STEPS))
-print("  Learning Rate / LR          : {}".format(LR))
+print(f"  {t('Project Name'):<28}: {PROJECT_NAME if PROJECT_NAME else t('(Default)')}")
+print(f"  {t('Trigger Word'):<28}: {TRIGGER_WORD}")
+print(f"  {t('Cache Dir'):<28}: {CACHE_DIR}")
+print(f"  {t('Output Dir'):<28}: {OUTPUT_DIR}")
+print(f"  {t('Total Steps'):<28}: {TOTAL_STEPS}")
+print(f"  {t('Learning Rate'):<28}: {LR}")
 print("  LoRA Rank/Alpha             : {}/{}".format(LORA_RANK, LORA_ALPHA))
 print("  Batch / Grad Accum          : {}/{}".format(BATCH_SIZE, GRAD_ACCUM_STEPS))
 print("  Max Text Tokens             : {}".format(MAX_TEXT_TOKENS))
@@ -287,12 +290,12 @@ print("  Preview Frame Index         : {}".format(PREVIEW_FRAME_INDEX))
 print("  Preview Shift               : {:.2f}".format(PREVIEW_SHIFT))
 print("  Preview VAE FP32            : {}".format("ON" if PREVIEW_VAE_FP32 else "OFF"))
 print("  Preview VAE scaling_factor  : {}".format("ON" if PREVIEW_VAE_USE_SCALING_FACTOR else "OFF"))
-print("  LoRA Key Prefix / Prefijo   : '{}'".format(LORA_KEY_PREFIX))
-print("  Seed Configured / Semilla   : {} ({})".format(SEED, "RANDOM" if SEED <= 0 else "FIXED"))
+print("  LoRA Key Prefix             : '{}'".format(LORA_KEY_PREFIX))
+print(f"  {t('Seed'):<28}: {SEED} ({t('random') if SEED <= 0 else t('fixed')})")
 print("  Low VRAM 12GB mode          : {}".format("ON" if LOW_VRAM_12GB else "OFF"))
 print("  Activation Offload          : {} (PyTorch save_on_cpu: {})".format(
     "ON" if ACTIVATION_OFFLOAD else "OFF",
-    "OK" if _SAVE_ON_CPU_AVAILABLE else "NO DISPONIBLE"
+    "OK" if _SAVE_ON_CPU_AVAILABLE else t("NOT AVAILABLE")
 ))
 print("  Loss Chunk Elements         : {}".format(LOSS_CHUNK_ELEMENTS))
 print("=" * 80)
@@ -326,15 +329,14 @@ def ensure_ltx23_model_downloaded(local_path):
     has_nf4 = os.path.exists(os.path.join(local_path, "index.json"))
 
     if has_base and has_nf4:
-        print("[OK] Modelo local encontrado en: {}".format(local_path))
+        print("[OK] " + t("Local model found at: {path}", path=local_path))
         return local_path
 
     print()
     print("=" * 80)
-    print("WARNING / ATENCIÓN")
+    print(t("WARNING"))
     print("=" * 80)
-    print("This will download about 32 GB. This may take several minutes.")
-    print("Esto descargará unos 32 GB. Esto puede tardar varios minutos.")
+    print(t("This will download about {gb} GB. This may take several minutes.", gb=32))
     print("=" * 80)
 
     auto = os.environ.get("LTX_AUTO_CONFIRM_DOWNLOAD", "0").strip().lower()
@@ -347,17 +349,17 @@ def ensure_ltx23_model_downloaded(local_path):
     try:
         from huggingface_hub import snapshot_download
     except ImportError:
-        raise ImportError("huggingface_hub is required. Install with: pip install huggingface_hub")
+        raise ImportError(t("huggingface_hub is required. Install it with: pip install huggingface_hub"))
 
     token = get_hf_token()
     if token:
-        print("Using HF Token / Usando token de HF")
+        print(t("Using HF Token"))
 
     os.makedirs(local_path, exist_ok=True)
 
     # El Transformer BF16 (~38 GB) y el text encoder FP32 (~49 GB) no se usan: salen ya cuantizados del repo NF4.
     print()
-    print("Downloading / Descargando:", HF_BASE_REPO_ID)
+    print(t("Downloading from Hugging Face: {repo}", repo=HF_BASE_REPO_ID))
     snapshot_download(
         repo_id=HF_BASE_REPO_ID,
         local_dir=local_path,
@@ -367,7 +369,7 @@ def ensure_ltx23_model_downloaded(local_path):
     )
 
     print()
-    print("Downloading / Descargando:", HF_NF4_REPO_ID)
+    print(t("Downloading from Hugging Face: {repo}", repo=HF_NF4_REPO_ID))
     snapshot_download(
         repo_id=HF_NF4_REPO_ID,
         local_dir=local_path,
@@ -376,7 +378,7 @@ def ensure_ltx23_model_downloaded(local_path):
     )
 
     print()
-    print("[OK] Modelo descargado en: {}".format(local_path))
+    print("[OK] " + t("Model downloaded to: {path}", path=local_path))
     return local_path
 
 
@@ -386,7 +388,7 @@ def ensure_nf4_others_downloaded(local_path):
 
     from huggingface_hub import hf_hub_download
 
-    print("Downloading / Descargando: {}/others.safetensors".format(HF_NF4_REPO_ID))
+    print(t("Downloading from Hugging Face: {repo}", repo=f"{HF_NF4_REPO_ID}/others.safetensors"))
     hf_hub_download(repo_id=HF_NF4_REPO_ID, filename="others.safetensors", local_dir=local_path, token=get_hf_token())
 
 
@@ -473,7 +475,7 @@ def load_nf4_transformer(cache_dir):
     """
     index_path = os.path.join(cache_dir, "index.json")
     if not os.path.exists(index_path):
-        raise FileNotFoundError("No existe index.json: {}".format(index_path))
+        raise FileNotFoundError(t("index.json not found in the NF4 cache: {path}", path=index_path))
 
     with open(index_path, "r", encoding="utf-8") as f:
         index = json.load(f)
@@ -490,7 +492,7 @@ def load_nf4_transformer(cache_dir):
     for name, info in quantized.items():
         filepath = os.path.join(weights_dir, info["file"])
         if not os.path.exists(filepath):
-            raise FileNotFoundError("No existe peso NF4: {}".format(filepath))
+            raise FileNotFoundError(t("NF4 weight not found: {path}", path=filepath))
 
         parent, child_name = get_parent_module(transformer, name)
 
@@ -542,7 +544,7 @@ def load_nf4_transformer(cache_dir):
     for name, info in unquantized.items():
         filepath = os.path.join(weights_dir, info["file"])
         if not os.path.exists(filepath):
-            raise FileNotFoundError("No existe peso unquantized: {}".format(filepath))
+            raise FileNotFoundError(t("Unquantized weight not found: {path}", path=filepath))
 
         parent, child_name = get_parent_module(transformer, name)
 
@@ -570,7 +572,7 @@ def load_nf4_transformer(cache_dir):
 
     missing = [n for n, t in list(transformer.named_parameters()) + list(transformer.named_buffers()) if t.is_meta]
     if missing:
-        raise RuntimeError("Caché NF4 incompleta / NF4 cache incomplete: {}".format(missing[:5]))
+        raise RuntimeError(t("NF4 cache incomplete: {names}", names=missing[:5]))
 
     verified = 0
     for _, module in transformer.named_modules():
@@ -581,13 +583,13 @@ def load_nf4_transformer(cache_dir):
             ):
                 verified += 1
 
-    print("Capas NF4 reconstruidas: {}".format(replaced))
-    print("Capas NF4 verificadas: {}".format(verified))
+    print(t("NF4 layers rebuilt: {n}", n=replaced))
+    print(t("NF4 layers verified: {n}", n=verified))
 
     if verified != replaced:
-        raise RuntimeError("La verificación NF4 no coincide.")
+        raise RuntimeError(t("The NF4 verification does not match."))
 
-    print("[OK] Caché NF4 cargada correctamente.")
+    print("[OK] " + t("NF4 cache loaded correctly."))
     return transformer
 
 
@@ -645,7 +647,7 @@ def discover_lora_targets(transformer):
     targets = list(dict.fromkeys(targets))
 
     if not targets:
-        raise RuntimeError("No se encontraron módulos Linear4bit visuales para LoRA.")
+        raise RuntimeError(t("No visual Linear4bit modules found for the LoRA."))
 
     return targets
 
@@ -702,7 +704,7 @@ def get_prompt_pair(result):
     tensors = flatten_tensors(result)
 
     if not tensors:
-        raise RuntimeError("La caché de prompt no contiene tensores.")
+        raise RuntimeError(t("The prompt cache holds no tensors."))
 
     if (
         isinstance(result, (tuple, list))
@@ -758,7 +760,7 @@ def get_text_cache_paths(cache_dir, base, max_text_tokens):
 
 def run_text_connectors(prompt_result, connectors, max_text_tokens=0):
     if connectors is None:
-        raise RuntimeError("No hay text connectors cargados.")
+        raise RuntimeError(t("No text connectors loaded."))
 
     embeds, mask = get_prompt_pair(prompt_result)
 
@@ -775,10 +777,10 @@ def run_text_connectors(prompt_result, connectors, max_text_tokens=0):
         mask = mask.unsqueeze(0)
 
     if embeds.ndim != 3:
-        raise RuntimeError("prompt_embeds debe tener forma [B, S, D].")
+        raise RuntimeError(t("{name} must have shape {shape}.", name="prompt_embeds", shape="[B, S, D]"))
 
     if mask.ndim != 2:
-        raise RuntimeError("prompt_attention_mask debe tener forma [B, S].")
+        raise RuntimeError(t("{name} must have shape {shape}.", name="prompt_attention_mask", shape="[B, S]"))
 
     B, S, D = embeds.shape
     max_text_tokens = int(max_text_tokens or 0)
@@ -851,7 +853,7 @@ def run_text_connectors(prompt_result, connectors, max_text_tokens=0):
                 audio_text = getattr(out, "audio", None)
 
         if video_text is None or audio_text is None:
-            raise RuntimeError("connectors() no devolvió video_text/audio_text.")
+            raise RuntimeError(t("connectors() did not return video_text/audio_text."))
 
         return video_text, audio_text
 
@@ -913,7 +915,7 @@ def run_text_connectors(prompt_result, connectors, max_text_tokens=0):
             audio_text = getattr(out, "audio", None)
 
     if video_text is None or audio_text is None:
-        raise RuntimeError("connectors() no devolvió video_text/audio_text.")
+        raise RuntimeError(t("connectors() did not return video_text/audio_text."))
 
     return video_text, audio_text
 
@@ -943,7 +945,7 @@ def prepare_text_conditioning(entries, connectors, max_text_tokens=0):
 
     if missing:
         if connectors is None:
-            raise RuntimeError("Faltan textos precomputados y no hay connectors.")
+            raise RuntimeError(t("Precomputed texts are missing and there are no connectors."))
 
         #print()
         #print("Precomputando text conditioning para {} entradas...".format(len(missing)))
@@ -961,7 +963,7 @@ def prepare_text_conditioning(entries, connectors, max_text_tokens=0):
                 entry["prompt"] = load_prompt_structure(CACHE_DIR, "{}_prompt".format(base))
 
             if entry.get("prompt", None) is None:
-                raise RuntimeError("No hay prompt cacheado para {}.".format(base))
+                raise RuntimeError(t("No cached prompt for {name}.", name=base))
 
             video_text, audio_text = run_text_connectors(
                 entry["prompt"],
@@ -1139,7 +1141,7 @@ def load_cached_entries(cache_dir, audio_channels, max_text_tokens=0):
         )
 
     if not entries:
-        raise RuntimeError("No se encontraron entradas válidas.")
+        raise RuntimeError(t("No valid entries found."))
 
     return entries
 
@@ -1149,7 +1151,7 @@ def load_cached_entries(cache_dir, audio_channels, max_text_tokens=0):
 # ===========================================================================
 def patch_video_latent(latent, patch_size=1, patch_size_t=1):
     if latent.ndim != 5:
-        raise RuntimeError("Video latent esperado [B,C,F,H,W].")
+        raise RuntimeError(t("{name} must have shape {shape}.", name="Video latent", shape="[B,C,F,H,W]"))
 
     B, C, Fm, H, W = latent.shape
 
@@ -1187,7 +1189,7 @@ def patch_audio_latent(latent):
         latent = latent.unsqueeze(0)
 
     if latent.ndim != 3:
-        raise RuntimeError("Audio latent esperado [B,C,T] o [C,T].")
+        raise RuntimeError(t("{name} must have shape {shape}.", name="Audio latent", shape="[B,C,T] / [C,T]"))
 
     return latent.transpose(1, 2).contiguous()
 
@@ -1497,7 +1499,7 @@ class LTXVaeHolder:
             cls.vae = pipe.vae
 
             if cls.vae is None:
-                raise RuntimeError("No se pudo obtener pipe.vae para preview.")
+                raise RuntimeError(t("Could not get pipe.vae for the preview."))
 
             cls.vae.requires_grad_(False)
             cls.vae.eval()
@@ -1565,14 +1567,14 @@ def preview_forward(
     audio_tokens,
     video_text,
     audio_text,
-    t,
+    ts,
     latent_shape,
     audio_channels,
 ):
     B, C, Fm, H, W = tuple(latent_shape)
 
     timestep, audio_timestep, sigma = preview_timestep_tensors(
-        t,
+        ts,
         video_tokens.shape[1],
         video_tokens.device,
         torch.bfloat16,
@@ -1604,7 +1606,7 @@ def preview_forward(
 
     if isinstance(output, tuple):
         if len(output) == 0:
-            raise RuntimeError("Preview: forward devolvió tupla vacía.")
+            raise RuntimeError(t("Preview: the forward returned an empty tuple."))
 
         pred_video = output[0]
         pred_audio = output[1] if len(output) > 1 else None
@@ -1618,7 +1620,7 @@ def preview_forward(
             pred_audio = getattr(output, "audio_sample", None)
 
     if pred_video is None:
-        raise RuntimeError("Preview: no se pudo obtener predicción de video.")
+        raise RuntimeError(t("Preview: could not get the video prediction."))
 
     if pred_audio is None:
         pred_audio = torch.zeros_like(audio_tokens)
@@ -2069,9 +2071,7 @@ def reload_preview_settings():
         SEED = int(g("seed", SEED))
 
     except Exception as e:
-        print("  [reload] No se pudo releer {} ({}); se mantiene la receta anterior.".format(
-            CONFIG_PATH, e
-        ))
+        print("  [reload] " + t("Could not re-read {path} ({error}); keeping the previous recipe.", path=CONFIG_PATH, error=e))
 
 
 _live_mtime = None
@@ -2252,7 +2252,7 @@ def run_preview_diagnostic(
         shift = max(0.1, float(PREVIEW_SHIFT))
 
         print()
-        print("  [Preview-Diag] Mode: {} | Sample: {}".format(PREVIEW_MODE, sample_name))
+        print(f"  [Preview-Diag] {t('Mode')}: {PREVIEW_MODE} | {t('Sample')}: {sample_name}")
         print("  -> Seed: {}".format(preview_seed))
         print("  -> Steps: {}".format(PREVIEW_STEPS))
         print("  -> CFG video/audio: {:.2f} / {:.2f}".format(eff_cfg, eff_audio_cfg))
@@ -2345,10 +2345,10 @@ def run_preview_diagnostic(
         vae = LTXVaeHolder.get().to("cuda")
 
         if PREVIEW_COMPARE_BASE:
-            print("  -> Generating BASE preview (LoRA scale 0.0)")
+            print("  -> " + t("Generating BASE preview (LoRA scale 0.0)"))
             latents_base = _run_mode(0.0)
 
-            print("  -> Generating LoRA preview (LoRA scale {:.2f})".format(PREVIEW_LORA_SCALE))
+            print("  -> " + t("Generating LoRA preview (LoRA scale {s:.2f})", s=PREVIEW_LORA_SCALE))
             latents_lora = _run_mode(PREVIEW_LORA_SCALE)
 
             if latents_base is None or latents_lora is None:
@@ -2376,7 +2376,7 @@ def run_preview_diagnostic(
 
             Image.fromarray(img).save(out_path)
 
-            print("  -> Compare preview saved: {}".format(out_path))
+            print("  -> " + t("Compare preview saved: {path}", path=out_path))
 
             free_vram(latents_base, latents_lora, img_base, img_lora, img)
 
@@ -2398,12 +2398,12 @@ def run_preview_diagnostic(
             out_path = os.path.join(OUTPUT_DIR, preview_filename(step))
             Image.fromarray(img).save(out_path)
 
-            print("  -> Preview saved: {}".format(out_path))
+            print("  -> " + t("Preview saved to: {path}", path=out_path))
 
             free_vram(latents, img)
 
     except Exception as e:
-        print("  [!] Preview diagnostic failed: {}".format(e))
+        print("  [!] " + t("Preview diagnostic failed: {error}", error=e))
         traceback.print_exc()
 
     finally:
@@ -2454,20 +2454,20 @@ def train_ltx23():
 
     if ACTIVATION_OFFLOAD and not _SAVE_ON_CPU_AVAILABLE:
         ACTIVATION_OFFLOAD_ACTIVE = False
-        print("[VRAM] activation_offload=True pero torch.autograd.graph.save_on_cpu")
-        print("       no está disponible (requiere PyTorch >= 2.1). Se desactiva.")
+        print("[VRAM] " + t("activation_offload=True but torch.autograd.graph.save_on_cpu"))
+        print("       " + t("is not available (needs PyTorch >= 2.1). Turning it off."))
     else:
         ACTIVATION_OFFLOAD_ACTIVE = bool(ACTIVATION_OFFLOAD and _SAVE_ON_CPU_AVAILABLE)
 
     if ACTIVATION_OFFLOAD_ACTIVE:
-        print("[VRAM] activation_offload ACTIVO: saved tensors -> CPU pinned.")
+        print("[VRAM] " + t("activation_offload ON: saved tensors -> CPU pinned."))
 
     if not torch.cuda.is_available():
-        raise RuntimeError("CUDA no está disponible.")
+        raise RuntimeError(t("CUDA is not available."))
 
     if not os.path.exists(CACHE_DIR) or not any(f.endswith("_video_latent.pt") for f in os.listdir(CACHE_DIR)):
-        print("\n[!] ERROR: Cache directory '{}' is empty or does not exist.".format(CACHE_DIR))
-        print("[!] Please run Pre-Cache first! / ¡Por favor ejecuta el Pre-Caché primero!")
+        print("\n[!] ERROR: " + t("Cache directory '{path}' is empty or does not exist.", path=CACHE_DIR))
+        print("[!] " + t("Please run Pre-Cache first!"))
         sys.exit(2)  # la GUI muestra este código como "falta la pre-caché"
 
     ensure_ltx23_model_downloaded(MODEL_ID)
@@ -2476,7 +2476,7 @@ def train_ltx23():
     ensure_nf4_others_downloaded(MODEL_ID)
 
     print()
-    print("Loading LTX-2.3 connectors... / Cargando connectors de LTX-2.3...")
+    print(t("Loading {name}...", name="LTX-2.3 connectors"))
 
     pipe = DiffusionPipeline.from_pretrained(
         MODEL_ID,
@@ -2519,7 +2519,7 @@ def train_ltx23():
     free_vram()
 
     print()
-    print("Loading LTX-2.3 Transformer (NF4)... / Cargando Transformer de LTX-2.3 (NF4)...")
+    print(t("Loading {name}...", name="LTX-2.3 Transformer (NF4)"))
 
     t0 = time.time()
 
@@ -2535,20 +2535,20 @@ def train_ltx23():
     transformer.to("cuda")
     free_vram()
 
-    print("[NF4] Cache loaded in / Cache cargada en {:.1f}s".format(time.time() - t0))
-    print("Transformer pinned in VRAM. Usage / Uso: {:.1f} GB".format(torch.cuda.memory_allocated() / 1e9))
+    print("[NF4] " + t("Cache loaded in {s:.1f}s", s=time.time() - t0))
+    print(t("Transformer pinned in VRAM. Usage: {gb:.1f} GB", gb=torch.cuda.memory_allocated() / 1e9))
 
     enable_memory_efficient_attention(transformer)
 
     if hasattr(transformer, "enable_gradient_checkpointing"):
         try:
             transformer.enable_gradient_checkpointing()
-            print("Gradient checkpointing activado.")
+            print(t("Gradient checkpointing on."))
         except Exception:
             pass
 
     target_modules = discover_lora_targets(transformer)
-    print("Target LoRA Layers / Capas LoRA objetivo: {}".format(len(target_modules)))
+    print(t("Target LoRA layers: {n}", n=len(target_modules)))
 
     # Reanudar es continuar EL MISMO LoRA: capas, rank y alpha salen del checkpoint, no de la GUI.
     # Si se construyera con otros, el optimizador no encajaría y quedaría una mezcla de pesos.
@@ -2561,12 +2561,9 @@ def train_ltx23():
             saved_cfg = json.load(f)
         saved = (len(saved_targets), saved_cfg["r"], saved_cfg["lora_alpha"])
         if saved != (len(target_modules), LORA_RANK, LORA_ALPHA):
-            print("\n[!] Resuming with the checkpoint's LoRA: {} layers, rank {}, alpha {} "
-                  "(settings ask for {} layers, rank {}, alpha {}; they apply to new trainings).".format(
-                      *saved, len(target_modules), LORA_RANK, LORA_ALPHA))
-            print("[!] Se reanuda con el LoRA del checkpoint: {} capas, rank {}, alpha {} "
-                  "(los ajustes piden {} capas, rank {}, alpha {}; se aplican a entrenamientos nuevos).".format(
-                      *saved, len(target_modules), LORA_RANK, LORA_ALPHA))
+            print("\n[!] " + t("Resuming with the checkpoint's LoRA: {n} layers, rank {r}, alpha {a} "
+                              "(settings ask for {n2} layers, rank {r2}, alpha {a2}; they apply to new trainings).",
+                              n=saved[0], r=saved[1], a=saved[2], n2=len(target_modules), r2=LORA_RANK, a2=LORA_ALPHA))
         target_modules, LORA_RANK, LORA_ALPHA = saved_targets, saved[1], saved[2]
 
     lora_config = LoraConfig(
@@ -2637,7 +2634,7 @@ def train_ltx23():
 
     if os.path.exists(adapter_path) and os.path.exists(STEP_FILE):
         print("=" * 65)
-        print("Checkpoint detected! Restoring state... / Checkpoint detectado! Restaurando estado...")
+        print(t("Checkpoint detected! Restoring state..."))
 
         try:
             with open(STEP_FILE, "r", encoding="utf-8") as f:
@@ -2649,14 +2646,14 @@ def train_ltx23():
             if os.path.exists(OPT_FILE):
                 try:
                     optimizer.load_state_dict(torch.load(OPT_FILE, weights_only=False))
-                    print("Optimizer restaurado.")
+                    print(t("Optimizer restored."))
                 except Exception:
-                    print("[!] No se pudo restaurar optimizer. Se continúa con optimizer nuevo.")
+                    print("[!] " + t("Could not restore the optimizer. Continuing with a new optimizer."))
 
-            print("Resuming training from step / Reanudando entrenamiento desde el paso {}...".format(start_step))
+            print(t("Resuming training from step {n}...", n=start_step))
 
         except Exception as e:
-            print("[!] Warning reading checkpoint / Advertencia al leer checkpoint: {}".format(e))
+            print("[!] " + t("Warning reading checkpoint: {error}", error=e))
             start_step = 0
 
         print("=" * 65)
@@ -2671,7 +2668,7 @@ def train_ltx23():
             return
 
         print()
-        print("Saving checkpoint state at step / Guardando estado en paso {}...".format(current_s))
+        print(t("Saving checkpoint state at step {n}...", n=current_s))
 
         os.makedirs(RESUME_DIR, exist_ok=True)
 
@@ -2694,7 +2691,7 @@ def train_ltx23():
         try:
             ckpt = os.path.join(OUTPUT_DIR, "LTX23_LoRA_step_{}.safetensors".format(current_s))
             save_lora(model, ckpt, current_s)
-            print("Checkpoint saved successfully at step / Checkpoint guardado en paso {}: {}".format(current_s, ckpt))
+            print(t("Checkpoint saved at step {n}: {path}", n=current_s, path=ckpt))
         except Exception:
             pass
 
@@ -2705,7 +2702,7 @@ def train_ltx23():
         nonlocal last_step_executed
 
         print()
-        print("Signal received / Señal de detención recibida ({}).".format(sig))
+        print(t("Stop signal received ({sig}).", sig=sig))
 
         save_checkpoint_now(last_step_executed)
         sys.exit(0)
@@ -2754,7 +2751,7 @@ def train_ltx23():
     grad_norm = 0.0
 
     print()
-    print("STARTING TRAINING / ARRANCANDO ENTRENAMIENTO! {} entradas cacheadas.".format(len(entries)))
+    print(t("STARTING TRAINING! {n} cached entries.", n=len(entries)))
     #print("LoRA export prefix / Prefijo de exportación: '{}'".format(LORA_KEY_PREFIX))
 
     reload_live_settings()
@@ -2879,8 +2876,8 @@ def train_ltx23():
                         output = model(**forward_kwargs)
                 except Exception as e_offload:
                     print()
-                    print("[VRAM] save_on_cpu falló en runtime ({}).".format(e_offload))
-                    print("       Se desactiva activation_offload y se reintenta el step sin offload.")
+                    print("[VRAM] " + t("save_on_cpu failed at runtime ({error}).", error=e_offload))
+                    print("       " + t("Turning activation_offload off and retrying the step without offload."))
 
                     ACTIVATION_OFFLOAD_ACTIVE = False
                     output = model(**forward_kwargs)
@@ -2892,7 +2889,7 @@ def train_ltx23():
 
             if isinstance(output, tuple):
                 if len(output) == 0:
-                    raise RuntimeError("LTX-2.3 forward devolvió tupla vacía.")
+                    raise RuntimeError(t("The LTX-2.3 forward returned an empty tuple."))
 
                 pred_video = output[0]
 
@@ -2911,7 +2908,7 @@ def train_ltx23():
                         pred_audio = getattr(output, "audio_sample", None)
 
             if pred_video is None:
-                raise RuntimeError("No se pudo obtener predicción de video.")
+                raise RuntimeError(t("Could not get the video prediction."))
 
             output = None
 
@@ -2920,7 +2917,7 @@ def train_ltx23():
 
             if USE_AUDIO_LOSS and pred_audio is not None and target_audio is not None:
                 if pred_audio.shape != target_audio.shape:
-                    raise RuntimeError("La forma de salida de audio no coincide con el target.")
+                    raise RuntimeError(t("The audio output shape does not match the target."))
 
                 loss_video = mse_loss_chunked(pred_video, target_video)
                 loss_audio = mse_loss_chunked(pred_audio, target_audio)
@@ -2965,7 +2962,7 @@ def train_ltx23():
             avg_loss = running_loss / max(1, step - start_step)
 
             progress_line = (
-                "Step/Paso {:4d}/{} [{}] {:5.1f}% | "
+                STEP_WORD + " {:4d}/{} [{}] {:5.1f}% | "
                 "Loss {:.4f} | gnorm {:.3f} | "
                 "lr {:.2e} | {:.2f}s/it | ETA {}".format(
                     step,
@@ -3028,7 +3025,7 @@ def train_ltx23():
 
     print()
     print()
-    print("Training completed! / Entrenamiento finalizado!")
+    print(t("Training completed!"))
 
     # Pasos realmente entrenados: si se bajan los pasos en caliente por debajo del actual, se para aquí.
     save_checkpoint_now(last_step_executed)
@@ -3036,7 +3033,7 @@ def train_ltx23():
     final_path = os.path.join(OUTPUT_DIR, "LTX23_FINAL_LoRA.safetensors")
     save_lora(model, final_path, last_step_executed)
 
-    print("Final LoRA saved to / Tu LoRA definitivo está en: {}".format(final_path))
+    print(t("Final LoRA saved to: {path}", path=final_path))
     #print("Formato exportado: prefijo='{}', scaling horneado -> usa strength=1.0 en ComfyUI.".format(LORA_KEY_PREFIX))
 
     for hook in hooks:
@@ -3052,7 +3049,7 @@ if __name__ == "__main__":
     except Exception:
         print()
         print("=" * 80)
-        print("ERROR EN TRAINER LTX-2.3")
+        print(t("ERROR IN THE LTX-2.3 TRAINER"))
         print("=" * 80)
         traceback.print_exc()
         raise
