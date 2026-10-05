@@ -5,6 +5,7 @@ import os
 import subprocess
 
 import numpy as np
+from i18n import t
 
 # Repositorio y REVISION FIJA. Sin fijarla, una actualizacion del repo cambiaria
 # los pesos bajo los pies de un dataset ya preparado y nadie sabria por que el
@@ -83,16 +84,15 @@ def descargar(carpeta=CARPETA, log=print):
         return destino
 
     os.makedirs(carpeta, exist_ok=True)
-    log("[MELBAND] Downloading {} ({}) from {} ... / Descargando ..."
-        .format(FICHERO, "~600 MB", REPO_ID))
+    log("[MELBAND] " + t("Downloading {0} ({1}) from {2} ...", FICHERO, "~600 MB", REPO_ID))
     try:
         from huggingface_hub import hf_hub_download
         traido = hf_hub_download(repo_id=REPO_ID, filename=FICHERO,
                                  revision=REVISION, local_dir=carpeta)
-        log("[MELBAND] Ready / Listo: {}".format(traido))
+        log("[MELBAND] " + t("Ready.") + " " + str(traido))
         return traido
     except Exception as exc:
-        log("[MELBAND][ERROR] Download failed / Fallo la descarga: {}".format(exc))
+        log("[MELBAND][ERROR] " + t("Download failed: {0}", exc))
         return None
 
 

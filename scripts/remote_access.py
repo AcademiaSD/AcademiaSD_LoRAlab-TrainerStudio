@@ -23,6 +23,8 @@ from pathlib import Path
 from flask import Response, jsonify, request
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from i18n import t
+
 SETTINGS_FILE = Path(__file__).resolve().parent.parent / "settings" / "network.json"
 DEFAULTS = {"listen": False, "launcher_port": 4990, "trainer_port": 5000, "user": "", "password_hash": "",
             "external_auth": False, "trainer_url": ""}
@@ -70,15 +72,13 @@ def _check():
     cfg = load()
     if not cfg["external_auth"]:
         if not cfg["password_hash"]:
-            return Response("Remote access needs a password: set it in the launcher, on the training PC.\n"
-                            "El acceso remoto necesita contraseña: ponla en el lanzador, en el PC de entrenamiento.\n",
-                            403, mimetype="text/plain")
+            return Response(t("Remote access needs a password: set it in the launcher, on the training PC.") + "\n", 403, mimetype="text/plain")
         auth = request.authorization
         if not auth or auth.username != cfg["user"] or not check_password_hash(cfg["password_hash"], auth.password or ""):
-            return Response("Login required / Inicio de sesión necesario\n", 401,
+            return Response(t("Login required") + "\n", 401,
                             {"WWW-Authenticate": 'Basic realm="AcademiaSD LoRAlab", charset="UTF-8"'}, mimetype="text/plain")
     if request.path in NATIVE_DIALOGS:
-        return jsonify({"status": "error", "error": "Remote access: type the path. / Acceso remoto: escribe la ruta."})
+        return jsonify({"status": "error", "error": t("Remote access: type the path.")})
     return None
 
 
@@ -90,12 +90,12 @@ def serve(app, port_key):
     port = cfg[port_key]
     if cfg["listen"]:
         if cfg["external_auth"]:
-            note = "  [!] No login: external authentication / Sin login: autenticación externa"
+            note = "  [!] " + t("No login: external authentication")
         elif not cfg["password_hash"]:
-            note = "  [!] No password: remote access refused / Sin contraseña: acceso remoto rechazado"
+            note = "  [!] " + t("No password: remote access refused")
         else:
             note = ""
-        print(f"  Network / Red: http://{lan_address()}:{port}{note}")
+        print(f"  {t('Network')}: http://{lan_address()}:{port}{note}")
     app.run(host=host, port=port, debug=False, threaded=True)
 
 

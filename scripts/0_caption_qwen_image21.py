@@ -34,6 +34,7 @@ import torch
 from PIL import Image
 from huggingface_hub import snapshot_download
 from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
+from i18n import t
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -122,21 +123,18 @@ def load_captioner(model_id):
     path = os.path.join(model_id, "text_encoder_NF4")
     if not os.path.exists(os.path.join(path, "config.json")):
         # Instalación limpia: solo hace falta el text encoder NF4 y el processor (~5 GB), no el modelo entero.
-        print(f"Downloading captioner from Hugging Face / Descargando el captioner desde Hugging Face: {HF_REPO_ID}", flush=True)
+        print(t("Downloading the captioner from Hugging Face: {repo}", repo=HF_REPO_ID), flush=True)
         token = read_json("settings/HF_token.json").get("token", "").strip() or None
         snapshot_download(repo_id=HF_REPO_ID, local_dir=model_id, token=token, max_workers=2,
                           allow_patterns=["text_encoder_NF4/*", "processor/*"])
 
-    print(f"Loading Qwen3-VL-8B (NF4)... / Cargando Qwen3-VL-8B (NF4)...", flush=True)
+    print(t("Loading {name}...", name="Qwen3-VL-8B (NF4)"), flush=True)
     model = Qwen3VLForConditionalGeneration.from_pretrained(path, dtype=torch.bfloat16, device_map="cuda")
     if model.config.tie_word_embeddings:
-        raise RuntimeError(
-            "text_encoder_NF4 has no lm_head and cannot write text. Re-run 5_conversor_QwenImage21_NF4.py for NF4. / "
-            "text_encoder_NF4 no tiene lm_head y no puede escribir texto. Vuelve a convertir NF4 con 5_conversor_QwenImage21_NF4.py."
-        )
+        raise RuntimeError(t("text_encoder_NF4 has no lm_head and cannot write text. Re-run 5_conversor_QwenImage21_NF4.py for NF4."))
     model.eval()
     processor = AutoProcessor.from_pretrained(os.path.join(model_id, "processor"))
-    print(f"Ready / Listo. VRAM: {torch.cuda.memory_allocated() / 1e9:.1f} GB", flush=True)
+    print(f"{t('Ready.')} VRAM: {torch.cuda.memory_allocated() / 1e9:.1f} GB", flush=True)
     return model, processor
 
 
@@ -190,7 +188,7 @@ def main():
     prompt = cfg["caption_edit_prompt"] if mode == "edit" else cfg["caption_prompt"]
 
     if not os.path.isdir(dataset):
-        print(f"[!] Dataset folder does not exist / La carpeta del dataset no existe: {dataset}")
+        print("[!] " + t("Dataset folder does not exist: {path}", path=dataset))
         return 1
 
     samples = find_samples(dataset, mode)
@@ -201,19 +199,18 @@ def main():
             continue
         pending.append((name, paths))
 
-    kind = "before/after pairs / pares antes/después" if mode == "edit" else "images / imágenes"
-    print(f"  Dataset / Ruta Dataset : {os.path.abspath(dataset)}")
-    print(f"  Mode / Modo            : {mode}")
-    print(f"  Samples / Muestras     : {len(samples)} {kind}, {len(pending)} to caption / por describir")
-    print(f"  Trigger Word / Palabra : {cfg['trigger_word'] or '(none / ninguna)'}")
-    print(f"  Overwrite / Rehacer    : {'yes / sí' if cfg['overwrite'] else 'only missing / solo los que faltan'}")
+    kind = t("before/after pairs") if mode == "edit" else t("images")
+    print(f"  {t('Dataset'):<22}: {os.path.abspath(dataset)}")
+    print(f"  {t('Mode'):<22}: {mode}")
+    print(f"  {t('Samples'):<22}: {len(samples)} {kind}, {t('{n} to caption', n=len(pending))}")
+    print(f"  {t('Trigger Word'):<22}: {cfg['trigger_word'] or t('(none)')}")
+    print(f"  {t('Overwrite'):<22}: {t('yes') if cfg['overwrite'] else t('only missing')}")
 
     if not samples and mode == "edit":
-        print("[!] No pairs found. Name them name_before.ext and name_after.ext. / "
-              "No hay pares. Nómbralos nombre_before.ext y nombre_after.ext.")
+        print("[!] " + t("No pairs found. Name them name_before.ext and name_after.ext."))
         return 1
     if not pending:
-        print("Nothing to do: every sample already has a caption. / Nada que hacer: todas las muestras ya tienen caption.")
+        print(t("Nothing to do: every sample already has a caption."))
         return 0
 
     model, processor = load_captioner(cfg["model_id"])
@@ -229,7 +226,7 @@ def main():
                     images.append(shrink(img.convert("RGB"), int(cfg["max_image_side"])))
             caption = caption_sample(model, processor, images, prompt, cfg)
             if not caption:
-                raise RuntimeError("empty caption / caption vacío")
+                raise RuntimeError(t("empty caption"))
 
             final = with_trigger(cfg["trigger_word"], caption)
             with open(os.path.join(dataset, name + ".txt"), "w", encoding="utf-8") as f:
@@ -241,13 +238,13 @@ def main():
             print(f"    {final[:200]}{'...' if len(final) > 200 else ''}", flush=True)
         except Exception as e:
             failed.append(name)
-            print(f"[{i}/{len(pending)}] {name} FAILED / FALLÓ: {e}", flush=True)
+            print(f"[{i}/{len(pending)}] {name} {t('FAILED')}: {e}", flush=True)
 
     total = time.time() - started
-    print(f"\n✓ {done} captions in / en {int(total // 60)}m{int(total % 60):02d}s ({total / max(done, 1):.1f}s per sample / por muestra).")
+    print("\n✓ " + t("{n} captions in {time} ({per:.1f}s per sample).", n=done, time=f"{int(total // 60)}m{int(total % 60):02d}s", per=total / max(done, 1)))
     if failed:
-        print(f"[!] {len(failed)} failed / fallaron: {', '.join(failed[:10])}")
-    print("Review them in the Dataset Manager before pre-caching. / Revísalos en el Dataset Manager antes del pre-caché.")
+        print("[!] " + t("{n} failed: {names}", n=len(failed), names=', '.join(failed[:10])))
+    print(t("Review them in the Dataset Manager before pre-caching."))
     return 0 if done else 1
 
 

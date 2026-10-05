@@ -88,6 +88,10 @@ except Exception:
 ACTIVATION_OFFLOAD_ACTIVE = False
 
 import psutil
+from i18n import t
+
+# La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
+STEP_WORD = t("Step")
 
 # torch.cuda.OutOfMemoryError solo existe en PyTorch >= 2.0; en versiones
 # anteriores un OOM real de CUDA llega como RuntimeError normal.
@@ -688,12 +692,10 @@ if os.path.exists(CONFIG_PATH):
     else:
         cfg = {}
 
-    print("[OK] Configuration loaded / Configuracion cargada: {}".format(CONFIG_PATH),
-          flush=True)
+    print("[OK] " + t("Configuration loaded from {path}", path=CONFIG_PATH), flush=True)
 else:
     cfg = {}
-    print("[!] {} not found; using defaults / {} no existe; usando valores por "
-          "defecto.".format(CONFIG_PATH, CONFIG_PATH), flush=True)
+    print("[!] " + t("{0} not found; using defaults", CONFIG_PATH), flush=True)
 
 
 def cfg_get(key, default):
@@ -728,7 +730,11 @@ def log_print(*args, **kwargs):
     Los mensajes de diagnóstico/configuración/seguimiento pasan a depender de
     DEBUG_TRAINING. Fallos, avisos importantes, checkpoints, señales, inicio
     y final del entrenamiento se mantienen siempre visibles.
+
+    essential=True lo muestra siempre: los mensajes traducidos ya no llevan las
+    palabras clave en inglés que busca el filtro de abajo.
     """
+    essential = kwargs.pop("essential", False)
     try:
         text = " ".join(str(x) for x in args).upper()
     except Exception:
@@ -788,7 +794,7 @@ def log_print(*args, **kwargs):
         "[DATASET]",
     )
 
-    if DEBUG_TRAINING or any(token in text for token in essential_tokens):
+    if DEBUG_TRAINING or essential or any(token in text for token in essential_tokens):
         # ----------------------------------------------------------------
         # CERRAR LA LINEA DE PROGRESO ANTES DE ESCRIBIR.
         #
@@ -891,50 +897,33 @@ def install_train_log(output_dir):
         _TRAIN_LOG["stderr"] = sys.stderr
         sys.stdout = _TeeStream(sys.stdout, handle)
         sys.stderr = _TeeStream(sys.stderr, handle)
-        print("[TRAIN-LOG] Full log written to / Guardando el log completo en: {}"
-              .format(os.path.abspath(path)), flush=True)
+        print("[TRAIN-LOG] " + t("Full log written to: {0}", os.path.abspath(path)), flush=True)
         return path
     except Exception as e:
         # Un log que falla nunca debe tumbar un entrenamiento de horas.
         # A failing log must never take down an hours-long training run.
-        print("[TRAIN-LOG][WARN] Could not open the file log: {} / No se pudo abrir el "
-              "log de fichero: {}".format(e, e), flush=True)
+        print("[TRAIN-LOG][WARN] " + t("Could not open the file log: {0}", e), flush=True)
         _TRAIN_LOG["handle"] = None
         return None
 
 
-def format_duration_bilingual(seconds):
-    """Segundos -> "2 Hours 26 Minutes / 2 Horas 26 Minutos".
-
-    Se queda en la unidad util: por debajo de un minuto solo segundos, por
-    debajo de una hora minutos y segundos, y a partir de ahi horas y minutos
-    (los segundos sobran cuando la cifra son horas). Singular y plural correctos
-    en los dos idiomas.
-    Seconds -> a bilingual duration string, using only the units that matter.
-    """
+def format_duration(seconds):
+    """Segundos -> "2 h 26 min". Se queda en la unidad útil: por debajo de un minuto solo
+    segundos, por debajo de una hora minutos y segundos, y a partir de ahí horas y minutos.
+    h / min / s se entienden en todos los idiomas de la interfaz.
+    Seconds -> a short duration string, using only the units that matter."""
     try:
         total = int(max(0, round(float(seconds))))
     except Exception:
-        return "? / ?"
+        return "?"
 
     hours, rest = divmod(total, 3600)
     minutes, secs = divmod(rest, 60)
-
-    def en(value, unit):
-        return "{} {}{}".format(value, unit, "" if value == 1 else "s")
-
-    def es(value, unit_sg, unit_pl):
-        return "{} {}".format(value, unit_sg if value == 1 else unit_pl)
-
     if hours > 0:
-        return "{} {} / {} {}".format(
-            en(hours, "Hour"), en(minutes, "Minute"),
-            es(hours, "Hora", "Horas"), es(minutes, "Minuto", "Minutos"))
+        return "{} h {} min".format(hours, minutes)
     if minutes > 0:
-        return "{} {} / {} {}".format(
-            en(minutes, "Minute"), en(secs, "Second"),
-            es(minutes, "Minuto", "Minutos"), es(secs, "Segundo", "Segundos"))
-    return "{} / {}".format(en(secs, "Second"), es(secs, "Segundo", "Segundos"))
+        return "{} min {} s".format(minutes, secs)
+    return "{} s".format(secs)
 
 
 def close_train_log():
@@ -1185,13 +1174,8 @@ log_print("  Updates optimizador : {} ({} micro-pasos / grad_accum {})".format(
     int(TOTAL_STEPS / max(1, GRAD_ACCUM_STEPS)), TOTAL_STEPS, GRAD_ACCUM_STEPS))
 
 if int(TOTAL_STEPS / max(1, GRAD_ACCUM_STEPS)) < 400:
-    print("[CONFIG][WARN] Solo {} actualizaciones del optimizador ({} pasos / accum {}). "
-          "Un LoRA de identidad necesita >=600-1000: por debajo de eso el parecido se "
-          "queda a medias hagas lo que hagas con el resto de ajustes. Sube total_steps "
-          "o baja grad_accum_steps a 1. / Only {} optimizer updates; identity LoRAs need "
-          ">=600-1000.".format(
-              int(TOTAL_STEPS / max(1, GRAD_ACCUM_STEPS)), TOTAL_STEPS, GRAD_ACCUM_STEPS,
-              int(TOTAL_STEPS / max(1, GRAD_ACCUM_STEPS))), flush=True)
+    print("[CONFIG][WARN] " + t("Only {0} optimizer updates ({1} steps / accum {2}). An identity LoRA needs >=600-1000: below that the likeness stays half-way whatever you do with the other settings. Raise total_steps or lower grad_accum_steps to 1.",
+          int(TOTAL_STEPS / max(1, GRAD_ACCUM_STEPS)), TOTAL_STEPS, GRAD_ACCUM_STEPS), flush=True)
 
 log_print("  Autocast bf16       : {}".format(
     "ON" if USE_AUTOCAST else "OFF (model handles dtypes / el modelo gestiona dtypes)"))
@@ -1209,12 +1193,7 @@ else:
     log_print("  LoRA salta bloques  : ninguno")
 
 if BATCH_SIZE != 1:
-    print("[CONFIG][WARN] batch_size={} is NOT used: the loop takes one cached entry per "
-          "step and B comes from the latent itself. The effective batch is 1 x "
-          "grad_accum_steps={}. / batch_size={} NO se usa: el bucle toma una entrada de "
-          "cache por paso y B sale del propio latente. El lote efectivo es 1 x "
-          "grad_accum_steps={}.".format(
-              BATCH_SIZE, GRAD_ACCUM_STEPS, BATCH_SIZE, GRAD_ACCUM_STEPS), flush=True)
+    print("[CONFIG][WARN] " + t("batch_size={0} is NOT used: the loop takes one cached entry per step and B comes from the latent itself. The effective batch is 1 x grad_accum_steps={1}.", BATCH_SIZE, GRAD_ACCUM_STEPS), flush=True)
 
 log_print("=" * 80)
 
@@ -1377,7 +1356,7 @@ def configure_cpu_backend():
         if CPU_OFFLOAD_THREADS > 0:
             torch.set_num_threads(int(CPU_OFFLOAD_THREADS))
     except Exception as e:
-        log_print("[CPU] No se pudo fijar torch.set_num_threads: {}".format(e), flush=True)
+        log_print("[CPU] " + t("Could not set torch.set_num_threads: {0}", e), flush=True)
 
     try:
         log_print("[CPU] torch.get_num_threads() = {}".format(torch.get_num_threads()), flush=True)
@@ -1389,9 +1368,9 @@ def _clear_offload_cpu_cache():
     return
 
 
-def _debug_tensor_stats(name, t):
+def _debug_tensor_stats(name, tv):
     try:
-        tf = t.detach().float()
+        tf = tv.detach().float()
         log_print(
             "[DEBUG-TENSOR] {} | shape={} | mean={:.6g} | std={:.6g} | min={:.6g} | max={:.6g}".format(
                 name,
@@ -1404,7 +1383,7 @@ def _debug_tensor_stats(name, t):
             flush=True,
         )
     except Exception as e:
-        log_print("[DEBUG-TENSOR] {} stats failed: {}".format(name, e), flush=True)
+        log_print("[DEBUG-TENSOR] " + t("{0} stats failed: {1}", name, e), flush=True, essential=True)
 
 
 def ensure_trainable_parameters_on_cuda(module):
@@ -1502,8 +1481,7 @@ def install_adaln_dtype_fix():
     try:
         from diffusers.models.transformers import transformer_minimax_h3 as _tm
     except Exception as _e:
-        log_print("[ADALN-FIX] could not import transformer_minimax_h3: {} / no se pudo "
-                  "importar transformer_minimax_h3: {}".format(_e, _e), flush=True)
+        log_print("[ADALN-FIX] " + t("could not import transformer_minimax_h3: {0}", _e), flush=True, essential=True)
         return False
 
     _touched = []
@@ -1544,9 +1522,7 @@ def install_adaln_dtype_fix():
         _touched.append("MiniMaxH3AdaLayerNormOut")
 
     _ADALN_DTYPE_PATCHED = True
-    log_print("[ADALN-FIX] uint8 activation-cast fix installed on: {} / parche del "
-              "cast a uint8 de las activaciones instalado en: {}".format(
-                  ", ".join(_touched) or "-", ", ".join(_touched) or "-"), flush=True)
+    log_print("[ADALN-FIX] " + t("uint8 activation-cast fix installed on: {0}", ", ".join(_touched) or "-"), flush=True, essential=True)
     return True
 
 
@@ -1586,7 +1562,7 @@ def dequantize_linear4bit_module(root, name, target_device="cuda", target_dtype=
         dequantized_weight = bnbF.dequantize_4bit(source_weight, quant_state)
 
     except Exception as e:
-        log_print("[WARN] No se pudo dequantizar {}: {}".format(name, e), flush=True)
+        log_print("[WARN] " + t("Could not dequantize {0}: {1}", name, e), flush=True)
         return False
 
     dequantized_weight = dequantized_weight.to(target_device, dtype=target_dtype)
@@ -1691,9 +1667,7 @@ def _find_nf4_index_path(cache_dir):
             if os.path.exists(p):
                 return p
 
-    raise FileNotFoundError(
-        "No se encontró index.json ni config_nf4.json en {}".format(cache_dir)
-    )
+    raise FileNotFoundError(t("Neither index.json nor config_nf4.json found in {0}", cache_dir))
 
 
 def resolve_transformer_class(cls_name):
@@ -1719,7 +1693,7 @@ def resolve_transformer_class(cls_name):
         except Exception:
             pass
 
-    raise RuntimeError("No se pudo resolver la clase transformer: {}".format(cls_name))
+    raise RuntimeError(t("Could not resolve the transformer class: {0}", cls_name))
 
 
 def _instantiate_transformer_on_meta(transformer_cls, config_dict):
@@ -1736,7 +1710,7 @@ def _instantiate_transformer_on_meta(transformer_cls, config_dict):
 
     try:
         if not hasattr(torch, "set_default_device"):
-            raise RuntimeError("torch.set_default_device no disponible")
+            raise RuntimeError(t("torch.set_default_device not available"))
 
         torch.set_default_device("meta")
         torch.set_default_dtype(torch.bfloat16)
@@ -1757,7 +1731,7 @@ def _instantiate_transformer_on_meta(transformer_cls, config_dict):
 
     try:
         if not hasattr(torch, "set_default_device"):
-            raise RuntimeError("torch.set_default_device no disponible")
+            raise RuntimeError(t("torch.set_default_device not available"))
 
         init_kwargs = {
             k: v
@@ -1783,7 +1757,7 @@ def _instantiate_transformer_on_meta(transformer_cls, config_dict):
         errors.append("constructor directo meta: {}".format(e))
 
     raise RuntimeError(
-        "No se pudo instanciar el transformer en META device.\n" + "\n".join(errors)
+        t("Could not instantiate the transformer on the META device.") + "\n" + "\n".join(errors)
     )
 
 
@@ -1854,7 +1828,7 @@ def rebuild_dit_rope_buffers(module):
             idx = torch.arange(n, dtype=torch.float32)
             new_buf = 1.0 / (theta ** (idx / float(n)))
             if float(new_buf.abs().sum()) == 0.0 or n < 1:
-                raise RuntimeError("tabla RoPE inválida")
+                raise RuntimeError(t("invalid RoPE table"))
             mod.register_buffer("inv_freq", new_buf, persistent=False)
             fixed.append((name, n, theta))
             log_print(
@@ -1863,7 +1837,7 @@ def rebuild_dit_rope_buffers(module):
             )
         except Exception as e:
             failed.append((name, str(e)))
-            log_print("[ROPE-DiT] FALLO al reconstruir {}: {}".format(name, e), flush=True)
+            log_print("[ROPE-DiT] " + t("FAILED to rebuild {0}: {1}", name, e), flush=True)
 
     if not fixed and not failed:
         log_print("[ROPE-DiT] Ningún inv_freq pendiente (o el modelo calcula RoPE al vuelo).",
@@ -2003,9 +1977,9 @@ def _repair_from_nf4_index(transformer):
                 with safe_open(fp, framework="pt", device="cpu") as f:
                     key = mname + "." + leaf
                     src = key if key in f.keys() else list(f.keys())[0]
-                    t = f.get_tensor(src)
+                    tv = f.get_tensor(src)
                 dt = _DTYPE_BY_NAME.get(str(info.get("dtype", "")).lower())
-                tensors[leaf] = t.to(dt) if dt is not None else t
+                tensors[leaf] = tv.to(dt) if dt is not None else tv
 
             w = tensors["weight"]
             b = tensors.get("bias")
@@ -2028,17 +2002,14 @@ def _repair_from_nf4_index(transformer):
             if w.ndim == 1:
                 target = mods[mname]
                 applied = []
-                for leaf, t in tensors.items():
+                for leaf, tv in tensors.items():
                     current = getattr(target, leaf, None)
                     if isinstance(current, torch.nn.Parameter):
                         setattr(target, leaf,
-                                torch.nn.Parameter(t, requires_grad=False))
+                                torch.nn.Parameter(tv, requires_grad=False))
                         applied.append(leaf)
                 if not applied:
-                    raise RuntimeError(
-                        "peso 1-D pero {} no tiene parametros que restaurar / "
-                        "1-D weight but {} has no parameters to restore".format(
-                            mname, mname))
+                    raise RuntimeError(t("1-D weight but {0} has no parameters to restore", mname))
                 fixed.append((mname, str(w.dtype).replace("torch.", "")))
                 continue
 
@@ -2063,13 +2034,7 @@ def _repair_from_nf4_index(transformer):
         for n, d in fixed:
             log_print("  [FP32-FIX] {:<44} -> {}".format(n, d), flush=True)
     if skipped_in_block:
-        log_print("[FP32-FIX][WARN] {} precision_critical tensors live INSIDE the transformer "
-                  "blocks and were SKIPPED: dequantizing them would pin them in VRAM for all "
-                  "blocks and shrink the resident block count. Re-export without them. / {} "
-                  "tensores de precision_critical estan DENTRO de los bloques y se han "
-                  "OMITIDO: dequantizarlos los fijaria en VRAM para todos los bloques y "
-                  "reduciria los bloques residentes. Re-exporta sin ellos.".format(
-                      len(skipped_in_block), len(skipped_in_block)), flush=True)
+        log_print("[FP32-FIX][WARN] " + t("{0} precision_critical tensors live INSIDE the transformer blocks and were SKIPPED: dequantizing them would pin them in VRAM for all blocks and shrink the resident block count. Re-export without them.", len(skipped_in_block)), flush=True, essential=True)
         for n in skipped_in_block[:10]:
             log_print("  [FP32-FIX][SKIP] {}".format(n), flush=True)
     for n, e in failed[:10]:
@@ -2113,16 +2078,8 @@ def repair_precision_critical_modules(transformer, orig_dir):
     # ------------------------------------------------------------------
     if not orig_dir:
         log_print("=" * 78, flush=True)
-        log_print("[FP32-FIX][WARN] El repo NF4 NO trae seccion 'precision_critical' y "
-                  "original_transformer_dir esta vacio: NO se repara nada. / The NF4 repo has "
-                  "no 'precision_critical' section and original_transformer_dir is empty: "
-                  "nothing is repaired.", flush=True)
-        log_print("[FP32-FIX][WARN] ARREGLO: ejecuta una vez "
-                  "`5b_export_nonlinear_NF4.py --precision_critical` para meter esa seccion en "
-                  "el repo NF4. NO hace falta el checkpoint de 163 GB para entrenar. / FIX: run "
-                  "`5b_export_nonlinear_NF4.py --precision_critical` once to add that section "
-                  "to the NF4 repo. The 163 GB checkpoint is NOT needed for training.",
-                  flush=True)
+        log_print("[FP32-FIX][WARN] " + t("The NF4 repo has no 'precision_critical' section and original_transformer_dir is empty: nothing is repaired."), flush=True, essential=True)
+        log_print("[FP32-FIX][WARN] " + t("FIX: run `5b_export_nonlinear_NF4.py --precision_critical` once to add that section to the NF4 repo. The 163 GB checkpoint is NOT needed for training."), flush=True, essential=True)
         log_print("=" * 78, flush=True)
         return 0
 
@@ -2139,18 +2096,9 @@ def repair_precision_critical_modules(transformer, orig_dir):
     # into a disk read and making training 10-20x slower.
     # ------------------------------------------------------------------
     log_print("=" * 78, flush=True)
-    log_print("[FP32-FIX][WARN] The NF4 repo has NO 'precision_critical' section. / El repo "
-              "NF4 NO trae seccion 'precision_critical'.", flush=True)
-    log_print("[FP32-FIX][WARN] Falling back to the ORIGINAL 163 GB checkpoint. This memory-maps "
-              "its shards, floods the OS page cache and can evict the parked NF4 weights the "
-              "block swap reads every step -> training can become 10-20x slower. / Cayendo al "
-              "checkpoint ORIGINAL de 163 GB. Esto mapea sus shards, satura la cache de paginas "
-              "y puede desalojar los pesos NF4 aparcados que el block swap lee cada paso -> el "
-              "entrenamiento puede volverse 10-20x mas lento.", flush=True)
-    log_print("[FP32-FIX][WARN] FIX: run `5b_export_nonlinear_NF4.py --precision_critical` once, "
-              "or set fp32_repair_enabled=false. / ARREGLO: ejecuta una vez "
-              "`5b_export_nonlinear_NF4.py --precision_critical`, o pon "
-              "fp32_repair_enabled=false.", flush=True)
+    log_print("[FP32-FIX][WARN] " + t("The NF4 repo has NO 'precision_critical' section."), flush=True, essential=True)
+    log_print("[FP32-FIX][WARN] " + t("Falling back to the ORIGINAL 163 GB checkpoint. This memory-maps its shards, floods the OS page cache and can evict the parked NF4 weights the block swap reads every step -> training can become 10-20x slower."), flush=True, essential=True)
+    log_print("[FP32-FIX][WARN] " + t("FIX: run `5b_export_nonlinear_NF4.py --precision_critical` once, or set fp32_repair_enabled=false."), flush=True, essential=True)
     log_print("=" * 78, flush=True)
     ram_stats("antes del respaldo fp32 / before fp32 fallback")
 
@@ -2281,8 +2229,7 @@ def asegurar_transformer_nf4(nf4_cache_dir, repo_id="AcademiaSD/MiniMax-H3-NF4")
         snapshot_download(repo_id=repo_id, local_dir=nf4_cache_dir,
                           allow_patterns=["transformers/*", "transformer/*"])
     except Exception as exc:
-        log_print("[DOWNLOAD][ERROR] No se pudo descargar: {} / download failed"
-                  .format(exc), flush=True)
+        log_print("[DOWNLOAD][ERROR] " + t("Download failed: {0}", exc), flush=True)
     return _find_transformer_cache_dir(nf4_cache_dir) is not None
 
 
@@ -2292,22 +2239,13 @@ def load_transformer_from_nf4(nf4_cache_dir):
     asegurar_transformer_nf4(nf4_cache_dir)
     cache_dir = _find_transformer_cache_dir(nf4_cache_dir)
     if cache_dir is None:
-        raise FileNotFoundError(
-            "No se encontro el transformer NF4 en: {}\n"
-            "La descarga automatica tambien fallo. Comprueba tu conexion y el "
-            "espacio libre (el modelo completo son ~41 GB), o borra esa carpeta "
-            "y vuelve a lanzar la Pre-Cache para bajarlo entero.\n"
-            "NF4 transformer not found and the automatic download also failed. "
-            "Check your connection and free space (~41 GB for the full model), "
-            "or delete that folder and run the Pre-Cache again."
-            .format(os.path.abspath(nf4_cache_dir))
-        )
+        raise FileNotFoundError(t("NF4 transformer not found in: {0}\nThe automatic download also failed. Check your connection and free space (~41 GB for the full model), or delete that folder and run the Pre-Cache again to download it whole.", os.path.abspath(nf4_cache_dir)))
 
     log_print("[NF4] Cache dir detectado: {}".format(cache_dir), flush=True)
 
     config_path = os.path.join(cache_dir, "config.json")
     if not os.path.exists(config_path):
-        raise FileNotFoundError("Falta config.json en {}".format(cache_dir))
+        raise FileNotFoundError(t("{name} missing in: {path}", name="config.json", path=cache_dir))
 
     with open(config_path, "r", encoding="utf-8") as f:
         config_dict = json.load(f)
@@ -2334,7 +2272,7 @@ def load_transformer_from_nf4(nf4_cache_dir):
 
     weights_dir = os.path.join(cache_dir, "weights")
     if not os.path.isdir(weights_dir):
-        raise FileNotFoundError("No existe la carpeta weights en {}".format(cache_dir))
+        raise FileNotFoundError(t("The weights folder does not exist in {0}", cache_dir))
 
     log_print("[NF4] Capas NF4: {}".format(len(quantized)), flush=True)
     log_print("[NF4] Capas BF16: {}".format(len(unquantized)), flush=True)
@@ -2375,18 +2313,11 @@ def load_transformer_from_nf4(nf4_cache_dir):
         if _nf4_done == 1 or _nf4_done % 50 == 0 or _nf4_done == _nf4_total:
             _el = time.time() - _nf4_t0
             _eta = (_el / max(1, _nf4_done)) * (_nf4_total - _nf4_done)
-            print(
-                "[NF4-LOAD] Loading layer {}/{} ({:.0f}%) | elapsed {:.0f}s | ETA {:.0f}s"
-                " / Cargando capa {}/{} ({:.0f}%) | transcurrido {:.0f}s | ETA {:.0f}s".format(
-                    _nf4_done, _nf4_total, 100.0 * _nf4_done / max(1, _nf4_total), _el, _eta,
-                    _nf4_done, _nf4_total, 100.0 * _nf4_done / max(1, _nf4_total), _el, _eta,
-                ),
-                flush=True,
-            )
+            print("[NF4-LOAD] " + t("Loading layer {0}/{1} ({2:.0f}%) | elapsed {3:.0f}s | ETA {4:.0f}s", _nf4_done, _nf4_total, 100.0 * _nf4_done / max(1, _nf4_total), _el, _eta), flush=True)
 
         filepath = os.path.join(weights_dir, info["file"])
         if not os.path.exists(filepath):
-            raise FileNotFoundError("No existe peso NF4: {}".format(filepath))
+            raise FileNotFoundError(t("NF4 weight not found: {path}", path=filepath))
 
         parent, child_name = get_parent_module(transformer, name)
 
@@ -2588,9 +2519,8 @@ def load_transformer_from_nf4(nf4_cache_dir):
                             setattr(parent, child_name, tensor)
                     except Exception as e:
                         log_print(
-                            "[WARN] No se pudo asignar tensor {}: {}".format(tensor_name, e),
-                            flush=True,
-                        )
+                            "[WARN] " + t("Could not assign tensor {0}: {1}", tensor_name, e),
+                            flush=True, essential=True)
 
                     if tensor_name in needed_real_for_aliases:
                         kept_tensors_for_aliases[tensor_name] = tensor
@@ -2644,9 +2574,8 @@ def load_transformer_from_nf4(nf4_cache_dir):
                                     setattr(parent, child_name, tensor)
                             except Exception as e:
                                 log_print(
-                                    "[WARN] No se pudo asignar tensor {}: {}".format(tensor_name, e),
-                                    flush=True,
-                                )
+                                    "[WARN] " + t("Could not assign tensor {0}: {1}", tensor_name, e),
+                                    flush=True, essential=True)
 
                             if tensor_name in needed_real_for_aliases:
                                 kept_tensors_for_aliases[tensor_name] = tensor
@@ -2659,11 +2588,7 @@ def load_transformer_from_nf4(nf4_cache_dir):
     # ------------------------------------------------------------------
     rope_fixed, rope_failed = rebuild_dit_rope_buffers(transformer)
     if rope_failed and STRICT_META_LOAD:
-        raise RuntimeError(
-            "[ROPE-DiT] No se pudo reconstruir {} buffer(s) inv_freq: {}. "
-            "Continuar los rellenaría con ceros y el RoPE del transformer quedaría "
-            "desactivado.".format(len(rope_failed), rope_failed[:5])
-        )
+        raise RuntimeError("[ROPE-DiT] " + t("Could not rebuild {0} inv_freq buffer(s): {1}. Going on would fill them with zeros and switch off the transformer's RoPE.", len(rope_failed), rope_failed[:5]))
 
     # ------------------------------------------------------------------
     # Auditoría ANTES de rellenar. Rellenar en silencio es exactamente el fallo
@@ -2680,29 +2605,16 @@ def load_transformer_from_nf4(nf4_cache_dir):
         log_print("  META (norma, se rellenaría con 1.0): {}".format(n), flush=True)
 
     if (p_other or bufs) and STRICT_META_LOAD:
-        raise RuntimeError(
-            "[NF4] {} peso(s) entrenados y {} buffer(s) siguen en META. Rellenarlos con "
-            "ceros produciría un modelo roto que entrena sin errores y no aprende nada. "
-            "Primeros: {} | Ejecuta 5b_export_nonlinear_NF4.py sobre la carpeta del "
-            "transformer, o pon strict_meta_load=false para forzar (NO recomendado).".format(
-                len(p_other), len(bufs), (p_other + bufs)[:8]
-            )
-        )
+        raise RuntimeError("[NF4] " + t("{0} trained weight(s) and {1} buffer(s) are still on META. Filling them with zeros would give a broken model that trains without errors and learns nothing. First: {2} | Run 5b_export_nonlinear_NF4.py on the transformer folder, or set strict_meta_load=false to force it (NOT recommended).", len(p_other), len(bufs), (p_other + bufs)[:8]))
 
     if p_norm and STRICT_META_LOAD_NORMS:
-        raise RuntimeError(
-            "[NF4] {} peso(s) de normalización siguen en META y se rellenarían con 1.0, "
-            "que NO son los valores entrenados. Primeros: {} | Ejecuta "
-            "5b_export_nonlinear_NF4.py sobre la carpeta del transformer.".format(
-                len(p_norm), p_norm[:8]
-            )
-        )
+        raise RuntimeError("[NF4] " + t("{0} normalization weight(s) are still on META and would be filled with 1.0, which are NOT the trained values. First: {1} | Run 5b_export_nonlinear_NF4.py on the transformer folder.", len(p_norm), p_norm[:8]))
 
     log_print("[NF4] Materializando tensores META restantes...", flush=True)
     materialized = materialize_meta_tensors(transformer, device="cpu")
 
     if materialized:
-        log_print("[WARN] Se materializaron {} tensores META.".format(len(materialized)), flush=True)
+        log_print("[WARN] " + t("{0} META tensors were materialized.", len(materialized)), flush=True)
         for n in materialized[:20]:
             log_print("  META materialized: {}".format(n), flush=True)
         if len(materialized) > 20:
@@ -2737,12 +2649,8 @@ def load_transformer_from_nf4(nf4_cache_dir):
 
             if target is None:
                 log_print(
-                    "[WARN] Alias {} no pudo resolverse porque falta {}".format(
-                        alias_name,
-                        real_name,
-                    ),
-                    flush=True,
-                )
+                    "[WARN] " + t("Alias {0} could not be resolved because {1} is missing", alias_name, real_name),
+                    flush=True, essential=True)
                 continue
 
             try:
@@ -2758,7 +2666,7 @@ def load_transformer_from_nf4(nf4_cache_dir):
                 else:
                     setattr(parent, child_name, target)
             except Exception as e:
-                log_print("[WARN] No se pudo asignar alias {}: {}".format(alias_name, e), flush=True)
+                log_print("[WARN] " + t("Could not assign alias {0}: {1}", alias_name, e), flush=True)
 
     del kept_tensors_for_aliases
 
@@ -2827,21 +2735,12 @@ def load_transformer_from_nf4(nf4_cache_dir):
                   present, verified, dequantized_on_purpose), flush=True)
 
     if replaced == 0:
-        raise RuntimeError(
-            "No NF4 layer was rebuilt. Check index.json / config_nf4.json and the "
-            "weights folder. / No se reconstruyo ninguna capa NF4. Revisa "
-            "index.json / config_nf4.json y la carpeta weights."
-        )
+        raise RuntimeError(t("No NF4 layer was rebuilt. Check index.json / config_nf4.json and the weights folder."))
 
     if present and verified != present:
         # Esto SI es un problema real: hay Linear4bit sin quant_state.
         # This IS a real problem: there are Linear4bit layers with no quant_state.
-        log_print(
-            "[NF4][WARN] {} of {} Linear4bit layers have no valid quant_state. / {} de "
-            "{} capas Linear4bit no tienen un quant_state valido.".format(
-                present - verified, present, present - verified, present),
-            flush=True,
-        )
+        log_print("[NF4][WARN] " + t("{0} of {1} Linear4bit layers have no valid quant_state.", present - verified, present), flush=True, essential=True)
 
     log_print("[OK] Transformer cargado en CPU desde caché NF4.", flush=True)
 
@@ -2953,10 +2852,7 @@ def discover_lora_targets(transformer):
             groups[prefix]["suffixes"][suffix] = groups[prefix]["suffixes"].get(suffix, 0) + 1
 
     if not groups:
-        raise RuntimeError(
-            "LoRA: no se detectaron bloques numéricos en named_modules(). "
-            "Revisa la estructura del transformer cargado."
-        )
+        raise RuntimeError(t("LoRA: no numbered blocks found in named_modules(). Check the structure of the loaded transformer."))
 
     log_print("[LoRA] Grupos de bloques detectados: {}".format(len(groups)), flush=True)
     for prefix, data in sorted(groups.items()):
@@ -3066,23 +2962,17 @@ def discover_lora_targets(transformer):
     targets = list(dict.fromkeys(targets))
 
     if not targets:
-        raise RuntimeError(
-            "LoRA: no se encontraron targets válidos. Revisa la estructura del transformer."
-        )
+        raise RuntimeError(t("LoRA: no valid targets found. Check the structure of the transformer."))
 
     # Verificación de existencia
     missing = [name for name in targets if name not in module_map]
     if missing:
-        raise RuntimeError(
-            "LoRA: {} targets no existen en named_modules(). Primeros: {}".format(
-                len(missing), missing[:10]
-            )
-        )
+        raise RuntimeError(t("LoRA: {0} targets do not exist in named_modules(). First: {1}", len(missing), missing[:10]))
 
     # Resumen
     log_print("[LoRA] Total targets: {} módulos".format(len(targets)), flush=True)
-    for t in targets[:16]:
-        log_print("  [LoRA-TARGET] {}".format(t), flush=True)
+    for tv in targets[:16]:
+        log_print("  [LoRA-TARGET] {}".format(tv), flush=True)
     if len(targets) > 16:
         log_print("  ... y {} más".format(len(targets) - 16), flush=True)
 
@@ -3138,7 +3028,7 @@ def get_prompt_pair(result):
     tensors = flatten_tensors(result)
 
     if not tensors:
-        raise RuntimeError("La caché de prompt no contiene tensores.")
+        raise RuntimeError(t("The prompt cache holds no tensors."))
 
     if (
         isinstance(result, (tuple, list))
@@ -3190,12 +3080,7 @@ def verify_cache_compatibility(cache_dir):
         info.get("format", "?"), version, info.get("prompt_encoding", "?")), flush=True)
 
     if version < MIN_CACHE_VERSION:
-        raise RuntimeError(
-            "[CACHE] {} es de version {} y se exige >= {}. Las cachés anteriores se "
-            "generaron con un text encoder roto (embed_tokens a ceros, RoPE desactivado): "
-            "los embeddings no son conditioning real. Bórrala y re-ejecuta el script 1."
-            .format(os.path.abspath(cache_dir), version, MIN_CACHE_VERSION)
-        )
+        raise RuntimeError("[CACHE] " + t("{0} is version {1} and >= {2} is required. Older caches were built with a broken text encoder (embed_tokens at zero, RoPE off): their embeddings are not real conditioning. Delete it and run script 1 again.", os.path.abspath(cache_dir), version, MIN_CACHE_VERSION))
 
     # Que hay en la cache. Antes esto era un WARN fijo en cuanto num_frames no
     # fuera 1, heredado de cuando solo existian imagenes: con una cache de clips
@@ -3224,10 +3109,7 @@ def verify_cache_compatibility(cache_dir):
                       info.get("num_clips", "?"), nf, 5 * ((int(nf) - 5) // 17) + 2,
                       "" if valido else "  [!]"), flush=True)
         if not valido:
-            log_print("[CACHE][WARN] num_frames={} is not 17n+5, which is the only geometry "
-                      "the H3 VAE can produce. Regenerate the pre-cache. / num_frames={} no "
-                      "es 17n+5, la unica geometria que puede producir el VAE de H3. "
-                      "Regenera la pre-cache.".format(nf, nf), flush=True)
+            log_print("[CACHE][WARN] " + t("num_frames={0} is not 17n+5, which is the only geometry the H3 VAE can produce. Regenerate the pre-cache.", nf), flush=True, essential=True)
     elif contenido == "mixed":
         log_print("[CACHE] Mixed dataset: {} images + {} clips. / Dataset mixto: {} imagenes "
                   "+ {} clips.".format(info.get("num_images", "?"), info.get("num_clips", "?"),
@@ -3299,7 +3181,7 @@ def load_cached_entries(cache_dir, audio_channels):
         })
 
     if not entries:
-        raise RuntimeError("No se encontraron entradas válidas en la caché.")
+        raise RuntimeError(t("No valid entries found in the cache."))
 
     return entries
 
@@ -3327,7 +3209,7 @@ def align_video_latent_to_patch(latent, patch_h=1, patch_w=1, patch_t=1):
 
 def patch_video_latent(latent, patch_h=1, patch_w=1, patch_t=1):
     if latent.ndim != 5:
-        raise RuntimeError("Video latent esperado [B,C,F,H,W].")
+        raise RuntimeError(t("{name} must have shape {shape}.", name="Video latent", shape="[B,C,F,H,W]"))
 
     B, C, F, H, W = latent.shape
 
@@ -3361,7 +3243,7 @@ def patch_audio_latent(latent):
         latent = latent.unsqueeze(0)
 
     if latent.ndim != 3:
-        raise RuntimeError("Audio latent esperado [B,C,T] o [C,T].")
+        raise RuntimeError(t("{name} must have shape {shape}.", name="Audio latent", shape="[B,C,T] / [C,T]"))
 
     return latent.transpose(1, 2).contiguous()
 
@@ -3787,15 +3669,7 @@ def enable_memory_efficient_attention(transformer):
     # (inference, no backward) Sage would be fine; that is not wired up.
     # ------------------------------------------------------------------
     if USE_SAGE_ATTENTION:
-        log_print("[ATTN][WARN] SageAttention is ON but it CANNOT be used for training: the "
-                  "package ships inference kernels with no backward pass (sageattn() returns "
-                  "requires_grad=False, grad_fn=None), so the q/k/v LoRAs would silently "
-                  "receive zero gradient. Using native attention, which is already "
-                  "memory-efficient. / SageAttention esta activada pero NO se puede usar para "
-                  "entrenar: el paquete son kernels de inferencia sin backward (sageattn() "
-                  "devuelve requires_grad=False y grad_fn=None), asi que los LoRA de q/k/v se "
-                  "quedarian sin gradiente y nadie avisaria. Se usa la atencion nativa, que ya "
-                  "es eficiente en memoria.", flush=True)
+        log_print("[ATTN][WARN] " + t("SageAttention is ON but it CANNOT be used for training: the package ships inference kernels with no backward pass (sageattn() returns requires_grad=False, grad_fn=None), so the q/k/v LoRAs would silently receive zero gradient. Using native attention, which is already memory-efficient."), flush=True, essential=True)
     candidatos = ("native",)
 
     if hasattr(transformer, "set_attention_backend"):
@@ -3803,25 +3677,18 @@ def enable_memory_efficient_attention(transformer):
             try:
                 transformer.set_attention_backend(backend)
                 if backend.startswith("sage"):
-                    log_print("[ATTN] SageAttention active ({}). Attention numerics are "
-                              "quantized: faster and lighter, but not bit-exact against "
-                              "native. / SageAttention activa ({}). La numerica de la "
-                              "atencion va cuantizada: mas rapida y ligera, pero no "
-                              "identica a la nativa.".format(backend, backend), flush=True)
+                    log_print("[ATTN] " + t("SageAttention active ({0}). Attention numerics are quantized: faster and lighter, but not bit-exact against native.", backend), flush=True, essential=True)
                 else:
-                    log_print("[ATTN] Attention backend / Backend de atencion: {}".format(backend),
-                              flush=True)
+                    log_print("[ATTN] " + t("Attention backend: {0}", backend),
+                              flush=True, essential=True)
                 return
             except Exception as exc:
                 if backend.startswith("sage"):
-                    log_print("[ATTN][WARN] SageAttention requested but unavailable ({}): {}. "
-                              "Falling back. / Se pidio SageAttention pero no esta disponible "
-                              "({}): {}. Se usa el siguiente.".format(backend, exc, backend, exc),
-                              flush=True)
+                    log_print("[ATTN][WARN] " + t("SageAttention requested but unavailable ({0}): {1}. Falling back.", backend, exc), flush=True, essential=True)
 
     try:
         transformer.enable_xformers_memory_efficient_attention()
-        log_print("[ATTN] xformers memory efficient attention activado.", flush=True)
+        log_print("[ATTN] " + t("xformers memory-efficient attention on."), flush=True, essential=True)
         return
     except Exception:
         pass
@@ -3829,16 +3696,9 @@ def enable_memory_efficient_attention(transformer):
     try:
         torch.backends.cuda.enable_flash_sdp(True)
         torch.backends.cuda.enable_mem_efficient_sdp(True)
-        log_print("[ATTN] Fell back to global PyTorch SDP flags (flash + mem-efficient). "
-                  "The model may still use its own attention path. / Se han puesto las "
-                  "banderas globales de SDP de PyTorch; el modelo puede seguir usando su "
-                  "propia ruta de atencion.", flush=True)
+        log_print("[ATTN] " + t("Fell back to global PyTorch SDP flags (flash + mem-efficient). The model may still use its own attention path."), flush=True, essential=True)
     except Exception:
-        log_print("[ATTN][WARN] No memory-efficient attention backend could be enabled. With "
-                  "long video sequences the n^2 attention matrix will be materialised and OOM "
-                  "is likely. / No se pudo activar ningun backend de atencion eficiente. Con "
-                  "secuencias largas de video se materializara la matriz n^2 y el OOM es "
-                  "probable.", flush=True)
+        log_print("[ATTN][WARN] " + t("No memory-efficient attention backend could be enabled. With long video sequences the n^2 attention matrix will be materialised and OOM is likely."), flush=True, essential=True)
 
 
 def enable_gradient_checkpointing_safe(transformer, model):
@@ -4039,7 +3899,7 @@ def print_block_diagnostics(transformer):
     candidates = find_block_lists(transformer)
 
     if not candidates:
-        log_print("  (No se encontró ningún ModuleList con >=4 elementos.)", flush=True)
+        log_print("  " + t("(No ModuleList with >=4 elements found.)"), flush=True, essential=True)
     else:
         for name, module, size_bytes in candidates:
             per_block_gb = (size_bytes / max(1, len(module))) / 1e9
@@ -4348,18 +4208,11 @@ def spill_init(ram_limit_gb, out_dir, file_gb=20.0):
         "base_used": None,
     })
     if PARK_MODE == "disk":
-        log_print("[SPILL] ON | mode DISK: every parked block goes to the mapped "
-                  "file. / modo DISCO: todos los bloques aparcados van al fichero "
-                  "mapeado.", flush=True)
+        log_print("[SPILL] " + t("ON | mode DISK: every parked block goes to the mapped file."), flush=True, essential=True)
         return True
 
     used = _system_ram_used_gb()
-    log_print("[SPILL] ON | system RAM ceiling: {:.1f} GB (now at {:.1f} GB). The "
-              "spill file is only created if a block does not fit. / Techo de RAM "
-              "del sistema: {:.1f} GB (ahora en {:.1f} GB). El fichero de spill "
-              "solo se crea si algun bloque no cabe.".format(
-                  float(ram_limit_gb), used or 0.0,
-                  float(ram_limit_gb), used or 0.0), flush=True)
+    log_print("[SPILL] " + t("ON | system RAM ceiling: {0:.1f} GB (now at {1:.1f} GB). The spill file is only created if a block does not fit.", float(ram_limit_gb), used or 0.0), flush=True, essential=True)
     return True
 
 
@@ -4378,14 +4231,7 @@ def _spill_open():
         # through parking. We ask for 1 GB of slack so the disk is not left dry.
         free = shutil.disk_usage(_SPILL["dir"]).free
         if free < size + (1024 ** 3):
-            log_print("[SPILL] Not enough free space on {}: {:.1f} GB free, "
-                      "{:.1f} GB needed. Staying in RAM. / No hay espacio libre "
-                      "en {}: {:.1f} GB libres, hacen falta {:.1f} GB. Todo se "
-                      "queda en RAM.".format(
-                          _SPILL["dir"], free / 1024 ** 3,
-                          (size + 1024 ** 3) / 1024 ** 3,
-                          _SPILL["dir"], free / 1024 ** 3,
-                          (size + 1024 ** 3) / 1024 ** 3), flush=True)
+            log_print("[SPILL] " + t("Not enough free space on {0}: {1:.1f} GB free, {2:.1f} GB needed. Staying in RAM.", _SPILL["dir"], free / 1024 ** 3, (size + 1024 ** 3) / 1024 ** 3), flush=True, essential=True)
             _SPILL["armed"] = False
             return False
         with open(path, "wb") as fh:
@@ -4395,33 +4241,28 @@ def _spill_open():
         _SPILL["path"] = path
         _SPILL["size"] = size
     except Exception as e:
-        log_print("[SPILL] Could not create the spill file, everything stays in "
-                  "RAM: {} / No se pudo crear el fichero de spill, todo se queda "
-                  "en RAM: {}".format(e, e), flush=True)
+        log_print("[SPILL] " + t("Could not create the spill file, everything stays in RAM: {0}", e), flush=True, essential=True)
         _SPILL["armed"] = False
         return False
 
-    log_print("[SPILL] Spill file created: {} ({:.1f} GB) / Fichero de spill "
-              "creado: {} ({:.1f} GB)".format(
-                  _SPILL["path"], _SPILL["file_gb"],
-                  _SPILL["path"], _SPILL["file_gb"]), flush=True)
+    log_print("[SPILL] " + t("Spill file created: {0} ({1:.1f} GB)", _SPILL["path"], _SPILL["file_gb"]), flush=True, essential=True)
     return True
 
 
-def spill_write(t):
+def spill_write(tv):
     """Copia t al fichero mapeado y devuelve una vista con los mismos bytes."""
-    t = t.detach().contiguous()
-    nbytes = t.numel() * t.element_size()
+    tv = tv.detach().contiguous()
+    nbytes = tv.numel() * tv.element_size()
     off = (_SPILL["offset"] + 63) & ~63          # alineado a 64 B / 64 B aligned
     if off + nbytes > _SPILL["size"]:
-        raise RuntimeError("spill file full / fichero de spill lleno")
+        raise RuntimeError(t("spill file full"))
 
-    flat = t.reshape(-1)
+    flat = tv.reshape(-1)
     if flat.dtype != torch.uint8:
         flat = flat.view(torch.uint8)
     _SPILL["map"][off:off + nbytes].copy_(flat)
     _SPILL["offset"] = off + nbytes
-    return _SPILL["map"][off:off + nbytes].view(t.dtype).reshape(t.shape)
+    return _SPILL["map"][off:off + nbytes].view(tv.dtype).reshape(tv.shape)
 
 
 # Cuanto crece la RAM del proceso DESPUES de aparcar, sin contar los bloques
@@ -4483,9 +4324,7 @@ def spill_park_block(linear_modules):
         try:
             view = spill_write(m.weight.data)
         except Exception as e:
-            log_print("[SPILL] Write failed, this block stays in RAM: {} / "
-                      "Fallo al escribir, este bloque se queda en RAM: "
-                      "{}".format(e, e), flush=True)
+            log_print("[SPILL] " + t("Write failed, this block stays in RAM: {0}", e), flush=True, essential=True)
             return False
         m.weight.data = view
         m._nf4_disk_view = view
@@ -4514,8 +4353,7 @@ def spill_cleanup():
         except Exception:
             import time as _t
             _t.sleep(0.5)      # Windows tarda en soltar el mapeo / mapping lag
-    log_print("[SPILL] Could not delete {}, remove it by hand. / No se pudo "
-              "borrar {}, borralo a mano.".format(path, path), flush=True)
+    log_print("[SPILL] " + t("Could not delete {0}, remove it by hand.", path), flush=True, essential=True)
 
 
 def spill_report():
@@ -4523,18 +4361,7 @@ def spill_report():
         return
     used = _system_ram_used_gb() or 0.0
     rss = _ram_rss_gb() or 0.0
-    log_print("[SPILL] Parked blocks: {} in RAM ({:.2f} GB), {} on disk "
-              "({:.2f} GB). System RAM {:.1f} GB / ceiling {:.1f} GB "
-              "(process RSS {:.1f} GB). / Bloques aparcados: {} en RAM "
-              "({:.2f} GB), {} en disco ({:.2f} GB). RAM del sistema {:.1f} GB "
-              "/ techo {:.1f} GB (RSS del proceso {:.1f} GB).".format(
-                  _SPILL["ram_blocks"], _SPILL["ram_used"] / 1024 ** 3,
-                  _SPILL["disk_blocks"], _SPILL["offset"] / 1024 ** 3,
-                  used, _SPILL["ram_limit"], rss,
-                  _SPILL["ram_blocks"], _SPILL["ram_used"] / 1024 ** 3,
-                  _SPILL["disk_blocks"], _SPILL["offset"] / 1024 ** 3,
-                  used, _SPILL["ram_limit"], rss),
-              flush=True)
+    log_print("[SPILL] " + t("Parked blocks: {0} in RAM ({1:.2f} GB), {2} on disk ({3:.2f} GB). System RAM {4:.1f} GB / ceiling {5:.1f} GB (process RSS {6:.1f} GB).", _SPILL["ram_blocks"], _SPILL["ram_used"] / 1024 ** 3, _SPILL["disk_blocks"], _SPILL["offset"] / 1024 ** 3, used, _SPILL["ram_limit"], rss), flush=True, essential=True)
 
 
 def _new_linear4bit_empty(in_features, out_features, bias=False, **kwargs):
@@ -4909,21 +4736,7 @@ def _enforce_manual_swap_budget(module):
         # ----------------------------------------------------------------
         needed_gb = required / 1e9
         minimum_gb = math.ceil(needed_gb * 100.0) / 100.0
-        raise RuntimeError(
-            "[ERROR] The NF4 block needs more memory than vram_swap_gb allows. "
-            "block needs {:.4f} GB | vram_swap_gb allows {:.4f} GB | short by "
-            "{:.4f} GB. Set vram_swap_gb to at least {:.2f}. "
-            "(resident budget {:.2f} GB | headroom {:.2f} GB) / "
-            "[ERROR] El bloque NF4 necesita mas memoria de la que permite "
-            "vram_swap_gb. El bloque necesita {:.4f} GB | vram_swap_gb permite "
-            "{:.4f} GB | faltan {:.4f} GB. Pon vram_swap_gb en {:.2f} como "
-            "minimo. (budget residente {:.2f} GB | headroom {:.2f} GB)".format(
-                needed_gb, allowed / 1e9, needed_gb - allowed / 1e9, minimum_gb,
-                VRAM_BUDGET_GB, VRAM_HEADROOM_GB,
-                needed_gb, allowed / 1e9, needed_gb - allowed / 1e9, minimum_gb,
-                VRAM_BUDGET_GB, VRAM_HEADROOM_GB,
-            )
-        )
+        raise RuntimeError("[ERROR] " + t("The NF4 block needs more memory than vram_swap_gb allows. block needs {0:.4f} GB | vram_swap_gb allows {1:.4f} GB | short by {2:.4f} GB. Set vram_swap_gb to at least {3:.2f}. (resident budget {4:.2f} GB | headroom {5:.2f} GB)", needed_gb, allowed / 1e9, needed_gb - allowed / 1e9, minimum_gb, VRAM_BUDGET_GB, VRAM_HEADROOM_GB))
 
 
 def _nf4_swap_pre_hook(module, args, kwargs):
@@ -5359,7 +5172,7 @@ def apply_vram_hard_cap():
     try:
         torch.cuda.set_per_process_memory_fraction(fraction, 0)
     except Exception as e:
-        log_print("[VRAM-CAP][WARN] No se pudo aplicar el tope: {}".format(e), flush=True)
+        log_print("[VRAM-CAP][WARN] " + t("Could not apply the cap: {0}", e), flush=True)
         return None
 
     log_print(
@@ -5385,7 +5198,7 @@ def setup_block_cpu_offload(transformer, target_vram_gb=None, reserve_gb=None):
 
     candidates = find_block_lists(transformer)
     if not candidates:
-        log_print("[VRAM-PLAN] No se encontró ModuleList de bloques; moviendo todo a GPU.", flush=True)
+        log_print("[VRAM-PLAN] " + t("No block ModuleList found; moving everything to the GPU."), flush=True, essential=True)
         transformer.to("cuda")
         free_vram()
         return None
@@ -5436,40 +5249,21 @@ def setup_block_cpu_offload(transformer, target_vram_gb=None, reserve_gb=None):
     if overhead_bytes > 0:
         if seq_tokens > 0:
             log_print(
-                "[VRAM-PLAN] Secuencia de {} tokens -> overhead de entrenamiento {:.2f} GB "
-                "(1,672 + 0,001663 x tokens, calibrado sobre 11 picos reales). El valor fijo "
-                "de {:.2f} GB solo valia para imagenes. / {} token sequence -> {:.2f} GB "
-                "training overhead; the fixed {:.2f} GB only held for images."
-                .format(seq_tokens, overhead_gb, float(VRAM_TRAINING_OVERHEAD_GB),
-                        seq_tokens, overhead_gb, float(VRAM_TRAINING_OVERHEAD_GB)),
-                flush=True,
-            )
+                "[VRAM-PLAN] " + t("{0} token sequence -> {1:.2f} GB training overhead (1.672 + 0.001663 x tokens, calibrated on 11 real peaks). The fixed {2:.2f} GB only held for images.",
+                                   seq_tokens, overhead_gb, float(VRAM_TRAINING_OVERHEAD_GB)),
+                flush=True, essential=True)
         else:
             log_print(
-                "[VRAM-PLAN][WARN] No se pudo leer la geometria de la cache; se usa el "
-                "overhead fijo de {:.2f} GB, que esta calibrado para IMAGENES y se queda "
-                "corto con video. / Could not read the cache geometry; falling back to the "
-                "fixed {:.2f} GB overhead, which is calibrated for IMAGES and is too small "
-                "for video.".format(overhead_gb, overhead_gb),
-                flush=True,
-            )
+                "[VRAM-PLAN][WARN] " + t("Could not read the cache geometry; falling back to the fixed {0:.2f} GB overhead, which is calibrated for IMAGES and is too small for video.", overhead_gb),
+                flush=True, essential=True)
         log_print(
-            "[VRAM-PLAN] Presupuesto residente {:.2f} GB - overhead de entrenamiento "
-            "{:.2f} GB = {:.2f} GB para pesos. / resident budget minus training "
-            "overhead.".format(float(target_vram_gb), overhead_bytes / 1e9,
-                               max_base_alloc / 1e9),
-            flush=True,
-        )
+            "[VRAM-PLAN] " + t("Resident budget {0:.2f} GB - training overhead {1:.2f} GB = {2:.2f} GB for weights.", float(target_vram_gb), overhead_bytes / 1e9, max_base_alloc / 1e9),
+            flush=True, essential=True)
 
     if base_alloc > max_base_alloc:
         log_print(
-            "[VRAM-PLAN][WARN] Los modulos FUERA de bloques ya ocupan {:.2f} GB, mas "
-            "que el presupuesto para pesos ({:.2f} GB). Ningun bloque va a quedarse "
-            "residente y aun asi te pasas del budget: sube vram_budget_gb o el modelo "
-            "no cabe en esa GPU simulada. / non-block modules alone exceed the weight "
-            "budget.".format(base_alloc / 1e9, max_base_alloc / 1e9),
-            flush=True,
-        )
+            "[VRAM-PLAN][WARN] " + t("The modules OUTSIDE the blocks already take {0:.2f} GB, more than the weight budget ({1:.2f} GB). No block will stay resident and you still exceed the budget: raise vram_budget_gb or the model does not fit on that simulated GPU.", base_alloc / 1e9, max_base_alloc / 1e9),
+            flush=True, essential=True)
 
     # ------------------------------------------------------------------
     # EL OVERHEAD NO SE SUMA AQUI: YA ESTA DENTRO DEL BUDGET.
@@ -5489,12 +5283,8 @@ def setup_block_cpu_offload(transformer, target_vram_gb=None, reserve_gb=None):
     configured_total = float(target_vram_gb) + float(swap_gb) + float(headroom_gb)
     if total_physical_gb is not None and configured_total > total_physical_gb:
         log_print(
-            "[VRAM-PLAN] AVISO / WARNING: presupuesto manual {:.4f} GB supera la VRAM "
-            "fisica {:.4f} GB. / manual budget exceeds physical VRAM.".format(
-                configured_total, total_physical_gb
-            ),
-            flush=True,
-        )
+            "[VRAM-PLAN] " + t("WARNING: manual budget {0:.4f} GB exceeds the physical VRAM {1:.4f} GB.", configured_total, total_physical_gb),
+            flush=True, essential=True)
 
     try:
         free_now_bytes, _total_now_bytes = torch.cuda.mem_get_info()
@@ -5510,13 +5300,9 @@ def setup_block_cpu_offload(transformer, target_vram_gb=None, reserve_gb=None):
 
         if physical_ceiling < max_base_alloc:
             log_print(
-                "[VRAM-PLAN] Budget configurado ({:.2f} GB) no cabe en la VRAM libre real. "
-                "Techo efectivo ajustado a {:.2f} GB (libre real {:.2f} GB - swap {:.2f} GB - headroom {:.2f} GB).".format(
-                    float(target_vram_gb), physical_ceiling / 1e9,
-                    free_now_bytes / 1e9, float(swap_gb), float(headroom_gb),
-                ),
-                flush=True,
-            )
+                "[VRAM-PLAN] " + t("Configured budget ({0:.2f} GB) does not fit in the real free VRAM. Effective ceiling set to {1:.2f} GB (real free {2:.2f} GB - swap {3:.2f} GB - headroom {4:.2f} GB).",
+                                   float(target_vram_gb), physical_ceiling / 1e9, free_now_bytes / 1e9, float(swap_gb), float(headroom_gb)),
+                flush=True, essential=True)
             max_base_alloc = physical_ceiling
 
     # Cuatro decimales en base_alloc y en el residente maximo: son las dos cifras
@@ -5526,26 +5312,13 @@ def setup_block_cpu_offload(transformer, target_vram_gb=None, reserve_gb=None):
     # two figures vram_budget_gb is calibrated against, and at two decimals the
     # +-0.005 GB rounding is enough to shift a whole 0.3332 GB block step.
     log_print(
-        "[VRAM-PLAN] Base fuera de bloques / non-block base: {:.4f} GB | Residente MAX "
-        "(efectivo) / effective resident max: {:.4f} GB | Swap MAX: {:.4f} GB | "
-        "Headroom: {:.4f} GB | TOTAL MAX: {:.4f} GB".format(
-            base_alloc / 1e9,
-            max_base_alloc / 1e9,
-            float(swap_gb),
-            float(headroom_gb),
-            configured_total,
-        ),
-        flush=True,
-    )
+        "[VRAM-PLAN] " + t("Non-block base: {0:.4f} GB | Effective resident max: {1:.4f} GB | Swap max: {2:.4f} GB | Headroom: {3:.4f} GB | TOTAL MAX: {4:.4f} GB",
+                           base_alloc / 1e9, max_base_alloc / 1e9, float(swap_gb), float(headroom_gb), configured_total),
+        flush=True, essential=True)
     log_print(
-        "[VRAM-PLAN] Bloque residente / resident block: {:.6f} GB | para N bloques hace "
-        "falta vram_budget_gb >= base + N*bloque + overhead / for N blocks you need "
-        "vram_budget_gb >= base + N*block + overhead ({:.4f} GB)".format(
-            (get_block_nontrainable_bytes(block_list[0]) / 1e9) if n_blocks else 0.0,
-            float(VRAM_TRAINING_OVERHEAD_GB),
-        ),
-        flush=True,
-    )
+        "[VRAM-PLAN] " + t("Resident block: {0:.6f} GB | for N blocks you need vram_budget_gb >= base + N*block + overhead ({1:.4f} GB)",
+                           (get_block_nontrainable_bytes(block_list[0]) / 1e9) if n_blocks else 0.0, float(VRAM_TRAINING_OVERHEAD_GB)),
+        flush=True, essential=True)
 
     block_total_sizes = []
     block_nf4_sizes = []
@@ -5585,26 +5358,12 @@ def setup_block_cpu_offload(transformer, target_vram_gb=None, reserve_gb=None):
     # Only the physical block count is clamped.
     if RESIDENT_BLOCKS > 0:
         forzado = min(int(RESIDENT_BLOCKS), n_blocks)
-        log_print(
-            "[VRAM-PLAN] Manual override: {} resident blocks (the plan said {}). "
-            "The plan only counts weights; with long video sequences the "
-            "activations do not fit its overhead. / Forzado manual: {} bloques "
-            "residentes (el plan decia {}). El plan solo cuenta pesos; con "
-            "secuencias largas de video las activaciones no caben en su "
-            "overhead.".format(forzado, start_index, forzado, start_index),
-            flush=True)
+        log_print("[VRAM-PLAN] " + t("Manual override: {0} resident blocks (the plan said {1}). The plan only counts weights; with long video sequences the activations do not fit its overhead.", forzado, start_index), flush=True, essential=True)
         start_index = forzado
 
     log_print(
-        "[VRAM-PLAN] Plan teórico: {} bloques residentes (0-{}), {} bloques swapeados ({}-{}).".format(
-            start_index,
-            start_index - 1,
-            n_blocks - start_index,
-            start_index,
-            n_blocks - 1,
-        ),
-        flush=True,
-    )
+        "[VRAM-PLAN] " + t("Theoretical plan: {0} resident blocks (0-{1}), {2} swapped blocks ({3}-{4}).", start_index, start_index - 1, n_blocks - start_index, start_index, n_blocks - 1),
+        flush=True, essential=True)
 
     # El spill tiene que estar listo ANTES de aparcar el primer bloque.
     # The spill must be ready BEFORE the first block is parked.
@@ -5631,9 +5390,8 @@ def setup_block_cpu_offload(transformer, target_vram_gb=None, reserve_gb=None):
 
             if torch.cuda.memory_allocated() > max_base_alloc + 0.5e9:
                 log_print(
-                    "[VRAM-PLAN] Bloque {} excede presupuesto real; devolviendo a CPU.".format(i),
-                    flush=True,
-                )
+                    "[VRAM-PLAN] " + t("Block {0} exceeds the real budget; sending it back to CPU.", i),
+                    flush=True, essential=True)
                 park_nf4_block(block)
                 free_vram()
                 break
@@ -5646,9 +5404,8 @@ def setup_block_cpu_offload(transformer, target_vram_gb=None, reserve_gb=None):
                 # cortar silenciosamente la colocación de más bloques es
                 # correcto.
                 log_print(
-                    "[VRAM-PLAN] OOM real de CUDA moviendo bloque {} a GPU (límite físico alcanzado): {}".format(i, e),
-                    flush=True,
-                )
+                    "[VRAM-PLAN] " + t("Real CUDA OOM moving block {0} to the GPU (physical limit reached): {1}", i, e),
+                    flush=True, essential=True)
                 park_nf4_block(block)
                 free_vram()
                 break
@@ -5658,9 +5415,8 @@ def setup_block_cpu_offload(transformer, target_vram_gb=None, reserve_gb=None):
             # punto siempre, dando la falsa impresión de que vram_budget_gb no
             # tiene efecto. Se registra completo y se relanza.
             log_print(
-                "[VRAM-PLAN] ERROR NO relacionado con VRAM moviendo bloque {} a GPU:".format(i),
-                flush=True,
-            )
+                "[VRAM-PLAN] " + t("ERROR NOT related to VRAM moving block {0} to the GPU:", i),
+                flush=True, essential=True)
             traceback.print_exc()
             raise
 
@@ -5685,56 +5441,32 @@ def setup_block_cpu_offload(transformer, target_vram_gb=None, reserve_gb=None):
         actual_base = torch.cuda.memory_allocated()
 
         log_print(
-            "[VRAM-PLAN] Ajuste: bloque {} parqueado en CPU. Base actual: {:.2f} GB.".format(
-                start_index,
-                actual_base / 1e9,
-            ),
-            flush=True,
-        )
+            "[VRAM-PLAN] " + t("Adjustment: block {0} parked on CPU. Current base: {1:.2f} GB.", start_index, actual_base / 1e9),
+            flush=True, essential=True)
 
     if start_index < n_blocks:
         max_nf4_block_bytes = max(block_nf4_sizes[start_index:])
         max_dequant_est_bytes = max_nf4_block_bytes * 4
 
         log_print(
-            "[VRAM-PLAN] Bloque swapeado más grande: NF4 {:.2f} GB | estimado dequant bf16 {:.2f} GB.".format(
-                max_nf4_block_bytes / 1e9,
-                max_dequant_est_bytes / 1e9,
-            ),
-            flush=True,
-        )
+            "[VRAM-PLAN] " + t("Largest swapped block: NF4 {0:.2f} GB | estimated bf16 dequant {1:.2f} GB.", max_nf4_block_bytes / 1e9, max_dequant_est_bytes / 1e9),
+            flush=True, essential=True)
 
         if max_dequant_est_bytes > float(swap_gb) * 1e9:
             log_print(
-                "[VRAM-PLAN] AVISO: el bloque swapeado más grande puede necesitar más que "
-                "vram_swap_gb={:.2f} GB. Si OOM, sube vram_swap_gb o baja vram_budget_gb.".format(
-                    float(swap_gb)
-                ),
-                flush=True,
-            )
+                "[VRAM-PLAN] " + t("WARNING: the largest swapped block may need more than vram_swap_gb={0:.2f} GB. On OOM, raise vram_swap_gb or lower vram_budget_gb.", float(swap_gb)),
+                flush=True, essential=True)
         else:
             log_print(
-                "[VRAM-PLAN] Swap máximo estimado cabe en vram_swap_gb={:.2f} GB.".format(
-                    float(swap_gb)
-                ),
-                flush=True,
-            )
+                "[VRAM-PLAN] " + t("Estimated max swap fits in vram_swap_gb={0:.2f} GB.", float(swap_gb)),
+                flush=True, essential=True)
 
-    log_print(
-        "[VRAM-PLAN] Post-plan real: {:.2f} GB | Objetivo base: {:.2f} GB | Swap reservado: {:.2f} GB".format(
-            actual_base / 1e9,
-            max_base_alloc / 1e9,
-            float(swap_gb),
-        ),
-        flush=True,
-    )
+    log_print("[VRAM-PLAN] " + t("Real after the plan: {0:.2f} GB | Base target: {1:.2f} GB | Reserved swap: {2:.2f} GB", actual_base / 1e9, max_base_alloc / 1e9, float(swap_gb)), flush=True, essential=True)
 
     if actual_base > max_base_alloc + 0.75e9:
         log_print(
-            "[VRAM-PLAN] AVISO: el consumo base real sigue por encima del objetivo. "
-            "Baja vram_budget_gb o aumenta vram_headroom_gb.",
-            flush=True,
-        )
+            "[VRAM-PLAN] " + t("WARNING: the real base usage is still above the target. Lower vram_budget_gb or raise vram_headroom_gb."),
+            flush=True, essential=True)
 
     excluded_audio_ids = set()
     for blk in block_list[start_index:]:
@@ -5828,22 +5560,15 @@ class DualOptimizer:
                 try:
                     self.gpu_optimizer.load_state_dict(state)
                 except Exception as e:
-                    log_print("[!] No se pudo restaurar optimizer GPU (formato antiguo): {}".format(e), flush=True)
+                    log_print("[!] " + t("Could not restore the GPU optimizer (old format): {0}", e), flush=True)
             return
 
         saved_type = state.get("opt_type", None)
 
         if saved_type is not None and saved_type != OPTIMIZER_TYPE:
             log_print(
-                "[!] WARNING: el checkpoint del optimizador es de tipo '{}' y ahora usas "
-                "'{}'. NO se restaura el estado del optimizador (los momentos no son "
-                "compatibles). Los pesos del LoRA si se han restaurado; Adam volvera a "
-                "calentar sus momentos en unos pocos pasos. / Optimizer checkpoint is "
-                "'{}' but the current optimizer is '{}': the optimizer state is NOT "
-                "restored. LoRA weights were restored; Adam will re-warm its moments in "
-                "a few steps.".format(saved_type, OPTIMIZER_TYPE, saved_type, OPTIMIZER_TYPE),
-                flush=True,
-            )
+                "[!] WARNING: " + t("The optimizer checkpoint is '{0}' but the current optimizer is '{1}': the optimizer state is NOT restored. LoRA weights were restored; Adam will re-warm its moments in a few steps.", saved_type, OPTIMIZER_TYPE),
+                flush=True, essential=True)
             return
 
         if self.gpu_optimizer is not None and state.get("gpu") is not None:
@@ -5950,10 +5675,7 @@ def cast_frozen_to_bf16(root):
         for n in (kept_params[:8] + kept_buffers[:8]):
             log_print("  [CAST-KEEP] {}".format(n), flush=True)
     else:
-        log_print("[CAST][WARN] cast_frozen_respect_fp32_modules=false: casting EVERYTHING "
-                  "to bf16, including _keep_in_fp32_modules and rope.inv_freq. This undoes "
-                  "fp32_repair. / casteando TODO a bf16, incluidos _keep_in_fp32_modules y "
-                  "rope.inv_freq. Esto deshace fp32_repair.", flush=True)
+        log_print("[CAST][WARN] " + t("cast_frozen_respect_fp32_modules=false: casting EVERYTHING to bf16, including _keep_in_fp32_modules and rope.inv_freq. This undoes fp32_repair."), flush=True, essential=True)
 
 
 # =============================================================================
@@ -6101,12 +5823,12 @@ def save_lora(model, path, prefix=None):
         clean = name.replace("base_model.model.", "")
         clean = clean.replace(".default.", ".")
 
-        t = tensor.detach().to(torch.float32).cpu()
+        tv = tensor.detach().to(torch.float32).cpu()
 
         if ".lora_B." in clean:
-            t = t * scaling
+            tv = tv * scaling
 
-        raw[prefix + clean] = t
+        raw[prefix + clean] = tv
 
     # 2) Renombrar al esquema correcto (qkv_proj / out_proj / mlp.fc1 / mlp.fc2)
     #    y fusionar Q,K,V en una única LoRA qkv_proj por bloque.
@@ -6143,14 +5865,11 @@ def save_lora(model, path, prefix=None):
     # export under the native name, so the swap has to be undone. It applies to
     # the OUTPUT dimension, hence lora_B only.
     # ------------------------------------------------------------------
-    def _swiglu_swap_halves(t):
+    def _swiglu_swap_halves(tv):
         """[value; gate] (diffusers) -> [gate; value] (checkpoint original)."""
-        if t.ndim != 2 or t.shape[0] % 2 != 0:
-            raise RuntimeError(
-                "mlp.fc1 lora_B con shape inesperada {}: no se puede intercambiar "
-                "las mitades SwiGLU / unexpected shape, cannot swap SwiGLU halves"
-                .format(tuple(t.shape)))
-        value, gate = t.chunk(2, dim=0)
+        if tv.ndim != 2 or tv.shape[0] % 2 != 0:
+            raise RuntimeError(t("mlp.fc1 lora_B with unexpected shape {0}: cannot swap the SwiGLU halves", tuple(tv.shape)))
+        value, gate = tv.chunk(2, dim=0)
         return torch.cat([gate, value], dim=0).contiguous()
 
     # (origen diffusers, destino nativo, transformacion del tensor)
@@ -6173,11 +5892,11 @@ def save_lora(model, path, prefix=None):
         for old_sub, new_sub, transform in simple_map:
             old_k = old_prefix + old_sub
             if old_k in raw:
-                t = raw[old_k]
+                tv = raw[old_k]
                 if transform is not None:
-                    t = transform(t)
+                    tv = transform(tv)
                     _swiglu_swapped += 1
-                state[new_prefix + new_sub] = t.to(torch.bfloat16).contiguous()
+                state[new_prefix + new_sub] = tv.to(torch.bfloat16).contiguous()
                 processed.add(old_k)
 
         q_A = raw.get(old_prefix + "attn.to_q.lora_A.weight")
@@ -6239,15 +5958,9 @@ def save_lora(model, path, prefix=None):
     # que verse tambien con debug_training=False.
     # Direct `print`, not `log_print`: this line confirms the conversion ran, so
     # it must stay visible with debug_training=False too.
-    print("[SAVE] SwiGLU: {} tensores mlp.fc1.lora_B con las mitades "
-          "intercambiadas [value;gate] -> [gate;value] / {} mlp.fc1.lora_B "
-          "tensors had their SwiGLU halves swapped".format(
-              _swiglu_swapped, _swiglu_swapped), flush=True)
+    print("[SAVE] SwiGLU: " + t("{0} mlp.fc1.lora_B tensors had their halves swapped [value;gate] -> [gate;value]", _swiglu_swapped), flush=True)
     if _swiglu_swapped == 0:
-        log_print("[SAVE][WARN] NINGUN mlp.fc1 exportado. Si el LoRA deberia "
-                  "incluir el MLP, algo va mal en el descubrimiento de targets. "
-                  "/ NO mlp.fc1 exported; check LoRA target discovery.",
-                  flush=True)
+        log_print("[SAVE][WARN] " + t("NO mlp.fc1 exported. If the LoRA should include the MLP, something is wrong in target discovery."), flush=True, essential=True)
 
     save_file(state, path, metadata=build_lora_metadata(prefix, scaling))
 
@@ -6283,8 +5996,8 @@ def save_lora(model, path, prefix=None):
             log_print("[SAVE] Copia con keys en CRUDO -> {} ({} keys). Ejemplos: {}"
                       .format(os.path.basename(raw_path), len(raw_state), _rs), flush=True)
         except Exception as e:
-            log_print("[SAVE][WARN] No se pudo guardar la copia en crudo: {}".format(e),
-                      flush=True)
+            log_print("[SAVE][WARN] " + t("Could not save the raw copy: {0}", e),
+                      flush=True, essential=True)
 
 
 # =============================================================================
@@ -6383,10 +6096,7 @@ def _vae_reorder_interleaved_qkv(weight, num_heads, head_dim):
     Works for both the 2-D weight and the 1-D bias."""
     expected = num_heads * 3 * head_dim
     if weight.shape[0] != expected:
-        raise ValueError(
-            "qkv fusionado con {} filas, se esperaban {} = {} cabezas * 3 * {} / "
-            "fused qkv has {} rows, expected {}".format(
-                weight.shape[0], expected, num_heads, head_dim, weight.shape[0], expected))
+        raise ValueError(t("fused qkv has {0} rows, expected {1} = {2} heads * 3 * {3}", weight.shape[0], expected, num_heads, head_dim))
     grouped = weight.reshape(num_heads, 3 * head_dim, *weight.shape[1:])
     q, k, v = grouped.split(head_dim, dim=1)
     return [t.reshape(num_heads * head_dim, *weight.shape[1:]).contiguous() for t in (q, k, v)]
@@ -6449,9 +6159,7 @@ def load_preview_video_vae(nf4_dir, device):
     ]
     ckpt = next((p for p in candidates if os.path.isfile(p)), None)
     if ckpt is None or not os.path.isfile(config_path):
-        raise FileNotFoundError(
-            "No se encontro el VAE de video en {} (se busco: {}) / video VAE not found"
-            .format(vae_dir, [os.path.basename(c) for c in candidates]))
+        raise FileNotFoundError(t("Video VAE not found in {0} (searched: {1})", vae_dir, [os.path.basename(c) for c in candidates]))
 
     with open(config_path, "r", encoding="utf-8") as f:
         vae_config = json.load(f)
@@ -6477,11 +6185,7 @@ def load_preview_video_vae(nf4_dir, device):
     # so it shows up as missing without being an actual missing weight.
     real_missing = [k for k in missing if not k.endswith("inv_freq")]
     if real_missing or unexpected:
-        raise RuntimeError(
-            "[PREVIEW-VAE] La traduccion de keys no cuadra: {} faltan, {} sobran. "
-            "Faltan: {} | Sobran: {} / key translation mismatch"
-            .format(len(real_missing), len(unexpected),
-                    real_missing[:6], list(unexpected)[:6]))
+        raise RuntimeError("[PREVIEW-VAE] " + t("The key translation does not match: {0} missing, {1} unexpected. Missing: {2} | Unexpected: {3}", len(real_missing), len(unexpected), real_missing[:6], list(unexpected)[:6]))
 
     vae.eval()
     for p in vae.parameters():
@@ -6587,13 +6291,7 @@ def pick_preview_prompt(entries, step):
                 pass
             return entries[0], custom, "custom: '{}'".format(
                 text[:80] + ("..." if len(text) > 80 else ""))
-        log_print("[PREVIEW][WARN] preview_caption_mode='custom' pero la cache no tiene "
-                  "_custom_structure.json. El entrenador NO puede codificar texto: "
-                  "escribe el prompt en la pestana de Pre-Cache, pulsa Save JSON y "
-                  "relanza el Pre-Cache (salta las imagenes ya cacheadas). Se usa el "
-                  "primer caption. / no _custom in cache; the trainer cannot encode "
-                  "text. Set the prompt in Pre-Cache, save and re-run it. Falling back "
-                  "to the first caption.", flush=True)
+        log_print("[PREVIEW][WARN] " + t("preview_caption_mode='custom' but the cache has no _custom_structure.json. The trainer CANNOT encode text: write the prompt in the Pre-Cache tab, press Save JSON and run the Pre-Cache again (it skips already-cached images). Using the first caption."), flush=True, essential=True)
         mode = "first"
 
     if mode == "random" and len(entries) > 1:
@@ -6613,7 +6311,7 @@ def run_training_preview(model, entries, step, output_dir, nf4_dir,
     from diffusers import MiniMaxH3Scheduler
 
     entry, prompt_result, prompt_label = pick_preview_prompt(entries, step)
-    log_print("[PREVIEW] Prompt / Prompt: {}".format(prompt_label), flush=True)
+    log_print("[PREVIEW] Prompt: {}".format(prompt_label), flush=True)
 
     was_training = model.training
     model.eval()
@@ -6669,9 +6367,7 @@ def run_training_preview(model, entries, step, output_dir, nf4_dir,
             n_lat = 1
         latent_shape = (latent_shape[0], latent_shape[1], n_lat, lat_h, lat_w)
         if n_lat != n_f:
-            log_print("[PREVIEW] Clip mode / modo clip: {} frames -> {} latent frames "
-                      "({}x the video tokens / {}x los tokens de video)".format(
-                          preview_frames, n_lat, n_lat, n_lat), flush=True)
+            log_print("[PREVIEW] " + t("Clip mode: {0} frames -> {1} latent frames ({1}x the video tokens)", preview_frames, n_lat), flush=True)
 
         seed = PREVIEW_SEED if PREVIEW_SEED > 0 else (SEED if SEED > 0 else random.randint(1, 2 ** 31 - 1))
         gen = torch.Generator(device="cuda").manual_seed(int(seed))
@@ -6773,9 +6469,7 @@ def run_training_preview(model, entries, step, output_dir, nf4_dir,
                         neg_text = torch.cat(
                             [neg_text, torch.zeros_like(neg_text[:, :1, :]).repeat(1, pad, 1)], dim=1)
             if neg_text is None:
-                log_print("[PREVIEW][WARN] preview_cfg > 1 pero la cache no tiene el "
-                          "prompt vacio (_neg). Se genera sin CFG. / no empty prompt in "
-                          "cache; running without CFG.", flush=True)
+                log_print("[PREVIEW][WARN] " + t("preview_cfg > 1 but the cache has no empty prompt (_neg). Generating without CFG."), flush=True, essential=True)
 
         # El transformer envuelto por PEFT no acepta kwargs que no existan en su
         # forward real; filter_forward_kwargs los descarta como en el train loop.
@@ -6804,7 +6498,7 @@ def run_training_preview(model, entries, step, output_dir, nf4_dir,
             return out.sample.float(), getattr(out, "audio_sample", None)
 
         with torch.no_grad():
-            for i, t in enumerate(scheduler.timesteps):
+            for i, tv in enumerate(scheduler.timesteps):
                 sv, sv_next = float(sigmas_v[i]), float(sigmas_v[i + 1])
                 sa, sa_next = float(sigmas_a[i]), float(sigmas_a[i + 1])
                 t_pair = torch.tensor([1.0 - sv, 1.0 - sa],
@@ -6817,7 +6511,7 @@ def run_training_preview(model, entries, step, output_dir, nf4_dir,
 
                 # Video: por el scheduler de diffusers, que ya esta probado.
                 # Video through the diffusers scheduler, which is tested.
-                tokens = scheduler.step(pred, t, tokens, return_dict=False)[0]
+                tokens = scheduler.step(pred, tv, tokens, return_dict=False)[0]
 
                 # Audio: Euler manual sobre SU rejilla de sigma, igual que la
                 # implementacion de referencia. El audio no se decodifica nunca
@@ -6982,32 +6676,22 @@ def _ensure_train_runtime():
             _latents = []
 
     if not _latents:
-        _why = ("the folder does not exist / la carpeta no existe"
+        _why = (t("the folder does not exist")
                 if not os.path.isdir(CACHE_DIR)
-                else "the folder is empty or has no latents / la carpeta esta "
-                     "vacia o no tiene latentes")
+                else t("the folder is empty or has no latents"))
         raise RuntimeError(
             "\n"
             "================================================================\n"
-            "  NO PRE-CACHE FOR THIS PROJECT / NO HAY PRE-CACHE DE ESTE PROYECTO\n"
+            "  " + t("NO PRE-CACHE FOR THIS PROJECT") + "\n"
             "================================================================\n"
-            "  Folder / Carpeta : {}\n"
-            "  Reason / Motivo  : {}\n"
+            "  " + t("Folder") + ": " + os.path.abspath(CACHE_DIR) + "\n"
+            "  " + t("Reason") + ": " + str(_why) + "\n"
             "\n"
-            "  Run step 1 (Pre-Cache) before training. Training has no text\n"
-            "  encoder and no VAE by design: every embedding and latent must\n"
-            "  be computed beforehand.\n"
-            "\n"
-            "  Ejecuta primero el paso 1 (Pre-Cache). El entrenamiento no lleva\n"
-            "  text encoder ni VAE por diseno: todos los embeddings y latentes\n"
-            "  tienen que calcularse antes.\n"
-            "================================================================\n"
-            .format(os.path.abspath(CACHE_DIR), _why))
+            "  " + t("Run step 1 (Pre-Cache) before training. Training has no text encoder and no VAE by design: every embedding and latent must be computed beforehand.") + "\n"
+            "================================================================\n")
 
     if not os.path.isdir(NF4_CACHE_DIR):
-        raise FileNotFoundError(
-            "No existe NF4_CACHE_DIR: {}. Ejecuta primero el conversor NF4.".format(NF4_CACHE_DIR)
-        )
+        raise FileNotFoundError(t("NF4_CACHE_DIR does not exist: {0}. Run the NF4 converter first.", NF4_CACHE_DIR))
 
     log_print("[CACHE] Primera ejecución en este proceso Python: cargando NF4 y dataset...", flush=True)
 
@@ -7024,7 +6708,7 @@ def _ensure_train_runtime():
         _sig_params = list(inspect.signature(transformer.forward).parameters.keys())
         log_print("[FORWARD-SIG] transformer.forward acepta: {}".format(_sig_params), flush=True)
     except Exception as _e:
-        log_print("[FORWARD-SIG] No se pudo inspeccionar la firma: {}".format(_e), flush=True)
+        log_print("[FORWARD-SIG] " + t("Could not inspect the signature: {0}", _e), flush=True)
 
     try:
         _cfg_path = os.path.join(_find_transformer_cache_dir(NF4_CACHE_DIR) or "", "config.json")
@@ -7036,7 +6720,7 @@ def _ensure_train_runtime():
                  if any(s in k.lower() for s in ("pruned", "partition", "variant", "task"))}
             ), flush=True)
     except Exception as _e:
-        log_print("[CHECKPOINT] No se pudo leer config.json para detectar variante: {}".format(_e), flush=True)
+        log_print("[CHECKPOINT] " + t("Could not read config.json to detect the variant: {0}", _e), flush=True)
 
     if CAST_FROZEN_BF16:
         cast_frozen_to_bf16(transformer)
@@ -7062,15 +6746,7 @@ def _ensure_train_runtime():
     sample_F = sample_video.shape[2] if sample_video.ndim == 5 else 1
 
     if patch_t > 1 and sample_F < patch_t:
-        raise RuntimeError(
-            "El cache tiene latentes de vídeo con F={} frame(s) pero el transformer "
-            "usa patch_size_t={}. align_video_latent_to_patch() dejaría el vídeo vacío. "
-            "El pre-cache de imagen de H3 usa T=1 a propósito; si tu transformer "
-            "requiere patch_size_t>1, este cache de imagen no es compatible tal cual "
-            "y hay que revisar el pipeline de imagen->vídeo del pre-cache.".format(
-                sample_F, patch_t
-            )
-        )
+        raise RuntimeError(t("The cache has video latents with F={0} frame(s) but the transformer uses patch_size_t={1}. align_video_latent_to_patch() would leave the video empty. The H3 image pre-cache uses T=1 on purpose; if your transformer needs patch_size_t>1, this image cache is not compatible as is and the pre-cache image->video pipeline must be reviewed.", sample_F, patch_t))
 
     inspect_transformer_for_lora(transformer)
     target_modules = discover_lora_targets(transformer)
@@ -7286,7 +6962,7 @@ def _ensure_train_runtime():
 
         if resume_compatible and os.path.exists(adapter_path) and os.path.exists(STEP_FILE):
             log_print("=" * 65)
-            log_print("Checkpoint detected! Restoring state...", flush=True)
+            log_print(t("Checkpoint detected! Restoring state..."), flush=True, essential=True)
             try:
                 with open(STEP_FILE, "r", encoding="utf-8") as f:
                     start_step = int(f.read().strip())
@@ -7299,7 +6975,7 @@ def _ensure_train_runtime():
                         optimizer.load_state_dict(torch.load(OPT_FILE, weights_only=False))
                         log_print("Optimizer restaurado.", flush=True)
                     except Exception:
-                        log_print("[!] No se pudo restaurar optimizer.", flush=True)
+                        log_print("[!] " + t("Could not restore the optimizer."), flush=True, essential=True)
 
                 if os.path.exists(LOSS_STATE_FILE):
                     try:
@@ -7317,11 +6993,11 @@ def _ensure_train_runtime():
                             resumed_ema_loss = float(resumed_ema_loss)
                         log_print("Loss EMA restaurado: {}".format(resumed_ema_loss), flush=True)
                     except Exception as e:
-                        log_print("[!] No se pudo restaurar estado del loss: {}".format(e), flush=True)
+                        log_print("[!] " + t("Could not restore the loss state: {0}", e), flush=True)
 
-                log_print("Resuming from step {}...".format(start_step), flush=True)
+                log_print(t("Resuming from step {0}...", start_step), flush=True, essential=True)
             except Exception as e:
-                log_print("[!] Warning reading checkpoint: {}".format(e), flush=True)
+                log_print("[!] " + t("Warning reading checkpoint: {0}", e), flush=True, essential=True)
                 start_step = 0
             log_print("=" * 65)
 
@@ -7354,17 +7030,12 @@ def _as_hook_list(value, label):
     A None here crashed startup with 'can only concatenate list (not NoneType)'.
     """
     if value is None:
-        print("[HOOKS][WARN] '{}' was None; using an empty list. Hooks of this kind will "
-              "not be tracked or removed. / '{}' era None; se usa lista vacia. Los hooks de "
-              "este tipo no se registraran ni se eliminaran.".format(label, label), flush=True)
+        print("[HOOKS][WARN] " + t("'{0}' was None; using an empty list. Hooks of this kind will not be tracked or removed.", label), flush=True)
         return []
     try:
         return list(value)
     except TypeError:
-        print("[HOOKS][WARN] '{}' is not iterable ({}); using an empty list. / '{}' no es "
-              "iterable ({}); se usa lista vacia.".format(label, type(value).__name__,
-                                                          label, type(value).__name__),
-              flush=True)
+        print("[HOOKS][WARN] " + t("'{0}' is not iterable ({1}); using an empty list.", label, type(value).__name__), flush=True)
         return []
 
 
@@ -7602,8 +7273,7 @@ def reload_runtime_config():
             if isinstance(raw, dict):
                 cfg = {str(k).strip(): v for k, v in raw.items()}
         except Exception as e:
-            print("[CONFIG][WARN] Could not re-read {}: {} / No se pudo releer {}: {}".format(
-                CONFIG_PATH, e, CONFIG_PATH, e), flush=True)
+            print("[CONFIG][WARN] " + t("Could not re-read {0}: {1}", CONFIG_PATH, e), flush=True)
 
     _tc = str(cfg_get("timestep_convention", DEFAULTS["timestep_convention"])).strip().lower()
     TIMESTEP_CONVENTION = _tc if _tc in ("one_minus_sigma", "sigma") else "one_minus_sigma"
@@ -7719,8 +7389,7 @@ def reload_runtime_config():
     try:
         os.makedirs(OUTPUT_DIR, exist_ok=True)
     except Exception as e:
-        print("[CONFIG][WARN] Could not create OUTPUT_DIR {}: {} / No se pudo crear "
-              "OUTPUT_DIR {}: {}".format(OUTPUT_DIR, e, OUTPUT_DIR, e), flush=True)
+        print("[CONFIG][WARN] " + t("Could not create OUTPUT_DIR {0}: {1}", OUTPUT_DIR, e), flush=True)
 
     RESUME_DIR = os.path.join(OUTPUT_DIR, "resume_checkpoint")
     OPT_FILE = os.path.join(OUTPUT_DIR, "optimizer.pt")
@@ -7750,14 +7419,12 @@ def reload_runtime_config():
     _over = [(k, DEFAULTS.get(k), cfg[k]) for k in _critical
              if isinstance(cfg, dict) and k in cfg and cfg[k] != DEFAULTS.get(k)]
     if _over:
-        print("[CONFIG][WARN] {} pisa estos DEFAULTS del script / overrides these script "
-              "defaults:".format(CONFIG_PATH), flush=True)
+        print("[CONFIG][WARN] " + t("{0} overrides these script defaults:", CONFIG_PATH), flush=True)
         for k, d, v in _over:
             print("[CONFIG][WARN]   {:<22} script={!r:<10} -> JSON={!r}".format(k, d, v),
                   flush=True)
-        print("[CONFIG][WARN] Si querias los valores nuevos, borra esas claves del JSON. "
-              "/ Delete those keys from the JSON to use the new defaults.", flush=True)
-    print("[CONFIG] EFFECTIVE flow settings / ajustes de flow EFECTIVOS:", flush=True)
+        print("[CONFIG][WARN] " + t("Delete those keys from the JSON to use the new defaults."), flush=True)
+    print("[CONFIG] " + t("EFFECTIVE flow settings"), flush=True)
     print("[CONFIG]   timestep_convention      = {}".format(TIMESTEP_CONVENTION), flush=True)
     print("[CONFIG]   timestep_scale_multiplier= {:g}".format(_mult), flush=True)
     print("[CONFIG]   flow_target_sign         = {} ({})".format(
@@ -7766,13 +7433,12 @@ def reload_runtime_config():
         SIGMA_SHIFT if SIGMA_SHIFT is not None
         else "logit-normal (mu={:g}, std={:g}, res_shift={})".format(
             LOGIT_NORMAL_MU, LOGIT_NORMAL_STD, SIGMA_RESOLUTION_SHIFT)), flush=True)
-    print("[CONFIG]   lora_dtype               = {} (dtype del estado de AdamW)".format(
-        LORA_DTYPE_STR), flush=True)
+    print("[CONFIG]   lora_dtype               = {} ({})".format(
+        LORA_DTYPE_STR, t("AdamW state dtype")), flush=True)
     print("[CONFIG]   lora_exclude_refiner     = {}".format(LORA_EXCLUDE_REFINER), flush=True)
     print("[CONFIG]   dataset_sampler          = {}".format(DATASET_SAMPLER), flush=True)
-    print("[CONFIG]   updates reales           = {} (total_steps {} / grad_accum {})".format(
-        int(TOTAL_STEPS / max(1, GRAD_ACCUM_STEPS)), TOTAL_STEPS, GRAD_ACCUM_STEPS),
-        flush=True)
+    print("[CONFIG]   updates                  = {} (total_steps {} / grad_accum {})".format(
+        int(TOTAL_STEPS / max(1, GRAD_ACCUM_STEPS)), TOTAL_STEPS, GRAD_ACCUM_STEPS), flush=True)
     print("[CONFIG]   -> t = {} * {:g}".format(
         "sigma" if TIMESTEP_CONVENTION == "sigma" else "(1 - sigma)", _mult), flush=True)
     print("[CONFIG]   fp32_repair_enabled      = {}".format(FP32_REPAIR_ENABLED), flush=True)
@@ -7786,9 +7452,8 @@ def reload_runtime_config():
     print("[CONFIG]   lr / rank / alpha        = {:g} / {} / {}".format(
         LR, LORA_RANK, LORA_ALPHA), flush=True)
     print("[CONFIG]   optimizer_type           = {}{}".format(
-        OPTIMIZER_TYPE,
-        "" if OPTIMIZER_TYPE == "adamw"
-        else "  <-- en H3 deja la cara blanda; usa 'adamw'"), flush=True)
+        OPTIMIZER_TYPE, "" if OPTIMIZER_TYPE == "adamw"
+        else "  <-- " + t("on H3 it leaves the face soft; use 'adamw'")), flush=True)
     # Con que ajustes se genero cada preview tiene que quedar por escrito: si no,
     # al mirar una imagen semanas despues no hay forma de saber con que pasos o
     # que shift salio. Va con `print`, no con log_print, para que se vea tambien
@@ -7796,30 +7461,26 @@ def reload_runtime_config():
     # The preview settings must be on the record: otherwise, looking at an image
     # weeks later there is no way to know which steps or shift produced it.
     if PREVIEW_EVERY > 0:
-        print("[CONFIG]   preview cada/steps/cfg   = {} / {} / {:g}".format(
+        print("[CONFIG]   preview every/steps/cfg  = {} / {} / {:g}".format(
             PREVIEW_EVERY, PREVIEW_STEPS, PREVIEW_CFG), flush=True)
         print("[CONFIG]   preview shift/seed/vae   = {:g} / {} / {}{}".format(
-            PREVIEW_SHIFT, PREVIEW_SEED if PREVIEW_SEED > 0 else "(usa seed)",
-            PREVIEW_VAE_DEVICE,
+            PREVIEW_SHIFT, PREVIEW_SEED if PREVIEW_SEED > 0 else t("(uses seed)"), PREVIEW_VAE_DEVICE,
             "" if PREVIEW_SHIFT <= 6.0 else
-            "  <-- shift 12 es el del muestreador de VIDEO: en una imagen suelta "
-            "ningun paso baja de sigma 0.30 y satura el color. Prueba 3.0"),
-            flush=True)
+            "  <-- " + t("shift 12 is the VIDEO sampler's: on a single image no step goes below sigma 0.30 and the colour saturates. Try 3.0")), flush=True)
     else:
         print("[CONFIG]   previews                 = OFF (preview_every = 0)", flush=True)
     print("[CONFIG]   vram budget/swap/headroom= {:.2f} / {:.2f} / {:.2f} GB".format(
         VRAM_BUDGET_GB, VRAM_SWAP_GB, VRAM_HEADROOM_GB), flush=True)
-    print("[CONFIG]   vram overhead entrenam.  = {:.2f} GB | TECHO TOTAL {:.2f} GB "
+    print("[CONFIG]   training vram overhead   = {:.2f} GB | TOTAL CEILING {:.2f} GB "
           "(hard cap {})".format(
               VRAM_TRAINING_OVERHEAD_GB,
               VRAM_BUDGET_GB + VRAM_SWAP_GB + VRAM_HEADROOM_GB + VRAM_TRAINING_OVERHEAD_GB,
               "ON" if VRAM_HARD_CAP_ENABLED else "OFF"), flush=True)
     print("[CONFIG]   checkpoint reentrant     = {}{}".format(
-        CHECKPOINT_USE_REENTRANT,
-        "" if CHECKPOINT_USE_REENTRANT
-        else "  <-- con False bitsandbytes clava los pesos NF4 en el grafo"), flush=True)
-    print("[CONFIG]   empty_cache cada         = {} paso(s)".format(
-        VRAM_EMPTY_CACHE_EVERY if VRAM_EMPTY_CACHE_EVERY > 0 else "nunca"), flush=True)
+        CHECKPOINT_USE_REENTRANT, "" if CHECKPOINT_USE_REENTRANT
+        else "  <-- " + t("with False, bitsandbytes pins the NF4 weights in the graph")), flush=True)
+    print("[CONFIG]   empty_cache every        = {}".format(
+        t("{0} step(s)", VRAM_EMPTY_CACHE_EVERY) if VRAM_EMPTY_CACHE_EVERY > 0 else t("never")), flush=True)
     print("[CONFIG]   cache_dir                = {}".format(CACHE_DIR), flush=True)
     print("[CONFIG]   output_dir               = {}".format(OUTPUT_DIR), flush=True)
     print("=" * 78, flush=True)
@@ -7880,7 +7541,7 @@ def train_minimaxh3():
         ACTIVATION_OFFLOAD_ACTIVE = bool(ACTIVATION_OFFLOAD and _SAVE_ON_CPU_AVAILABLE)
 
     if not torch.cuda.is_available():
-        raise RuntimeError("CUDA no está disponible.")
+        raise RuntimeError(t("CUDA is not available."))
 
     runtime = _ensure_train_runtime()
 
@@ -7920,7 +7581,7 @@ def train_minimaxh3():
             return
 
         log_print()
-        log_print("Saving checkpoint at step {}...".format(current_s), flush=True)
+        log_print(t("Saving checkpoint at step {0}...", current_s), flush=True, essential=True)
 
         os.makedirs(RESUME_DIR, exist_ok=True)
 
@@ -7938,8 +7599,8 @@ def train_minimaxh3():
             model.save_pretrained(RESUME_DIR)
             weights_ok = True
         except Exception as e:
-            log_print("[CKPT][ERROR] No se pudieron guardar los pesos LoRA: {}".format(e),
-                      flush=True)
+            log_print("[CKPT][ERROR] " + t("Could not save the LoRA weights: {0}", e),
+                      flush=True, essential=True)
 
         opt_ok = False
         try:
@@ -7949,7 +7610,7 @@ def train_minimaxh3():
             os.replace(_opt_tmp, OPT_FILE)
             opt_ok = True
         except Exception as e:
-            log_print("[CKPT][ERROR] No se pudo guardar el optimizador: {}".format(e), flush=True)
+            log_print("[CKPT][ERROR] " + t("Could not save the optimizer: {0}", e), flush=True)
             try:
                 if os.path.exists(OPT_FILE + ".tmp"):
                     os.remove(OPT_FILE + ".tmp")
@@ -7965,13 +7626,10 @@ def train_minimaxh3():
                     os.fsync(f.fileno())
                 os.replace(_step_tmp, STEP_FILE)
             except Exception as e:
-                log_print("[CKPT][ERROR] No se pudo escribir STEP_FILE: {}".format(e), flush=True)
+                log_print("[CKPT][ERROR] " + t("Could not write STEP_FILE: {0}", e), flush=True)
         else:
             log_print(
-                "[CKPT][ERROR] Checkpoint INCOMPLETO (pesos={}, optimizador={}). "
-                "NO se actualiza STEP_FILE: al reanudar se volverá al último "
-                "checkpoint íntegro en vez de continuar con estado inconsistente."
-                .format(weights_ok, opt_ok), flush=True)
+                "[CKPT][ERROR] " + t("INCOMPLETE checkpoint (weights={0}, optimizer={1}). STEP_FILE is NOT updated: resuming will go back to the last intact checkpoint instead of continuing with an inconsistent state.", weights_ok, opt_ok), flush=True, essential=True)
 
         try:
             with open(LOSS_STATE_FILE, "w", encoding="utf-8") as f:
@@ -7986,7 +7644,7 @@ def train_minimaxh3():
                     indent=2,
                 )
         except Exception as e:
-            log_print("[!] No se pudo guardar estado del loss: {}".format(e), flush=True)
+            log_print("[!] " + t("Could not save the loss state: {0}", e), flush=True)
 
         try:
             ckpt = os.path.join(
@@ -7994,7 +7652,7 @@ def train_minimaxh3():
                 "MiniMaxH3_LoRA_step_{}.safetensors".format(current_s),
             )
             save_lora(model, ckpt)
-            log_print("Checkpoint saved: {}".format(ckpt), flush=True)
+            log_print(t("Checkpoint saved: {0}", ckpt), flush=True, essential=True)
         except Exception:
             pass
 
@@ -8008,7 +7666,7 @@ def train_minimaxh3():
         global STOP_REQUESTED
         STOP_REQUESTED = True
         log_print()
-        log_print("Signal received ({}). Convirtiendo en parada suave.".format(sig), flush=True)
+        log_print(t("Stop signal received ({sig}).", sig=sig) + " " + t("Turning it into a soft stop."), flush=True)
         raise KeyboardInterrupt
 
     try:
@@ -8109,7 +7767,7 @@ def train_minimaxh3():
     # ------------------------------------------------------------------
     last_completed_step = start_step
 
-    log_print("STARTING TRAINING! {} entradas cacheadas.".format(len(entries)), flush=True)
+    log_print(t("STARTING TRAINING! {n} cached entries.", n=len(entries)), flush=True)
 
     # ------------------------------------------------------------------
     # RESUMEN DEL DATASET / DATASET SUMMARY
@@ -8132,31 +7790,13 @@ def train_minimaxh3():
     # ------------------------------------------------------------------
     _n_entries = len(entries)
     _epochs = TOTAL_STEPS / float(max(1, _n_entries))
-    log_print("[DATASET] {} images | {} steps | {:.1f} epochs (each image seen ~{:.0f} "
-              "times) / {} imagenes | {} pasos | {:.1f} epocas (cada imagen se ve ~{:.0f} "
-              "veces)".format(_n_entries, TOTAL_STEPS, _epochs, _epochs,
-                              _n_entries, TOTAL_STEPS, _epochs, _epochs), flush=True)
+    log_print("[DATASET] " + t("{0} images | {1} steps | {2:.1f} epochs (each image seen ~{3:.0f} times)", _n_entries, TOTAL_STEPS, _epochs, _epochs), flush=True, essential=True)
 
     if _n_entries < 20:
-        log_print(
-            "[DATASET] Small set: {} images. This can work very well for a character: a "
-            "tight, consistent set is often enough. A larger one (a practical reference "
-            "is 35-45, mixing medium shots with face close-ups) mostly buys better "
-            "generalisation to new poses and prompts. / Conjunto pequeno: {} imagenes. "
-            "Puede funcionar muy bien para un personaje: un conjunto corto y consistente "
-            "suele bastar. Uno mayor (referencia practica: 35-45, mezclando planos medios "
-            "con primeros planos de cara) sobre todo compra mejor generalizacion a poses "
-            "y prompts nuevos.".format(_n_entries, _n_entries), flush=True)
+        log_print("[DATASET] " + t("Small set: {0} images. This can work very well for a character: a tight, consistent set is often enough. A larger one (a practical reference is 35-45, mixing medium shots with face close-ups) mostly buys better generalisation to new poses and prompts.", _n_entries), flush=True, essential=True)
 
     if _epochs > 60:
-        log_print(
-            "[DATASET] {:.0f} epochs over {} images. Past roughly this point the LoRA "
-            "leans more on memorising framing and background than on generalising, so "
-            "extra images tend to pay off more than extra steps. / {:.0f} epocas sobre {} "
-            "imagenes. Pasado mas o menos este punto el LoRA se apoya mas en memorizar "
-            "encuadre y fondo que en generalizar, asi que suele rendir mas anadir "
-            "imagenes que anadir pasos.".format(
-                _epochs, _n_entries, _epochs, _n_entries), flush=True)
+        log_print("[DATASET] " + t("{0:.0f} epochs over {1} images. Past roughly this point the LoRA leans more on memorising framing and background than on generalising, so extra images tend to pay off more than extra steps.", _epochs, _n_entries), flush=True, essential=True)
 
     try:
         _probe = entries[0]
@@ -8167,11 +7807,7 @@ def train_minimaxh3():
             _, _c, _f, _h, _w = _lat.shape
             _gh = _h // max(1, PATCH_H)
             _gw = _w // max(1, PATCH_W)
-            log_print(
-                "[DATASET] Latent {}x{} -> {}x{} grid = {} video tokens per image / "
-                "Latente {}x{} -> rejilla {}x{} = {} tokens de video por imagen".format(
-                    _h, _w, _gh, _gw, _gh * _gw,
-                    _h, _w, _gh, _gw, _gh * _gw), flush=True)
+            log_print("[DATASET] " + t("Latent {0}x{1} -> {2}x{3} grid = {4} video tokens per image", _h, _w, _gh, _gw, _gh * _gw), flush=True, essential=True)
     except Exception:
         pass
 
@@ -8207,9 +7843,8 @@ def train_minimaxh3():
                 # micro-step may have only accumulated, and calling it complete
                 # would drop the half-accumulated gradient.
                 save_checkpoint_now(last_completed_step)
-                log_print("Total training time / Tiempo total de entrenamiento: {}"
-                          .format(format_duration_bilingual(total_elapsed_seconds())),
-                          flush=True)
+                log_print(t("Total training time: {0}", format_duration(total_elapsed_seconds())),
+                          flush=True, essential=True)
                 STOP_REQUESTED = False
                 close_train_log()
                 return
@@ -8224,22 +7859,18 @@ def train_minimaxh3():
                 _live_changes = hot_reload_live_settings()
                 if _live_changes:
                     log_print("")
-                    log_print("[LIVE] Settings reloaded without stopping training / "
-                              "Ajustes recargados sin parar el entrenamiento:", flush=True)
+                    log_print("[LIVE] " + t("Settings reloaded without stopping training"), flush=True, essential=True)
                     for _c in _live_changes:
                         log_print("[LIVE]   {}".format(_c), flush=True)
             except Exception as _e_live:
-                log_print("[LIVE][WARN] Could not reload settings: {} / No se pudieron "
-                          "recargar los ajustes: {}".format(_e_live, _e_live), flush=True)
+                log_print("[LIVE][WARN] " + t("Could not reload settings: {0}", _e_live), flush=True, essential=True)
 
             # total_steps bajado en caliente: se termina de forma ordenada por la
             # via normal (guarda checkpoint y LoRA final), no con un corte seco.
             # total_steps lowered live: finish through the normal completion path.
             if step > TOTAL_STEPS:
                 log_print("")
-                log_print("[LIVE] total_steps was lowered to {}: finishing the run. / "
-                          "total_steps se bajo a {}: terminando la ejecucion."
-                          .format(TOTAL_STEPS, TOTAL_STEPS), flush=True)
+                log_print("[LIVE] " + t("total_steps was lowered to {0}: finishing the run.", TOTAL_STEPS), flush=True, essential=True)
                 break
 
             t0 = time.time()
@@ -8401,9 +8032,7 @@ def train_minimaxh3():
                                     "activos); no se recorta nada.".format(
                                         _n_real, _T_full, _n_real, _T_full), flush=True)
                     except Exception as _e_trim:
-                        log_print("[TEXT][WARN] Could not trim padding: {} / No se pudo "
-                                  "recortar el padding: {}".format(_e_trim, _e_trim),
-                                  flush=True)
+                        log_print("[TEXT][WARN] " + t("Could not trim padding: {0}", _e_trim), flush=True, essential=True)
                 elif step <= start_step + 1 and TRIM_TEXT_PADDING:
                     log_print("[TEXT] No attention_mask in the cache: assuming the prompt "
                               "embeddings carry no padding. / Sin attention_mask en la "
@@ -8416,11 +8045,8 @@ def train_minimaxh3():
                         # Si salta, sube max_text_tokens o acorta los captions.
                         # This is no longer padding: real conditioning is being cut.
                         log_print(
-                            "[TEXT][WARN] caption de '{}' recortado {} -> {} tokens REALES; "
-                            "sube max_text_tokens o acorta el caption / real conditioning "
-                            "truncated.".format(
-                                entry.get("name", "?"), video_text.shape[1], MAX_TEXT_TOKENS),
-                            flush=True)
+                            "[TEXT][WARN] " + t("caption of '{0}' trimmed {1} -> {2} REAL tokens; raise max_text_tokens or shorten the caption.", entry.get("name", "?"), video_text.shape[1], MAX_TEXT_TOKENS),
+                            flush=True, essential=True)
                         video_text = video_text[:, :MAX_TEXT_TOKENS, :].contiguous()
 
                 video_clean = align_video_latent_to_patch(
@@ -8625,9 +8251,7 @@ def train_minimaxh3():
                 forward_kwargs = filter_forward_kwargs(forward_kwargs, transformer.forward)
                 if step <= start_step + 1:
                     _dropped = sorted(_kwargs_before - set(forward_kwargs.keys()))
-                    log_print("[FORWARD-SIG] kwargs DESCARTADOS (no existen en forward real): {}".format(
-                        _dropped if _dropped else "ninguno"
-                    ), flush=True)
+                    log_print("[FORWARD-SIG] " + t("DISCARDED kwargs (not in the real forward): {0}", _dropped if _dropped else t("none")), flush=True)
 
             loss = None
             pred_video = None
@@ -8648,7 +8272,7 @@ def train_minimaxh3():
                             with _save_on_cpu_ctx(pin_memory=True):
                                 output = model(**forward_kwargs)
                         except Exception as e:
-                            log_print("[VRAM] save_on_cpu falló: {}. Desactivando.".format(e), flush=True)
+                            log_print("[VRAM] " + t("save_on_cpu failed: {0}. Turning it off.", e), flush=True)
                             ACTIVATION_OFFLOAD_ACTIVE = False
                             output = model(**forward_kwargs)
                     else:
@@ -8656,7 +8280,7 @@ def train_minimaxh3():
 
                 if isinstance(output, tuple):
                     if len(output) == 0:
-                        raise RuntimeError("forward devolvió tupla vacía.")
+                        raise RuntimeError(t("The forward returned an empty tuple."))
 
                     pred_video = output[0]
 
@@ -8675,7 +8299,7 @@ def train_minimaxh3():
                             pred_audio = getattr(output, "audio_sample", None)
 
                 if pred_video is None:
-                    raise RuntimeError("No se pudo obtener predicción de video.")
+                    raise RuntimeError(t("Could not get the video prediction."))
 
                 if DEBUG_TRAINING and step <= 2:
                     if isinstance(output, tuple):
@@ -8691,13 +8315,7 @@ def train_minimaxh3():
                     _debug_tensor_stats("pred_video", pred_video)
 
                 if pred_video.shape != target_video.shape:
-                    raise RuntimeError(
-                        "pred_video shape {} != target_video shape {}. "
-                        "Posible orden de salida incorrecto o broadcasting silencioso.".format(
-                            pred_video.shape,
-                            target_video.shape,
-                        )
-                    )
+                    raise RuntimeError(t("pred_video shape {0} != target_video shape {1}. Possibly wrong output order or silent broadcasting.", pred_video.shape, target_video.shape))
 
                 # ------------------------------------------------------------
                 # SONDA DE AJUSTE: ¿el LoRA MEJORA la prediccion, o solo la cambia?
@@ -8767,14 +8385,10 @@ def train_minimaxh3():
 
                         if _gain < 0.02:
                             log_print(
-                                "[FIT-PROBE][WARN] El LoRA no mejora la prediccion sobre "
-                                "su PROPIA imagen de entrenamiento. Si ||dW|| es grande, "
-                                "el optimizador mueve peso sin ajustar contenido: el "
-                                "gradiente no esta conectado a la imagen. / The LoRA does "
-                                "not improve prediction on its own training image.",
-                                flush=True)
+                                "[FIT-PROBE][WARN] " + t("The LoRA does not improve the prediction on its OWN training image. If ||dW|| is large, the optimizer moves weight without fitting content: the gradient is not connected to the image."),
+                                flush=True, essential=True)
                     except Exception as _e:
-                        log_print("[FIT-PROBE] fallo: {}".format(_e), flush=True)
+                        log_print("[FIT-PROBE] " + t("failed: {0}", _e), flush=True)
 
                 # El mismo diagnostico para el AUDIO. Es la unica senal que dice,
                 # en el primer paso y sin esperar una hora, si la cadena entera
@@ -8865,11 +8479,7 @@ def train_minimaxh3():
                     # se salta en vez de entrenar el relleno negro.
                     # With no audio loss, an audio-only take contributes nothing:
                     # skip it rather than train the black filler.
-                    raise RuntimeError(
-                        "Audio-only sample '{}' with use_audio_loss=False: nothing "
-                        "to train. Enable Train Audio. / Muestra de solo audio '{}' "
-                        "con use_audio_loss=False: no hay nada que entrenar. "
-                        "Activa Train Audio.".format(entry.get("name"), entry.get("name")))
+                    raise RuntimeError(t("Audio-only sample '{0}' with use_audio_loss=False: nothing to train. Enable Train Audio.", entry.get("name")))
                 elif (USE_AUDIO_LOSS and pred_audio is not None
                         and target_audio is not None and not audio_es_relleno):
                     loss_video = mse_loss_chunked(pred_video, target_video)
@@ -8999,11 +8609,7 @@ def train_minimaxh3():
                     # step 20 means B is not being updated at all.
                     if step > 20 and n_with_grad > 0 and n_nonzero <= n_with_grad // 2:
                         log_print(
-                            "[DEBUG-GRAD][WARN] step={}: la mitad de los tensores siguen "
-                            "con gradiente CERO. lora_B no se esta moviendo -> el LoRA no "
-                            "aprende. Revisa lr, lora_dtype y el estado del optimizador. "
-                            "/ half the tensors still have ZERO grad: lora_B is not "
-                            "moving.".format(step), flush=True)
+                            "[DEBUG-GRAD][WARN] " + t("step={0}: half the tensors still have ZERO gradient. lora_B is not moving -> the LoRA is not learning. Check lr, lora_dtype and the optimizer state.", step), flush=True, essential=True)
 
                 # ------------------------------------------------------------
                 # PERFIL DE GRADIENTE POR BLOQUE.
@@ -9057,14 +8663,9 @@ def train_minimaxh3():
                                 flush=True)
                             if _ratio > 5.0:
                                 log_print(
-                                    "[GRAD-PROFILE][WARN] El gradiente que llega a los "
-                                    "bloques tempranos es {:.0f}x menor que el de los "
-                                    "finales. El LoRA se esta entrenando casi solo en la "
-                                    "segunda mitad de la red. / Early blocks receive "
-                                    "{:.0f}x less gradient than late ones.".format(
-                                        _ratio, _ratio), flush=True)
+                                    "[GRAD-PROFILE][WARN] " + t("The gradient reaching the early blocks is {0:.0f}x smaller than in the late ones. The LoRA is training almost only on the second half of the network.", _ratio), flush=True, essential=True)
                     except Exception as _e:
-                        log_print("[GRAD-PROFILE] fallo: {}".format(_e), flush=True)
+                        log_print("[GRAD-PROFILE] " + t("failed: {0}", _e), flush=True)
 
             finally:
                 loss = None
@@ -9200,7 +8801,7 @@ def train_minimaxh3():
             # digits of a number read at a glance; four decimals say the same and
             # leave room on the line.
             progress_line = (
-                "Step {:4d}/{} [{}] {:5.1f}% | "
+                STEP_WORD + " {:4d}/{} [{}] {:5.1f}% | "
                 "Loss {:.4f} | lr {:.2e} | {:.2f}s/it (now {:.2f}) | ETA {} | "
                 "gnorm {:.4f}".format(
                     step,
@@ -9255,7 +8856,7 @@ def train_minimaxh3():
                               _vm.percent),
                           flush=True)
                 except Exception as _e_alloc:
-                    print("[ALLOC] probe failed / la sonda fallo: {}".format(_e_alloc),
+                    print("[ALLOC] " + t("probe failed: {0}", _e_alloc),
                           flush=True)
 
             if step <= 5 or step % 10 == 0:
@@ -9281,23 +8882,15 @@ def train_minimaxh3():
                 try:
                     _t_prev = time.time()
                     log_print("")
-                    log_print("[PREVIEW] Rendering step {} preview / Generando preview "
-                              "del paso {} ({} steps/pasos, shift {:g}, CFG {:g}, VAE "
-                              "{})".format(step, step, PREVIEW_STEPS, PREVIEW_SHIFT,
-                                           PREVIEW_CFG, PREVIEW_VAE_DEVICE), flush=True)
+                    log_print("[PREVIEW] " + t("Rendering the step {0} preview ({1} steps, shift {2:g}, CFG {3:g}, VAE {4})", step, PREVIEW_STEPS, PREVIEW_SHIFT, PREVIEW_CFG, PREVIEW_VAE_DEVICE), flush=True)
                     _p = run_training_preview(
                         model, entries, step, OUTPUT_DIR, NF4_CACHE_DIR,
                         PATCH_T, PATCH_H, PATCH_W, audio_channels=audio_channels)
-                    log_print("[PREVIEW] Saved to / Guardada en: {} ({:.1f}s)"
-                              .format(_p, time.time() - _t_prev), flush=True)
+                    log_print("[PREVIEW] " + t("Saved to: {0} ({1:.1f}s)", _p, time.time() - _t_prev), flush=True)
                 except Exception as _e_prev:
                     PREVIEW_EVERY = 0
                     release_preview_video_vae()
-                    log_print("[PREVIEW][WARN] The preview failed and is now DISABLED "
-                              "for the rest of the run; training continues. Reason: {} / "
-                              "La preview fallo y se DESACTIVA para el resto de la "
-                              "ejecucion; el entrenamiento sigue. Motivo: {}"
-                              .format(_e_prev, _e_prev), flush=True)
+                    log_print("[PREVIEW][WARN] " + t("The preview failed and is now DISABLED for the rest of the run; training continues. Reason: {0}", _e_prev), flush=True, essential=True)
                     if DEBUG_TRAINING:
                         traceback.print_exc()
 
@@ -9315,8 +8908,7 @@ def train_minimaxh3():
                       step if 'step' in locals() else "?", last_completed_step),
                   flush=True)
         save_checkpoint_now(last_completed_step)
-        log_print("Total training time / Tiempo total de entrenamiento: {}"
-                  .format(format_duration_bilingual(total_elapsed_seconds())), flush=True)
+        log_print(t("Total training time: {0}", format_duration(total_elapsed_seconds())), flush=True)
         close_train_log()
         return
     except SystemExit:
@@ -9325,10 +8917,9 @@ def train_minimaxh3():
 
     log_print()
     log_print()
-    log_print("Training completed!", flush=True)
+    log_print(t("Training completed!"), flush=True, essential=True)
     log_print("=" * 60)
-    log_print("Total training time / Tiempo total de entrenamiento: {}"
-              .format(format_duration_bilingual(total_elapsed_seconds())), flush=True)
+    log_print(t("Total training time: {0}", format_duration(total_elapsed_seconds())), flush=True)
     log_print("=" * 60)
 
     save_checkpoint_now(TOTAL_STEPS)
@@ -9336,7 +8927,7 @@ def train_minimaxh3():
     final_path = os.path.join(OUTPUT_DIR, "MiniMaxH3_FINAL_LoRA.safetensors")
     save_lora(model, final_path)
 
-    log_print("Final LoRA saved to: {}".format(final_path), flush=True)
+    log_print(t("Final LoRA saved to: {0}", final_path), flush=True, essential=True)
 
     runtime["completed"] = True
     runtime["last_step"] = TOTAL_STEPS
@@ -9349,7 +8940,7 @@ if __name__ == "__main__":
     except Exception:
         log_print()
         log_print("=" * 80)
-        log_print("ERROR EN TRAINER MINIMAX-H3")
+        log_print(t("ERROR IN THE MINIMAX-H3 TRAINER"), essential=True)
         log_print("=" * 80)
         # El traceback va a stderr, que tambien esta duplicado al fichero, asi
         # que un fallo queda registrado en train_log.txt antes de cerrarlo.

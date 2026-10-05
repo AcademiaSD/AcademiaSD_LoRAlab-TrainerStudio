@@ -17,9 +17,11 @@ import logging
 import webbrowser
 
 from console_stream import read_console
+import i18n
 import remote_access
 import file_transfer
 from pathlib import Path
+from i18n import t
 
 
 # =============================================================================
@@ -32,18 +34,18 @@ def ensure_package(package_name, import_name=None):
         return
     print()
     print("=" * 70)
-    print(f"[INFO] Installing missing package / Instalando paquete: '{package_name}'...")
+    print("[INFO] " + t("Installing missing package: '{name}'...", name=package_name))
     print(f"[INFO] Python: {sys.executable}")
     print("=" * 70)
     print()
     try:
         subprocess.check_call([sys.executable, "-m", "pip", "install", package_name])
     except subprocess.CalledProcessError as exc:
-        print(f"\n[ERROR] Failed to install '{package_name}'. Exit code: {exc.returncode}\n")
+        print("\n[ERROR] " + t("Failed to install '{name}'. Exit code: {code}", name=package_name, code=exc.returncode) + "\n")
         raise
     if importlib.util.find_spec(import_name) is None:
-        raise RuntimeError(f"Package '{package_name}' installed but import failed.")
-    print(f"[OK] '{package_name}' installed successfully / instalado correctamente.")
+        raise RuntimeError(t("Package '{name}' installed but import failed.", name=package_name))
+    print("[OK] " + t("'{name}' installed successfully.", name=package_name))
 
 
 ensure_package("Flask", "flask")
@@ -160,7 +162,7 @@ def read_json_file(path, default=None):
             data = json.load(f)
         return data if isinstance(data, dict) else default
     except Exception as exc:
-        print(f"[ERROR] Could not read {path}: {exc}")
+        print("[ERROR] " + t("Could not read {path}: {error}", path=path, error=exc))
         return default
 
 
@@ -290,7 +292,7 @@ def select_folder_native():
             root.withdraw()
             root.attributes('-topmost', True)
             chosen = filedialog.askdirectory(
-                title="Select Folder / Seleccionar Carpeta",
+                title=t("Select Folder"),
                 initialdir=initial_dir
             )
             root.destroy()
@@ -317,7 +319,7 @@ def select_folder_native():
         if selected_path:
             return jsonify({"status": "ok", "path": selected_path})
         if not dialog_shown:
-            return jsonify({"status": "error", "error": "No native folder dialog / Sin diálogo nativo de carpetas"})
+            return jsonify({"status": "error", "error": t("No native folder dialog")})
         else:
             return jsonify({"status": "cancelled", "path": None})
     except Exception as exc:
@@ -414,17 +416,17 @@ def export_lora():
         target_dir_str = data.get("target_dir", "").strip()
         custom_name = data.get("final_name", "").strip()
         if not target_dir_str:
-            return jsonify({"status": "error", "error": "Please select a target folder / Por favor selecciona una carpeta de destino."}), 400
+            return jsonify({"status": "error", "error": t("Please select a target folder.")}), 400
         target_dir = Path(target_dir_str).resolve()
         if not target_dir.exists() or not target_dir.is_dir():
-            return jsonify({"status": "error", "error": f"Target folder does not exist / Carpeta de destino no existe: {target_dir}"}), 400
+            return jsonify({"status": "error", "error": t("Target folder does not exist: {path}", path=target_dir)}), 400
         if not custom_name:
             custom_name = "MiniMaxH3_lora.safetensors"
         if not custom_name.lower().endswith(".safetensors"):
             custom_name += ".safetensors"
         output_dir = get_train_output_dir()
         if not output_dir.exists():
-            return jsonify({"status": "error", "error": f"Output folder does not exist / Carpeta de salida no existe: {output_dir}"}), 404
+            return jsonify({"status": "error", "error": t("Output folder does not exist: {path}", path=output_dir)}), 404
         final_file = output_dir / "MiniMaxH3_FINAL_LoRA.safetensors"
         source_file = None
         if final_file.exists():
@@ -439,7 +441,7 @@ def export_lora():
                 candidates.sort(key=lambda x: x[0], reverse=True)
                 source_file = candidates[0][1]
         if not source_file or not source_file.exists():
-            return jsonify({"status": "error", "error": f"No .safetensors files found in / No se encontraron archivos .safetensors en: {output_dir}"}), 404
+            return jsonify({"status": "error", "error": t("No .safetensors files found in: {path}", path=output_dir)}), 404
         dest_file = target_dir / custom_name
         shutil.copy2(source_file, dest_file)
         return jsonify({
@@ -458,7 +460,7 @@ def export_lora():
 @app.route("/")
 def index():
     if not UI_FILE.exists():
-        return f"File not found / No se encuentra: trainer_ui.html in {UI_FILE.parent}", 404
+        return t("File not found: {path}", path=UI_FILE), 404
     return send_from_directory(str(UI_FILE.parent), UI_FILE.name)
 
 
@@ -498,7 +500,7 @@ def save_precache():
     try:
         data = request.get_json(force=True)
         if not isinstance(data, dict):
-            return jsonify({"status": "error", "error": "JSON object required / Objeto JSON requerido."}), 400
+            return jsonify({"status": "error", "error": t("JSON object required.")}), 400
         proj = data.get("project_name", "").strip()
         cache_dir_name = f"cached_data_MiniMaxH3_{proj}" if proj else "cached_data_MiniMaxH3"
         output_dir_name = f"MiniMaxH3_lora_output_{proj}" if proj else "MiniMaxH3_lora_output"
@@ -541,7 +543,7 @@ def save_refmod():
     try:
         data = request.get_json(force=True)
         if not isinstance(data, dict):
-            return jsonify({"status": "error", "error": "JSON object required / Objeto JSON requerido."}), 400
+            return jsonify({"status": "error", "error": t("JSON object required.")}), 400
         write_json_file(REFMOD_CONFIG, data)
         return jsonify({"status": "ok", "file": REFMOD_CONFIG.name})
     except Exception as exc:
@@ -553,7 +555,7 @@ def save_train():
     try:
         data = request.get_json(force=True)
         if not isinstance(data, dict):
-            return jsonify({"status": "error", "error": "JSON object required / Objeto JSON requerido."}), 400
+            return jsonify({"status": "error", "error": t("JSON object required.")}), 400
         proj = data.get("project_name", "").strip()
         cache_dir_name = f"cached_data_MiniMaxH3_{proj}" if proj else "cached_data_MiniMaxH3"
         output_dir_name = f"MiniMaxH3_lora_output_{proj}" if proj else "MiniMaxH3_lora_output"
@@ -761,14 +763,14 @@ def run_script():
         if script_path is None or not script_path.exists():
             return jsonify({
                 "status": "error",
-                "error": f"Script not found / Script no encontrado: {script_name}"
+                "error": t("Script not found: {name}", name=script_name)
             }), 404
 
         with process_lock:
             if active_process is not None and active_process.poll() is None:
                 return jsonify({
                     "status": "error",
-                    "error": f"Process already running / Proceso en ejecucion: {active_script}"
+                    "error": t("Process already running: {name}", name=active_script)
                 }), 409
 
             command = [
@@ -1050,7 +1052,7 @@ def clear_dataset():
     """
     try:
         if get_status()["running"]:
-            return jsonify({"status": "error", "error": "A process is running / Hay un proceso en marcha"}), 409
+            return jsonify({"status": "error", "error": t("A process is running")}), 409
         dataset_dir = get_dataset_dir()
         removed, errors = 0, []
         if dataset_dir.is_dir():
@@ -1530,8 +1532,7 @@ def extract_refmod():
         carpeta = Path(origen) if origen else get_dataset_dir()
         if not carpeta.is_dir():
             return jsonify({"status": "error",
-                            "error": "Source folder not found / No existe la carpeta: "
-                                     "{}".format(carpeta)}), 404
+                            "error": t("Source folder not found: {path}", path=carpeta)}), 404
 
         salida = str(data.get("output", "")).strip()
         destino = Path(salida) if salida else (BASE_DIR / "refmods")
@@ -1556,10 +1557,8 @@ def extract_refmod():
         empaquetar = bool(data.get("bundle", False))
         descripcion = str(data.get("description", "")).strip()
 
-        log_tarea("[REFMOD] {} file(s) in {} / fichero(s) en"
-                  .format(len(fuentes), carpeta))
-        log_tarea("[REFMOD] encode mode | type {} | output {} / modo encode, tipo, salida"
-                  .format(concepto, destino))
+        log_tarea("[REFMOD] " + t("{n} file(s) in {path}", n=len(fuentes), path=carpeta))
+        log_tarea("[REFMOD] " + t("encode mode | type {kind} | output {path}", kind=concepto, path=destino))
 
         P = refmod.precache()
 
@@ -1578,17 +1577,15 @@ def extract_refmod():
 
         try:
             if kind in ("audio", "both"):
-                log_tarea("[REFMOD] cargando el VAE de audio / loading the audio VAE...")
+                log_tarea("[REFMOD] " + t("loading the audio VAE..."))
                 avae = P.load_h3_audio_vae(P.NF4_MODEL_ID) if hay_audio else None
                 if avae is None:
-                    detalles.append("audio: the audio VAE is missing and could not be "
-                                    "downloaded / falta el VAE de audio")
+                    detalles.append("audio: " + t("the audio VAE is missing and could not be downloaded"))
                 else:
                     lat, usados = refmod.extraer_audio(fuentes, avae, tok_a, log=log_tarea)
                     del avae
                     if lat is None:
-                        detalles.append("audio: no source carried an audio track "
-                                    "/ ninguna fuente traia pista de audio")
+                        detalles.append("audio: " + t("no source carried an audio track"))
                     else:
                         piezas.append((lat, "audio", dict(
                             name=nombre + "_audio", source="audio",
@@ -1598,18 +1595,15 @@ def extract_refmod():
 
             if kind in ("visual", "both"):
                 if not hay_video:
-                    detalles.append("visual: the video VAE is missing and could not be "
-                                    "downloaded / falta el VAE de video")
-                    raise RuntimeError("El VAE de video no esta disponible. / "
-                                       "The video VAE is not available.")
-                log_tarea("[REFMOD] cargando el VAE de video / loading the video VAE...")
+                    detalles.append("visual: " + t("the video VAE is missing and could not be downloaded"))
+                    raise RuntimeError(t("The video VAE is not available."))
+                log_tarea("[REFMOD] " + t("loading the video VAE..."))
                 vvae = refmod.preparar_video_vae(
                     P.load_h3_video_vae(P.NF4_MODEL_ID, P.MODEL_ID, strict=False))
                 lat, usados = refmod.extraer_visual(fuentes, vvae, res, tok_v, log=log_tarea)
                 del vvae
                 if lat is None:
-                    detalles.append("visual: no source was an image or a video "
-                                    "/ ninguna fuente era imagen o video")
+                    detalles.append("visual: " + t("no source was an image or a video"))
                 else:
                     tipo = "image" if int(lat.shape[2]) == 1 else "video"
                     piezas.append((lat, tipo, dict(
@@ -1648,8 +1642,7 @@ def extract_refmod():
                                 .format(kw["name"], tipo, refmod.token_count(lat, tipo)))
         else:
             if empaquetar:
-                detalles.append("bundle skipped: more than one reference is needed "
-                                "/ bundle omitido, hace falta mas de una referencia")
+                detalles.append(t("bundle skipped: more than one reference is needed"))
             for lat, tipo, kw in piezas:
                 ruta = refmod.guardar(lat, tipo, kw["name"],
                                       str(destino / kw["name"]),
@@ -1666,11 +1659,9 @@ def extract_refmod():
             log_tarea("[REFMOD] " + d)
         if not escritos:
             return jsonify({"status": "error",
-                            "error": "Nothing was written. / No se escribio nada. "
-                                     + " | ".join(detalles)}), 400
+                            "error": t("Nothing was written.") + " " + " | ".join(detalles)}), 400
         return jsonify({"status": "ok", "files": escritos, "details": detalles,
-                        "message": "{} fichero(s) escrito(s) / file(s) written"
-                                   .format(len(escritos))})
+                        "message": t("{n} file(s) written", n=len(escritos))})
     except Exception as exc:
         import traceback
         log_tarea("[REFMOD][ERROR] " + traceback.format_exc().strip().splitlines()[-1])
@@ -1734,7 +1725,7 @@ def extract_vocals():
 
         dataset_dir = get_dataset_dir()
         if not dataset_dir.is_dir():
-            return jsonify({"status": "error", "error": "No dataset folder / No hay dataset"}), 404
+            return jsonify({"status": "error", "error": t("No dataset folder")}), 404
 
         # LOS CLIPS DE VIDEO TAMBIEN CUENTAN.
         #
@@ -1774,8 +1765,8 @@ def extract_vocals():
 
         import torch
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        log_tarea("[VOCALS] Device: {} | model folder: ./MelBandRoFormer".format(device))
-        log_tarea("[VOCALS] {} file(s) to process / ficheros a procesar".format(len(muestras)))
+        log_tarea("[VOCALS] " + t("Device: {device} | model folder: {path}", device=device, path="./MelBandRoFormer"))
+        log_tarea("[VOCALS] " + t("{n} file(s) to process", n=len(muestras)))
         modelo = sep.cargar(str(BASE_DIR / "MelBandRoFormer"), device, log=log_tarea)
         if modelo is None:
             return jsonify({"status": "error",
@@ -1788,7 +1779,7 @@ def extract_vocals():
             try:
                 pcm = sep.leer_pcm(m, ffmpeg)
                 if pcm.size == 0:
-                    errores.append("{}: empty / vacio".format(m.name))
+                    errores.append("{}: {}".format(m.name, t("empty")))
                     continue
                 voz = sep.separar_voz(modelo, pcm, device)
 
@@ -1818,8 +1809,7 @@ def extract_vocals():
                     except Exception:
                         pass
                     if r.returncode != 0 or not tmp.is_file():
-                        errores.append("{}: remux fallo / remux failed -- {}"
-                                       .format(m.name, (r.stderr or "").strip()[:160]))
+                        errores.append("{}: {} -- {}".format(m.name, t("remux failed"), (r.stderr or "").strip()[:160]))
                         continue
                 else:
                     sep.escribir_pcm(voz, tmp, ffmpeg)
@@ -1893,7 +1883,7 @@ def split_samples():
 
         dataset_dir = get_dataset_dir()
         if not dataset_dir.is_dir():
-            return jsonify({"status": "error", "error": "No dataset folder / No hay dataset"}), 404
+            return jsonify({"status": "error", "error": t("No dataset folder")}), 404
 
         muestras = sorted(f for f in dataset_dir.iterdir()
                           if f.is_file() and f.suffix.lower() in DATASET_EXTS
@@ -1909,8 +1899,7 @@ def split_samples():
                      "-of", "csv=p=0", str(m)],
                     capture_output=True, text=True, timeout=120).stdout.strip())
             except Exception:
-                errores.append("{}: could not read the duration / no se pudo leer la duracion"
-                               .format(m.name))
+                errores.append("{}: {}".format(m.name, t("could not read the duration")))
                 continue
 
             if dur <= ventana + 1e-6:
@@ -1982,7 +1971,7 @@ def split_samples():
             shutil.move(str(m), str(backup / m.name))
             troceadas += 1
             producidas += len(hechos)
-            detalles.append("{} ({:.1f}s -> {} takes / tomas)".format(m.name, dur, len(hechos)))
+            detalles.append("{} ({:.1f}s -> {})".format(m.name, dur, t("{n} takes", n=len(hechos))))
 
         return jsonify({"status": "ok" if not errores else "partial",
                         "split": troceadas, "skipped": saltadas, "produced": producidas,
@@ -2062,14 +2051,14 @@ def convert_fps():
 
         dataset_dir = get_dataset_dir()
         if not dataset_dir.is_dir():
-            return jsonify({"status": "error", "error": "No dataset folder / No hay dataset"}), 404
+            return jsonify({"status": "error", "error": t("No dataset folder")}), 404
 
         clips = sorted(f for f in dataset_dir.iterdir()
                        if f.is_file() and f.suffix.lower() in VIDEO_EXTS)
         if not clips:
             return jsonify({"status": "ok", "converted": 0, "skipped": 0, "errors": [],
                             "details": [], "warnings": [],
-                            "message": "No clips / No hay clips"})
+                            "message": t("No clips")})
 
         # Los originales van a una subcarpeta. Ni el pre-cache ni el Dataset
         # Manager recorren subdirectorios, asi que no se entrenaran dos veces.
@@ -2081,7 +2070,7 @@ def convert_fps():
         for clip in clips:
             info = _video_info(clip)
             if info is None:
-                errors.append("{}: could not read the clip / no se pudo leer el clip".format(clip.name))
+                errors.append("{}: {}".format(clip.name, t("could not read the clip")))
                 continue
             fps, frames, width, height = info
 
@@ -2113,10 +2102,8 @@ def convert_fps():
             # Dimensions are NOT touched: the pre-cache rescales to the target area
             # honouring `multiple`, and cropping here would lose framing. Warn only.
             if width % H3_SPATIAL_MULTIPLE or height % H3_SPATIAL_MULTIPLE:
-                warnings.append("{}: {}x{} is not a multiple of {} (the pre-cache will "
-                                "rescale it) / no es multiplo de {} (el pre-cache lo "
-                                "reescalara)".format(clip.name, width, height,
-                                                     H3_SPATIAL_MULTIPLE, H3_SPATIAL_MULTIPLE))
+                warnings.append("{}: ".format(clip.name) + t("{w}x{h} is not a multiple of {m} (the pre-cache will rescale it)",
+                                                            w=width, h=height, m=H3_SPATIAL_MULTIPLE))
 
             tiene_audio = _has_audio(clip)
             necesita_fps = abs(fps - target) >= 0.05
@@ -2203,7 +2190,7 @@ def convert_fps():
                     cambios.append("{} -> {} frames".format(frames, keep))
                 cambios.append("{:.2f}s -> {:.2f}s".format(duracion, duracion_nueva))
                 cambios.append("audio: {}".format(
-                    "32 kHz stereo" if tiene_audio else "none / sin pista"))
+                    "32 kHz stereo" if tiene_audio else t("no track")))
                 converted.append("{} ({})".format(clip.name, ", ".join(cambios)))
             except subprocess.CalledProcessError as exc:
                 # Sin el stderr de ffmpeg, un fallo aqui solo dice un codigo de
@@ -2241,7 +2228,7 @@ def delete_project_data():
             path = get_train_output_dir()
         else:
             return jsonify({"status": "error",
-                            "error": "Unknown target / destino desconocido: {}".format(target)}), 400
+                            "error": t("Unknown target: {name}", name=target)}), 400
 
         # Un proceso en marcha tiene ficheros abiertos: borrar por debajo deja
         # el entrenamiento escribiendo en un checkpoint que ya no existe.
@@ -2254,7 +2241,7 @@ def delete_project_data():
 
         if not path.is_dir():
             return jsonify({"status": "ok", "removed": 0, "path": str(path),
-                            "message": "Nothing to delete / No habia nada que borrar"})
+                            "message": t("Nothing to delete")})
 
         removed, errors = _wipe_dir(path)
         return jsonify({"status": "ok" if not errors else "partial",
@@ -2269,7 +2256,7 @@ def delete_dataset_image():
     try:
         filename = str(request.get_json(force=True).get("file", "")).strip()
         if not filename:
-            return jsonify({"status": "error", "error": "No file / sin fichero"}), 400
+            return jsonify({"status": "error", "error": t("No file")}), 400
 
         dataset_dir = get_dataset_dir()
         target = (dataset_dir / filename).resolve()
@@ -2280,10 +2267,10 @@ def delete_dataset_image():
         # before deleting anything.
         if dataset_dir.resolve() not in target.parents:
             return jsonify({"status": "error",
-                            "error": "Path outside the dataset / ruta fuera del dataset"}), 400
+                            "error": t("Path outside the dataset")}), 400
         if not target.is_file():
             return jsonify({"status": "error",
-                            "error": "Not found / no existe: {}".format(filename)}), 404
+                            "error": t("Not found: {name}", name=filename)}), 404
 
         removed = []
         target.unlink()
@@ -2338,6 +2325,7 @@ def open_browser():
         pass
 
 
+i18n.register(app)
 file_transfer.register(app, get_dataset_dir, get_train_output_dir, DATASET_EXTS)
 
 
@@ -2345,8 +2333,8 @@ if __name__ == "__main__":
     print("\n" + "=" * 70)
     print("  ACADEMIASD — MiniMax-H3 LORALAB TRAINER WEB SERVER")
     print("=" * 70)
-    print(f"  Base Dir / Carpeta  : {BASE_DIR}")
-    print(f"  Python Interpreter  : {sys.executable}")
+    print(f"  {t('Base folder'):<20}: {BASE_DIR}")
+    print(f"  {t('Python interpreter'):<20}: {sys.executable}")
     print(f"  URL                 : {remote_access.local_url('trainer_port')}")
     print("=" * 70 + "\n")
     threading.Timer(1.2, open_browser).start()

@@ -1,10 +1,11 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AcademiaSD LoRAlab Trainer Studio</title>
     <link rel="icon" type="image/png" href="/assets/qwenimage21/logo_128.png">
+    <script src="/i18n.js"></script>
 
     <style>
         :root {
@@ -97,6 +98,14 @@
                                color: var(--text-main); background: var(--bg-dark); font-weight: 600; }
         #net .actions button.primary { background: var(--accent); border-color: var(--accent); }
         #net-msg { font-size: 0.8rem; min-height: 1.2em; }
+
+        #ui-settings { display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; font-size: 0.85rem; color: var(--text-muted); }
+        #ui-settings select, #ui-settings button { font: inherit; font-size: 0.85rem; padding: 6px 10px; border-radius: 6px; cursor: pointer;
+                                                   color: var(--text-main); background: var(--bg-dark); border: 1px solid var(--panel-border); }
+        #ui-settings button:hover, #ui-settings select:hover { border-color: var(--accent); }
+        #ui-msg { min-width: 1em; }
+        #ui-msg.ok { color: #10b981; }
+        #ui-msg.warn { color: #f59e0b; }
     </style>
 </head>
 <body>
@@ -108,6 +117,12 @@
     </header>
 
     <div class="grid" id="grid"></div>
+    <div id="ui-settings">
+        <label for="ui-lang">🌍 <span>Language</span></label>
+        <select id="ui-lang" onchange="previewLanguage()"></select>
+        <button type="button" onclick="saveSettings()">💾 Save settings</button>
+        <span id="ui-msg"></span>
+    </div>
     <div id="status"></div>
 
     <footer>
@@ -115,37 +130,34 @@
         <a href="https://twitter.com/Academia_S_D" target="_blank">𝕏 X (Twitter)</a>
         <a href="https://discord.gg/Syuaduy678" target="_blank">💬 Discord</a>
         <a href="https://ko-fi.com/academiasd" target="_blank">☕ Ko-Fi</a>
-        <button type="button" id="net-open" onclick="openNetwork()" hidden>🌐 Remote access / Acceso remoto</button>
+        <button type="button" id="net-open" onclick="openNetwork()" hidden>🌐 Remote access</button>
     </footer>
 
     <!-- Acceso desde otros equipos de la red. Solo se edita desde este PC (/api/network). -->
     <div id="net" onclick="if (event.target === this) closeNetwork()">
         <form onsubmit="saveNetwork(event)">
-            <h2>🌐 Remote access / Acceso remoto</h2>
-            <label class="check"><input type="checkbox" id="net-listen"> Allow other devices on the network / Permitir otros equipos de la red</label>
+            <h2>🌐 Remote access</h2>
+            <label class="check"><input type="checkbox" id="net-listen"> <span>Allow other devices on the network</span></label>
             <div class="pair">
-                <label>Launcher port / Puerto lanzador<input type="number" id="net-lport" min="1024" max="65535"></label>
-                <label>Trainer port / Puerto entrenador<input type="number" id="net-tport" min="1024" max="65535"></label>
+                <label><span>Launcher port</span><input type="number" id="net-lport" min="1024" max="65535"></label>
+                <label><span>Trainer port</span><input type="number" id="net-tport" min="1024" max="65535"></label>
             </div>
             <div class="pair">
-                <label>User / Usuario<input type="text" id="net-user" autocomplete="off"></label>
-                <label>Password / Contraseña<input type="password" id="net-pass" autocomplete="new-password"></label>
+                <label><span>User</span><input type="text" id="net-user" autocomplete="off"></label>
+                <label><span>Password</span><input type="password" id="net-pass" autocomplete="new-password"></label>
             </div>
-            <label class="check" title="Only if a reverse proxy in front already asks for a login (Authelia, Authentik, Cloudflare Access...). / Solo si un proxy inverso delante ya pide inicio de sesión (Authelia, Authentik, Cloudflare Access...).">
-                <input type="checkbox" id="net-extauth"> I use my own authentication (reverse proxy) / Uso mi propia autenticación (proxy inverso)</label>
-            <div class="note warn" id="net-extauth-warn" hidden>No login from here: without a proxy with authentication in front, anyone on the network can control this PC. /
-                Sin login desde aquí: sin un proxy con autenticación delante, cualquiera de la red puede controlar este PC.</div>
-            <label>Trainer public URL (optional, behind a proxy) / URL pública del entrenador (opcional, tras un proxy)
+            <label class="check" title="Only if a reverse proxy in front already asks for a login (Authelia, Authentik, Cloudflare Access...).">
+                <input type="checkbox" id="net-extauth"> <span>I use my own authentication (reverse proxy)</span></label>
+            <div class="note warn" id="net-extauth-warn" hidden>No login from here: without a proxy with authentication in front, anyone on the network can control this PC.</div>
+            <label><span>Trainer public URL (optional, behind a proxy)</span>
                 <input type="text" id="net-turl" placeholder="https://trainer.example.com" autocomplete="off"></label>
             <div class="note" id="net-url"></div>
-            <div class="note">This PC never asks for the password; other devices always do. Changes apply after restarting the launcher and the trainer. /
-                Este PC nunca pide contraseña; los demás equipos siempre. Los cambios se aplican al reiniciar el lanzador y el entrenador.</div>
-            <div class="note warn">Plain HTTP: for your home network only. To connect from the Internet use Tailscale or an SSH tunnel, never an open port. /
-                HTTP sin cifrar: solo para la red de casa. Para entrar desde Internet usa Tailscale o un túnel SSH, nunca un puerto abierto.</div>
+            <div class="note">This PC never asks for the password; other devices always do. Changes apply after restarting the launcher and the trainer.</div>
+            <div class="note warn">Plain HTTP: for your home network only. To connect from the Internet use Tailscale or an SSH tunnel, never an open port.</div>
             <div id="net-msg"></div>
             <div class="actions">
-                <button type="button" onclick="closeNetwork()">Close / Cerrar</button>
-                <button type="submit" class="primary">Save / Guardar</button>
+                <button type="button" onclick="closeNetwork()">Close</button>
+                <button type="submit" class="primary">Save</button>
             </div>
         </form>
     </div>
@@ -174,7 +186,7 @@
 
         async function launch(trainer, card) {
             card.classList.add('launching');
-            setStatus(`Abriendo / Opening ${trainer.name}...`);
+            setStatus(t('Opening {name}...', { name: trainer.name }));
             try {
                 const res = await fetch('/api/launch', {
                     method: 'POST',
@@ -183,13 +195,11 @@
                 });
                 const data = await res.json();
                 if (data.status === 'ok' && data.remote) {
-                    setStatus(`✓ ${trainer.name}: arrancando en el PC de entrenamiento; ábrelo en unos segundos en / starting on the training PC; open it in a few seconds at `
-                        + `<a href="${data.url}" target="_blank">${data.url}</a>`, 'ok');
+                    setStatus('✓ ' + t('{name}: starting on the training PC; open it in a few seconds at {url}', { name: trainer.name, url: link(data.url) }), 'ok');
                 } else if (data.status === 'ok') {
-                    setStatus(`✓ ${trainer.name}: se abrirá en una ventana nueva y en el navegador / will open in a new window and in the browser.`, 'ok');
+                    setStatus('✓ ' + t('{name}: will open in a new window and in the browser.', { name: trainer.name }), 'ok');
                 } else if (data.status === 'busy') {
-                    setStatus(`Ya hay un entrenador abierto en <a href="${data.url}" target="_blank">${data.url}</a>. Ciérralo antes de abrir otro. / `
-                        + `A trainer is already open at <a href="${data.url}" target="_blank">${data.url}</a>. Close it before opening another.`, 'warn');
+                    setStatus(t('A trainer is already open at {url}. Close it before opening another.', { url: link(data.url) }), 'warn');
                 } else {
                     setStatus(`[!] ${data.error || 'Error'}`, 'warn');
                 }
@@ -199,39 +209,85 @@
             setTimeout(() => card.classList.remove('launching'), 1500);
         }
 
+        function link(url) { return `<a href="${url}" target="_blank">${url}</a>`; }
+
+        let cfg = null;
+
+        function renderTexts() {
+            document.getElementById('subtitle').innerText = t(cfg.subtitle || '');
+            document.querySelectorAll('.card').forEach(card => {
+                card.querySelector('.desc').innerText = t(card.dataset.desc);
+            });
+            if (netInfo) netUrl();
+        }
+
+        function fillLanguages() {
+            const sel = document.getElementById('ui-lang');
+            sel.innerHTML = '';
+            for (const [code, name] of I18N.languages) sel.add(new Option(name, code));
+            sel.value = I18N.lang;
+        }
+
+        // Al cambiar el selector se ve el idioma al momento; "Guardar ajustes" lo deja fijo para todo.
+        async function previewLanguage() {
+            await I18N.load(document.getElementById('ui-lang').value);
+            renderTexts();
+            document.getElementById('ui-msg').innerText = '';
+        }
+
+        async function saveSettings() {
+            const msg = document.getElementById('ui-msg');
+            try {
+                const res = await fetch('/api/i18n', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ language: document.getElementById('ui-lang').value })
+                });
+                const data = await res.json();
+                if (data.status !== 'ok') throw new Error(data.error);
+                msg.className = 'ok';
+                msg.innerText = '✓ ' + t('Saved. Trainers already open use it after reloading the page; scripts, on their next run.');
+            } catch (e) {
+                msg.className = 'warn';
+                msg.innerText = '[!] ' + e.message;
+            }
+        }
+
         async function init() {
-            const cfg = await (await fetch('/launcher.json')).json();
+            fillLanguages();
+            cfg = await (await fetch('/launcher.json')).json();
             document.title = cfg.title || document.title;
             document.getElementById('title').alt = cfg.title || '';
-            document.getElementById('subtitle').innerText = cfg.subtitle || '';
             const scale = parseFloat(cfg.image_scale) || 0.2;
 
             const grid = document.getElementById('grid');
             for (const rowItems of splitRows(cfg.trainers, cfg.rows)) {
                 const row = document.createElement('div');
                 row.className = 'row';
-                for (const t of rowItems) {
+                for (const tr of rowItems) {
                     const card = document.createElement('button');
                     card.type = 'button';
                     card.className = 'card';
-                    card.title = `${t.name}: ${t.run}`;
+                    card.dataset.id = tr.id;
+                    card.dataset.desc = tr.description || '';
+                    card.title = `${tr.name}: ${tr.run}`;
                     const img = document.createElement('img');
-                    img.alt = t.name;
+                    img.alt = tr.name;
                     // El tamaño sale de la imagen real: image_scale = 0.2 es el 20 % de su tamaño.
                     img.onload = () => { img.width = Math.round(img.naturalWidth * scale); };
-                    img.src = '/' + t.image;
+                    img.src = '/' + tr.image;
                     const name = document.createElement('div');
                     name.className = 'name';
-                    name.innerText = t.name;
+                    name.innerText = tr.name;
                     const desc = document.createElement('div');
                     desc.className = 'desc';
-                    desc.innerText = t.description || '';
                     card.append(img, name, desc);
-                    card.onclick = () => launch(t, card);
+                    card.onclick = () => launch(tr, card);
                     row.appendChild(card);
                 }
                 grid.appendChild(row);
             }
+            renderTexts();
         }
         let netInfo = null;
 
@@ -239,8 +295,8 @@
             const listen = document.getElementById('net-listen').checked;
             document.getElementById('net-extauth-warn').hidden = !document.getElementById('net-extauth').checked;
             document.getElementById('net-url').innerHTML = listen
-                ? `From other devices / Desde otros equipos: <b>http://${netInfo.lan_ip}:${document.getElementById('net-lport').value}</b>`
-                : 'Only this PC / Solo este PC (127.0.0.1).';
+                ? t('From other devices: {url}', { url: `<b>http://${netInfo.lan_ip}:${document.getElementById('net-lport').value}</b>` })
+                : t('Only this PC (127.0.0.1).');
         }
 
         async function loadNetwork() {
@@ -259,7 +315,7 @@
             document.getElementById('net-turl').value = netInfo.trainer_url;
             const pass = document.getElementById('net-pass');
             pass.value = '';
-            pass.placeholder = netInfo.has_password ? '(unchanged / sin cambios)' : '';
+            pass.placeholder = netInfo.has_password ? t('(unchanged)') : '';
             document.getElementById('net-msg').innerText = '';
             netUrl();
             document.getElementById('net').classList.add('open');
@@ -287,9 +343,9 @@
             if (data.status !== 'ok') { msg.style.color = '#f59e0b'; msg.innerText = '[!] ' + data.error; return; }
             netInfo = data;
             document.getElementById('net-pass').value = '';
-            document.getElementById('net-pass').placeholder = data.has_password ? '(unchanged / sin cambios)' : '';
+            document.getElementById('net-pass').placeholder = data.has_password ? t('(unchanged)') : '';
             msg.style.color = '#10b981';
-            msg.innerText = '✓ Saved. Restart the launcher to apply. / Guardado. Reinicia el lanzador para aplicarlo.';
+            msg.innerText = '✓ ' + t('Saved. Restart the launcher to apply.');
             netUrl();
         }
 

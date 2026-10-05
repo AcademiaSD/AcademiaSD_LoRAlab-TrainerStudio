@@ -17,6 +17,7 @@ from diffusers import DiffusionPipeline, AutoencoderKLQwenImage
 from transformers import Qwen3VLModel
 import logging
 import sys
+from i18n import t
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -49,10 +50,10 @@ CONFIG_PATH = "settings/pre_cache_settings_krea2.json"
 if os.path.exists(CONFIG_PATH):
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         cfg = json.load(f)
-    print(f"✓ Configuration loaded from {CONFIG_PATH} / Configuración cargada desde {CONFIG_PATH}")
+    print("✓ " + t("Configuration loaded from {path}", path=CONFIG_PATH))
 else:
     cfg = {}
-    print(f"⚠ {CONFIG_PATH} not found, using defaults / No se encontró {CONFIG_PATH}, usando valores por defecto.")
+    print("⚠ " + t("{path} not found, using default values.", path=CONFIG_PATH))
 
 MODEL_ID     = cfg.get("model_id",     DEFAULTS["model_id"])
 DATASET_PATH = cfg.get("dataset_path", DEFAULTS["dataset_path"])
@@ -71,18 +72,18 @@ else:
     CACHE_DIR = cfg.get("cache_dir", DEFAULTS["cache_dir"])
 
 if MULTIPLE not in (8, 16, 32, 64):
-    print(f"⚠ Invalid Multiple {MULTIPLE}. Defaulting to 16 / Múltiplo inválido {MULTIPLE}. Usando 16 por defecto.")
+    print("⚠ " + t("Invalid Multiple {n}. Using 16.", n=MULTIPLE))
     MULTIPLE = 16
 
-print(f"  Model ID / ID Modelo        : {MODEL_ID}")
-print(f"  Project Name / Proyecto     : {PROJECT_NAME if PROJECT_NAME else '(Default)'}")
-print(f"  Trigger Word / Palabra      : {TRIGGER_WORD}")
-print(f"  Dataset Path / Ruta Dataset : {DATASET_PATH}")
-print(f"  Cache Dir / Carpeta Caché   : {CACHE_DIR}")
-print(f"  Target Area / Área Objetivo : {TARGET_AREA} px²")
-print(f"  Max Side / Lado Máximo      : {MAX_SIDE}")
-print(f"  Multiple / Múltiplo         : {MULTIPLE}")
-print(f"  Max Seq Len / Long. Sec.    : {MAX_SEQ_LEN}")
+print(f"  {t('Model ID'):<22}: {MODEL_ID}")
+print(f"  {t('Project Name'):<22}: {PROJECT_NAME if PROJECT_NAME else t('(Default)')}")
+print(f"  {t('Trigger Word'):<22}: {TRIGGER_WORD}")
+print(f"  {t('Dataset Path'):<22}: {DATASET_PATH}")
+print(f"  {t('Cache Dir'):<22}: {CACHE_DIR}")
+print(f"  {t('Target Area'):<22}: {TARGET_AREA} px²")
+print(f"  {t('Max Side'):<22}: {MAX_SIDE}")
+print(f"  {t('Multiple'):<22}: {MULTIPLE}")
+print(f"  {t('Max Seq Len'):<22}: {MAX_SEQ_LEN}")
 
 os.makedirs(DATASET_PATH, exist_ok=True)
 os.makedirs(CACHE_DIR, exist_ok=True)
@@ -100,7 +101,7 @@ def get_hf_token():
                 token_data = json.load(f)
                 token = token_data.get("token", "").strip()
                 if token:
-                    print("✓ Using HF Token / Usando token de HF")
+                    print("✓ " + t("Using HF Token"))
                     return token
         except Exception:
             pass
@@ -153,18 +154,18 @@ def ensure_model_downloaded(local_path, repo_id):
     if (os.path.exists(os.path.join(local_path, "model_index.json"))
             and os.path.exists(os.path.join(local_path, "text_encoder", "config.json"))
             and os.path.exists(os.path.join(local_path, "vae", "config.json"))):
-        print(f"✓ Local model found at / Modelo local encontrado en: {local_path}")
+        print("✓ " + t("Local model found at: {path}", path=local_path))
         return local_path
 
-    print(f"⚠ Local model not found at / No se encontró modelo local en: {local_path}")
-    print(f"  Downloading from Hugging Face / Descargando desde Hugging Face: {repo_id}")
+    print("⚠ " + t("Local model not found at: {path}", path=local_path))
+    print("  " + t("Downloading from Hugging Face: {repo}", repo=repo_id))
 
     enable_hf_file_progress()
 
     try:
         from huggingface_hub import snapshot_download
     except ImportError:
-        raise ImportError("huggingface_hub is required. Install with pip install huggingface_hub")
+        raise ImportError(t("huggingface_hub is required. Install it with: pip install huggingface_hub"))
 
     downloaded_path = snapshot_download(
         repo_id=repo_id,
@@ -172,7 +173,7 @@ def ensure_model_downloaded(local_path, repo_id):
         token=get_hf_token(),
         max_workers=2,
     )
-    print(f"✓ Model downloaded to / Modelo descargado en: {downloaded_path}")
+    print("✓ " + t("Model downloaded to: {path}", path=downloaded_path))
     return downloaded_path
 
 
@@ -190,7 +191,7 @@ def load_text_encoder(device):
     # BF16 exacto en cualquier GPU: las capas que no caben en la VRAM libre se quedan en RAM y se ejecutan desde allí.
     free_bytes, _ = torch.cuda.mem_get_info()
     gpu_budget = max(free_bytes - OFFLOAD_RESERVE_BYTES, 0)
-    print(f"  GPU budget / Presupuesto GPU: {gpu_budget / 1024**3:.1f} GB (rest in RAM / resto en RAM)")
+    print(f"  {t('GPU budget'):<22}: {gpu_budget / 1024**3:.1f} GB ({t('rest in RAM')})")
     return Qwen3VLModel.from_pretrained(path, dtype=torch.bfloat16, device_map="auto",
                                         max_memory={0: gpu_budget, "cpu": "512GiB"})
 
@@ -245,18 +246,18 @@ def encode_latents(vae, jobs):
             os.replace(tmp, os.path.join(CACHE_DIR, out))
             del img_tensor, z, latent
 
-            print(f"[{idx}/{len(jobs)}] Image / Imagen: {os.path.basename(src)} -> {out} | {bw}x{bh}", flush=True)
+            print(f"[{idx}/{len(jobs)}] {t('Image')}: {os.path.basename(src)} -> {out} | {bw}x{bh}", flush=True)
 
 
 def preprocess_krea2():
     if not os.path.exists(DATASET_PATH):
-        print(f"[!] Dataset folder does not exist / La carpeta del dataset no existe: {DATASET_PATH}")
+        print("[!] " + t("Dataset folder does not exist: {path}", path=DATASET_PATH))
         sys.exit(1)
 
     archivos_img = sorted(f for f in os.listdir(DATASET_PATH)
                           if f.lower().endswith((".png", ".jpg", ".jpeg", ".webp")))
     if not archivos_img:
-        print(f"[!] No images found in '{DATASET_PATH}'. Please add images.")
+        print("[!] " + t("No images found in '{path}'. Please add images.", path=DATASET_PATH))
         sys.exit(1)
     samples = [(os.path.splitext(f)[0], os.path.join(DATASET_PATH, f)) for f in archivos_img]
 
@@ -266,20 +267,20 @@ def preprocess_krea2():
     for f in stale:
         os.remove(os.path.join(CACHE_DIR, f))
     if stale:
-        print(f"  Removed {len(stale)} stale cache files / Eliminados {len(stale)} ficheros antiguos de la caché")
+        print("  " + t("Removed {n} stale cache files", n=len(stale)))
 
     ensure_model_downloaded(local_path=MODEL_ID, repo_id=HF_REPO_ID)
 
     # ── FASE 1: TEXT ENCODER (Qwen3-VL-4B) ──────────────────────────────────
     # El text encoder y el VAE nunca coinciden en VRAM.
-    print("\nLoading Text Encoder (Qwen3-VL-4B)... / Cargando Text Encoder (Qwen3-VL-4B)...")
+    print("\n" + t("Loading {name}...", name="Text Encoder (Qwen3-VL-4B)"))
     pipe = load_text_pipe()
 
     encode_and_save(pipe, "", "_neg")
 
     if PREVIEW_CUSTOM_PROMPT:
         c_prompt = with_trigger(PREVIEW_CUSTOM_PROMPT)
-        print(f"[Custom Prompt Cache] Encoding: '{c_prompt}'")
+        print("[Custom Prompt Cache] " + t("Encoding: '{prompt}'", prompt=c_prompt))
         encode_and_save(pipe, c_prompt, "_custom")
         # El trainer y el servidor comparan con este texto para saber si la caché está al día.
         with open(os.path.join(CACHE_DIR, "_custom_prompt.txt"), "w", encoding="utf-8") as f:
@@ -291,7 +292,7 @@ def preprocess_krea2():
 
     for idx, (name, _) in enumerate(samples, 1):
         encode_and_save(pipe, with_trigger(read_caption(name)), name)
-        print(f"[{idx}/{len(samples)}] Text / Texto: {name}")
+        print(f"[{idx}/{len(samples)}] {t('Text')}: {name}")
 
     del pipe
     free_vram()
@@ -311,17 +312,17 @@ def preprocess_krea2():
         pending.append((src, f"{name}_latent.pt", (bw, bh)))
 
     if len(pending) < len(samples):
-        print(f"\n{len(samples) - len(pending)} latents already cached, skipped / latentes ya cacheados, se saltan.")
+        print("\n" + t("{n} latents already cached, skipped.", n=len(samples) - len(pending)))
     if not pending:
-        print("\n✓ Pre-caching finished! / ¡Pre-caché finalizado!")
+        print("\n✓ " + t("Pre-caching finished!"))
         return
 
-    print("\nLoading VAE (Qwen-Image)... / Cargando VAE (Qwen-Image)...")
+    print("\n" + t("Loading {name}...", name="VAE (Qwen-Image)"))
     vae = AutoencoderKLQwenImage.from_pretrained(MODEL_ID, subfolder="vae", torch_dtype=torch.bfloat16).to("cuda")
     encode_latents(vae, pending)
     del vae
     free_vram()
-    print("\n✓ Pre-caching finished! VRAM freed / ¡Pre-caché finalizado! VRAM liberada.")
+    print("\n✓ " + t("Pre-caching finished! VRAM freed."))
 
 
 def encode_preview_prompt(cache_dir, prompt, device):
@@ -332,7 +333,7 @@ def encode_preview_prompt(cache_dir, prompt, device):
     """
     where = device.upper().replace("CUDA", "GPU")
     # El servidor lee la línea "[Custom Prompt] Prompt" para mostrar la fase en la GUI.
-    print(f"[Custom Prompt] Prompt: encoding on {where} / Codificando en {where}: '{prompt}'", flush=True)
+    print("[Custom Prompt] Prompt: " + t("Encoding the prompt on {device}: '{prompt}'", device=where, prompt=prompt), flush=True)
     pipe = load_text_pipe(device)
     embeds, mask = encode(pipe, prompt, device)
     del pipe
@@ -347,7 +348,7 @@ def encode_preview_prompt(cache_dir, prompt, device):
     replace("_custom_mask.pt", lambda f: torch.save(mask.cpu(), f))
     replace("_custom_prompt.txt", lambda f: open(f, "w", encoding="utf-8").write(prompt))
     replace("_custom_embed.pt", lambda f: torch.save(embeds.cpu(), f))
-    print("[Custom Prompt] Ready / Listo.", flush=True)
+    print("[Custom Prompt] " + t("Ready."), flush=True)
 
 
 if __name__ == "__main__":

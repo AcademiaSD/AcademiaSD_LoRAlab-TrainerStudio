@@ -16,6 +16,7 @@ from PIL import Image
 from diffusers import AutoencoderKL, StableDiffusionXLPipeline
 import logging
 import sys
+from i18n import t
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -81,10 +82,10 @@ CONFIG_PATH = "settings/pre_cache_settings_sdxl.json"
 if os.path.exists(CONFIG_PATH):
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         cfg = json.load(f)
-    print(f"✓ Configuration loaded from {CONFIG_PATH} / Configuración cargada desde {CONFIG_PATH}")
+    print("✓ " + t("Configuration loaded from {path}", path=CONFIG_PATH))
 else:
     cfg = {}
-    print(f"⚠ {CONFIG_PATH} not found, using defaults / No se encontró {CONFIG_PATH}, usando valores por defecto.")
+    print("⚠ " + t("{path} not found, using default values.", path=CONFIG_PATH))
 
 MODEL_PRESET = cfg.get("model_preset", DEFAULTS["model_preset"])
 CUSTOM_CHECKPOINT = cfg.get("custom_checkpoint", DEFAULTS["custom_checkpoint"]).strip().strip('"')
@@ -105,22 +106,22 @@ else:
 
 # VAE 8x y tres bajadas de resolución en la UNet: lados múltiplos de 64 px.
 if MULTIPLE not in (64, 128):
-    print(f"⚠ Invalid Multiple {MULTIPLE}. Defaulting to 64 / Múltiplo inválido {MULTIPLE}. Usando 64 por defecto.")
+    print("⚠ " + t("Invalid Multiple {n}. Using {d}.", n=MULTIPLE, d=64))
     MULTIPLE = 64
 
 if MODEL_PRESET != "custom" and MODEL_PRESET not in PRESETS:
-    print(f"⚠ Unknown model preset {MODEL_PRESET}. Using SDXL Base / Preset desconocido {MODEL_PRESET}. Se usa SDXL Base.")
+    print("⚠ " + t("Unknown model preset {name}. Using SDXL Base.", name=MODEL_PRESET))
     MODEL_PRESET = "sdxl_base"
 
-print(f"  Model / Modelo              : {CUSTOM_CHECKPOINT if MODEL_PRESET == 'custom' else PRESETS[MODEL_PRESET]['name']}")
-print(f"  Project Name / Proyecto     : {PROJECT_NAME if PROJECT_NAME else '(Default)'}")
-print(f"  Trigger Word / Palabra      : {TRIGGER_WORD}")
-print(f"  Quality Prefix / Prefijo    : {'yes / sí' if QUALITY_PREFIX else 'no'}")
-print(f"  Dataset Path / Ruta Dataset : {DATASET_PATH}")
-print(f"  Cache Dir / Carpeta Caché   : {CACHE_DIR}")
-print(f"  Target Area / Área Objetivo : {TARGET_AREA} px²")
-print(f"  Max Side / Lado Máximo      : {MAX_SIDE}")
-print(f"  Multiple / Múltiplo         : {MULTIPLE}")
+print(f"  {t('Model'):<22}: {CUSTOM_CHECKPOINT if MODEL_PRESET == 'custom' else PRESETS[MODEL_PRESET]['name']}")
+print(f"  {t('Project Name'):<22}: {PROJECT_NAME if PROJECT_NAME else t('(Default)')}")
+print(f"  {t('Trigger Word'):<22}: {TRIGGER_WORD}")
+print(f"  {t('Quality prefix'):<22}: {t('yes') if QUALITY_PREFIX else t('no')}")
+print(f"  {t('Dataset Path'):<22}: {DATASET_PATH}")
+print(f"  {t('Cache Dir'):<22}: {CACHE_DIR}")
+print(f"  {t('Target Area'):<22}: {TARGET_AREA} px²")
+print(f"  {t('Max Side'):<22}: {MAX_SIDE}")
+print(f"  {t('Multiple'):<22}: {MULTIPLE}")
 
 os.makedirs(DATASET_PATH, exist_ok=True)
 os.makedirs(CACHE_DIR, exist_ok=True)
@@ -137,7 +138,7 @@ def get_hf_token():
             with open("settings/HF_token.json", "r", encoding="utf-8") as f:
                 token = json.load(f).get("token", "").strip()
                 if token:
-                    print("✓ Using HF Token / Usando token de HF")
+                    print("✓ " + t("Using HF Token"))
                     return token
         except Exception:
             pass
@@ -177,7 +178,7 @@ def resolve_model():
     """Ruta del checkpoint y datos del preset; descarga el del preset si no está."""
     if MODEL_PRESET == "custom":
         if not os.path.isfile(CUSTOM_CHECKPOINT):
-            print(f"[!] Custom checkpoint not found / No se encuentra el checkpoint propio: {CUSTOM_CHECKPOINT}")
+            print("[!] " + t("Custom checkpoint not found: {path}", path=CUSTOM_CHECKPOINT))
             sys.exit(1)
         return {"preset": "custom", "name": os.path.basename(CUSTOM_CHECKPOINT), "checkpoint": os.path.abspath(CUSTOM_CHECKPOINT),
                 "prefix": "", "negative": "worst quality, low quality", "cfg": 6.0}
@@ -185,12 +186,12 @@ def resolve_model():
     p = PRESETS[MODEL_PRESET]
     path = os.path.join(MODELS_DIR, p["file"])
     if not os.path.exists(path):
-        print(f"⚠ {p['name']} not found / no encontrado. Downloading from Hugging Face / Descargando desde Hugging Face: {p['repo']} (~7 GB)")
+        print("⚠ " + t("{name} not found. Downloading from Hugging Face: {repo}", name=p['name'], repo=p['repo']) + " (~7 GB)")
         enable_hf_file_progress()
         from huggingface_hub import hf_hub_download
         path = hf_hub_download(p["repo"], p["file"], local_dir=MODELS_DIR, token=get_hf_token())
     else:
-        print(f"✓ Local model found at / Modelo local encontrado en: {path}")
+        print("✓ " + t("Local model found at: {path}", path=path))
     return {"preset": MODEL_PRESET, "name": p["name"], "checkpoint": os.path.abspath(path),
             "prefix": p["prefix"] if QUALITY_PREFIX else "", "negative": p["negative"], "cfg": p["cfg"]}
 
@@ -288,19 +289,19 @@ def encode_latents(vae, jobs):
             tmp = os.path.join(CACHE_DIR, out + ".tmp")
             torch.save(data, tmp)
             os.replace(tmp, os.path.join(CACHE_DIR, out))
-            print(f"[{idx}/{len(jobs)}] Image / Imagen: {os.path.basename(src)} -> {out} | {bw}x{bh}", flush=True)
+            print(f"[{idx}/{len(jobs)}] {t('Image')}: {os.path.basename(src)} -> {out} | {bw}x{bh}", flush=True)
 
 
 def preprocess_sdxl():
     if not os.path.exists(DATASET_PATH):
-        print(f"[!] Dataset folder does not exist / La carpeta del dataset no existe: {DATASET_PATH}")
+        print("[!] " + t("Dataset folder does not exist: {path}", path=DATASET_PATH))
         sys.exit(1)
 
     samples = find_samples()
     if not samples:
-        print(f"[!] No images found in '{DATASET_PATH}'. Please add images.")
+        print("[!] " + t("No images found in '{path}'. Please add images.", path=DATASET_PATH))
         sys.exit(1)
-    print(f"  Samples / Muestras          : {len(samples)}")
+    print(f"  {t('Samples'):<22}: {len(samples)}")
 
     model = resolve_model()
     # Otro modelo = otros text encoders: los textos y latentes cacheados con el anterior no valen.
@@ -310,17 +311,17 @@ def preprocess_sdxl():
         for f in os.listdir(CACHE_DIR):
             if f.endswith(".pt"):
                 os.remove(os.path.join(CACHE_DIR, f))
-        print("  Model changed: cache cleared / Modelo cambiado: caché vaciada")
+        print("  " + t("Model changed: cache cleared"))
 
     expected = {f"{name}_{suffix}.pt" for name, _ in samples for suffix in ("latent", "embed")}
     stale = [f for f in os.listdir(CACHE_DIR) if f.endswith(".pt") and not f.startswith("_") and f not in expected]
     for f in stale:
         os.remove(os.path.join(CACHE_DIR, f))
     if stale:
-        print(f"  Removed {len(stale)} stale cache files / Eliminados {len(stale)} ficheros antiguos de la caché")
+        print("  " + t("Removed {n} stale cache files", n=len(stale)))
 
     # ── FASE 1: TEXT ENCODERS (CLIP-L + CLIP-bigG) ──────────────────────────
-    print(f"\nLoading Text Encoders (CLIP-L + CLIP-bigG) from / Cargando Text Encoders de: {model['name']}")
+    print("\n" + t("Loading {name}...", name=f"Text Encoders (CLIP-L + CLIP-bigG): {model['name']}"))
     pipe = load_text_encoders(model["checkpoint"], "cuda")
 
     torch.save(encode_text(pipe, model["negative"], "cuda") if model["negative"] else zeros_embed(),
@@ -330,7 +331,7 @@ def preprocess_sdxl():
 
     if PREVIEW_CUSTOM_PROMPT:
         c_prompt = with_trigger(PREVIEW_CUSTOM_PROMPT)
-        print(f"[Custom Prompt Cache] Encoding: '{model['prefix']}{c_prompt}'")
+        print("[Custom Prompt Cache] " + t("Encoding: '{prompt}'", prompt=model['prefix'] + c_prompt))
         torch.save(encode_text(pipe, model["prefix"] + c_prompt, "cuda"), os.path.join(CACHE_DIR, "_custom_embed.pt"))
         with open(os.path.join(CACHE_DIR, "_custom_prompt.txt"), "w", encoding="utf-8") as f:
             f.write(c_prompt)
@@ -343,7 +344,7 @@ def preprocess_sdxl():
         caption = model["prefix"] + with_trigger(read_caption(name))
         data = encode_text(pipe, caption, "cuda")
         torch.save(data, os.path.join(CACHE_DIR, f"{name}_embed.pt"))
-        print(f"[{idx}/{len(samples)}] Text / Texto: {name} | {data['emb'].shape[0] // 77} block(s) / bloque(s)")
+        print(f"[{idx}/{len(samples)}] {t('Text')}: {name} | {t('{n} block(s)', n=data['emb'].shape[0] // 77)}")
 
     del pipe
     free_vram()
@@ -364,18 +365,18 @@ def preprocess_sdxl():
         jobs.append((src, f"{name}_latent.pt", (bw, bh)))
 
     if len(jobs) < len(samples):
-        print(f"\n{len(samples) - len(jobs)} latents already cached, skipped / latentes ya cacheados, se saltan.")
+        print("\n" + t("{n} latents already cached, skipped.", n=len(samples) - len(jobs)))
     if not jobs:
-        print("\n✓ Pre-caching finished! / ¡Pre-caché finalizado!")
+        print("\n✓ " + t("Pre-caching finished!"))
         return
 
     # El VAE de SDXL da NaN en FP16; en BF16 funciona.
-    print("\nLoading VAE... / Cargando VAE...")
+    print("\n" + t("Loading {name}...", name="VAE"))
     vae = AutoencoderKL.from_single_file(model["checkpoint"], torch_dtype=torch.bfloat16).to("cuda")
     encode_latents(vae, jobs)
     del vae
     free_vram()
-    print("\n✓ Pre-caching finished! VRAM freed / ¡Pre-caché finalizado! VRAM liberada.")
+    print("\n✓ " + t("Pre-caching finished! VRAM freed."))
 
 
 def encode_preview_prompt(cache_dir, prompt, device):
@@ -385,7 +386,7 @@ def encode_preview_prompt(cache_dir, prompt, device):
     """
     model = json.load(open(os.path.join(cache_dir, "_model.json"), encoding="utf-8"))
     where = device.upper().replace("CUDA", "GPU")
-    print(f"[Custom Prompt] Prompt: encoding on {where} / Codificando en {where}: '{prompt}'", flush=True)
+    print("[Custom Prompt] Prompt: " + t("Encoding the prompt on {device}: '{prompt}'", device=where, prompt=prompt), flush=True)
     pipe = load_text_encoders(model["checkpoint"], device)
     if device == "cpu":
         pipe.text_encoder.float()
@@ -401,7 +402,7 @@ def encode_preview_prompt(cache_dir, prompt, device):
 
     replace("_custom_prompt.txt", lambda f: open(f, "w", encoding="utf-8").write(prompt))
     replace("_custom_embed.pt", lambda f: torch.save(data, f))
-    print("[Custom Prompt] Ready / Listo.", flush=True)
+    print("[Custom Prompt] " + t("Ready."), flush=True)
 
 
 if __name__ == "__main__":
