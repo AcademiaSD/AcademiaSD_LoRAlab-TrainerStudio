@@ -740,10 +740,14 @@
             document.getElementById('slider_precache_container').style.display = slider ? 'block' : 'none';
             document.getElementById('slider_train_container').style.display = slider ? 'flex' : 'none';
             // Un slider es una sola dirección: rank 4 basta y no deja sitio a efectos secundarios.
+            // Grad Accum 1: cada paso es un par, como en el prototipo (con 4, 1200 pasos serían solo 300 actualizaciones).
             if (fromUser && slider && document.getElementById('train_lora_rank').value === '16'
                     && document.getElementById('train_lora_alpha').value === '16') {
                 document.getElementById('train_lora_rank').value = 4;
                 document.getElementById('train_lora_alpha').value = 4;
+            }
+            if (fromUser && slider && document.getElementById('train_grad_accum').value === '4') {
+                document.getElementById('train_grad_accum').value = 1;
             }
             toggleCaptionMode(document.getElementById('train_preview_caption_mode').value);
         }
