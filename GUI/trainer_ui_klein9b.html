@@ -657,6 +657,16 @@
 
                 <!-- Generador de datasets sintéticos para sliders (docs/SLIDERS.md): sustituye al auto-caption con LoRA Type = Slider. -->
                 <div class="ds-caption-bar" id="slidergen-bar" style="display:none;">
+                    <!-- Paso 1: describir el slider en cualquier idioma; Qwen3-VL-8B escribe los prompts detallados en inglés. -->
+                    <input type="text" class="ds-search sg-wide" id="sg_effect" placeholder="Effect / Efecto: Control de la longitud del pelo">
+                    <input type="text" class="ds-search sg-half" id="sg_max_text" placeholder="Maximum / Máximo (+5): El individuo tiene una larga cabellera">
+                    <input type="text" class="ds-search sg-half" id="sg_min_text" placeholder="Minimum / Mínimo (-5), optional / opcional: El individuo está totalmente calvo">
+                    <button type="button" class="btn btn-warning btn-sm" id="btn-sgprompts" onclick="runSliderPrompts()"
+                            title="Qwen3-VL-8B (the auto-caption model, ~5.5 GB VRAM) turns these three fields, in any language, into the detailed English prompts below. Review and edit them before generating. Leave the minimum empty for a one-sided slider (0 = the normal state). / Qwen3-VL-8B (el modelo del auto-caption, ~5,5 GB de VRAM) convierte estos tres campos, en cualquier idioma, en los prompts detallados en inglés de abajo. Revísalos y edítalos antes de generar. Deja el mínimo vacío para un slider de un solo lado (0 = el estado normal).">
+                        ✍ Write prompts / Escribir prompts
+                    </button>
+                    <span class="ds-step-hint">Detailed prompts (editable) / Prompts detallados (editables):</span>
+                    <span style="flex:1 1 100%; height:0;"></span>
                     <button type="button" class="btn btn-primary btn-sm" id="btn-slidergen" onclick="runSliderGen()"
                             title="Writes a slider dataset (group_position) into the dataset folder with an edit model: one base image per group and one edit towards each position you fill in, plus anchors. If stopped, running it again continues where it left off. / Escribe un dataset de slider (grupo_posición) en la carpeta del dataset con un modelo de edición: una imagen base por grupo y una edición hacia cada posición que rellenes, más anchors. Si se detiene, al relanzarlo sigue donde lo dejó.">
                         Generate Pairs / Generar Pares
@@ -1307,6 +1317,8 @@
                     document.getElementById('btn-sg-stop').style.display = 'none';
                     loadDatasetInfo();
                 }
+                // Los prompts que ha escrito Qwen3-VL aparecen en los campos detallados.
+                if (scriptName === 'sliderprompts') loadSliderGenSettings();
             }
         }
 
@@ -1374,6 +1386,7 @@
             const encoding = encodingStage !== null;
             document.getElementById('btn-caption').disabled = isRunning || encoding;
             document.getElementById('btn-slidergen').disabled = isRunning || encoding;
+            document.getElementById('btn-sgprompts').disabled = isRunning || encoding;
             document.getElementById('btn-precache').disabled = isRunning || encoding;
             document.getElementById('btn-train').disabled = isRunning || encoding;
             document.getElementById('btn-stop').disabled = !isRunning || encoding;
@@ -1575,12 +1588,16 @@
             }
         };
         const SG_POSITIONS = ['-100', '-50', '50', '100'];
-        let sgEngines = {}, sgLastGroup = null, sgLastRefresh = 0;
+        let sgEngines = {}, sgWriter = {}, sgLastGroup = null, sgLastRefresh = 0;
 
         async function loadSliderGenSettings() {
             let data = {};
             try { data = await (await fetch('/api/slider-gen-settings')).json(); } catch (e) {}
             sgEngines = data.engines || {};
+            sgWriter = data.writer || {};
+            ['effect', 'max_text', 'min_text'].forEach(k => {
+                if (data.settings && data.settings[k] !== undefined) document.getElementById('sg_' + k).value = data.settings[k];
+            });
             const s = { ...SG_EXAMPLE, ...(data.settings || {}) };
             const edits = { ...SG_EXAMPLE.edits, ...(s.edits || {}) };
             document.getElementById('sg_subject').value = s.subject || '';
@@ -1607,10 +1624,31 @@
                 vary_hair: document.getElementById('sg_vary_hair').checked,
                 anchors: parseInt(document.getElementById('sg_anchors').value) || 0,
                 size: parseInt(document.getElementById('sg_size').value),
+                effect: document.getElementById('sg_effect').value.trim(),
+                max_text: document.getElementById('sg_max_text').value.trim(),
+                min_text: document.getElementById('sg_min_text').value.trim(),
                 subject: document.getElementById('sg_subject').value.trim(),
                 neutral: document.getElementById('sg_neutral').value.trim(),
                 edits: edits
             };
+        }
+
+        async function runSliderPrompts() {
+            const effect = document.getElementById('sg_effect').value.trim();
+            const maxText = document.getElementById('sg_max_text').value.trim();
+            if (!effect || !maxText) { alert('Write the effect and the maximum (+5). / Escribe el efecto y el máximo (+5).'); return; }
+            if (sgWriter.ready === false && !confirm(`Qwen3-VL-8B is not downloaded yet: ~${sgWriter.download_gb} GB will be downloaded first (shared with the auto-caption).\n\nQwen3-VL-8B aún no está descargado: primero se descargarán ~${sgWriter.download_gb} GB (compartido con el auto-caption).\n\nContinue? / ¿Continuar?`)) return;
+            const d = sliderGenData();
+            if ((d.subject || SG_POSITIONS.some(p => d.edits[p])) && !confirm('This replaces the detailed prompts below. / Esto sustituye los prompts detallados de abajo.\n\nContinue? / ¿Continuar?')) return;
+            try {
+                const res = await fetch('/api/save-slider-gen-settings', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...d, effect: effect, max_text: maxText, min_text: document.getElementById('sg_min_text').value.trim() })
+                });
+                const data = await res.json();
+                if (data.status !== 'ok') { alert('Error: ' + (data.error || 'unknown')); return; }
+            } catch (e) { alert('Error: ' + e); return; }
+            startScript('sliderprompts');
         }
 
         async function runSliderGen() {

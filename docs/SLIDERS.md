@@ -106,6 +106,8 @@ There is no input image, so each step takes **two images of the same group**, `p
 
 A bar in the Dataset Manager (in place of the auto-caption when LoRA Type = Slider) that runs `scripts/slider_generator.py` and writes a slider dataset (section 2). Engine selector: **FLUX.2 Klein 9B** (Turbo LoRA, 4 steps); **Qwen-Image 2.1** comes next. A progress bar with the time left, the strip of the last group and a grid that refreshes while it generates let the user stop early if the edits go wrong; running it again continues where it stopped.
 
+The prompts can be written by hand or by **Write prompts** (`scripts/slider_prompts.py`): the user fills in three fields in any language (effect, maximum +5, optional minimum −5) and Qwen3-VL-8B, the shared auto-caption model, fills in the detailed fields below in English from a fixed template (subject, position 0, the four edit instructions with concrete halfway states, and whether to vary people and hair). With no minimum, or a minimum that is just the normal state, the slider is one-sided: position 0 is that state and −50 / −100 stay empty. The fields stay editable.
+
 1. **Subject**: what the images show ("head and shoulders portrait of a person", "full body photo of a person").
 2. **The ends**: text for the 100 end and the −100 or 0 end ("very long hair" / "very short hair"). Optional intermediate levels (e.g. 50) with milder wording ("slightly long hair"). Intensity words are less reliable, so they are optional.
 3. **Base images**: generated from the subject with varied people, places and light (as `experiments/slider/gen_pairs.py` does), or **the user's own images**, e.g. their character, for a "my character, older/younger" slider.

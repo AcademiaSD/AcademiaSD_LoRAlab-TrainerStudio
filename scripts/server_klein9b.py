@@ -95,6 +95,8 @@ CAPTION_SCRIPT = SCRIPTS_DIR / "0_caption_klein9b.py"
 PRECACHE_SCRIPT = SCRIPTS_DIR / "1_pre_cache_klein9b.py"
 TRAIN_SCRIPT = SCRIPTS_DIR / "2_train_lora_klein9b.py"
 SLIDER_GEN_SCRIPT = SCRIPTS_DIR / "slider_generator.py"
+SLIDER_PROMPTS_SCRIPT = SCRIPTS_DIR / "slider_prompts.py"
+CAPTIONER_MODEL = BASE_DIR / "Captioner-Qwen3-VL-8B" / "text_encoder_NF4" / "config.json"  # compartido con el auto-caption
 SLIDER_GEN_CONFIG = SETTINGS_DIR / "slider_gen_settings.json"  # compartido / shared by every trainer
 # Motores del generador de sliders: carpeta del modelo y GB a descargar si falta.
 SLIDER_ENGINES = {"klein9b": ("FLUX.2-Klein-9B_NF4", 8.8)}
@@ -187,6 +189,8 @@ def get_script_for_name(script_name):
         return TRAIN_SCRIPT
     if script_name == "slidergen":
         return SLIDER_GEN_SCRIPT
+    if script_name == "sliderprompts":
+        return SLIDER_PROMPTS_SCRIPT
     return None
 
 
@@ -1091,7 +1095,8 @@ def get_slider_gen_settings():
         model = BASE_DIR / folder
         ready = (model / "transformer" / "index.json").exists() and (model / "text_encoder" / "config.json").exists()
         engines[key] = {"ready": ready, "download_gb": gb}
-    return jsonify({"settings": read_json_file(SLIDER_GEN_CONFIG, {}), "engines": engines})
+    writer = {"ready": CAPTIONER_MODEL.exists(), "download_gb": 5}
+    return jsonify({"settings": read_json_file(SLIDER_GEN_CONFIG, {}), "engines": engines, "writer": writer})
 
 
 @app.route("/api/save-slider-gen-settings", methods=["POST"])
