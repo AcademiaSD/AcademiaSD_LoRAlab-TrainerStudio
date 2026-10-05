@@ -1,69 +1,69 @@
 {
   "title": "AcademiaSD LoRAlab Trainer Studio",
-  "subtitle": "Elige un entrenador / Choose a trainer",
+  "subtitle": "Choose a trainer",
   "image_scale": 0.2,
   "rows": "auto",
   "trainers": [
     {
       "id": "ltx23",
       "name": "LTX 2.3 (2.5)",
-      "description": "LoRAs de vídeo / Video LoRAs",
+      "description": "Video LoRAs",
       "image": "assets/ltx23/portada.jpg",
       "run": "Run_LoRAlab-LTX23.bat"
     },
     {
       "id": "krea2",
       "name": "Krea 2",
-      "description": "LoRAs de imagen / Image LoRAs",
+      "description": "Image LoRAs",
       "image": "assets/krea2/portada.jpg",
       "run": "Run_LoRAlab-Krea2.bat"
     },
     {
       "id": "minimaxh3",
       "name": "MiniMax-H3",
-      "description": "LoRAs de vídeo y audio / Video and audio LoRAs",
+      "description": "Video and audio LoRAs",
       "image": "assets/minimaxh3/portada.jpg",
       "run": "Run_LoRAlab-MiniMaxH3.bat"
     },
     {
       "id": "qwenimage21",
       "name": "Qwen-Image 2.1",
-      "description": "LoRAs de imagen y edición / Image and edit LoRAs",
+      "description": "Image and edit LoRAs",
       "image": "assets/qwenimage21/portada.jpg",
       "run": "Run_LoRAlab-QwenImage21.bat"
     },
     {
       "id": "zimage",
       "name": "Z-Image",
-      "description": "LoRAs de imagen (también Z-Image-Turbo) / Image LoRAs (also Z-Image-Turbo)",
+      "description": "Image LoRAs (also Z-Image-Turbo)",
       "image": "assets/zimage/portada.jpg",
       "run": "Run_LoRAlab-ZImage.bat"
     },
     {
       "id": "anima",
       "name": "Anima",
-      "description": "LoRAs de anime e ilustración / Anime and illustration LoRAs",
+      "description": "Anime and illustration LoRAs",
       "image": "assets/anima/portada.jpg",
       "run": "Run_LoRAlab-Anima.bat"
     },
     {
       "id": "klein9b",
       "name": "FLUX.2 Klein 9B",
-      "description": "LoRAs de imagen y edición / Image and edit LoRAs",
+      "description": "Image and edit LoRAs",
       "image": "assets/klein9b/portada.jpg",
       "run": "Run_LoRAlab-Klein9B.bat"
     },
     {
       "id": "ideogram4",
       "name": "Ideogram 4",
-      "description": "LoRAs de imagen / Image LoRAs",
+      "description": "Image LoRAs",
       "image": "assets/ideogram4/portada.jpg",
       "run": "Run_LoRAlab-Ideogram4.bat"
     },
     {
       "id": "sdxl",
       "name": "SDXL",
-      "description": "SDXL Base, Pony, Illustrious, NoobAI, Juggernaut, RealVis y checkpoints propios / and custom checkpoints",
+      "description": "SDXL Base, Pony, Illustrious, NoobAI, Juggernaut, RealVis and custom checkpoints",
       "image": "assets/sdxl/portada.jpg",
       "run": "Run_LoRAlab-SDXL.bat"
     }
