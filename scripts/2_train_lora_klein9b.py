@@ -602,13 +602,23 @@ def run_preview(model, scheduler, sample, neg, size, step, slider=None):
                 images.append(((img.float() / 2 + 0.5).clamp(0, 1)[0].cpu().permute(1, 2, 0).numpy() * 255).astype("uint8"))
             vae.to("cpu")
 
-        from PIL import Image, ImageDraw
+        from PIL import Image, ImageDraw, ImageFont
         pil = [Image.fromarray(img) for img in images]
         result = pil[0]
         if slider:
+            # Etiqueta grande y con fondo: la fuerza se tiene que leer aunque la tira se vea reducida.
+            size = max(16, pil[0].width // 10)
+            try:
+                font = ImageFont.load_default(size=size)
+            except TypeError:  # Pillow < 10.1: solo la fuente pequeña
+                font = ImageFont.load_default()
+            pad = size // 4
             result = Image.new("RGB", (sum(im.width for im in pil), pil[0].height))
             for i, (im, (label, _)) in enumerate(zip(pil, dial)):
-                ImageDraw.Draw(im).text((8, 8), label, fill=(255, 255, 0))
+                draw = ImageDraw.Draw(im)
+                box = draw.textbbox((pad, pad), label, font=font)
+                draw.rectangle((0, 0, box[2] + pad, box[3] + pad), fill=(0, 0, 0))
+                draw.text((pad, pad), label, fill=(255, 255, 0), font=font)
                 result.paste(im, (i * pil[0].width, 0))
         out = os.path.join(OUTPUT_DIR, f"preview_step_{step}.png")
         result.save(out)
@@ -1045,7 +1055,7 @@ def train_klein9b():
                     # Slider: el prompt de la preview (y en edición su imagen) con el dial a -100 %, -50 %, 0, 50 % y 100 %.
                     p_name, sample = "_custom", cache_data["_custom"]
                     ref = sample.get("ctrl", next(iter(slider_lat.values())))
-                    dial = (slider_layers, [(f"{s:+g}", slider_core.strength_to_multiplier(s, SLIDER))
+                    dial = (slider_layers, [(f"{s:+g}" if s else "0", slider_core.strength_to_multiplier(s, SLIDER))
                                             for s in slider_core.preview_strengths(SLIDER)])
                 else:
                     p_name = get_preview_sample(step)
