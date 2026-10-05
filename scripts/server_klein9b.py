@@ -645,11 +645,15 @@ def save_train():
         trigger = data.get("trigger_word", "").strip()
         if trigger and prompt and trigger.lower() not in prompt.lower():
             prompt = f"{trigger}, {prompt}"
-        edit_image = data.get("lora_type") == "edit" or (data.get("lora_type") == "slider" and data.get("slider_mode", "edit") == "edit")
-        wanted = [prompt, data.get("preview_edit_image", "").strip() if edit_image else ""]
         cache_dir = resolve_config_path(data["cache_dir"], cache_dir_name)
         encoded = [(cache_dir / f).read_text(encoding="utf-8") if (cache_dir / f).exists() else None
                    for f in ("_custom_prompt.txt", "_custom_image.txt")]
+        if not prompt and data.get("lora_type") == "slider":
+            # Slider sin prompt manual: el de por defecto del pre-caché, para poder cambiar en caliente solo
+            # la imagen (en cachés anteriores a ese dato, el prompt ya codificado).
+            prompt = slider_core.default_prompt(cache_dir) or encoded[0] or ""
+        edit_image = data.get("lora_type") == "edit" or (data.get("lora_type") == "slider" and data.get("slider_mode", "edit") == "edit")
+        wanted = [prompt, data.get("preview_edit_image", "").strip() if edit_image else ""]
         if prompt and wanted != encoded and (cache_dir / "_neg_embed.pt").exists() and get_status()["script"] != "precache":
             encode_preview_prompt(cache_dir, *wanted)
         saved_files = [TRAIN_CONFIG.name]

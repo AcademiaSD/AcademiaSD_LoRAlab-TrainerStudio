@@ -454,7 +454,8 @@ def preprocess_slider():
         return with_trigger(read_caption(name) or slider_core.default_caption(mode))
 
     # Las previews del slider siempre tienen prompt: el manual o el caption del primer grupo.
-    c_prompt = with_trigger(PREVIEW_CUSTOM_PROMPT) if PREVIEW_CUSTOM_PROMPT else caption(sorted(groups)[0])
+    default_prompt = caption(sorted(groups)[0])
+    c_prompt = with_trigger(PREVIEW_CUSTOM_PROMPT) if PREVIEW_CUSTOM_PROMPT else default_prompt
     print(f"[Custom Prompt Cache] Encoding: '{c_prompt}'" + (f" + {os.path.basename(preview_src)}" if preview_src else ""))
     encode_and_save(te, tok, c_prompt, "_custom")
     with open(os.path.join(CACHE_DIR, "_custom_prompt.txt"), "w", encoding="utf-8") as f:
@@ -485,7 +486,7 @@ def preprocess_slider():
         free_vram()
 
     # El manifiesto, el último: el trainer lo usa para saber que la caché es de un slider.
-    slider_core.write_manifest(CACHE_DIR, groups, anchors, mode)
+    slider_core.write_manifest(CACHE_DIR, groups, anchors, mode, default_prompt)
     print("\n✓ Pre-caching finished! VRAM freed / ¡Pre-caché finalizado! VRAM liberada.")
 
 

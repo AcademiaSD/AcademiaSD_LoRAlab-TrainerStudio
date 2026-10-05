@@ -182,8 +182,9 @@ def strength_to_multiplier(strength, settings):
     return strength * export_factor(settings)
 
 
-def write_manifest(cache_dir, groups, anchors, mode):
-    data = {"mode": mode, "anchors": anchors,
+def write_manifest(cache_dir, groups, anchors, mode, default_prompt=""):
+    # default_prompt: el de las previews sin prompt manual (caption del primer grupo o el neutro).
+    data = {"mode": mode, "anchors": anchors, "default_prompt": default_prompt,
             "groups": {g: {str(p): stem for p, stem in sorted(pos.items())} for g, pos in groups.items()}}
     tmp = os.path.join(cache_dir, MANIFEST + ".tmp")
     with open(tmp, "w", encoding="utf-8") as f:
@@ -200,6 +201,15 @@ def read_manifest(cache_dir):
         data = json.load(f)
     groups = {g: {int(p): stem for p, stem in pos.items()} for g, pos in data["groups"].items()}
     return groups, data["anchors"], data.get("mode", DEFAULTS["slider_mode"])
+
+
+def default_prompt(cache_dir):
+    """Prompt de las previews sin prompt manual, o None si la caché no es de un slider."""
+    path = os.path.join(cache_dir, MANIFEST)
+    if not os.path.exists(path):
+        return None
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f).get("default_prompt", "")
 
 
 def describe(groups, anchors):
