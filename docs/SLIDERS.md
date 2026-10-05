@@ -115,6 +115,8 @@ Two options for subjects that are not faces, found with an "alien hands" test wh
 
 Write prompts fills in both: ten variations for the subject, and chaining when the effect changes shapes, proportions or anatomy.
 
+**Limits found so far:** for the alien hands neither engine was usable. Klein 9B only tinted the skin and even kept or grew the nails; Qwen-Image 2.1 (Turbo, 4 steps) was worse, with tangled fingers and deformed hands. Changes of anatomy or shape of hands are beyond what the edit models do reliably: for them, a dataset made by hand (ComfyUI with inpainting, etc.) is the way. Expressions, hair, age, color and texture are the kind of change the generator is for.
+
 1. **Subject**: what the images show ("head and shoulders portrait of a person", "full body photo of a person").
 2. **The ends**: text for the 100 end and the −100 or 0 end ("very long hair" / "very short hair"). Optional intermediate levels (e.g. 50) with milder wording ("slightly long hair"). Intensity words are less reliable, so they are optional.
 3. **Base images**: generated from the subject with varied people, places and light (as `experiments/slider/gen_pairs.py` does), or **the user's own images**, e.g. their character, for a "my character, older/younger" slider.
