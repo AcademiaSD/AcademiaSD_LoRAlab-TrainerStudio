@@ -48,11 +48,14 @@ Examples: "Head and shoulders photo portrait", "Close-up photo of a human hand, 
 - "neutral": the state at position 0, a short comma-separated description added after the subject. If both ends \
 are given, it is the middle state, so there is room to change in both directions (for hair length: "medium-length \
 hair"). If the MINIMUM is empty or describes the normal, ordinary state of the subject, position 0 IS that state: \
-describe it in "neutral" and leave "-100" and "-50" empty ("").
-- "edits": imperative instructions that turn the position-0 image into each position, at most 40 words each. \
-"100" reaches the MAXIMUM and "-100" the MINIMUM. "50" and "-50" are exactly halfway: describe the halfway state \
-with concrete, visible features (lengths, sizes, shapes, colors, amounts), never only with words like "slightly". \
-Name only what changes; the rest of the image is kept by the editing model.
+describe it in "neutral" and leave "-100" and "-50" empty (""). Describe position 0 as plainly normal: do not add \
+features that lean away from either end (for hands: "fingers of normal length", never "short fingers").
+- "edits": instructions for the editing model that turn the position-0 image into each position, at most 40 words \
+each. Every instruction starts with a verb ("Make", "Turn", "Give", "Change"). "100" reaches the MAXIMUM and "-100" the \
+MINIMUM. "50" and "-50" are exactly halfway: take EVERY feature of the end and describe it at half its amount with \
+concrete, visible words (lengths, sizes, shapes, colors, amounts: "about a third longer", "a light green tint", \
+"small and thin nails"). A feature that disappears at the end is only reduced halfway, not removed. Never use vague \
+words like "slightly" or "a bit" on their own. Name only what changes; the editing model keeps the rest.
 - "vary_people": true if the subject is a person or part of a person's body (the base images then show people of \
 different age, sex and origin); false otherwise.
 - "vary_hair": false if the effect is about hair or the subject does not show hair; true otherwise.
