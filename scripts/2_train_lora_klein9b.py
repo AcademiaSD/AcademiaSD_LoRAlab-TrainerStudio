@@ -28,6 +28,10 @@ from safetensors import safe_open
 from safetensors.torch import save_file, load, load_file
 from bitsandbytes.functional import QuantState
 from bitsandbytes.nn import Linear4bit, Params4bit
+from i18n import t
+
+# La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
+STEP_WORD = t("Step")
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -72,10 +76,10 @@ CONFIG_PATH = "settings/train_settings_klein9b.json"
 if os.path.exists(CONFIG_PATH):
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         cfg = json.load(f)
-    print(f"[OK] Configuration loaded from {CONFIG_PATH} / Configuración cargada desde {CONFIG_PATH}")
+    print("[OK] " + t("Configuration loaded from {path}", path=CONFIG_PATH))
 else:
     cfg = {}
-    print(f"[!] {CONFIG_PATH} not found, using default values / No se encontró {CONFIG_PATH}, usando valores por defecto.")
+    print("[!] " + t("{path} not found, using default values.", path=CONFIG_PATH))
 
 MODEL_ID          = cfg.get("model_id",          DEFAULTS["model_id"])
 TOTAL_STEPS       = cfg.get("total_steps",       DEFAULTS["total_steps"])
@@ -116,20 +120,20 @@ else:
     CACHE_DIR  = cfg.get("cache_dir",  DEFAULTS["cache_dir"])
     OUTPUT_DIR = cfg.get("output_dir", DEFAULTS["output_dir"])
 
-print(f"  Model ID / ID Modelo     : {MODEL_ID}")
-print(f"  Project / Proyecto       : {PROJECT_NAME if PROJECT_NAME else '(Default)'}")
-print(f"  Trigger Word / Palabra   : {TRIGGER_WORD}")
-print(f"  Cache Dir / Carpeta Caché: {CACHE_DIR}")
-print(f"  Output Dir / Salida      : {OUTPUT_DIR}")
-print(f"  Total Steps / Pasos      : {TOTAL_STEPS}")
-print(f"  Learning Rate / LR       : {LR}")
-print(f"  LoRA Rank/Alpha          : {LORA_RANK}/{LORA_ALPHA}")
-print(f"  LoRA Targets             : {LORA_TARGETS}")
-print(f"  Batch / Grad Accum       : {BATCH_SIZE}/{GRAD_ACCUM_STEPS}")
-print(f"  Preview Mode / Prompt    : Mode={PREVIEW_CAPTION_MODE} | Custom='{PREVIEW_CUSTOM_PROMPT}'")
-print(f"  Preview Every / Steps / CFG / Size: {PREVIEW_EVERY} / {PREVIEW_STEPS} / {PREVIEW_CFG} / {PREVIEW_SIZE or 'training'}")
-print(f"  Seed Configured / Semilla: {SEED} ({'RANDOM' if SEED <= 0 else 'FIXED'})")
-print(f"  Turbo LoRA Previews      : {'ON (Strength=' + str(TURBO_LORA_STRENGTH) + ')' if USE_TURBO else 'OFF'}")
+print(f"  {t('Model ID'):<22}: {MODEL_ID}")
+print(f"  {t('Project Name'):<22}: {PROJECT_NAME if PROJECT_NAME else t('(Default)')}")
+print(f"  {t('Trigger Word'):<22}: {TRIGGER_WORD}")
+print(f"  {t('Cache Dir'):<22}: {CACHE_DIR}")
+print(f"  {t('Output Dir'):<22}: {OUTPUT_DIR}")
+print(f"  {t('Total Steps'):<22}: {TOTAL_STEPS}")
+print(f"  {t('Learning Rate'):<22}: {LR}")
+print(f"  {'LoRA Rank/Alpha':<22}: {LORA_RANK}/{LORA_ALPHA}")
+print(f"  {t('LoRA Targets'):<22}: {LORA_TARGETS}")
+print(f"  {'Batch / Grad Accum':<22}: {BATCH_SIZE}/{GRAD_ACCUM_STEPS}")
+print(f"  {t('Preview'):<22}: {t('Mode')}={PREVIEW_CAPTION_MODE} | Prompt='{PREVIEW_CUSTOM_PROMPT}'")
+print(f"  {t('Preview Every'):<22}: {PREVIEW_EVERY} | {t('Preview Steps')} {PREVIEW_STEPS} | CFG {PREVIEW_CFG} | {t('Preview Size')} {PREVIEW_SIZE or t('Training')}")
+print(f"  {t('Seed'):<22}: {SEED} ({t('random') if SEED <= 0 else t('fixed')})")
+print(f"  {'Turbo LoRA':<22}: {t('ON (strength {s})', s=TURBO_LORA_STRENGTH) if USE_TURBO else t('OFF')}")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 RESUME_DIR = os.path.join(OUTPUT_DIR, "resume_checkpoint")
@@ -153,7 +157,7 @@ def get_hf_token():
                 token_data = json.load(f)
                 token = token_data.get("token", "").strip()
                 if token:
-                    print("✓ Using HF Token / Usando token de HF")
+                    print("✓ " + t("Using HF Token"))
                     return token
         except Exception:
             pass
@@ -192,18 +196,18 @@ def enable_hf_file_progress():
 def ensure_model_downloaded(local_path, repo_id):
     if (os.path.exists(os.path.join(local_path, "transformer", "index.json"))
             and os.path.exists(os.path.join(local_path, "vae", "config.json"))):
-        print(f"[OK] Local model found at / Modelo local encontrado en: {local_path}")
+        print("[OK] " + t("Local model found at: {path}", path=local_path))
         return local_path
 
-    print(f"⚠ Local model not found at / No se encontró modelo local en: {local_path}")
-    print(f"  Downloading from Hugging Face / Descargando desde Hugging Face: {repo_id}")
+    print("⚠ " + t("Local model not found at: {path}", path=local_path))
+    print("  " + t("Downloading from Hugging Face: {repo}", repo=repo_id))
 
     enable_hf_file_progress()
 
     try:
         from huggingface_hub import snapshot_download
     except ImportError:
-        raise ImportError("huggingface_hub is required. Install with pip install huggingface_hub")
+        raise ImportError(t("huggingface_hub is required. Install it with: pip install huggingface_hub"))
 
     # El entrenamiento no usa el text encoder: ya está todo en el pre-cache.
     downloaded_path = snapshot_download(
@@ -214,7 +218,7 @@ def ensure_model_downloaded(local_path, repo_id):
         ignore_patterns=["text_encoder/*"],
     )
 
-    print(f"[OK] Model downloaded to / Modelo descargado en: {downloaded_path}")
+    print("[OK] " + t("Model downloaded to: {path}", path=downloaded_path))
     return downloaded_path
 
 
@@ -267,7 +271,7 @@ def load_nf4_transformer(model_dir):
     index_path = os.path.join(cache_dir, "index.json")
 
     if not os.path.exists(index_path):
-        raise FileNotFoundError(f"index.json not found in NF4 cache / No existe index.json en caché NF4: {cache_dir}")
+        raise FileNotFoundError(t("index.json not found in the NF4 cache: {path}", path=cache_dir))
 
     with open(index_path, "r", encoding="utf-8") as f:
         index = json.load(f)
@@ -308,9 +312,9 @@ def load_nf4_transformer(model_dir):
 
     missing = [n for n, t in list(transformer.named_parameters()) + list(transformer.named_buffers()) if t.is_meta]
     if missing:
-        raise RuntimeError(f"NF4 cache incomplete / Caché NF4 incompleta: {missing[:5]}")
+        raise RuntimeError(t("NF4 cache incomplete: {names}", names=missing[:5]))
 
-    print(f"[OK] NF4 layers / Capas NF4: {len(index['quantized'])} | BF16 layers / Capas BF16: {len(index['unquantized'])}")
+    print("[OK] " + t("NF4 layers: {a} | BF16 layers: {b}", a=len(index['quantized']), b=len(index['unquantized'])))
     return transformer
 
 
@@ -472,7 +476,7 @@ class TurboHolder:
         path = os.path.join(MODEL_ID, "LoRAs", TURBO_LORA_FILE)
         if not os.path.exists(path):
             from huggingface_hub import hf_hub_download
-            print(f"  Downloading Turbo LoRA / Descargando Turbo LoRA (~350 MB): {TURBO_LORA_REPO}")
+            print("  " + t("Downloading Turbo LoRA (~350 MB): {repo}", repo=TURBO_LORA_REPO))
             path = hf_hub_download(TURBO_LORA_REPO, TURBO_LORA_FILE, local_dir=os.path.join(MODEL_ID, "LoRAs"))
 
         # Claves diffusion_model.<capa>.lora_down/lora_up (sin alpha: escala 1) y .diff de las normas q/k.
@@ -533,7 +537,7 @@ def apply_turbo_lora(model):
             model.get_submodule("base_model.model." + name).weight.data.copy_(w)
         saved.clear()
 
-    print(f"  🚀 Turbo LoRA: {len(hooks)} layers + {len(TurboHolder.norms)} norms / capas + normas (strength / fuerza {TURBO_LORA_STRENGTH})")
+    print("  🚀 Turbo LoRA: " + t("{a} layers + {b} norms (strength {s})", a=len(hooks), b=len(TurboHolder.norms), s=TURBO_LORA_STRENGTH))
     return undo
 
 
@@ -543,7 +547,7 @@ def run_preview(model, scheduler, sample, neg, size, step):
     model.eval()
 
     actual_seed = random.randint(1, 2147483647) if SEED <= 0 else SEED
-    print(f"  ↳ Preview Seed used / Semilla utilizada: {actual_seed}")
+    print("  ↳ " + t("Preview seed used: {seed}", seed=actual_seed))
 
     undo_turbo = apply_turbo_lora(model) if USE_TURBO else None
     try:
@@ -564,7 +568,7 @@ def run_preview(model, scheduler, sample, neg, size, step):
             except torch.OutOfMemoryError:
                 # Con 8 GB y el entrenamiento cargado no siempre cabe entera: por mosaicos usa mucha
                 # menos memoria, a cambio de alguna marca leve en las uniones. Sigue así el resto del run.
-                print("  ↳ Low VRAM: tiled VAE decode for previews / Poca VRAM: decodificación por mosaicos en las previews")
+                print("  ↳ " + t("Low VRAM: tiled VAE decode for previews"))
                 torch.cuda.empty_cache()
                 vae.enable_tiling()
                 img = vae.decode(lat, return_dict=False)[0]
@@ -574,7 +578,7 @@ def run_preview(model, scheduler, sample, neg, size, step):
         from PIL import Image
         out = os.path.join(OUTPUT_DIR, f"preview_step_{step}.png")
         Image.fromarray(img).save(out)
-        print(f"  ↳ Preview saved to / Preview guardada: {out}")
+        print("  ↳ " + t("Preview saved to: {path}", path=out))
     finally:
         if undo_turbo:
             undo_turbo()
@@ -592,10 +596,8 @@ def check_custom_prompt(has_custom):
     if PREVIEW_CAPTION_MODE != "custom":
         return
     if not has_custom:
-        print("\n[PREVIEW] Custom mode but the cache has no encoded prompt: set it, Save JSON and run Pre-Cache "
-              "(it only re-encodes the texts). Using the first caption meanwhile.")
-        print("[PREVIEW] Modo custom pero la caché no tiene el prompt codificado: escríbelo, Save JSON y lanza el "
-              "Pre-Caché (solo vuelve a codificar los textos). Mientras, se usa el primer caption.")
+        print("\n[PREVIEW] " + t("Custom mode but the cache has no encoded prompt: set it, Save JSON and run Pre-Cache "
+                                "(it only re-encodes the texts). Using the first caption meanwhile."))
         return
 
     wanted = PREVIEW_CUSTOM_PROMPT
@@ -603,10 +605,9 @@ def check_custom_prompt(has_custom):
         wanted = f"{TRIGGER_WORD}, {wanted}"
     prompt_file = os.path.join(CACHE_DIR, "_custom_prompt.txt")
     encoded = open(prompt_file, "r", encoding="utf-8").read() if os.path.exists(prompt_file) else ""
-    print(f"\n[PREVIEW] Custom prompt / Prompt manual: '{encoded}'")
+    print(f"\n[PREVIEW] {t('Custom prompt')}: '{encoded}'")
     if wanted and wanted != encoded:
-        print("[PREVIEW] The new prompt is being encoded on CPU (Save JSON); previews switch to it when ready.")
-        print("[PREVIEW] El prompt nuevo se está codificando en CPU (Save JSON); las previews lo usarán en cuanto esté.")
+        print("[PREVIEW] " + t("The new prompt is being encoded on CPU (Save JSON); previews switch to it when ready."))
 
 
 _live_mtime = None
@@ -674,18 +675,18 @@ def train_klein9b():
     torch.backends.cudnn.benchmark = True
 
     if not os.path.exists(CACHE_DIR) or not any(f.endswith("_latent.pt") for f in os.listdir(CACHE_DIR)):
-        print(f"\n[!] ERROR: Cache directory '{CACHE_DIR}' is empty or does not exist.")
-        print(f"[!] Please run Pre-Cache first! / ¡Por favor ejecuta el Pre-Caché primero!")
+        print("\n[!] ERROR: " + t("Cache directory '{path}' is empty or does not exist.", path=CACHE_DIR))
+        print("[!] " + t("Please run Pre-Cache first!"))
         sys.exit(2)  # la GUI muestra este código como "falta la pre-caché"
 
     ensure_model_downloaded(local_path=MODEL_ID, repo_id=HF_REPO_ID)
 
-    print("Loading FLUX.2 Klein 9B Transformer (NF4)... / Cargando Transformer de FLUX.2 Klein 9B (NF4)...")
+    print(t("Loading {name}...", name="FLUX.2 Klein 9B Transformer (NF4)"))
     t0 = time.time()
     transformer = load_nf4_transformer(MODEL_ID)
     transformer.to("cuda")
     free_vram()
-    print(f"Transformer 9B loaded in / cargado en {time.time() - t0:.1f}s. VRAM: {torch.cuda.memory_allocated()/1e9:.1f} GB", flush=True)
+    print(t("Transformer loaded in {s:.1f}s.", s=time.time() - t0) + f" VRAM: {torch.cuda.memory_allocated()/1e9:.1f} GB", flush=True)
 
     scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(MODEL_ID, subfolder="scheduler")
 
@@ -697,7 +698,7 @@ def train_klein9b():
     target_modules = [name for name, m in transformer.named_modules()
                       if isinstance(m, (torch.nn.Linear, Linear4bit))
                       and (LORA_TARGETS == "all" or name.startswith(("transformer_blocks.", "single_transformer_blocks.")))]
-    print(f"Target LoRA Layers / Capas LoRA objetivo: {len(target_modules)} ({LORA_TARGETS})")
+    print(t("Target LoRA layers: {n} ({kind})", n=len(target_modules), kind=LORA_TARGETS))
 
     # Reanudar es continuar EL MISMO LoRA: capas, rank y alpha salen del checkpoint, no de la GUI.
     # Si se construyera con otros, el optimizador no encajaría y quedaría una mezcla de pesos.
@@ -710,10 +711,9 @@ def train_klein9b():
             saved_cfg = json.load(f)
         saved = (len(saved_targets), saved_cfg["r"], saved_cfg["lora_alpha"])
         if saved != (len(target_modules), LORA_RANK, LORA_ALPHA):
-            print(f"\n[!] Resuming with the checkpoint's LoRA: {saved[0]} layers, rank {saved[1]}, alpha {saved[2]} "
-                  f"(settings ask for {len(target_modules)} layers, rank {LORA_RANK}, alpha {LORA_ALPHA}; they apply to new trainings).")
-            print(f"[!] Se reanuda con el LoRA del checkpoint: {saved[0]} capas, rank {saved[1]}, alpha {saved[2]} "
-                  f"(los ajustes piden {len(target_modules)} capas, rank {LORA_RANK}, alpha {LORA_ALPHA}; se aplican a entrenamientos nuevos).")
+            print("\n[!] " + t("Resuming with the checkpoint's LoRA: {n} layers, rank {r}, alpha {a} "
+                              "(settings ask for {n2} layers, rank {r2}, alpha {a2}; they apply to new trainings).",
+                              n=saved[0], r=saved[1], a=saved[2], n2=len(target_modules), r2=LORA_RANK, a2=LORA_ALPHA))
         target_modules, LORA_RANK, LORA_ALPHA = saved_targets, saved[1], saved[2]
 
     lora_config = LoraConfig(
@@ -741,16 +741,16 @@ def train_klein9b():
     lora_weights_path = os.path.join(RESUME_DIR, "adapter_model.safetensors")
     if os.path.exists(STEP_FILE) and os.path.exists(OPT_FILE) and os.path.exists(lora_weights_path):
         print("=" * 65)
-        print("¡Checkpoint detected! Restoring state... / ¡Checkpoint detectado! Restaurando estado...")
+        print(t("Checkpoint detected! Restoring state..."))
         try:
             with open(STEP_FILE, "r", encoding="utf-8") as f:
                 start_step = int(f.read().strip())
             with open(lora_weights_path, "rb") as f:
                 set_peft_model_state_dict(model, {k: v.float() for k, v in load(f.read()).items()})
             optimizer.load_state_dict(torch.load(OPT_FILE, weights_only=False))
-            print(f"Resuming training from step / Reanudando entrenamiento desde el paso {start_step}...")
+            print(t("Resuming training from step {n}...", n=start_step))
         except Exception as e:
-            print(f"[!] Warning reading checkpoint / Advertencia al leer checkpoint: {e}")
+            print("[!] " + t("Warning reading checkpoint: {error}", error=e))
             start_step = 0
         print("=" * 65)
 
@@ -759,7 +759,7 @@ def train_klein9b():
     def save_checkpoint_now(current_s):
         if current_s <= 0:
             return
-        print(f"\nSaving checkpoint state at step / Guardando estado en paso {current_s}...")
+        print("\n" + t("Saving checkpoint state at step {n}...", n=current_s))
         os.makedirs(RESUME_DIR, exist_ok=True)
         model.save_pretrained(RESUME_DIR)
         torch.save(optimizer.state_dict(), OPT_FILE)
@@ -767,11 +767,11 @@ def train_klein9b():
             f.write(str(current_s))
         ckpt = os.path.join(OUTPUT_DIR, f"Klein9B_LoRA_step_{current_s}.safetensors")
         _export_lora(model, ckpt, current_s)
-        print(f"✓ Checkpoint saved successfully at step / Checkpoint guardado en paso {current_s}: {ckpt}")
+        print("✓ " + t("Checkpoint saved at step {n}: {path}", n=current_s, path=ckpt))
 
     def handle_signal(sig, frame):
         nonlocal last_step_executed
-        print(f"\n[!] Signal received / Señal de detención recibida ({sig}).")
+        print("\n[!] " + t("Stop signal received ({sig}).", sig=sig))
         save_checkpoint_now(last_step_executed)
         sys.exit(0)
 
@@ -831,8 +831,8 @@ def train_klein9b():
             return all_preview_names[0]
 
     running_loss, t_step_avg, grad_norm = 0.0, 0.0, 0.0
-    kind = "before/after pairs / pares antes/después" if edit_mode else "images / imágenes"
-    print(f"\nSTARTING TRAINING / ¡ARRANCANDO ENTRENAMIENTO! {len(all_preview_names)} {kind} in {len(buckets)} buckets.")
+    kind = t("before/after pairs") if edit_mode else t("images")
+    print("\n" + t("STARTING TRAINING! {n} {kind} in {b} buckets.", n=len(all_preview_names), kind=kind, b=len(buckets)))
 
     reload_live_settings()
     step = start_step
@@ -844,7 +844,7 @@ def train_klein9b():
 
             changes = reload_live_settings()
             if changes:
-                print("\n[LIVE] Settings reloaded without stopping / Ajustes recargados sin parar:")
+                print("\n[LIVE] " + t("Settings reloaded without stopping:"))
                 for c in changes:
                     print(f"[LIVE]   {c}")
                 if any(c.startswith(("preview_custom_prompt", "preview_caption_mode")) for c in changes):
@@ -906,7 +906,7 @@ def train_klein9b():
 
             avg_loss = running_loss / max(1, step - start_step)
             progress_line = (
-                f"Step/Paso {step:4d}/{TOTAL_STEPS} [{barra}] {pct*100:5.1f}% | "
+                f"{STEP_WORD} {step:4d}/{TOTAL_STEPS} [{barra}] {pct*100:5.1f}% | "
                 f"Loss {avg_loss:.4f} | gnorm {grad_norm:.3f} | "
                 f"lr {lr_at(step):.2e} | {t_step_avg:.2f}s/it | ETA {eta}"
             )
@@ -929,7 +929,7 @@ def train_klein9b():
                 # (como en ComfyUI, la salida hereda el tamaño de la referencia). El prompt manual
                 # sin imagen usa el tamaño de la primera del dataset.
                 ref = sample.get("ctrl", sample.get("lat", cache_data[all_preview_names[0]]["lat"]))
-                print(f"\n  [Preview] Mode: {PREVIEW_CAPTION_MODE} | Sample: {p_name}")
+                print(f"\n  [Preview] {t('Mode')}: {PREVIEW_CAPTION_MODE} | {t('Sample')}: {p_name}")
                 H, W = ref.shape[2], ref.shape[3]
                 if PREVIEW_SIZE > 0:
                     # Cada token es un parche de 16x16 px.
@@ -941,10 +941,10 @@ def train_klein9b():
         save_checkpoint_now(last_step_executed)
         return
 
-    print("\n\nTraining completed! / ¡Entrenamiento finalizado!")
+    print("\n\n" + t("Training completed!"))
     final = os.path.join(OUTPUT_DIR, "Klein9B_FINAL_LoRA.safetensors")
     _export_lora(model, final, min(last_step_executed, TOTAL_STEPS))
-    print(f"✓ Final LoRA saved to / Tu LoRA definitivo está en: {final}")
+    print("✓ " + t("Final LoRA saved to: {path}", path=final))
 
 
 if __name__ == "__main__":

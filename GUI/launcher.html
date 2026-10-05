@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AcademiaSD LoRAlab Trainer Studio</title>
     <link rel="icon" type="image/png" href="/assets/qwenimage21/logo_128.png">
+    <script src="/i18n.js"></script>
 
     <style>
         :root {
@@ -161,7 +162,6 @@
         </form>
     </div>
 
-    <script src="/i18n.js"></script>
     <script>
         // Filas: hasta 3 entrenadores en una fila; con más, dos filas y la de arriba con el sobrante
         // (4 -> 2+2, 5 -> 3+2, 6 -> 3+3, 7 -> 4+3). "rows" en launcher.json fija el número a mano.
@@ -254,7 +254,6 @@
         }
 
         async function init() {
-            await I18N.load();
             fillLanguages();
             cfg = await (await fetch('/launcher.json')).json();
             document.title = cfg.title || document.title;

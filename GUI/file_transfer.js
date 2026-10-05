@@ -22,11 +22,11 @@ function ftSend(files) {
         let data = null;
         try { data = JSON.parse(xhr.responseText); } catch (e) { }
         if (!data || data.status !== 'ok') {
-            alert('Upload failed / Error al subir: ' + (data && data.error || xhr.status));
+            alert(t('Upload failed') + ': ' + (data && data.error || xhr.status));
             return;
         }
-        let msg = `✓ ${data.saved} file(s) uploaded / archivo(s) subido(s) → ${data.path}`;
-        if (data.skipped.length) msg += `\n\nSkipped (unsupported type) / Omitidos (tipo no admitido):\n${data.skipped.join('\n')}`;
+        let msg = '✓ ' + t('{n} file(s) uploaded', { n: data.saved }) + ` → ${data.path}`;
+        if (data.skipped.length) msg += '\n\n' + t('Skipped (unsupported type):') + `\n${data.skipped.join('\n')}`;
         alert(msg);
         if (typeof loadDatasetInfo === 'function') loadDatasetInfo();
     };
@@ -48,13 +48,13 @@ async function ftDownload() {
         ? data.files.map(f => `<a href="/api/download-output/${encodeURIComponent(f.name)}" download
               style="display:flex;justify-content:space-between;gap:16px;padding:8px 10px;border-radius:6px;color:var(--text-main);text-decoration:none;background:var(--bg-dark);border:1px solid var(--panel-border);">
               <span>⬇ ${f.name}</span><span style="color:var(--text-muted);">${(f.size / 1048576).toFixed(1)} MB</span></a>`).join('')
-        : '<div style="color:var(--text-muted);">No LoRA yet / Todavía no hay LoRA.</div>';
+        : `<div style="color:var(--text-muted);">${t('No LoRA yet.')}</div>`;
     box.innerHTML = `<div style="width:min(560px,92vw);max-height:80vh;overflow:auto;display:flex;flex-direction:column;gap:8px;padding:20px;
             background:var(--panel-bg);border:1px solid var(--panel-border);border-radius:12px;">
-        <div style="font-weight:700;">⬇ Download LoRA / Descargar LoRA</div>
+        <div style="font-weight:700;">${t('⬇ Download LoRA')}</div>
         <div style="font-size:0.78rem;color:var(--text-muted);word-break:break-all;">${data.path}</div>
         ${rows}
-        <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('ft-modal').remove()">Close / Cerrar</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('ft-modal').remove()">${t('Close')}</button>
     </div>`;
 }
 

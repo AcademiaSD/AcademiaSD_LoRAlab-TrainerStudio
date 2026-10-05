@@ -14,8 +14,6 @@ Navegador:   register(app) sirve /i18n.js y /api/i18n; ver GUI/i18n.js.
 import json
 from pathlib import Path
 
-from flask import jsonify, request, send_from_directory
-
 BASE_DIR = Path(__file__).resolve().parent.parent
 GUI_DIR = BASE_DIR / "GUI"
 LOCALES_DIR = GUI_DIR / "locales"
@@ -76,11 +74,20 @@ def t(key, **kw):
 
 
 def register(app):
-    """Sirve GUI/i18n.js y /api/i18n (GET: textos del idioma actual; POST {"language"}: lo guarda)."""
+    """Sirve GUI/i18n.js (con los textos del idioma guardado dentro) y /api/i18n
+    (GET: textos de un idioma; POST {"language"}: lo guarda). Flask se importa aquí: los scripts de
+    entrenamiento usan t() sin cargarlo."""
+    from flask import Response, jsonify, request
+
+    def payload(lang):
+        return {"status": "ok", "language": lang, "saved": language(),
+                "languages": list(LANGUAGES.items()), "strings": strings(lang)}
 
     @app.route("/i18n.js")
     def i18n_js():
-        return send_from_directory(str(GUI_DIR), "i18n.js")
+        js = (GUI_DIR / "i18n.js").read_text(encoding="utf-8")
+        js += f"\nI18N.init({json.dumps(payload(language()), ensure_ascii=False)});\n"
+        return Response(js, mimetype="text/javascript", headers={"Cache-Control": "no-store"})
 
     @app.route("/api/i18n", methods=["GET", "POST"])
     def i18n_api():
@@ -90,5 +97,4 @@ def register(app):
                 return jsonify({"status": "error", "error": t("Invalid language")}), 400
             save_language(lang)
         lang = request.args.get("lang") if request.args.get("lang") in LANGUAGES else language()
-        return jsonify({"status": "ok", "language": lang, "saved": language(),
-                        "languages": list(LANGUAGES.items()), "strings": strings(lang)})
+        return jsonify(payload(lang))

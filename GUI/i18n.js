@@ -6,12 +6,21 @@
 //                           (los ":" del final y los espacios no forman parte de la clave)
 //   t('Hello {name}', {name: 'x'})   desde el JS; {name} se sustituye
 //   class="no-i18n"         no traduce ese elemento ni lo de dentro (captions, consola, nombres...)
-// await I18N.load() antes de pintar la página; I18N.load('de') carga otro idioma sin guardarlo.
+// /i18n.js llega con los textos del idioma guardado ya dentro (I18N.init al final), así que t() funciona
+// desde el primer script de la página y los textos fijos se traducen al terminar de cargarla.
+// I18N.load('de') carga otro idioma sin guardarlo (vista previa del lanzador).
 const I18N = {
     lang: 'en',
     languages: [],   // [[código, nombre], ...] en el orden del selector
     strings: {},
     original: new WeakMap(),   // texto inglés de cada nodo, para poder cambiar de idioma otra vez
+
+    init(data) {
+        Object.assign(this, { lang: data.language, languages: data.languages, strings: data.strings });
+        document.documentElement.lang = this.lang;
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => this.apply(document.body));
+        else this.apply(document.body);
+    },
 
     async load(lang) {
         try {
