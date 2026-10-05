@@ -38,6 +38,8 @@ The sad side breaks earlier because the generated sad faces are milder than the 
 | `gen_anchors.py` | Generates `work/anchors/aXX.png`, scenes without people |
 | `make_slider_trainer.py` | Writes `work/train_slider_klein9b.py`: a copy of `scripts/2_train_lora_klein9b.py` with the slider changes (about 20 lines) |
 | `test_slider.py` | Strength sweep of a trained LoRA on the 4 held-out people → one sheet |
+| `prepare_run.py` | Builds a training folder from `data/` (or `work/`): pairs, captions, settings and the model link |
+| `data/` | The dataset of these tests: `pairs/pXX_neutral|happy|sad.jpg` (24 people) and `anchors/aXX.jpg` (12 scenes) |
 | `results/` | Sheets of every test, and `dataset_pairs.jpg` (the 24 triplets) |
 
 Everything generated goes to `experiments/slider/work/` (not in git). `SLIDER_WORK` changes that folder.
@@ -52,23 +54,25 @@ Everything generated goes to `experiments/slider/work/` (not in git). `SLIDER_WO
 
 Run from the repo root with the Trainer Studio venv, on an NVIDIA GPU (Klein 9B NF4 is downloaded by the normal trainer).
 
+The dataset used in these tests is already in `data/` (24 triplets and 12 anchors, JPG), so the generators are only needed to make new pairs.
+
 ```bash
-python experiments/slider/gen_pairs.py
-python experiments/slider/gen_anchors.py
-python experiments/slider/make_slider_trainer.py
+python experiments/slider/make_slider_trainer.py              # writes work/train_slider_klein9b.py
+python experiments/slider/prepare_run.py run_ultra --ultra    # builds work/run_ultra/ from data/
 ```
 
-Then build a run folder (for example `work/run_ultra/`) with:
-
-- `ds/`: for people p00–p19, `pXX_pos_before.png` (neutral) + `pXX_pos_after.png` (happy), and `pXX_neg_before.png` (neutral) + `pXX_neg_after.png` (sad). Add each anchor as `aXX_anc_before.png` + `aXX_anc_after.png` (the same image). Every pair gets a `.txt` with `Keep the photo exactly as it is.`
-- `settings/pre_cache_settings_klein9b.json`: `{"dataset_path": "./ds", "project_name": "slider", "target_area": 262144, "max_side": 1024, "multiple": 16, "lora_type": "edit", "preview_custom_prompt": "Keep the photo exactly as it is."}`
-- `settings/train_settings_klein9b.json`: `{"project_name": "slider", "total_steps": 1200, "grad_accum_steps": 1, "lr": 2e-4, "warmup_steps": 50, "lora_rank": 4, "lora_alpha": 4, "save_every": 400, "preview_every": 0, "seed": 42}`
-- `FLUX.2-Klein-9B_NF4`: a link (junction on Windows) to the model folder of the installation.
-
-From the run folder: `scripts/1_pre_cache_klein9b.py`, then `SLIDER_PUSH=3 SLIDER_ULTRA=1 python <work>/train_slider_klein9b.py`, and finally:
+`prepare_run.py` builds `ds/` with the `_pos` / `_neg` / `_anc` pairs and their caption, the two settings files (512², rank 4 / alpha 4, LR 2e-4, 1,200 steps) and the link to the Klein 9B model, and prints the commands to run:
 
 ```bash
-STRENGTHS="-9,-6,-3,-1.5,0,1.5,3,6,9" PROMPTS="Keep the photo exactly as it is." python experiments/slider/test_slider.py <run>/klein9b_lora_output_slider/resume_checkpoint <run>/sheet.jpg
+cd experiments/slider/work/run_ultra
+python ../../../../scripts/1_pre_cache_klein9b.py
+SLIDER_PUSH=3 SLIDER_ULTRA=1 python ../train_slider_klein9b.py
+```
+
+Then the strength sweep:
+
+```bash
+STRENGTHS="-9,-6,-3,-1.5,0,1.5,3,6,9" PROMPTS="Keep the photo exactly as it is." python experiments/slider/test_slider.py experiments/slider/work/run_ultra/klein9b_lora_output_slider/resume_checkpoint experiments/slider/work/run_ultra/sheet.jpg
 ```
 
 ## Next steps
