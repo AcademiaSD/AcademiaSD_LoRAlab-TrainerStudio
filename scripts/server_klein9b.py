@@ -98,8 +98,8 @@ SLIDER_GEN_SCRIPT = SCRIPTS_DIR / "slider_generator.py"
 SLIDER_PROMPTS_SCRIPT = SCRIPTS_DIR / "slider_prompts.py"
 CAPTIONER_MODEL = BASE_DIR / "Captioner-Qwen3-VL-8B" / "text_encoder_NF4" / "config.json"  # compartido con el auto-caption
 SLIDER_GEN_CONFIG = SETTINGS_DIR / "slider_gen_settings.json"  # compartido / shared by every trainer
-# Motores del generador de sliders: carpeta del modelo y GB a descargar si falta.
-SLIDER_ENGINES = {"klein9b": ("FLUX.2-Klein-9B_NF4", 8.8)}
+# Motores del generador de sliders: carpeta del modelo y GB a descargar si falta (Qwen: sin text encoder si ya hay uno).
+SLIDER_ENGINES = {"klein9b": ("FLUX.2-Klein-9B_NF4", 8.8), "qwenimage21": ("Qwen-Image21-NF4", 11.0)}
 
 app = Flask(__name__)
 
@@ -977,6 +977,28 @@ def batch_caption():
         return jsonify({"status": "error", "error": str(exc)}), 500
 
 
+@app.route("/api/clear-dataset", methods=["POST"])
+def clear_dataset():
+    """
+    Vacía la carpeta del dataset: todas las imágenes y sus .txt. Las subcarpetas y otros ficheros
+    no se tocan. La GUI pide escribir el número de imágenes antes de llamar aquí.
+    """
+    try:
+        dataset_dir = get_dataset_dir()
+        removed, errors = 0, []
+        if dataset_dir.is_dir():
+            for f in dataset_dir.iterdir():
+                if f.is_file() and f.suffix.lower() in DATASET_EXTS + (".txt",):
+                    try:
+                        f.unlink()
+                        removed += 1
+                    except Exception as exc:
+                        errors.append(f"{f.name}: {exc}")
+        return jsonify({"status": "ok" if not errors else "partial", "removed": removed, "errors": errors, "path": str(dataset_dir)})
+    except Exception as exc:
+        return jsonify({"status": "error", "error": str(exc)}), 500
+
+
 @app.route("/api/clear-captions", methods=["POST"])
 def clear_captions():
     """
@@ -1093,8 +1115,13 @@ def get_slider_gen_settings():
     engines = {}
     for key, (folder, gb) in SLIDER_ENGINES.items():
         model = BASE_DIR / folder
-        ready = (model / "transformer" / "index.json").exists() and (model / "text_encoder" / "config.json").exists()
-        engines[key] = {"ready": ready, "download_gb": gb}
+        if key == "qwenimage21":
+            # Vale cualquier variante de su text encoder, o la NF4 del captioner.
+            has_te = CAPTIONER_MODEL.exists() or any((model / f"text_encoder_{v}" / "config.json").exists() for v in ("NF4", "INT8", "BF16"))
+            gb = gb if not has_te else 5.5
+        else:
+            has_te = (model / "text_encoder" / "config.json").exists()
+        engines[key] = {"ready": (model / "transformer" / "index.json").exists() and has_te, "download_gb": gb}
     writer = {"ready": CAPTIONER_MODEL.exists(), "download_gb": 5}
     return jsonify({"settings": read_json_file(SLIDER_GEN_CONFIG, {}), "engines": engines, "writer": writer})
 

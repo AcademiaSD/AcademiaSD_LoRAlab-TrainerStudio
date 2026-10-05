@@ -95,11 +95,35 @@ def log(en, es=None):
     print(f"{en} / {es}" if es else en, flush=True)
 
 
-def fit_size(w, h, side):
-    """Tamaño con el área de side x side y la proporción de la imagen, en múltiplos de 16."""
+def fit_size(w, h, side, multiple=16):
+    """Tamaño con el área de side x side y la proporción de la imagen, en múltiplos de multiple."""
     ar = w / h
     bh = math.sqrt(side * side / ar)
-    return max(16, round(ar * bh / 16) * 16), max(16, round(bh / 16) * 16)
+    return max(multiple, round(ar * bh / multiple) * multiple), max(multiple, round(bh / multiple) * multiple)
+
+
+def fit_crop(img, size):
+    """Escala hasta cubrir size y recorta al centro (como fit() del pre-caché)."""
+    w, h = size
+    ratio = max(w / img.width, h / img.height)
+    img = img.resize((math.ceil(img.width * ratio), math.ceil(img.height * ratio)))
+    left, top = (img.width - w) // 2, (img.height - h) // 2
+    return img.crop((left, top, left + w, top + h))
+
+
+def waves(jobs):
+    """
+    Oleadas por dependencia: bases y anchors, después las ediciones que parten de una imagen ya
+    existente o de la oleada anterior. Solo hacen falta si los embeddings dependen de la imagen.
+    """
+    level, out = {}, []
+    for job in jobs:
+        kind, path, d = job
+        level[path] = level.get(d["base"], 0) + 1 if kind == "edit" else 0
+        while len(out) <= level[path]:
+            out.append([])
+        out[level[path]].append(job)
+    return [w for w in out if w]
 
 
 def save_atomic(img, path):
@@ -117,11 +141,39 @@ def get_hf_token():
         return None
 
 
+def import_script(name, filename):
+    """
+    Importa un trainer o pre-caché del repo para reutilizar su cargador NF4 y su LoRA turbo. Se
+    importa desde una carpeta temporal: al importarse lee ajustes y crea carpetas en la actual.
+    """
+    cwd = os.getcwd()
+    with tempfile.TemporaryDirectory() as tmp:
+        os.chdir(tmp)
+        try:
+            spec = importlib.util.spec_from_file_location(name, os.path.join(SCRIPTS_DIR, filename))
+            module = importlib.util.module_from_spec(spec)
+            saved_argv, sys.argv = sys.argv, [sys.argv[0]]
+            spec.loader.exec_module(module)
+            sys.argv = saved_argv
+        finally:
+            os.chdir(cwd)
+    return module
+
+
+def free_vram():
+    import torch
+    gc.collect()
+    torch.cuda.empty_cache()
+
+
 class KleinEngine:
     """FLUX.2 Klein 9B NF4 + LoRA turbo de kalle07 (4 pasos, sin CFG), como el prototipo."""
     name = "FLUX.2 Klein 9B"
     model_dir = "FLUX.2-Klein-9B_NF4"
     repo_id = "AcademiaSD/FLUX.2-Klein-9B-NF4-for-LoRA-Training"
+    multiple = 16
+    # El text encoder de Klein solo lee el texto: todo se codifica de una vez, antes de generar.
+    image_in_prompt = False
 
     def ensure(self):
         if (os.path.exists(os.path.join(self.model_dir, "transformer", "index.json"))
@@ -131,8 +183,8 @@ class KleinEngine:
         from huggingface_hub import snapshot_download
         snapshot_download(repo_id=self.repo_id, local_dir=self.model_dir, token=get_hf_token(), max_workers=2)
 
-    def encode(self, prompts):
-        """{prompt: embedding} en CPU. El text encoder se libera antes de cargar el transformer."""
+    def encode(self, keys, side):
+        """{(prompt, imagen): embedding} en CPU. El text encoder se libera antes de cargar el transformer."""
         import torch
         from diffusers import Flux2KleinPipeline
         from transformers import AutoTokenizer, Qwen3Model
@@ -141,29 +193,16 @@ class KleinEngine:
         tok = AutoTokenizer.from_pretrained(self.model_dir, subfolder="tokenizer")
         out = {}
         with torch.inference_mode():
-            for p in prompts:
-                out[p] = Flux2KleinPipeline._get_qwen3_prompt_embeds(te, tok, [p], dtype=torch.bfloat16, device="cuda").cpu()
+            for key in keys:
+                out[key] = Flux2KleinPipeline._get_qwen3_prompt_embeds(te, tok, [key[0]], dtype=torch.bfloat16, device="cuda").cpu()
         del te, tok
-        gc.collect()
-        torch.cuda.empty_cache()
+        free_vram()
         return out
 
     def load(self):
         import torch
         from diffusers import AutoencoderKLFlux2, FlowMatchEulerDiscreteScheduler, Flux2KleinPipeline
-        # El cargador NF4 y el LoRA turbo son los del trainer. Se importa desde una carpeta temporal:
-        # al importarse lee ajustes y crea su carpeta de salida en la carpeta actual.
-        cwd = os.getcwd()
-        with tempfile.TemporaryDirectory() as tmp:
-            os.chdir(tmp)
-            try:
-                spec = importlib.util.spec_from_file_location("klein_trainer", os.path.join(SCRIPTS_DIR, "2_train_lora_klein9b.py"))
-                kt = importlib.util.module_from_spec(spec)
-                saved_argv, sys.argv = sys.argv, [sys.argv[0]]
-                spec.loader.exec_module(kt)
-                sys.argv = saved_argv
-            finally:
-                os.chdir(cwd)
+        kt = import_script("klein_trainer", "2_train_lora_klein9b.py")
         kt.TURBO_LORA_STRENGTH = 1.0
         log("Loading FLUX.2 Klein 9B (NF4) + Turbo LoRA...", "Cargando FLUX.2 Klein 9B (NF4) + Turbo LoRA...")
         transformer = kt.load_nf4_transformer(self.model_dir).to("cuda")
@@ -176,6 +215,10 @@ class KleinEngine:
             scheduler=FlowMatchEulerDiscreteScheduler.from_pretrained(self.model_dir, subfolder="scheduler"),
             vae=AutoencoderKLFlux2.from_pretrained(self.model_dir, subfolder="vae", torch_dtype=torch.bfloat16).to("cuda"),
             text_encoder=None, tokenizer=None, transformer=transformer)
+
+    def unload(self):
+        self.pipe = None
+        free_vram()
 
     def _run(self, emb, size, seed, image=None):
         import torch
@@ -191,7 +234,140 @@ class KleinEngine:
         return self._run(emb, size, seed, image)
 
 
-ENGINES = {"klein9b": KleinEngine}
+class QwenImage21Engine:
+    """
+    Qwen-Image 2.1 NF4 + LoRA turbo de Viggle (4 pasos, sin CFG), con el cargador, el muestreo y el
+    LoRA turbo de su trainer. En edición la imagen de partida entra en el text encoder (Qwen3-VL-8B)
+    junto a la instrucción, como el nodo TextEncodeQwenImage21 de ComfyUI: los embeddings dependen
+    de la imagen, así que se generan por oleadas (main) y el text encoder nunca coincide en VRAM con
+    el transformer.
+    """
+    name = "Qwen-Image 2.1"
+    model_dir = "Qwen-Image21-NF4"
+    repo_id = "AcademiaSD/Qwen-Image-2.1-NF4-for-LoRA-Training"
+    captioner_te = os.path.join("Captioner-Qwen3-VL-8B", "text_encoder_NF4")
+    multiple = 32
+    image_in_prompt = True
+
+    def text_encoder_dir(self):
+        """El text encoder ya descargado: el elegido en el pre-caché de Qwen, otra variante o el del captioner."""
+        try:
+            with open("settings/pre_cache_settings_qwenimage21.json", "r", encoding="utf-8") as f:
+                chosen = {"BF16_offload": "BF16"}.get(json.load(f).get("text_encoder", ""), None)
+        except Exception:
+            chosen = None
+        for variant in ([chosen] if chosen else []) + ["NF4", "INT8", "BF16"]:
+            path = os.path.join(self.model_dir, f"text_encoder_{variant}")
+            if os.path.exists(os.path.join(path, "config.json")):
+                return path
+        if os.path.exists(os.path.join(self.captioner_te, "config.json")):
+            return self.captioner_te
+        return None
+
+    def ensure(self):
+        have_model = (os.path.exists(os.path.join(self.model_dir, "transformer", "index.json"))
+                      and os.path.exists(os.path.join(self.model_dir, "model_index.json")))
+        te = self.text_encoder_dir()
+        if have_model and te:
+            return
+        # Solo el text encoder NF4 (~5 GB), y ninguno si ya hay uno (el del captioner sirve).
+        ignore = [f"text_encoder_{v}/*" for v in ("BF16", "INT8")] + (["text_encoder_NF4/*"] if te else [])
+        log(f"Downloading {self.repo_id}...", f"Descargando {self.repo_id}...")
+        from huggingface_hub import snapshot_download
+        snapshot_download(repo_id=self.repo_id, local_dir=self.model_dir, token=get_hf_token(), max_workers=2,
+                          ignore_patterns=ignore)
+
+    def encode(self, keys, side):
+        """{(prompt, imagen o None): (embeds, mask, imgmask)} en CPU."""
+        import torch
+        from diffusers import DiffusionPipeline
+        from PIL import Image
+        from transformers import Qwen3VLForConditionalGeneration
+        path = self.text_encoder_dir()
+        log(f"Loading Text Encoder (Qwen3-VL-8B, {os.path.basename(path)})...",
+            f"Cargando Text Encoder (Qwen3-VL-8B, {os.path.basename(path)})...")
+        if path.endswith("BF16"):
+            # BF16 no cabe en 8-12 GB: lo que no entra en la VRAM libre se ejecuta desde la RAM.
+            free_bytes, _ = torch.cuda.mem_get_info()
+            te = Qwen3VLForConditionalGeneration.from_pretrained(
+                path, dtype=torch.bfloat16, device_map="auto",
+                max_memory={0: max(free_bytes - int(1.5 * 1024**3), 0), "cpu": "512GiB"})
+        else:
+            te = Qwen3VLForConditionalGeneration.from_pretrained(path, dtype=torch.bfloat16, device_map="cuda")
+        pipe = DiffusionPipeline.from_pretrained(self.model_dir, transformer=None, vae=None, text_encoder=te, dtype=torch.bfloat16)
+        out = {}
+        with torch.inference_mode():
+            for prompt, image_path in keys:
+                image = None
+                if image_path:
+                    src = Image.open(image_path)
+                    image = [fit_crop(src.convert("RGBA"), fit_size(*src.size, side, self.multiple))]
+                embeds, mask, imgmask = pipe.encode_prompt(prompt=prompt, image=image, device="cuda")
+                if mask is None:
+                    mask = torch.ones(embeds.shape[:2], dtype=torch.bool)
+                out[(prompt, image_path)] = (embeds.cpu(), mask.bool().cpu(), None if imgmask is None else imgmask.bool().cpu())
+        del pipe, te
+        free_vram()
+        return out
+
+    def load(self):
+        import torch
+        from diffusers import AutoencoderKLQwenImage21, FlowMatchEulerDiscreteScheduler
+        qt = import_script("qwen_trainer", "2_train_lora_qwen_image21.py")
+        qt.PREVIEW_STEPS, qt.PREVIEW_CFG, qt.TURBO_LORA_STRENGTH = 4, 1.0, 1.0
+        if not os.path.exists(qt.TURBO_LORA_PATH):
+            raise FileNotFoundError(f"Turbo LoRA not found / No se encuentra el Turbo LoRA: {qt.TURBO_LORA_PATH}")
+        log("Loading Qwen-Image 2.1 (NF4) + Turbo LoRA...", "Cargando Qwen-Image 2.1 (NF4) + Turbo LoRA...")
+        self.qt = qt
+        self.transformer = qt.load_nf4_transformer(self.model_dir).to("cuda")
+        wrap = torch.nn.Module()
+        wrap.base_model = torch.nn.Module()
+        wrap.base_model.model = self.transformer
+        qt.apply_turbo_lora(wrap)
+        # El Turbo LoRA se entrenó sin shift_terminal (como en las previews del trainer).
+        base = FlowMatchEulerDiscreteScheduler.from_pretrained(self.model_dir, subfolder="scheduler")
+        self.scheduler = FlowMatchEulerDiscreteScheduler.from_config(base.config, shift_terminal=None)
+        self.vae = AutoencoderKLQwenImage21.from_pretrained(self.model_dir, subfolder="vae", dtype=torch.bfloat16).to("cuda")
+        z = self.vae.config.z_dim
+        self.mean = torch.tensor(self.vae.config.latents_mean, device="cuda").view(1, z, 1, 1, 1)
+        self.std = torch.tensor(self.vae.config.latents_std, device="cuda").view(1, z, 1, 1, 1)
+
+    def unload(self):
+        self.transformer = self.vae = self.qt = None
+        free_vram()
+
+    def _run(self, emb, size, seed, image=None):
+        import torch
+        import torchvision.transforms.functional as F_vision
+        from PIL import Image
+        embeds, mask, imgmask = emb
+        w, h = size
+        H, W = h // 16, w // 16
+        sample = {"emb": embeds, "msk": mask}
+        with torch.inference_mode():
+            if image is not None:
+                # Latente de la imagen de partida, como encode_latents del pre-caché (el VAE lee RGBA).
+                x = F_vision.pil_to_tensor(fit_crop(image.convert("RGBA"), size)).unsqueeze(0).unsqueeze(2)
+                x = (x.float() / 127.5 - 1.0).to("cuda", dtype=self.vae.dtype)
+                z = self.vae.encode(x).latent_dist.mode().float()
+                sample["ctrl"] = ((z - self.mean) / self.std)[:, :, 0].to(torch.bfloat16)
+                if imgmask is not None:
+                    sample["imgmask"] = imgmask
+            g = torch.Generator(device="cuda").manual_seed(seed)
+            latents = self.qt.denoise(self.transformer, self.scheduler, sample, H, W, g)
+            lat = self.qt.unpack_latents(latents, H, W).to(self.vae.dtype).unsqueeze(2)
+            img = self.vae.decode(lat * self.std.to(lat.dtype) + self.mean.to(lat.dtype), return_dict=False)[0][:, :3, 0]
+            img = ((img.float() / 2 + 0.5).clamp(0, 1)[0].cpu().permute(1, 2, 0).numpy() * 255).astype("uint8")
+        return Image.fromarray(img)
+
+    def generate(self, emb, size, seed):
+        return self._run(emb, size, seed)
+
+    def edit(self, image, emb, size, seed):
+        return self._run(emb, size, seed, image)
+
+
+ENGINES = {"klein9b": KleinEngine, "qwenimage21": QwenImage21Engine}
 
 
 def plan(cfg):
@@ -302,22 +478,30 @@ def main():
         from PIL import Image
         engine = ENGINES[cfg["engine"]]()
         engine.ensure()
-        embeds = engine.encode(sorted({d["prompt"] for _, _, d in jobs}))
-        engine.load()
         side, t0, made = int(cfg["size"]), time.time(), 0
-        for kind, out, d in jobs:
-            name = os.path.splitext(os.path.basename(out))[0]
-            if kind == "edit":
-                src = Image.open(d["base"]).convert("RGB")
-                img = engine.edit(src, embeds[d["prompt"]], fit_size(*src.size, side), d["seed"])
-            else:
-                img = engine.generate(embeds[d["prompt"]], (side, side), d["seed"])
-            save_atomic(img, out)
-            done, made = done + 1, made + 1
-            eta = (time.time() - t0) / made * (len(jobs) - made)
-            group = slider_core.caption_stem(name)
-            # El servidor y la GUI leen esta línea: hechas/total, imagen y grupo, segundos restantes.
-            print(f"[SliderGen] {done}/{total} {name} {group} eta={int(eta)}", flush=True)
+        m = engine.multiple
+        steps = waves(jobs) if engine.image_in_prompt else [jobs]
+        for wi, wave in enumerate(steps, 1):
+            if len(steps) > 1:
+                log(f"\n── Stage {wi}/{len(steps)}: {len(wave)} images ──", f"Etapa {wi}/{len(steps)}: {len(wave)} imágenes")
+            keys = {(d["prompt"], d["base"] if kind == "edit" and engine.image_in_prompt else None) for kind, _, d in wave}
+            embeds = engine.encode(sorted(keys, key=lambda k: (k[0], k[1] or "")), side)
+            engine.load()
+            for kind, out, d in wave:
+                name = os.path.splitext(os.path.basename(out))[0]
+                if kind == "edit":
+                    src = Image.open(d["base"]).convert("RGB")
+                    key = (d["prompt"], d["base"] if engine.image_in_prompt else None)
+                    img = engine.edit(src, embeds[key], fit_size(*src.size, side, m), d["seed"])
+                else:
+                    img = engine.generate(embeds[(d["prompt"], None)], (side // m * m, side // m * m), d["seed"])
+                save_atomic(img, out)
+                done, made = done + 1, made + 1
+                eta = (time.time() - t0) / made * (len(jobs) - made)
+                group = slider_core.caption_stem(name)
+                # El servidor y la GUI leen esta línea: hechas/total, imagen y grupo, segundos restantes.
+                print(f"[SliderGen] {done}/{total} {name} {group} eta={int(eta)}", flush=True)
+            engine.unload()
     except KeyboardInterrupt:
         log("\n[!] Stopped: run it again to continue where it left off.",
             "Detenido: vuelve a lanzarlo para seguir donde lo dejó.")

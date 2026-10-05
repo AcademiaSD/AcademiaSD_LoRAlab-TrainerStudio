@@ -631,6 +631,8 @@
                         <button type="button" class="btn btn-warning btn-sm" onclick="addTriggerToAllCaptions()">Apply to All / Aplicar a todos</button>
                         <button type="button" class="btn btn-danger btn-sm" onclick="clearAllCaptions()"
                                 title="Deletes the .txt of every image. There is no undo. / Borra el .txt de todas las imágenes. No hay deshacer.">Clear Captions / Borrar</button>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="clearDataset()"
+                                title="Deletes every image and .txt of the dataset folder (subfolders are kept). There is no undo. / Borra todas las imágenes y .txt de la carpeta del dataset (las subcarpetas se conservan). No hay deshacer.">Clear Dataset / Vaciar Dataset</button>
                         <button type="button" class="btn btn-secondary btn-sm" onclick="loadDatasetInfo()">Refresh / Actualizar</button>
                     </div>
                 </div>
@@ -673,7 +675,7 @@
                     </button>
                     <select class="ds-mode-select" id="sg_engine" title="Model that generates the dataset. The dataset works for any trainer. / Modelo que genera el dataset. El dataset sirve para cualquier entrenador.">
                         <option value="klein9b">FLUX.2 Klein 9B (Turbo, 4 steps / pasos)</option>
-                        <option value="qwenimage21" disabled>Qwen-Image 2.1 (coming soon / próximamente)</option>
+                        <option value="qwenimage21">Qwen-Image 2.1 (Turbo, 4 steps / pasos)</option>
                     </select>
                     <select class="ds-mode-select" id="sg_base"
                             title="Generate: the model creates the base images (position 0) with varied people, places and light. Mine: your images named group_0 are the bases, and only the other positions are generated. / Generar: el modelo crea las imágenes base (posición 0) con personas, lugares y luces variados. Mías: tus imágenes grupo_0 son las bases y solo se generan las demás posiciones.">
@@ -1516,6 +1518,26 @@
                 if (data.status === 'error') { alert('Error: ' + (data.error || 'unknown')); return; }
                 appendTerminal(`[CAPTIONS] ${data.removed || 0} .txt deleted / borrados`, false, 'term-warning');
                 (data.errors || []).forEach(x => appendTerminal('   ' + x, false, 'term-danger'));
+                loadDatasetInfo();
+            } catch (e) { alert('Error: ' + e); }
+        }
+
+        async function clearDataset() {
+            const n = parseInt(document.getElementById('ds-count').innerText) || 0;
+            const path = document.getElementById('dataset_path').value;
+            if (!n) { alert('The dataset is already empty. / El dataset ya está vacío.'); return; }
+            if (isRunning) { alert('Wait until the current process finishes. / Espera a que termine el proceso en curso.'); return; }
+            // Se pide escribir el número: un confirm normal se acepta por reflejo y esto no tiene deshacer.
+            const resp = prompt(`This DELETES the ${n} images of the dataset and their .txt captions:\n${path}\nThere is no undo.\n\nEsto BORRA las ${n} imágenes del dataset y sus captions .txt. No hay deshacer.\n\nType ${n} to confirm / Escribe ${n} para confirmar:`);
+            if (String(resp || '').trim() !== String(n)) return;
+            try {
+                const res = await fetch('/api/clear-dataset', { method: 'POST' });
+                const data = await res.json();
+                if (data.status === 'error') { alert('Error: ' + (data.error || 'unknown')); return; }
+                appendTerminal(`[DATASET] ${data.removed || 0} file(s) deleted / fichero(s) borrado(s): ${data.path}`, false, 'term-warning');
+                (data.errors || []).forEach(x => appendTerminal('   ' + x, false, 'term-danger'));
+                sgLastGroup = null;
+                document.getElementById('sg-last').innerHTML = '';
                 loadDatasetInfo();
             } catch (e) { alert('Error: ' + e); }
         }
