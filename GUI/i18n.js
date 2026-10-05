@@ -1,14 +1,17 @@
 // i18n.js — Traducciones de la interfaz / Interface translations.
-// Los textos vienen de /api/i18n (GUI/locales/<idioma>.json, con el inglés de reserva).
-//   <span data-i18n="clave">            textContent
-//   <span data-i18n-html="clave">       innerHTML (textos con <b>, <br>...)
-//   data-i18n-title / data-i18n-placeholder / data-i18n-alt   atributos
-//   t('clave', {name: 'x'})             desde el JS; {name} en el texto se sustituye
+// Las páginas se escriben en inglés y la clave de cada traducción es el propio texto inglés
+// (como en gettext): GUI/locales/<idioma>.json = {"Save": "Guardar", ...}. Lo que no esté traducido
+// sale en inglés, así que un texto nuevo funciona antes de traducirlo.
+//   I18N.apply(raíz)        traduce los textos y los atributos title / placeholder bajo la raíz
+//                           (los ":" del final y los espacios no forman parte de la clave)
+//   t('Hello {name}', {name: 'x'})   desde el JS; {name} se sustituye
+//   class="no-i18n"         no traduce ese elemento ni lo de dentro (captions, consola, nombres...)
 // await I18N.load() antes de pintar la página; I18N.load('de') carga otro idioma sin guardarlo.
 const I18N = {
     lang: 'en',
     languages: [],   // [[código, nombre], ...] en el orden del selector
     strings: {},
+    original: new WeakMap(),   // texto inglés de cada nodo, para poder cambiar de idioma otra vez
 
     async load(lang) {
         try {
@@ -19,15 +22,31 @@ const I18N = {
             console.warn('i18n:', e);
         }
         document.documentElement.lang = this.lang;
-        this.apply(document);
+        this.apply(document.body);
+    },
+
+    // "  Project Name:  " -> se traduce "Project Name" y se conservan los espacios y los ":".
+    translate(text) {
+        const m = /^(\s*)([\s\S]*?)(\s*:?\s*)$/.exec(text);
+        const key = m[2].replace(/\s+/g, ' ');
+        return key && key in this.strings ? m[1] + this.strings[key] + m[3] : text;
     },
 
     apply(root) {
-        root.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
-        root.querySelectorAll('[data-i18n-html]').forEach(el => { el.innerHTML = t(el.dataset.i18nHtml); });
-        for (const attr of ['title', 'placeholder', 'alt']) {
-            const key = 'i18n' + attr[0].toUpperCase() + attr.slice(1);
-            root.querySelectorAll(`[data-i18n-${attr}]`).forEach(el => { el.setAttribute(attr, t(el.dataset[key])); });
+        const skip = el => el.closest('.no-i18n');
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        for (let node; (node = walker.nextNode());) {
+            if (!node.nodeValue.trim() || node.parentElement.closest('.no-i18n, script, style, textarea')) continue;
+            if (!this.original.has(node)) this.original.set(node, node.nodeValue);
+            node.nodeValue = this.translate(this.original.get(node));
+        }
+        for (const attr of ['title', 'placeholder']) {
+            root.querySelectorAll(`[${attr}]`).forEach(el => {
+                if (skip(el)) return;
+                const store = 'i18n' + attr;
+                if (!(store in el.dataset)) el.dataset[store] = el.getAttribute(attr);
+                el.setAttribute(attr, this.translate(el.dataset[store]));
+            });
         }
     }
 };

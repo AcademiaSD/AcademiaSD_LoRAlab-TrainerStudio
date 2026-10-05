@@ -120,12 +120,12 @@ def launch():
     if os.name == "nt":
         run = (CODE_DIR / trainer["run"]).resolve()
         if run.parent != CODE_DIR or run.suffix.lower() != ".bat" or not run.is_file():
-            return jsonify({"status": "error", "error": t("common.not_found", name=trainer["run"])}), 404
+            return jsonify({"status": "error", "error": t("Not found: {name}", name=trainer["run"])}), 404
     else:
         # En Linux se usa el .sh con el mismo nombre / On Linux use the same-named .sh
         run = (CODE_DIR / Path(trainer["run"]).with_suffix(".sh")).resolve()
         if run.parent != CODE_DIR or run.suffix.lower() != ".sh" or not run.is_file():
-            return jsonify({"status": "error", "error": t("common.not_found", name=run.name)}), 404
+            return jsonify({"status": "error", "error": t("Not found: {name}", name=run.name)}), 404
 
     if trainer_running():
         return jsonify({"status": "busy", "url": trainer_url()})
@@ -148,15 +148,15 @@ def network():
         try:
             ports = int(req.get("launcher_port", 4990)), int(req.get("trainer_port", 5000))
         except (TypeError, ValueError):
-            return jsonify({"status": "error", "error": t("launcher.net.err_port")}), 400
+            return jsonify({"status": "error", "error": t("Invalid port")}), 400
         if not all(1024 <= p <= 65535 for p in ports) or ports[0] == ports[1]:
-            return jsonify({"status": "error", "error": t("launcher.net.err_ports")}), 400
+            return jsonify({"status": "error", "error": t("Ports: 1024-65535 and different")}), 400
         listen, user, password = bool(req.get("listen")), str(req.get("user", "")).strip(), str(req.get("password", ""))
         external_auth, public_url = bool(req.get("external_auth")), str(req.get("trainer_url", "")).strip()
         if public_url and not public_url.startswith(("http://", "https://")):
-            return jsonify({"status": "error", "error": t("launcher.net.err_url")}), 400
+            return jsonify({"status": "error", "error": t("Trainer URL must start with http:// or https://")}), 400
         if listen and not external_auth and (not user or not (password or remote_access.load()["password_hash"])):
-            return jsonify({"status": "error", "error": t("launcher.net.err_auth")}), 400
+            return jsonify({"status": "error", "error": t("Network access needs a user and a password")}), 400
         remote_access.save(listen, ports[0], ports[1], user, password, external_auth, public_url)
     cfg = remote_access.load()
     return jsonify({"status": "ok", "listen": cfg["listen"], "launcher_port": cfg["launcher_port"],
@@ -175,7 +175,7 @@ if __name__ == "__main__":
     print("=" * 70)
     url = remote_access.local_url("launcher_port")
     print(f"  URL : {url}")
-    print("  " + t("launcher.close_window"))
+    print("  " + t("Close this window to close the launcher."))
     print("=" * 70)
     threading.Timer(1.0, lambda: webbrowser.open(url)).start()
     remote_access.serve(app, "launcher_port")

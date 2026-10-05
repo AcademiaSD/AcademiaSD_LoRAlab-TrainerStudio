@@ -117,9 +117,9 @@
 
     <div class="grid" id="grid"></div>
     <div id="ui-settings">
-        <label for="ui-lang">🌍 <span data-i18n="launcher.language">Language</span></label>
+        <label for="ui-lang">🌍 <span>Language</span></label>
         <select id="ui-lang" onchange="previewLanguage()"></select>
-        <button type="button" onclick="saveSettings()" data-i18n="launcher.save_settings">💾 Save settings</button>
+        <button type="button" onclick="saveSettings()">💾 Save settings</button>
         <span id="ui-msg"></span>
     </div>
     <div id="status"></div>
@@ -129,34 +129,34 @@
         <a href="https://twitter.com/Academia_S_D" target="_blank">𝕏 X (Twitter)</a>
         <a href="https://discord.gg/Syuaduy678" target="_blank">💬 Discord</a>
         <a href="https://ko-fi.com/academiasd" target="_blank">☕ Ko-Fi</a>
-        <button type="button" id="net-open" onclick="openNetwork()" hidden data-i18n="launcher.net.title">🌐 Remote access</button>
+        <button type="button" id="net-open" onclick="openNetwork()" hidden>🌐 Remote access</button>
     </footer>
 
     <!-- Acceso desde otros equipos de la red. Solo se edita desde este PC (/api/network). -->
     <div id="net" onclick="if (event.target === this) closeNetwork()">
         <form onsubmit="saveNetwork(event)">
-            <h2 data-i18n="launcher.net.title">🌐 Remote access</h2>
-            <label class="check"><input type="checkbox" id="net-listen"> <span data-i18n="launcher.net.listen">Allow other devices on the network</span></label>
+            <h2>🌐 Remote access</h2>
+            <label class="check"><input type="checkbox" id="net-listen"> <span>Allow other devices on the network</span></label>
             <div class="pair">
-                <label><span data-i18n="launcher.net.launcher_port">Launcher port</span><input type="number" id="net-lport" min="1024" max="65535"></label>
-                <label><span data-i18n="launcher.net.trainer_port">Trainer port</span><input type="number" id="net-tport" min="1024" max="65535"></label>
+                <label><span>Launcher port</span><input type="number" id="net-lport" min="1024" max="65535"></label>
+                <label><span>Trainer port</span><input type="number" id="net-tport" min="1024" max="65535"></label>
             </div>
             <div class="pair">
-                <label><span data-i18n="launcher.net.user">User</span><input type="text" id="net-user" autocomplete="off"></label>
-                <label><span data-i18n="launcher.net.password">Password</span><input type="password" id="net-pass" autocomplete="new-password"></label>
+                <label><span>User</span><input type="text" id="net-user" autocomplete="off"></label>
+                <label><span>Password</span><input type="password" id="net-pass" autocomplete="new-password"></label>
             </div>
-            <label class="check" data-i18n-title="launcher.net.extauth_tip">
-                <input type="checkbox" id="net-extauth"> <span data-i18n="launcher.net.extauth">I use my own authentication (reverse proxy)</span></label>
-            <div class="note warn" id="net-extauth-warn" hidden data-i18n="launcher.net.extauth_warn"></div>
-            <label><span data-i18n="launcher.net.public_url">Trainer public URL (optional, behind a proxy)</span>
+            <label class="check" title="Only if a reverse proxy in front already asks for a login (Authelia, Authentik, Cloudflare Access...).">
+                <input type="checkbox" id="net-extauth"> <span>I use my own authentication (reverse proxy)</span></label>
+            <div class="note warn" id="net-extauth-warn" hidden>No login from here: without a proxy with authentication in front, anyone on the network can control this PC.</div>
+            <label><span>Trainer public URL (optional, behind a proxy)</span>
                 <input type="text" id="net-turl" placeholder="https://trainer.example.com" autocomplete="off"></label>
             <div class="note" id="net-url"></div>
-            <div class="note" data-i18n="launcher.net.password_note"></div>
-            <div class="note warn" data-i18n="launcher.net.http_warn"></div>
+            <div class="note">This PC never asks for the password; other devices always do. Changes apply after restarting the launcher and the trainer.</div>
+            <div class="note warn">Plain HTTP: for your home network only. To connect from the Internet use Tailscale or an SSH tunnel, never an open port.</div>
             <div id="net-msg"></div>
             <div class="actions">
-                <button type="button" onclick="closeNetwork()" data-i18n="common.close">Close</button>
-                <button type="submit" class="primary" data-i18n="common.save">Save</button>
+                <button type="button" onclick="closeNetwork()">Close</button>
+                <button type="submit" class="primary">Save</button>
             </div>
         </form>
     </div>
@@ -186,7 +186,7 @@
 
         async function launch(trainer, card) {
             card.classList.add('launching');
-            setStatus(t('launcher.opening', { name: trainer.name }));
+            setStatus(t('Opening {name}...', { name: trainer.name }));
             try {
                 const res = await fetch('/api/launch', {
                     method: 'POST',
@@ -195,11 +195,11 @@
                 });
                 const data = await res.json();
                 if (data.status === 'ok' && data.remote) {
-                    setStatus('✓ ' + t('launcher.started_remote', { name: trainer.name, url: link(data.url) }), 'ok');
+                    setStatus('✓ ' + t('{name}: starting on the training PC; open it in a few seconds at {url}', { name: trainer.name, url: link(data.url) }), 'ok');
                 } else if (data.status === 'ok') {
-                    setStatus('✓ ' + t('launcher.started', { name: trainer.name }), 'ok');
+                    setStatus('✓ ' + t('{name}: will open in a new window and in the browser.', { name: trainer.name }), 'ok');
                 } else if (data.status === 'busy') {
-                    setStatus(t('launcher.busy', { url: link(data.url) }), 'warn');
+                    setStatus(t('A trainer is already open at {url}. Close it before opening another.', { url: link(data.url) }), 'warn');
                 } else {
                     setStatus(`[!] ${data.error || 'Error'}`, 'warn');
                 }
@@ -211,15 +211,12 @@
 
         function link(url) { return `<a href="${url}" target="_blank">${url}</a>`; }
 
-        // Textos de launcher.json: la traducción launcher.desc.<id> si existe; si no, el de launcher.json.
-        function cfgText(key, fallback) { return I18N.strings[key] ?? fallback ?? ''; }
-
         let cfg = null;
 
         function renderTexts() {
-            document.getElementById('subtitle').innerText = cfgText('launcher.subtitle', cfg.subtitle);
+            document.getElementById('subtitle').innerText = t(cfg.subtitle || '');
             document.querySelectorAll('.card').forEach(card => {
-                card.querySelector('.desc').innerText = cfgText('launcher.desc.' + card.dataset.id, card.dataset.desc);
+                card.querySelector('.desc').innerText = t(card.dataset.desc);
             });
             if (netInfo) netUrl();
         }
@@ -249,7 +246,7 @@
                 const data = await res.json();
                 if (data.status !== 'ok') throw new Error(data.error);
                 msg.className = 'ok';
-                msg.innerText = '✓ ' + t('launcher.settings_saved');
+                msg.innerText = '✓ ' + t('Saved. Trainers already open use it after reloading the page; scripts, on their next run.');
             } catch (e) {
                 msg.className = 'warn';
                 msg.innerText = '[!] ' + e.message;
@@ -299,8 +296,8 @@
             const listen = document.getElementById('net-listen').checked;
             document.getElementById('net-extauth-warn').hidden = !document.getElementById('net-extauth').checked;
             document.getElementById('net-url').innerHTML = listen
-                ? t('launcher.net.from_others', { url: `<b>http://${netInfo.lan_ip}:${document.getElementById('net-lport').value}</b>` })
-                : t('launcher.net.only_this_pc');
+                ? t('From other devices: {url}', { url: `<b>http://${netInfo.lan_ip}:${document.getElementById('net-lport').value}</b>` })
+                : t('Only this PC (127.0.0.1).');
         }
 
         async function loadNetwork() {
@@ -319,7 +316,7 @@
             document.getElementById('net-turl').value = netInfo.trainer_url;
             const pass = document.getElementById('net-pass');
             pass.value = '';
-            pass.placeholder = netInfo.has_password ? t('launcher.net.unchanged') : '';
+            pass.placeholder = netInfo.has_password ? t('(unchanged)') : '';
             document.getElementById('net-msg').innerText = '';
             netUrl();
             document.getElementById('net').classList.add('open');
@@ -347,9 +344,9 @@
             if (data.status !== 'ok') { msg.style.color = '#f59e0b'; msg.innerText = '[!] ' + data.error; return; }
             netInfo = data;
             document.getElementById('net-pass').value = '';
-            document.getElementById('net-pass').placeholder = data.has_password ? t('launcher.net.unchanged') : '';
+            document.getElementById('net-pass').placeholder = data.has_password ? t('(unchanged)') : '';
             msg.style.color = '#10b981';
-            msg.innerText = '✓ ' + t('launcher.net.saved');
+            msg.innerText = '✓ ' + t('Saved. Restart the launcher to apply.');
             netUrl();
         }
 

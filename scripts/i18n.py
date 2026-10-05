@@ -3,11 +3,12 @@
 i18n.py — Traducciones de la interfaz y de la consola.
 Translations for the interface and the console.
 
-Los textos viven en GUI/locales/<idioma>.json, un diccionario plano de claves ("launcher.save": "Save").
-El idioma se elige en el lanzador y se guarda en settings/ui.json; el inglés es el de reserva: una clave
-que falta en un idioma sale en inglés, y una que falta también en inglés sale como la propia clave.
+Todo se escribe en inglés y la clave de cada traducción es el propio texto inglés (como en gettext):
+GUI/locales/<idioma>.json = {"Save": "Guardar", ...}. Lo que no esté traducido sale en inglés, así que
+un texto nuevo funciona antes de traducirlo. El idioma se elige en el lanzador y se guarda en
+settings/ui.json; los scripts lo leen al arrancar y las páginas al cargarse.
 
-Python:      from i18n import t;  print(t("launcher.close_window"))   # {name} -> t("x", name=...)
+Python:      from i18n import t;  print(t("Caching {n} images...", n=12))
 Navegador:   register(app) sirve /i18n.js y /api/i18n; ver GUI/i18n.js.
 """
 import json
@@ -61,14 +62,13 @@ def _load(lang):
 
 
 def strings(lang=None):
-    """Todas las claves del idioma, con el inglés debajo para las que falten."""
+    """Las traducciones del idioma ({} en inglés)."""
     lang = lang or language()
-    return {**_load(DEFAULT), **(_load(lang) if lang != DEFAULT else {})}
+    return _load(lang) if lang != DEFAULT else {}
 
 
 def t(key, **kw):
-    lang = language()
-    text = _load(lang).get(key) or _load(DEFAULT).get(key) or key
+    text = strings().get(key) or key
     try:
         return text.format(**kw) if kw else text
     except (KeyError, IndexError, ValueError):
@@ -87,7 +87,7 @@ def register(app):
         if request.method == "POST":
             lang = str((request.get_json(force=True) or {}).get("language", ""))
             if lang not in LANGUAGES:
-                return jsonify({"status": "error", "error": t("common.invalid_language")}), 400
+                return jsonify({"status": "error", "error": t("Invalid language")}), 400
             save_language(lang)
         lang = request.args.get("lang") if request.args.get("lang") in LANGUAGES else language()
         return jsonify({"status": "ok", "language": lang, "saved": language(),

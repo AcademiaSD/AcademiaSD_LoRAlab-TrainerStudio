@@ -72,13 +72,13 @@ def _check():
     cfg = load()
     if not cfg["external_auth"]:
         if not cfg["password_hash"]:
-            return Response(t("remote.needs_password") + "\n", 403, mimetype="text/plain")
+            return Response(t("Remote access needs a password: set it in the launcher, on the training PC.") + "\n", 403, mimetype="text/plain")
         auth = request.authorization
         if not auth or auth.username != cfg["user"] or not check_password_hash(cfg["password_hash"], auth.password or ""):
-            return Response(t("remote.login_required") + "\n", 401,
+            return Response(t("Login required") + "\n", 401,
                             {"WWW-Authenticate": 'Basic realm="AcademiaSD LoRAlab", charset="UTF-8"'}, mimetype="text/plain")
     if request.path in NATIVE_DIALOGS:
-        return jsonify({"status": "error", "error": t("remote.type_path")})
+        return jsonify({"status": "error", "error": t("Remote access: type the path.")})
     return None
 
 
@@ -90,9 +90,9 @@ def serve(app, port_key):
     port = cfg[port_key]
     if cfg["listen"]:
         if cfg["external_auth"]:
-            note = "  [!] " + t("remote.no_login")
+            note = "  [!] " + t("No login: external authentication")
         elif not cfg["password_hash"]:
-            note = "  [!] " + t("remote.no_password")
+            note = "  [!] " + t("No password: remote access refused")
         else:
             note = ""
         print(f"  {t('remote.network')}: http://{lan_address()}:{port}{note}")
