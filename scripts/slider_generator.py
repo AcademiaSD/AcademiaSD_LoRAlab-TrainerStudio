@@ -47,7 +47,8 @@ DEFAULTS = {
     "neutral": "",
     "edits": {},
     "people": 24,
-    "vary_people": True,
+    "vary_people": True,  # edad, sexo y origen distintos en cada base
+    "vary_hair": True,    # peinado distinto en cada base (desactivar en sliders de pelo)
     "anchors": 12,
     "base": "generate",   # "generate": las crea el modelo | "mine": las grupo_0 del dataset
     "size": 768,
@@ -55,19 +56,19 @@ DEFAULTS = {
 }
 
 # Variedad de las imágenes base: el slider tiene que aprender el concepto, no una cara, un sitio o una luz.
+# Personas y pelo van aparte: en un slider de pelo, el pelo de la base lo fija la posición 0, no esta lista.
 PEOPLE = [
-    "a young East Asian woman with long straight black hair", "an elderly white man with a grey beard",
-    "a middle-aged Black woman with short curly hair", "a teenage boy with freckles and red hair",
-    "a South Asian man in his thirties with a short beard", "an old Japanese woman with white hair in a bun",
-    "a blonde woman in her twenties with wavy hair", "a Latino man in his forties with glasses",
-    "a young Black man with short dreadlocks", "a middle-aged woman with a brown bob haircut",
-    "a bald man in his sixties", "a young Middle Eastern woman wearing a headscarf",
-    "a little girl with pigtails", "a man in his fifties with salt and pepper hair",
-    "an Indigenous woman with long braided hair", "a young man with a buzz cut and earrings",
-    "a Korean man in his twenties with dyed blue hair", "an elderly Black man with a white moustache",
-    "a woman in her thirties with freckles and a red ponytail", "a chubby man in his forties with curly brown hair",
-    "a young woman with an undercut and nose piercing", "an old woman with curly grey hair and glasses",
-    "a boy around ten years old with messy brown hair", "a Scandinavian man with long blond hair",
+    "a young East Asian woman", "an elderly white man", "a middle-aged Black woman", "a teenage boy with freckles",
+    "a South Asian man in his thirties", "an old Japanese woman", "a woman in her twenties", "a Latino man in his forties with glasses",
+    "a young Black man", "a middle-aged white woman", "a man in his sixties", "a young Middle Eastern woman",
+    "a little girl", "a man in his fifties", "an Indigenous woman", "a young man with earrings",
+    "a Korean man in his twenties", "an elderly Black man", "a woman in her thirties with freckles", "a chubby man in his forties",
+    "a young woman with a nose piercing", "an old woman with glasses", "a boy around ten years old", "a Scandinavian man",
+]
+HAIRS = [
+    "long straight black hair", "short curly hair", "red hair in a ponytail", "white hair in a bun", "wavy blonde hair",
+    "short dreadlocks", "a brown bob haircut", "salt and pepper hair", "long braided hair", "a buzz cut",
+    "dyed blue hair", "messy brown hair", "long blond hair", "curly grey hair", "a shaved head",
 ]
 PLACES = ["in a park", "in a modern office", "on a city street", "in a kitchen", "against a plain grey wall",
           "in a library", "at the beach", "in a cafe", "in a living room", "in a garden"]
@@ -214,7 +215,9 @@ def plan(cfg):
     else:
         for i in range(int(cfg["people"])):
             who = f" of {PEOPLE[i % len(PEOPLE)]}" if cfg["vary_people"] else ""
-            prompt = f"{cfg['subject'].strip().rstrip('.')}{who}, {rng.choice(PLACES)}, {rng.choice(LIGHTS)}"
+            # Paso 7 en la lista de peinados: que persona y pelo no vayan siempre juntos.
+            hair = f", with {HAIRS[i * 7 % len(HAIRS)]}" if cfg["vary_hair"] else ""
+            prompt = f"{cfg['subject'].strip().rstrip('.')}{who}{hair}, {rng.choice(PLACES)}, {rng.choice(LIGHTS)}"
             if cfg["neutral"].strip():
                 prompt += f", {cfg['neutral'].strip().rstrip('.')}"
             groups.append((f"g{i:02d}", os.path.join(ds, f"g{i:02d}_0.png"), prompt + "."))

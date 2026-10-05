@@ -671,8 +671,10 @@
                         <option value="mine">Base: my group_0 images / Base: mis imágenes grupo_0</option>
                     </select>
                     <label class="ds-inline-label">Groups / Grupos <input type="number" class="sg-num" id="sg_people" value="24" min="1" max="200"></label>
-                    <label class="ds-inline-label" title="Adds a different person (age, origin, hair) to each base prompt. Turn it off when the subject is not a person. / Añade una persona distinta (edad, origen, pelo) a cada prompt base. Desactívalo si el sujeto no es una persona.">
+                    <label class="ds-inline-label" title="Adds a different person (age, sex, origin) to each base prompt. Turn it off when the subject is not a person. / Añade una persona distinta (edad, sexo, origen) a cada prompt base. Desactívalo si el sujeto no es una persona.">
                         <input type="checkbox" id="sg_vary_people" checked> Vary people / Variar personas</label>
+                    <label class="ds-inline-label" title="Adds a different hairstyle to each base prompt. Turn it off for hair sliders, so the hair of the bases is the one written in Position 0. / Añade un peinado distinto a cada prompt base. Desactívalo en sliders de pelo, para que el pelo de las bases sea el que escribas en Posición 0.">
+                        <input type="checkbox" id="sg_vary_hair" checked> Vary hair / Variar pelo</label>
                     <label class="ds-inline-label" title="Scenes without the subject in varied styles (photo, black and white, vintage, illustration...), trained to stay unchanged. / Escenas sin el sujeto en estilos variados (foto, blanco y negro, antigua, ilustración...), que se entrenan para no cambiar.">Anchors <input type="number" class="sg-num" id="sg_anchors" value="12" min="0" max="100"></label>
                     <select class="ds-mode-select" id="sg_size">
                         <option value="512">512 px</option>
@@ -1588,6 +1590,7 @@
             if (s.base) document.getElementById('sg_base').value = s.base;
             if (s.people) document.getElementById('sg_people').value = s.people;
             if (s.vary_people !== undefined) document.getElementById('sg_vary_people').checked = !!s.vary_people;
+            if (s.vary_hair !== undefined) document.getElementById('sg_vary_hair').checked = !!s.vary_hair;
             if (s.anchors !== undefined) document.getElementById('sg_anchors').value = s.anchors;
             if (s.size) document.getElementById('sg_size').value = String(s.size);
         }
@@ -1601,6 +1604,7 @@
                 base: document.getElementById('sg_base').value,
                 people: parseInt(document.getElementById('sg_people').value) || 0,
                 vary_people: document.getElementById('sg_vary_people').checked,
+                vary_hair: document.getElementById('sg_vary_hair').checked,
                 anchors: parseInt(document.getElementById('sg_anchors').value) || 0,
                 size: parseInt(document.getElementById('sg_size').value),
                 subject: document.getElementById('sg_subject').value.trim(),
