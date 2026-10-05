@@ -342,7 +342,7 @@ def ensure_ltx23_model_downloaded(local_path):
     auto = os.environ.get("LTX_AUTO_CONFIRM_DOWNLOAD", "0").strip().lower()
     if auto not in ("1", "true", "yes", "y", "on"):
         try:
-            input("Press Enter to continue / Pulsa Enter para continuar...")
+            input(t("Press Enter to continue..."))
         except Exception:
             pass
 

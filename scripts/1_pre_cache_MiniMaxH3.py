@@ -740,7 +740,7 @@ def ensure_nf4_model_exists(nf4_model_id, repo_id="AcademiaSD/MiniMax-H3-NF4"):
             log_dev(L("[DOWNLOAD] Download completed at {}",
                       "[DOWNLOAD] Descarga completada en {}").format(os.path.abspath(nf4_model_id)))
         except Exception as e:
-            diag_error("HF download failed / Fallo la descarga HF ({}): {}".format(repo_id, e))
+            diag_error(t("Hugging Face download failed ({0}): {1}", repo_id, e))
             raise
     else:
         log_dev(L("[OK] NF4 folder found: {}",
@@ -1142,14 +1142,11 @@ def rebuild_rope_buffers(model, fallback_config=None):
         except Exception as e:
             failed.append({"module": name, "error": str(e), "load_bearing": load_bearing})
             if load_bearing:
-                diag_error("Could not rebuild the LOAD-BEARING rope buffer / "
-                           "No se pudo reconstruir el buffer rope CRITICO {}: {}".format(name, e))
+                diag_error(t("Could not rebuild the LOAD-BEARING rope buffer {0}: {1}", name, e))
                 raise
             # The vision tower is never used for text-only captions; it will be zero-filled.
             # La torre de vision no se usa con captions de solo texto; se rellenara con ceros.
-            diag_warn("Vision rope buffer not rebuilt (unused for text-only) / "
-                      "Buffer rope de vision no reconstruido (no se usa en solo-texto) {}: {}"
-                      .format(name, e))
+            diag_warn(t("Vision rope buffer not rebuilt (unused for text-only) {0}: {1}", name, e))
 
     DIAG["rope"]["rebuilt_modules"] = fixed
     DIAG["rope"]["rebuilt_count"] = len(fixed)
@@ -1343,13 +1340,13 @@ def build_weight_inventory(index, weights_dir, *extra_dirs):
                         sl = f.get_slice(k)
                         shape, dtype = tuple(sl.get_shape()), str(sl.get_dtype())
                     except Exception:
-                        t = f.get_tensor(k)
-                        shape, dtype = tuple(t.shape), str(t.dtype)
+                        tv = f.get_tensor(k)
+                        shape, dtype = tuple(tv.shape), str(tv.dtype)
                     if "." in k and k not in ("weight", "bias"):
                         inv.fullkey.setdefault(k, {"file": p, "shape": shape, "dtype": dtype})
                     inv.by_shape.setdefault(shape, []).append((p, k))
         except Exception as e:
-            diag_warn("could not scan / no se pudo escanear {}: {}".format(os.path.basename(p), e))
+            diag_warn(t("could not scan {0}: {1}", os.path.basename(p), e))
 
     log_dev(L("[SCAN] {} files | {} index names | {} full-path keys | {} per-tensor generic-key files",
               "[SCAN] {} ficheros | {} nombres de indice | {} claves ruta-completa | {} ficheros de clave generica")
@@ -1373,7 +1370,7 @@ def _read_matching_tensor(path, wanted_name, wanted_shape):
     """Read the tensor from `path` whose shape matches, regardless of its key name.
     Lee del fichero `path` el tensor cuya shape coincide, sea cual sea su clave."""
     if not os.path.isfile(path):
-        return None, "file missing / falta el fichero"
+        return None, t("file missing")
     leaf = wanted_name.rsplit(".", 1)[-1]
     with safe_open(path, framework="pt", device="cpu") as f:
         keys = [k for k in f.keys() if not k.startswith("quant_state.")]
@@ -1383,11 +1380,10 @@ def _read_matching_tensor(path, wanted_name, wanted_shape):
             + [k for k in keys if k == leaf] \
             + [k for k in keys if k not in (wanted_name, leaf)]
         for k in ordered:
-            t = f.get_tensor(k)
-            if tuple(t.shape) == tuple(wanted_shape):
-                return t, k
-        return None, "no key with shape {} (keys: {}) / ninguna clave con shape {} (claves: {})".format(
-            list(wanted_shape), keys[:6], list(wanted_shape), keys[:6])
+            tv = f.get_tensor(k)
+            if tuple(tv.shape) == tuple(wanted_shape):
+                return tv, k
+        return None, t("no key with shape {0} (keys: {1})", list(wanted_shape), keys[:6])
 
 
 def _name_candidates(model_name):
@@ -1674,18 +1670,18 @@ def backfill_missing_from_hub(model, nf4_te_dir, repo_id, subfolders, max_layer)
                     continue
                 dt = _ST_DTYPES.get(meta["dtype"])
                 if dt is None:
-                    diag_warn("unsupported dtype / dtype no soportado {} for {}".format(meta["dtype"], name))
+                    diag_warn(t("unsupported dtype {0} for {1}", meta["dtype"], name))
                     continue
                 s, e = meta["data_offsets"]
                 f.seek(base + s)
                 buf = bytearray(f.read(e - s))
                 total_bytes += len(buf)
-                t = torch.frombuffer(buf, dtype=dt).reshape(tuple(meta["shape"])).clone()
-                if tuple(t.shape) != tuple(shape):
+                tv = torch.frombuffer(buf, dtype=dt).reshape(tuple(meta["shape"])).clone()
+                if tuple(tv.shape) != tuple(shape):
                     diag_warn("shape mismatch / shape distinta {}: {} vs {}"
-                              .format(name, list(t.shape), list(shape)))
+                              .format(name, list(tv.shape), list(shape)))
                     continue
-                fetched[name] = t
+                fetched[name] = tv
 
     report["fetched"] = len(fetched)
     report["bytes"] = total_bytes
@@ -1707,12 +1703,12 @@ def backfill_missing_from_hub(model, nf4_te_dir, repo_id, subfolders, max_layer)
                       "[BACKFILL] Cacheado en {} - las siguientes ejecuciones no volveran a descargar.")
                     .format(cache_path))
         except Exception as e:
-            diag_warn("could not cache backfill / no se pudo cachear el backfill: {}".format(e))
+            diag_warn(t("could not cache the backfill: {0}", e))
 
-        for name, t in fetched.items():
+        for name, tv in fetched.items():
             parent, child = get_parent_module(model, name)
             is_param = name in dict(model.named_parameters())
-            val = t.to(torch.bfloat16) if t.is_floating_point() else t
+            val = tv.to(torch.bfloat16) if tv.is_floating_point() else tv
             if is_param:
                 setattr(parent, child, nn.Parameter(val, requires_grad=False))
             else:
@@ -1976,12 +1972,12 @@ def load_text_encoder_from_nf4(nf4_model_id, original_model_id, full_model=False
     for name, info in quantized.items():
         filepath = os.path.join(weights_dir, info["file"])
         if not os.path.exists(filepath):
-            failed_nf4.append((name, "missing file / falta el fichero"))
+            failed_nf4.append((name, t("file missing")))
             continue
         try:
             parent, child_name = get_parent_module(text_encoder, name)
         except Exception as e:
-            failed_nf4.append((name, "unresolved module / modulo no resuelto: {}".format(e)))
+            failed_nf4.append((name, t("unresolved module: {0}", e)))
             continue
         try:
             with safe_open(filepath, framework="pt", device="cpu") as f:
@@ -2104,7 +2100,7 @@ def load_text_encoder_from_nf4(nf4_model_id, original_model_id, full_model=False
                             # FIX: se queda en CPU (el codigo antiguo movia estos a CUDA solo aqui).
                             state_dict_other[key] = tensor
                 except Exception as e:
-                    diag_warn("could not read / no se pudo leer {}: {}".format(fname, e))
+                    diag_warn(t("Could not read {path}: {error}", path=fname, error=e))
 
     if aliases:
         for alias_name, real_name in aliases.items():
@@ -2429,7 +2425,7 @@ def encode_prompt_minimax(text_encoder, processor, prompt, device="cuda", quiet=
                 .format(path, layer_idx, tuple(prompt_embeds.shape), n_tok, elapsed))
 
     if torch.isnan(prompt_embeds).any():
-        diag_error("NaN in prompt_embeds / NaN en prompt_embeds: {}".format(prompt[:60]))
+        diag_error(t("NaN in prompt_embeds: {0}", prompt[:60]))
 
     return {
         "prompt_embeds": prompt_embeds.detach().to(torch.bfloat16).cpu().contiguous(),
@@ -3115,10 +3111,9 @@ def preprocess_minimaxh3():
         log_dev(L("[NF4-TE] Linear4bit total: {} | verified: {}",
                   "[NF4-TE] Linear4bit totales: {} | verificadas: {}").format(total_l4, verified))
         if total_l4 and verified != total_l4:
-            diag_warn("Some Linear4bit layers are not properly quantized / "
-                      "Algunas capas Linear4bit no estan bien cuantizadas: {}/{}".format(verified, total_l4))
+            diag_warn(t("Some Linear4bit layers are not properly quantized: {0}/{1}", verified, total_l4))
     except Exception as e:
-        diag_warn("Linear4bit check failed / fallo la comprobacion: {}".format(e))
+        diag_warn(t("Linear4bit check failed: {0}", e))
 
     torch.cuda.reset_peak_memory_stats()
 

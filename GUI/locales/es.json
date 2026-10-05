@@ -1005,5 +1005,20 @@
   "share: {0} image(s) at 1 latent + {1} video(s) at {2} latents": "reparto: {0} imagen(es) a 1 latente + {1} vídeo(s) a {2} latentes",
   "no quota left, skipped": "sin cupo, se salta",
   "{0} latent frames -> {1} to fit the {2} token budget": "{0} fotogramas latentes -> {1} por el presupuesto de {2} tokens",
-  "Downloading {0} ({1}) from {2} ...": "Descargando {0} ({1}) desde {2} ..."
+  "Downloading {0} ({1}) from {2} ...": "Descargando {0} ({1}) desde {2} ...",
+  "the folder does not exist": "la carpeta no existe",
+  "the folder is empty or has no latents": "la carpeta está vacía o no tiene latentes",
+  "Press Enter to continue...": "Pulsa Enter para continuar...",
+  "file missing": "falta el fichero",
+  "no key with shape {0} (keys: {1})": "ninguna clave con shape {0} (claves: {1})",
+  "NaN in prompt_embeds: {0}": "NaN en prompt_embeds: {0}",
+  "Some Linear4bit layers are not properly quantized: {0}/{1}": "Algunas capas Linear4bit no están bien cuantizadas: {0}/{1}",
+  "Linear4bit check failed: {0}": "Falló la comprobación de Linear4bit: {0}",
+  "Hugging Face download failed ({0}): {1}": "Falló la descarga de Hugging Face ({0}): {1}",
+  "Vision rope buffer not rebuilt (unused for text-only) {0}: {1}": "Buffer rope de visión no reconstruido (no se usa en solo-texto) {0}: {1}",
+  "could not scan {0}: {1}": "no se pudo escanear {0}: {1}",
+  "could not cache the backfill: {0}": "no se pudo cachear el backfill: {0}",
+  "Could not rebuild the LOAD-BEARING rope buffer {0}: {1}": "No se pudo reconstruir el buffer rope CRÍTICO {0}: {1}",
+  "unsupported dtype {0} for {1}": "dtype no soportado {0} para {1}",
+  "unresolved module: {0}": "módulo no resuelto: {0}"
 }

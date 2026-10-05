@@ -6676,10 +6676,9 @@ def _ensure_train_runtime():
             _latents = []
 
     if not _latents:
-        _why = ("the folder does not exist / la carpeta no existe"
+        _why = (t("the folder does not exist")
                 if not os.path.isdir(CACHE_DIR)
-                else "the folder is empty or has no latents / la carpeta esta "
-                     "vacia o no tiene latentes")
+                else t("the folder is empty or has no latents"))
         raise RuntimeError(
             "\n"
             "================================================================\n"
