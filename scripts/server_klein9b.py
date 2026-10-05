@@ -94,6 +94,10 @@ DATASET_EXTS = (".png", ".jpg", ".jpeg", ".webp")
 CAPTION_SCRIPT = SCRIPTS_DIR / "0_caption_klein9b.py"
 PRECACHE_SCRIPT = SCRIPTS_DIR / "1_pre_cache_klein9b.py"
 TRAIN_SCRIPT = SCRIPTS_DIR / "2_train_lora_klein9b.py"
+SLIDER_GEN_SCRIPT = SCRIPTS_DIR / "slider_generator.py"
+SLIDER_GEN_CONFIG = SETTINGS_DIR / "slider_gen_settings.json"  # compartido / shared by every trainer
+# Motores del generador de sliders: carpeta del modelo y GB a descargar si falta.
+SLIDER_ENGINES = {"klein9b": ("FLUX.2-Klein-9B_NF4", 8.8)}
 
 app = Flask(__name__)
 
@@ -181,6 +185,8 @@ def get_script_for_name(script_name):
         return PRECACHE_SCRIPT
     if script_name == "train":
         return TRAIN_SCRIPT
+    if script_name == "slidergen":
+        return SLIDER_GEN_SCRIPT
     return None
 
 
@@ -1074,6 +1080,29 @@ def save_caption_settings():
         merged.update(request.get_json(force=True) or {})
         write_json_file(CAPTION_CONFIG, merged)
         return jsonify({"status": "ok"})
+    except Exception as exc:
+        return jsonify({"status": "error", "error": str(exc)}), 500
+
+
+@app.route("/api/slider-gen-settings", methods=["GET"])
+def get_slider_gen_settings():
+    engines = {}
+    for key, (folder, gb) in SLIDER_ENGINES.items():
+        model = BASE_DIR / folder
+        ready = (model / "transformer" / "index.json").exists() and (model / "text_encoder" / "config.json").exists()
+        engines[key] = {"ready": ready, "download_gb": gb}
+    return jsonify({"settings": read_json_file(SLIDER_GEN_CONFIG, {}), "engines": engines})
+
+
+@app.route("/api/save-slider-gen-settings", methods=["POST"])
+def save_slider_gen_settings():
+    """Ajustes del generador de sliders. El dataset es siempre el del proyecto abierto."""
+    try:
+        merged = read_json_file(SLIDER_GEN_CONFIG, {})
+        merged.update(request.get_json(force=True) or {})
+        merged["dataset_path"] = str(get_dataset_dir())
+        write_json_file(SLIDER_GEN_CONFIG, merged)
+        return jsonify({"status": "ok", "dataset_path": merged["dataset_path"]})
     except Exception as exc:
         return jsonify({"status": "error", "error": str(exc)}), 500
 

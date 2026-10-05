@@ -131,6 +131,12 @@
         .ds-mode-select { flex: 0 0 auto; background: #0f172a; color: #fff; border: 1px solid var(--panel-border); border-radius: 6px; padding: 6px 8px; font-size: 0.8rem; }
         .ds-inline-label { display: flex; align-items: center; gap: 5px; font-size: 0.74rem; color: var(--text-muted); white-space: nowrap; cursor: pointer; }
         .ds-step-hint { font-size: 0.74rem; color: var(--text-muted); }
+        .sg-wide { flex: 1 1 100%; min-width: 260px; }
+        .sg-half { flex: 1 1 45%; min-width: 240px; }
+        .sg-num { width: 64px; padding: 4px 6px; }
+        .sg-thumb { position: relative; flex: 0 0 auto; }
+        .sg-thumb img { height: 140px; border-radius: 6px; display: block; }
+        .sg-thumb span { position: absolute; top: 4px; left: 4px; background: #000; color: #facc15; font-size: 0.75rem; font-weight: 700; padding: 1px 5px; border-radius: 4px; }
         .ds-del { position: absolute; top: 6px; left: 6px; width: 22px; height: 22px; border: none; border-radius: 5px; background: rgba(15,23,42,0.82); color: #fca5a5; font-size: 0.82rem; line-height: 1; cursor: pointer; z-index: 3; opacity: 0; transition: opacity 0.15s, background 0.15s; }
         .ds-card:hover .ds-del { opacity: 1; }
         .ds-del:hover { background: var(--danger); color: #fff; }
@@ -630,7 +636,7 @@
                 </div>
 
                 <!-- Auto-caption con Qwen3-VL-8B NF4: el captioner compartido con LTX-2.3, Z-Image y Anima. -->
-                <div class="ds-caption-bar">
+                <div class="ds-caption-bar" id="caption-bar">
                     <button type="button" class="btn btn-primary btn-sm" id="btn-caption" onclick="runCaption()"
                             title="Writes one .txt per image with Qwen3-VL-8B (NF4, ~5.5 GB VRAM), with the trigger word first. Shared with LTX-2.3, Z-Image and Anima: the first time it downloads ~5 GB. / Escribe un .txt por imagen con Qwen3-VL-8B (NF4, ~5.5 GB de VRAM), con la palabra clave delante. Compartido con LTX-2.3, Z-Image y Anima: la primera vez descarga ~5 GB.">
                         <span id="btn-caption-label">Create Captions / Crear Captions</span>
@@ -647,6 +653,47 @@
                     </label>
                     <textarea class="ds-search ds-caption-prompt" id="caption_prompt_text" rows="4"
                               placeholder="Prompt for the captioner / Prompt para el generador"></textarea>
+                </div>
+
+                <!-- Generador de datasets sintéticos para sliders (docs/SLIDERS.md): sustituye al auto-caption con LoRA Type = Slider. -->
+                <div class="ds-caption-bar" id="slidergen-bar" style="display:none;">
+                    <button type="button" class="btn btn-primary btn-sm" id="btn-slidergen" onclick="runSliderGen()"
+                            title="Writes a slider dataset (group_position) into the dataset folder with an edit model: one base image per group and one edit towards each position you fill in, plus anchors. If stopped, running it again continues where it left off. / Escribe un dataset de slider (grupo_posición) en la carpeta del dataset con un modelo de edición: una imagen base por grupo y una edición hacia cada posición que rellenes, más anchors. Si se detiene, al relanzarlo sigue donde lo dejó.">
+                        Generate Pairs / Generar Pares
+                    </button>
+                    <select class="ds-mode-select" id="sg_engine" title="Model that generates the dataset. The dataset works for any trainer. / Modelo que genera el dataset. El dataset sirve para cualquier entrenador.">
+                        <option value="klein9b">FLUX.2 Klein 9B (Turbo, 4 steps / pasos)</option>
+                        <option value="qwenimage21" disabled>Qwen-Image 2.1 (coming soon / próximamente)</option>
+                    </select>
+                    <select class="ds-mode-select" id="sg_base"
+                            title="Generate: the model creates the base images (position 0) with varied people, places and light. Mine: your images named group_0 are the bases, and only the other positions are generated. / Generar: el modelo crea las imágenes base (posición 0) con personas, lugares y luces variados. Mías: tus imágenes grupo_0 son las bases y solo se generan las demás posiciones.">
+                        <option value="generate">Base: generate / Base: generar</option>
+                        <option value="mine">Base: my group_0 images / Base: mis imágenes grupo_0</option>
+                    </select>
+                    <label class="ds-inline-label">Groups / Grupos <input type="number" class="sg-num" id="sg_people" value="24" min="1" max="200"></label>
+                    <label class="ds-inline-label" title="Adds a different person (age, origin, hair) to each base prompt. Turn it off when the subject is not a person. / Añade una persona distinta (edad, origen, pelo) a cada prompt base. Desactívalo si el sujeto no es una persona.">
+                        <input type="checkbox" id="sg_vary_people" checked> Vary people / Variar personas</label>
+                    <label class="ds-inline-label" title="Scenes without the subject in varied styles (photo, black and white, vintage, illustration...), trained to stay unchanged. / Escenas sin el sujeto en estilos variados (foto, blanco y negro, antigua, ilustración...), que se entrenan para no cambiar.">Anchors <input type="number" class="sg-num" id="sg_anchors" value="12" min="0" max="100"></label>
+                    <select class="ds-mode-select" id="sg_size">
+                        <option value="512">512 px</option>
+                        <option value="768" selected>768 px</option>
+                        <option value="1024">1024 px</option>
+                    </select>
+                    <span class="ds-step-hint">before Pre-Cache / antes del Pre-Caché</span>
+                    <input type="text" class="ds-search sg-wide" id="sg_subject" placeholder="Subject / Tema: Head and shoulders photo portrait">
+                    <input type="text" class="ds-search sg-wide" id="sg_neutral" placeholder="Position 0 (optional) / Posición 0 (opcional): neutral relaxed expression, mouth closed, looking at the camera">
+                    <input type="text" class="ds-search sg-half" id="sg_edit_-100" placeholder="-100: Make the person look very sad...">
+                    <input type="text" class="ds-search sg-half" id="sg_edit_100" placeholder="+100: Make the person laugh...">
+                    <input type="text" class="ds-search sg-half" id="sg_edit_-50" placeholder="-50 (optional / opcional): Make the person look slightly sad...">
+                    <input type="text" class="ds-search sg-half" id="sg_edit_50" placeholder="+50 (optional / opcional): Make the person smile slightly...">
+                    <div id="sg-progress" style="display:none; flex:1 1 100%;">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <div class="progress-bar-bg" style="flex:1; height:10px;"><div class="progress-bar-fill" id="sg-bar"></div></div>
+                            <button type="button" class="btn btn-danger btn-sm" id="btn-sg-stop" onclick="stopScript()">Stop / Detener</button>
+                        </div>
+                        <div id="sg-text" style="font-size:0.8rem; margin-top:4px; color:var(--text-muted);"></div>
+                        <div id="sg-last" style="display:flex; gap:6px; margin-top:6px; overflow-x:auto;"></div>
+                    </div>
                 </div>
 
                 <div class="ds-grid" id="ds-grid"></div>
@@ -739,6 +786,9 @@
             document.getElementById('edit_image_container').style.display = (type === 'edit' || sliderEdit) ? 'block' : 'none';
             document.getElementById('slider_precache_container').style.display = slider ? 'block' : 'none';
             document.getElementById('slider_train_container').style.display = slider ? 'flex' : 'none';
+            // En un slider el auto-caption no aplica: su sitio lo ocupa el generador de pares.
+            document.getElementById('caption-bar').style.display = slider ? 'none' : 'flex';
+            document.getElementById('slidergen-bar').style.display = slider ? 'flex' : 'none';
             // Un slider es una sola dirección: rank 4 basta y no deja sitio a efectos secundarios.
             // Grad Accum 1: cada paso es un par, como en el prototipo (con 4, 1200 pasos serían solo 300 actualizaciones).
             if (fromUser && slider && document.getElementById('train_lora_rank').value === '16'
@@ -1196,6 +1246,7 @@
                                 const msg = JSON.parse(line.slice(6));
                                 if (msg.type === 'output') {
                                     appendTerminal(msg.text, msg.replace);
+                                    if (scriptName === 'slidergen') onSliderGenLine(msg.text);
 
                                     const stepMatch = msg.text.match(/Step\/Paso\s+(\d+)\/(\d+)/i);
                                     if (stepMatch) {
@@ -1218,6 +1269,9 @@
                                                 successMsg = "\n[SYSTEM] ✓ LoRA Training completed successfully! / ¡Entrenamiento del LoRA finalizado con éxito!";
                                                 msgClass = 'term-success';
                                             }
+                                        } else if (scriptName === 'slidergen' && userRequestedStop) {
+                                            successMsg = "\n[SYSTEM] ⏸ Generation stopped: Generate Pairs continues where it left off. / Generación detenida: Generar Pares sigue donde lo dejó.";
+                                            msgClass = 'term-warning';
                                         } else if (scriptName === 'precache') {
                                             if (userRequestedStop) {
                                                 successMsg = "\n[SYSTEM] ⏸ Pre-Cache stopped by user. / Pre-Caché detenida por el usuario.";
@@ -1247,6 +1301,10 @@
                 setRunningState(false);
                 loadPreviews();
                 checkCheckpointInfo();
+                if (scriptName === 'slidergen') {
+                    document.getElementById('btn-sg-stop').style.display = 'none';
+                    loadDatasetInfo();
+                }
             }
         }
 
@@ -1313,6 +1371,7 @@
         function applyButtonState() {
             const encoding = encodingStage !== null;
             document.getElementById('btn-caption').disabled = isRunning || encoding;
+            document.getElementById('btn-slidergen').disabled = isRunning || encoding;
             document.getElementById('btn-precache').disabled = isRunning || encoding;
             document.getElementById('btn-train').disabled = isRunning || encoding;
             document.getElementById('btn-stop').disabled = !isRunning || encoding;
@@ -1365,6 +1424,7 @@
                 document.getElementById('btn-caption-label').innerText = data.caption_count > 0
                     ? 'Redo Captions / Rehacer Captions' : 'Create Captions / Crear Captions';
                 renderDatasetGrid(allDatasetImages);
+                renderSliderGenLast();
             } catch (e) {}
         }
 
@@ -1498,6 +1558,126 @@
             if (data.overwrite !== undefined) document.getElementById('caption_overwrite').checked = !!data.overwrite;
         }
         loadCaptionSettings();
+
+        // ── Generador de pares del slider (scripts/slider_generator.py) ─────────────────────────────
+        // Ejemplo con el que se abre la primera vez: el slider triste <-> alegre del prototipo, con la
+        // tristeza más marcada y los niveles intermedios que la primera prueba echó en falta.
+        const SG_EXAMPLE = {
+            subject: 'Head and shoulders photo portrait',
+            neutral: 'neutral relaxed expression, mouth closed, looking at the camera',
+            edits: {
+                '-100': 'Make the person look very sad, close to crying: inner eyebrows raised, eyes watery and downcast, mouth corners pulled down',
+                '-50': 'Make the person look slightly sad, with a subtle downturned mouth and slightly raised inner eyebrows',
+                '50': 'Make the person smile slightly, with a soft closed-mouth smile',
+                '100': 'Make the person laugh, with a broad and genuinely happy smile showing the teeth'
+            }
+        };
+        const SG_POSITIONS = ['-100', '-50', '50', '100'];
+        let sgEngines = {}, sgLastGroup = null, sgLastRefresh = 0;
+
+        async function loadSliderGenSettings() {
+            let data = {};
+            try { data = await (await fetch('/api/slider-gen-settings')).json(); } catch (e) {}
+            sgEngines = data.engines || {};
+            const s = { ...SG_EXAMPLE, ...(data.settings || {}) };
+            const edits = { ...SG_EXAMPLE.edits, ...(s.edits || {}) };
+            document.getElementById('sg_subject').value = s.subject || '';
+            document.getElementById('sg_neutral').value = s.neutral || '';
+            SG_POSITIONS.forEach(p => document.getElementById('sg_edit_' + p).value = edits[p] || '');
+            if (s.engine) document.getElementById('sg_engine').value = s.engine;
+            if (s.base) document.getElementById('sg_base').value = s.base;
+            if (s.people) document.getElementById('sg_people').value = s.people;
+            if (s.vary_people !== undefined) document.getElementById('sg_vary_people').checked = !!s.vary_people;
+            if (s.anchors !== undefined) document.getElementById('sg_anchors').value = s.anchors;
+            if (s.size) document.getElementById('sg_size').value = String(s.size);
+        }
+        loadSliderGenSettings();
+
+        function sliderGenData() {
+            const edits = {};
+            SG_POSITIONS.forEach(p => edits[p] = document.getElementById('sg_edit_' + p).value.trim());
+            return {
+                engine: document.getElementById('sg_engine').value,
+                base: document.getElementById('sg_base').value,
+                people: parseInt(document.getElementById('sg_people').value) || 0,
+                vary_people: document.getElementById('sg_vary_people').checked,
+                anchors: parseInt(document.getElementById('sg_anchors').value) || 0,
+                size: parseInt(document.getElementById('sg_size').value),
+                subject: document.getElementById('sg_subject').value.trim(),
+                neutral: document.getElementById('sg_neutral').value.trim(),
+                edits: edits
+            };
+        }
+
+        async function runSliderGen() {
+            const d = sliderGenData();
+            const filled = SG_POSITIONS.filter(p => d.edits[p]);
+            if (!filled.length) { alert('Write at least one edit (-100, -50, +50 or +100). / Escribe al menos una edición (-100, -50, +50 o +100).'); return; }
+            if (d.base === 'generate' && !d.subject) { alert('Write the subject of the images. / Escribe el tema de las imágenes.'); return; }
+            const eng = sgEngines[d.engine];
+            if (eng && !eng.ready && !confirm(`The ${document.getElementById('sg_engine').selectedOptions[0].text} model is not downloaded yet: ~${eng.download_gb} GB will be downloaded first.\n\nEl modelo aún no está descargado: primero se descargarán ~${eng.download_gb} GB.\n\nContinue? / ¿Continuar?`)) return;
+            const groups = d.base === 'mine' ? 'your group_0 images / tus imágenes grupo_0' : `${d.people} groups / grupos`;
+            if (!confirm(`Generate into the dataset folder / Generar en la carpeta del dataset:\n${document.getElementById('dataset_path').value}\n\n${groups} × positions / posiciones 0, ${filled.join(', ')} + ${d.anchors} anchors\n\nImages already there are kept; only the missing ones are generated. / Las imágenes que ya estén se conservan; solo se generan las que faltan.`)) return;
+            await savePrecacheSettings(true);
+            try {
+                const res = await fetch('/api/save-slider-gen-settings', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d)
+                });
+                const data = await res.json();
+                if (data.status !== 'ok') { alert('Error: ' + (data.error || 'unknown')); return; }
+            } catch (e) { alert('Error: ' + e); return; }
+            sgLastGroup = null;
+            document.getElementById('sg-progress').style.display = 'block';
+            document.getElementById('btn-sg-stop').style.display = '';
+            document.getElementById('sg-bar').style.width = '0%';
+            document.getElementById('sg-text').innerText = '🧪 Creating synthetic dataset... / Creando dataset sintético... (loading models / cargando modelos)';
+            document.getElementById('sg-last').innerHTML = '';
+            startScript('slidergen');
+        }
+
+        // Línea del generador: "[SliderGen] hechas/total imagen grupo eta=segundos".
+        function onSliderGenLine(text) {
+            const m = text.match(/\[SliderGen\] (\d+)\/(\d+) (\S+) (\S+)(?: eta=(\d+))?/);
+            if (!m) return;
+            const done = parseInt(m[1]), total = parseInt(m[2]);
+            document.getElementById('sg-bar').style.width = `${total ? 100 * done / total : 0}%`;
+            let info = `🧪 ${done}/${total} images / imágenes`;
+            if (m[3] !== '-') info += ` · ${m[3]}`;
+            if (m[5] !== undefined) {
+                const s = parseInt(m[5]);
+                info += ` · ~${s >= 60 ? Math.round(s / 60) + ' min' : s + ' s'} left / restantes`;
+            }
+            document.getElementById('sg-text').innerText = info;
+            if (m[4] !== '-') sgLastGroup = m[4];
+            // La rejilla se refresca como mucho cada 4 s: las imágenes aparecen a medida que se generan.
+            if (m[3] !== '-' && Date.now() - sgLastRefresh > 4000) {
+                sgLastRefresh = Date.now();
+                loadDatasetInfo();
+            }
+        }
+
+        function sliderPosition(file) {
+            const m = file.replace(/\.[^.]+$/, '').match(/^(.+)_(-?\d+|anc)$/);
+            return m ? { group: m[1], pos: m[2] === 'anc' ? null : parseInt(m[2]) } : null;
+        }
+
+        // Tira del último grupo generado, de -100 a +100, para ver la calidad sin esperar al final.
+        function renderSliderGenLast() {
+            const box = document.getElementById('sg-last');
+            if (!box || !sgLastGroup) return;
+            const items = allDatasetImages
+                .map(img => ({ img, p: sliderPosition(img.file) }))
+                .filter(x => x.p && x.p.group === sgLastGroup)
+                .sort((a, b) => (a.p.pos ?? 999) - (b.p.pos ?? 999));
+            box.innerHTML = '';
+            items.forEach(({ img, p }) => {
+                const div = document.createElement('div');
+                div.className = 'sg-thumb';
+                div.innerHTML = `<img src="${mediaUrl(img)}" alt="${img.file}"><span>${p.pos === null ? 'anc' : (p.pos > 0 ? '+' : '') + p.pos}</span>`;
+                div.onclick = () => openModal(mediaUrl(img), img.file, img.caption || '');
+                box.appendChild(div);
+            });
+        }
 
         async function runCaption() {
             const captioned = parseInt(document.getElementById('ds-txt-count').innerText) || 0;
