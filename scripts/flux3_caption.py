@@ -31,7 +31,11 @@ PROMPT = (
     "the subjects, say where each one sits in the frame (left foreground, in her lap, upper right corner...) and how "
     "they relate, and end with the light, the colors and the background. Every element of the list is cited exactly "
     "once in the caption by its id in angle brackets, right after the words that name it, where it first appears: "
-    '"a woman <person_1> sits in the left foreground holding a small dog <animal_1>". Describe only what is visible; '
+    '"a woman <person_1> sits in the left foreground holding a small dog <animal_1>". The caption MUST contain the '
+    "<id> of every element. Example: \"A clean product photograph of a modern kitchen counter. A black and steel drip "
+    "coffee maker <coffee_maker_1> stands on the right; to its left, a white ceramic bowl <fruit_bowl_1> holds apples, "
+    "pears and grapes. The polished white marble countertop <countertop_1> fills the lower half, in front of a plain "
+    "white wall <background_1>. Soft, even studio light.\" Describe only what is visible; "
     "no words like stunning, beautiful, iconic or masterpiece, and no \"this image shows\".\n\n"
     "elements: the main subject first, then every other person, animal and object that matters, every block of "
     "legible text, and the background areas. At most 40 elements. A dense group of similar things (a distant crowd, "
@@ -109,6 +113,25 @@ def iou(a, b):
     return inter / max(1, area(a) + area(b) - inter)
 
 
+def cite(caption, element_id):
+    """
+    Pone <id> detrás de la primera mención del elemento que aún no esté citada: el nombre del id entero
+    ("coffee maker" para coffee_maker_1) o, si no aparece, cada una de sus palabras empezando por la última
+    ("bowl" para fruit_bowl_1). Los ids de texto se citan detrás de la primera cita entre comillas.
+    """
+    if "_Text_" in element_id:
+        candidates = [r'"[^"<>]+"']
+    else:
+        words = [w for w in re.sub(r"_\d+$", "", element_id).split("_") if len(w) > 2]
+        candidates = ([r"\s+".join(words)] if len(words) > 1 else []) + [w for w in reversed(words)]
+        candidates = [rf"\b{c}(?:s|es)?\b" for c in candidates]
+    for pattern in candidates:
+        for m in re.finditer(pattern, caption, flags=re.IGNORECASE):
+            if not caption[m.end():].lstrip().startswith("<"):
+                return f"{caption[:m.end()]} <{element_id}>{caption[m.end():]}"
+    return caption
+
+
 def normalize(caption, rows):
     """
     Deja caption y filas coherentes: ids válidos y únicos, cajas válidas, sin filas repetidas, cada fila
@@ -140,6 +163,10 @@ def normalize(caption, rows):
         first = caption.find(f"<{i}>")
         if first >= 0:
             caption = caption[:first + len(i) + 2] + caption[first + len(i) + 2:].replace(f" <{i}>", "").replace(f"<{i}>", "")
+    # Qwen3-VL a veces no cita los ids: se ponen detrás de la primera mención del elemento en el caption.
+    for r in out:
+        if f"<{r['id']}>" not in caption:
+            caption = cite(caption, r["id"])
     missing = [r for r in out if f"<{r['id']}>" not in caption]
     if missing:
         caption = (caption.rstrip(". ") + ". " if caption else "") + " ".join(
@@ -147,10 +174,23 @@ def normalize(caption, rows):
     return caption.strip(), out
 
 
+# Área mínima (en unidades de la cuadrícula 0-1000) de una fila de texto propia: ~0,2 % de la imagen.
+MIN_TEXT_AREA = 2000
+
+
+def contains(outer, inner, share=0.8):
+    """inner está casi entero (share) dentro de outer."""
+    it = max(0, min(outer[2], inner[2]) - max(outer[0], inner[0]))
+    il = max(0, min(outer[3], inner[3]) - max(outer[1], inner[1]))
+    return it * il >= share * max(1, (inner[2] - inner[0]) * (inner[3] - inner[1]))
+
+
 def merge_ocr(rows, texts):
     """
     Los textos del OCR ([{"bbox_2d", "text"}]) corrigen las palabras citadas en la fila de texto con
-    la que se solapan; los que no se solapan con ninguna se añaden como filas nuevas.
+    la que se solapan; los que no se solapan con ninguna se añaden como filas nuevas. Un texto diminuto
+    (una marca en un producto) no lleva fila propia, porque FLUX 3 no respeta cajas tan pequeñas: pasa al
+    desc del objeto que lo contiene, o se descarta si no está dentro de ninguno.
     """
     for x in texts:
         box = to_bbox(x.get("bbox_2d"))
@@ -165,6 +205,11 @@ def merge_ocr(rows, texts):
                 match["desc"] = re.sub(r'"[^"]*"', lambda m: f'"{quoted}"', match["desc"], count=1)
             else:
                 match["desc"] = f'Text reading "{quoted}". {match["desc"]}'
+        elif (box[2] - box[0]) * (box[3] - box[1]) < MIN_TEXT_AREA:
+            holder = [r for r in rows if "_Text_" not in r.get("id", "") and contains(r["bbox"], box)]
+            if holder:
+                host = min(holder, key=lambda r: (r["bbox"][2] - r["bbox"][0]) * (r["bbox"][3] - r["bbox"][1]))
+                host["desc"] = f'{host["desc"].rstrip(".")}, with the small text "{quoted}" on it.'
         else:
             rows.append({"id": f"{text_language(text)}_Text_1", "bbox": box,
                          "desc": f'Text reading "{quoted}", in the same type style, color and placement as in the scene.'})
