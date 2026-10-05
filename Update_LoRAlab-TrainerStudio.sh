@@ -43,6 +43,9 @@ echo "[EN] Syncing latest updates from GitHub..."
 echo "[ES] Sincronizando ultimas actualizaciones desde GitHub..."
 echo
 
+# Version actual, para listar despues los cambios nuevos / Current version, to list the new changes afterwards
+OLD_HEAD="$(git rev-parse -q --verify HEAD 2>/dev/null || true)"
+
 # 4. Rama a actualizar: la de esta carpeta (main, dev...); main si no hay ninguna, master como ultimo recurso
 #    Branch to update: this folder's branch (main, dev...); main if there is none, master as a last resort
 BRANCH="$(git symbolic-ref --short -q HEAD 2>/dev/null || true)"
@@ -83,6 +86,21 @@ echo "[ES] Proceso de actualizacion completado."
 echo
 echo "[EN] Your models, datasets, projects, LoRAs and settings were kept."
 echo "[ES] Tus modelos, datasets, proyectos, LoRAs y ajustes se han conservado."
+
+# Cambios desde la version anterior (titulos de los commits) / Changes since the previous version (commit titles)
+if [ -n "${OLD_HEAD}" ]; then
+    NEW_COUNT="$(git rev-list --no-merges --count "${OLD_HEAD}..HEAD" 2>/dev/null || true)"
+    if [ "${NEW_COUNT}" = "0" ]; then
+        echo
+        echo "[EN] You already had the latest version: no new changes."
+        echo "[ES] Ya tenias la ultima version: no hay cambios nuevos."
+    elif [ -n "${NEW_COUNT}" ]; then
+        echo
+        echo "[EN] Changes since your previous version (${NEW_COUNT}, newest first):"
+        echo "[ES] Cambios desde tu version anterior (${NEW_COUNT}, los mas recientes primero):"
+        git --no-pager log --no-merges -n 40 --format="  - %s" "${OLD_HEAD}..HEAD"
+    fi
+fi
 
 # 6. Librerias nuevas o actualizadas de requirements.txt / New or updated libraries from requirements.txt
 PY_EXE="${LORALAB_PYTHON:-./venv/bin/python}"
