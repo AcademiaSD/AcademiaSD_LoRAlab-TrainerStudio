@@ -50,6 +50,7 @@ import torch.nn as nn
 import torchvision.transforms.functional as F_vision
 from PIL import Image
 from safetensors import safe_open
+from i18n import t
 
 # ============================================================================
 # BILINGUAL LOGGING / LOGS BILINGUES

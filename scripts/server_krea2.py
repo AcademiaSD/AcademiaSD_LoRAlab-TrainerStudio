@@ -18,9 +18,11 @@ import logging
 import webbrowser
 
 from console_stream import read_console
+import i18n
 import remote_access
 import file_transfer
 from pathlib import Path
+from i18n import t
 
 
 # =============================================================================
@@ -36,7 +38,7 @@ def ensure_package(package_name, import_name=None):
 
     print()
     print("=" * 70)
-    print(f"[INFO] Installing missing package / Instalando paquete: '{package_name}'...")
+    print("[INFO] " + t("Installing missing package: '{name}'...", name=package_name))
     print(f"[INFO] Python: {sys.executable}")
     print("=" * 70)
     print()
@@ -44,13 +46,13 @@ def ensure_package(package_name, import_name=None):
     try:
         subprocess.check_call([sys.executable, "-m", "pip", "install", package_name])
     except subprocess.CalledProcessError as exc:
-        print(f"\n[ERROR] Failed to install '{package_name}'. Exit code: {exc.returncode}\n")
+        print("\n[ERROR] " + t("Failed to install '{name}'. Exit code: {code}", name=package_name, code=exc.returncode) + "\n")
         raise
 
     if importlib.util.find_spec(import_name) is None:
-        raise RuntimeError(f"Package '{package_name}' installed but import failed.")
+        raise RuntimeError(t("Package '{name}' installed but import failed.", name=package_name))
 
-    print(f"[OK] '{package_name}' installed successfully / instalado correctamente.")
+    print("[OK] " + t("'{name}' installed successfully.", name=package_name))
 
 
 ensure_package("Flask", "flask")
@@ -130,7 +132,7 @@ def read_json_file(path, default=None):
             data = json.load(f)
         return data if isinstance(data, dict) else default
     except Exception as exc:
-        print(f"[ERROR] Could not read {path}: {exc}")
+        print("[ERROR] " + t("Could not read {path}: {error}", path=path, error=exc))
         return default
 
 
@@ -256,7 +258,7 @@ def select_folder_native():
             root.attributes('-topmost', True)
             
             chosen = filedialog.askdirectory(
-                title="Select Folder / Seleccionar Carpeta",
+                title=t("Select Folder"),
                 initialdir=initial_dir
             )
             root.destroy()
@@ -285,7 +287,7 @@ def select_folder_native():
         if selected_path:
             return jsonify({"status": "ok", "path": selected_path})
         if not dialog_shown:
-            return jsonify({"status": "error", "error": "No native folder dialog / Sin diálogo nativo de carpetas"})
+            return jsonify({"status": "error", "error": t("No native folder dialog")})
         else:
             return jsonify({"status": "cancelled", "path": None})
 
@@ -394,11 +396,11 @@ def export_lora():
         custom_name = data.get("final_name", "").strip()
 
         if not target_dir_str:
-            return jsonify({"status": "error", "error": "Please select a target folder / Por favor selecciona una carpeta de destino."}), 400
+            return jsonify({"status": "error", "error": t("Please select a target folder.")}), 400
 
         target_dir = Path(target_dir_str).resolve()
         if not target_dir.exists() or not target_dir.is_dir():
-            return jsonify({"status": "error", "error": f"Target folder does not exist / Carpeta de destino no existe: {target_dir}"}), 400
+            return jsonify({"status": "error", "error": t("Target folder does not exist: {path}", path=target_dir)}), 400
 
         if not custom_name:
             custom_name = "krea2_lora.safetensors"
@@ -407,7 +409,7 @@ def export_lora():
 
         output_dir = get_train_output_dir()
         if not output_dir.exists():
-            return jsonify({"status": "error", "error": f"Output folder does not exist / Carpeta de salida no existe: {output_dir}"}), 404
+            return jsonify({"status": "error", "error": t("Output folder does not exist: {path}", path=output_dir)}), 404
 
         final_file = output_dir / "Krea2_FINAL_LoRA.safetensors"
         source_file = None
@@ -425,7 +427,7 @@ def export_lora():
                 source_file = candidates[0][1]
 
         if not source_file or not source_file.exists():
-            return jsonify({"status": "error", "error": f"No .safetensors files found in / No se encontraron archivos .safetensors en: {output_dir}"}), 404
+            return jsonify({"status": "error", "error": t("No .safetensors files found in: {path}", path=output_dir)}), 404
 
         dest_file = target_dir / custom_name
         shutil.copy2(source_file, dest_file)
@@ -448,7 +450,7 @@ def export_lora():
 @app.route("/")
 def index():
     if not UI_FILE.exists():
-        return f"File not found / No se encuentra: trainer_ui.html in {UI_FILE.parent}", 404
+        return t("File not found: {path}", path=UI_FILE), 404
     return send_from_directory(str(UI_FILE.parent), UI_FILE.name)
 
 
@@ -488,7 +490,7 @@ def save_precache():
     try:
         data = request.get_json(force=True)
         if not isinstance(data, dict):
-            return jsonify({"status": "error", "error": "JSON object required / Objeto JSON requerido."}), 400
+            return jsonify({"status": "error", "error": t("JSON object required.")}), 400
         
         proj = data.get("project_name", "").strip()
         cache_dir_name = f"cached_data_krea2_{proj}" if proj else "cached_data_krea2"
@@ -571,7 +573,7 @@ def save_train():
     try:
         data = request.get_json(force=True)
         if not isinstance(data, dict):
-            return jsonify({"status": "error", "error": "JSON object required / Objeto JSON requerido."}), 400
+            return jsonify({"status": "error", "error": t("JSON object required.")}), 400
         
         proj = data.get("project_name", "").strip()
         cache_dir_name = f"cached_data_krea2_{proj}" if proj else "cached_data_krea2"
@@ -656,14 +658,14 @@ def run_script():
         script_path = get_script_for_name(script_name)
 
         if script_path is None or not script_path.exists():
-            return jsonify({"status": "error", "error": f"Script not found / Script no encontrado: {script_name}"}), 404
+            return jsonify({"status": "error", "error": t("Script not found: {name}", name=script_name)}), 404
 
         if encoding_stage() is not None:
-            return jsonify({"status": "error", "error": "Encoding the preview prompt, wait until it finishes / Codificando el prompt de la preview, espera a que termine."}), 409
+            return jsonify({"status": "error", "error": t("Encoding the preview prompt, wait until it finishes.")}), 409
 
         with process_lock:
             if active_process is not None and active_process.poll() is None:
-                return jsonify({"status": "error", "error": f"Process already running / Proceso en ejecución: {active_script}"}), 409
+                return jsonify({"status": "error", "error": t("Process already running: {name}", name=active_script)}), 409
 
             command = [sys.executable, "-u", str(script_path)]
 
@@ -901,7 +903,7 @@ def clear_dataset():
     """
     try:
         if get_status()["running"]:
-            return jsonify({"status": "error", "error": "A process is running / Hay un proceso en marcha"}), 409
+            return jsonify({"status": "error", "error": t("A process is running")}), 409
         dataset_dir = get_dataset_dir()
         removed, errors = 0, []
         if dataset_dir.is_dir():
@@ -949,9 +951,9 @@ def delete_dataset_image():
 
         # El nombre viene del navegador: tiene que seguir dentro del dataset.
         if not filename or dataset_dir.resolve() not in target.parents:
-            return jsonify({"status": "error", "error": "Path outside the dataset / Ruta fuera del dataset"}), 400
+            return jsonify({"status": "error", "error": t("Path outside the dataset")}), 400
         if not target.is_file() or target.suffix.lower() not in DATASET_EXTS:
-            return jsonify({"status": "error", "error": f"Not found / No existe: {filename}"}), 404
+            return jsonify({"status": "error", "error": t("Not found: {name}", name=filename)}), 404
 
         removed = []
         for f in (target, caption_path(target)):
@@ -973,12 +975,12 @@ def delete_project_data():
         elif target == "training":
             path = get_train_output_dir()
         else:
-            return jsonify({"status": "error", "error": f"Unknown target / Destino desconocido: {target}"}), 400
+            return jsonify({"status": "error", "error": t("Unknown target: {name}", name=target)}), 400
 
         # Un proceso en marcha tiene ficheros abiertos en esas carpetas.
         if get_status()["running"]:
             return jsonify({"status": "error",
-                            "error": "A process is running. Stop it first. / Hay un proceso en marcha. Detenlo primero."}), 409
+                            "error": t("A process is running. Stop it first.")}), 409
 
         removed, errors = 0, []
         if path.is_dir():
@@ -1020,6 +1022,7 @@ def open_browser():
         pass
 
 
+i18n.register(app)
 file_transfer.register(app, get_dataset_dir, get_train_output_dir, DATASET_EXTS)
 
 
@@ -1027,8 +1030,8 @@ if __name__ == "__main__":
     print("\n" + "=" * 70)
     print("  ACADEMIASD — KREA-2 LORA TRAINER WEB SERVER")
     print("=" * 70)
-    print(f"  Base Dir / Carpeta  : {BASE_DIR}")
-    print(f"  Python Interpreter  : {sys.executable}")
+    print(f"  {t('Base folder'):<20}: {BASE_DIR}")
+    print(f"  {t('Python interpreter'):<20}: {sys.executable}")
     print(f"  URL                 : {remote_access.local_url('trainer_port')}")
     print("=" * 70 + "\n")
 

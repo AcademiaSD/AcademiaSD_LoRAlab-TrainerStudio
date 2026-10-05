@@ -39,6 +39,7 @@ import torch
 import torchvision.transforms.functional as F_vision
 from PIL import Image
 from diffusers import DiffusionPipeline
+from i18n import t
 
 
 # ============================================================================
@@ -310,7 +311,7 @@ def ensure_ltx23_model_downloaded(local_path):
 
     token = get_hf_token()
     if token:
-        print("✓ Using HF Token / Usando token de HF")
+        print("✓ " + t("Using HF Token"))
 
     os.makedirs(local_path, exist_ok=True)
 

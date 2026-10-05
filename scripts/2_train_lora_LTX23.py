@@ -53,6 +53,7 @@ from bitsandbytes.nn import (
 from safetensors import safe_open
 from safetensors.torch import save_file, load_file
 from PIL import Image
+from i18n import t
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -2765,7 +2766,7 @@ def train_ltx23():
 
             changes = reload_live_settings()
             if changes:
-                print("\n[LIVE] Settings reloaded without stopping / Ajustes recargados sin parar:")
+                print("\n[LIVE] " + t("Settings reloaded without stopping:"))
                 for c in changes:
                     print("[LIVE]   {}".format(c))
                 if step > TOTAL_STEPS:

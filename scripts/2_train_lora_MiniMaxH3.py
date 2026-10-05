@@ -88,6 +88,7 @@ except Exception:
 ACTIVATION_OFFLOAD_ACTIVE = False
 
 import psutil
+from i18n import t
 
 # torch.cuda.OutOfMemoryError solo existe en PyTorch >= 2.0; en versiones
 # anteriores un OOM real de CUDA llega como RuntimeError normal.

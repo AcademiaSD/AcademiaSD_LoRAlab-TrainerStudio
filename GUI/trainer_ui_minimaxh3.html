@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AcademiaSD MiniMax-H3 LoRAlab</title>
+    <script src="/i18n.js"></script>
 
     <!-- Favicon de la pestaña del navegador -->
     <link rel="icon" type="image/png" href="/assets/logo_128.png">
@@ -324,7 +325,7 @@
             <div class="logo-title">
                 <div>
                     <h1>AcademiaSD MimiMax-H3 LoRAlab</h1>
-                    <span>Web GUI & Automation / Interfaz Web y Automatización</span>
+                    <span>Web GUI & Automation</span>
                 </div>
             </div>
 
@@ -339,17 +340,17 @@
             <!-- Hardware Monitor (RAM, VRAM, GPU Temp) -->
             <div class="hardware-monitor">
                 <div class="hw-card">
-                    <div class="label">RAM Usage / Uso RAM</div>
+                    <div class="label">RAM Usage</div>
                     <div class="value" id="ram-text">-- GB</div>
                     <div class="progress-bar-bg"><div class="progress-bar-fill" id="ram-bar"></div></div>
                 </div>
                 <div class="hw-card">
-                    <div class="label">VRAM Usage / Uso VRAM</div>
+                    <div class="label">VRAM Usage</div>
                     <div class="value" id="vram-text">-- GB</div>
                     <div class="progress-bar-bg"><div class="progress-bar-fill" id="vram-bar" style="background:#38bdf8;"></div></div>
                 </div>
                 <div class="hw-card">
-                    <div class="label">GPU Temp / Temp. GPU</div>
+                    <div class="label">GPU Temp</div>
                     <div class="value" id="gpu-temp-text">-- °C</div>
                     <div class="progress-bar-bg"><div class="progress-bar-fill" id="gpu-temp-bar" style="background:var(--success);"></div></div>
                 </div>
@@ -366,16 +367,16 @@
             <!-- 0. Hugging Face Token Panel (CERRADO POR DEFECTO) -->
             <div id="pnl_hf" class="panel collapsed">
                 <div class="panel-title" onclick="togglePanel(this)">
-                    <span>Hugging Face Token (Optional / Opcional)</span>
+                    <span>Hugging Face Token (Optional)</span>
                     <span class="toggle-icon">▼</span>
                 </div>
                 <div class="panel-body">
                     <div class="form-group" style="margin-bottom: 8px;">
-                        <label>HF Token / Token de HF:</label>
+                        <label>HF Token:</label>
                         <input type="password" id="hf_token" value="" placeholder="hf_..." autocomplete="off">
                     </div>
                     <button type="button" class="btn btn-secondary btn-full" onclick="saveHfToken()">
-                        Save HF Token / Guardar HF Token
+                        Save HF Token
                     </button>
                 </div>
             </div>
@@ -383,32 +384,32 @@
             <!-- 1. Pre-Cache Settings Panel (ABIERTO POR DEFECTO) -->
             <div id="pnl_precache" class="panel">
                 <div class="panel-title" onclick="togglePanel(this)">
-                    <span>1. Pre-Cache Settings / Config. Pre-Caché</span>
+                    <span>1. Pre-Cache Settings</span>
                     <span class="toggle-icon">▲</span>
                 </div>
                 <div class="panel-body">
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Project Name / Proyecto:</label>
-                            <input type="text" id="project_name" value="" placeholder="Ej: cherry2" oninput="updateProjectPaths()">
+                            <label>Project Name:</label>
+                            <input type="text" id="project_name" value="" placeholder="e.g. cherry2" oninput="updateProjectPaths()">
                         </div>
                         <div class="form-group">
-                            <label>Trigger Word / Palabra Clave:</label>
+                            <label>Trigger Word:</label>
                             <input type="text" id="trigger_word" value="">
                         </div>
                     </div>
 
                     <div class="form-group">
-                        <label>Dataset Path / Ruta del Dataset:</label>
+                        <label>Dataset Path:</label>
                         <div style="display:flex; gap:8px;">
                             <input type="text" id="dataset_path" value="./dataset" onchange="loadDatasetInfo(); try { refmodDefaults(); } catch (e) {}">
-                            <button type="button" class="btn btn-secondary btn-sm" onclick="browseFolderNative('dataset')">Browse / Explorar</button>
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="browseFolderNative('dataset')">Browse</button>
                         </div>
                     </div>
 
                     <div class="form-group">
-                        <label>Cache Folder / Carpeta Caché (Auto):</label>
-                        <input type="text" id="precache_cache_dir" value="./cached_data_MiniMaxH3" readonly title="Ruta informativa generada automáticamente">
+                        <label>Cache Folder (Auto):</label>
+                        <input type="text" id="precache_cache_dir" value="./cached_data_MiniMaxH3" readonly title="Path generated automatically, for information">
                     </div>
 
                     <div class="form-row">
@@ -424,7 +425,7 @@
 							<option value="331776" selected>576 x 576 (331,776 px²)</option>
                             <option value="589824">768 x 768 (589,824 px²)</option>
                             <option value="1048576">1024 x 1024 (1,048,576 px²)</option>
-                            <option value="custom">Custom / Personalizada</option>
+                            <option value="custom">Custom</option>
                         </select>
                         <input type="number" id="precache_target_area" value="331776" style="margin-top:6px; display:none;">
                     </div>
@@ -458,7 +459,7 @@
                         <div class="form-group">
                             <label>Frames (clips):</label>
                             <select id="precache_num_frames"
-                                    title="Frames per clip. Only 17n+5 is valid: that is H3's VAE geometry (17n+5 pixel frames map to 5n+2 latents). Longer clips cost quadratically more VRAM, because attention is O(n2). On 16 GB, 56 frames (2.3 s) is the confirmed figure; 73 and 90 are worth trying but not guaranteed. Images ignore this. / Fotogramas por clip. Solo vale 17n+5: es la geometria del VAE de H3. Los clips largos cuestan VRAM de forma cuadratica, porque la atencion es O(n2). En 16 GB, 56 fotogramas (2,3 s) es lo confirmado; 73 y 90 merecen probarse pero no estan garantizados. Las imagenes ignoran este campo.">
+                                    title="Frames per clip. Only 17n+5 is valid: that is H3's VAE geometry (17n+5 pixel frames map to 5n+2 latents). Longer clips cost quadratically more VRAM, because attention is O(n2). On 16 GB, 56 frames (2.3 s) is the confirmed figure; 73 and 90 are worth trying but not guaranteed. Images ignore this.">
                                 <option value="22">22 &mdash; 0.9 s</option>
                                 <option value="39">39 &mdash; 1.6 s</option>
                                 <option value="56" selected>56 &mdash; 2.3 s (16 GB)</option>
@@ -474,23 +475,19 @@
                     <div class="btn-row" style="margin-top:12px;">
                         <button type="button" class="btn btn-secondary btn-tall" onclick="triggerLoadJson('precache')">
                             <span class="main-text">Load JSON</span>
-                            <span class="sub-text">Cargar JSON</span>
                         </button>
                         <button type="button" class="btn btn-secondary btn-tall" onclick="savePrecacheSettings()">
                             <span class="main-text">Save JSON</span>
-                            <span class="sub-text">Guardar JSON</span>
                         </button>
                     </div>
 
                     <div class="btn-row" style="margin-top:8px;">
                         <button type="button" class="btn btn-danger btn-tall" onclick="deleteProjectData('precache')"
-                                title="Empties this project's pre-cache folder: latents, embeddings and cache_info.json. The dataset is NOT touched. / Vacia la carpeta de pre-cache de este proyecto: latentes, embeddings y cache_info.json. El dataset NO se toca.">
+                                title="Empties this project's pre-cache folder: latents, embeddings and cache_info.json. The dataset is NOT touched.">
                             <span class="main-text">Delete Pre-Cache</span>
-                            <span class="sub-text">Borrar Pre-Caché</span>
                         </button>
                         <button type="button" class="btn btn-success btn-tall" id="btn-precache" onclick="runPrecache()">
                             <span class="main-text">Start Pre-Cache</span>
-                            <span class="sub-text">Iniciar Pre-Caché</span>
                         </button>
                     </div>
                 </div>
@@ -502,35 +499,34 @@
             <!-- 3. Export to WebUI Models Panel (ABIERTO POR DEFECTO) -->
             <div id="pnl_export" class="panel">
                 <div class="panel-title" onclick="togglePanel(this)">
-                    <span>3. Export to WebUI / Enviar a Models</span>
+                    <span>3. Export to WebUI</span>
                     <span class="toggle-icon">▲</span>
                 </div>
                 
                 <div class="panel-body">
                     <div class="form-group">
-                        <label>Final LoRA Filename / Nombre Final (.safetensors):</label>
+                        <label>Final LoRA Filename (.safetensors):</label>
                         <input type="text" id="export_final_name" value="MiniMaxH3_lora.safetensors" placeholder="mi_lora_MiniMaxH3.safetensors">
                     </div>
 
                     <div class="form-group">
-                        <label>UI LoRA Folder / Carpeta models/lora (ComfyUI / Forge / A1111):</label>
+                        <label>UI LoRA Folder (ComfyUI / Forge / A1111):</label>
                         <div style="display:flex; gap:8px;">
                             <input type="text" id="export_models_dir" value="" placeholder="C:/ComfyUI/models/loras">
-                            <button type="button" class="btn btn-secondary btn-sm" onclick="browseFolderNative('export')">Browse / Explorar</button>
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="browseFolderNative('export')">Browse</button>
                         </div>
                         <button type="button" class="btn btn-secondary btn-sm btn-full" onclick="saveExportPath()" style="margin-top:6px;"
-                                title="Saves this folder for all the LoRAlab trainers: they all open with it filled in. / Guarda esta carpeta para todos los entrenadores del LoRAlab: todos se abren con ella rellenada.">
-                            Save Path / Guardar Ruta
+                                title="Saves this folder for all the LoRAlab trainers: they all open with it filled in.">
+                            Save Path
                         </button>
                     </div>
 
                     <button type="button" class="btn btn-warning btn-tall btn-full" onclick="sendToModels()" style="margin-top:5px;">
                         <span class="main-text">🚀 Send to Models</span>
-                        <span class="sub-text">Enviar a Models</span>
                     </button>
                     <button type="button" class="btn btn-secondary btn-sm btn-full" onclick="ftDownload()" style="margin-top:6px;"
-                            title="Downloads the LoRA to the device you are browsing from (another PC, RunPod...). / Descarga el LoRA al equipo desde el que navegas (otro PC, RunPod...).">
-                        ⬇ Download LoRA / Descargar LoRA
+                            title="Downloads the LoRA to the device you are browsing from (another PC, RunPod...).">
+                        ⬇ Download LoRA
                     </button>
                 </div>
             </div>
@@ -543,7 +539,7 @@
             <div id="pnl_train" class="panel">
                 <div class="panel-title" onclick="togglePanel(this)">
                     <div style="display:flex; align-items:center; gap:8px;">
-                        <span>2. Training Settings / Config. Entrenamiento</span>
+                        <span>2. Training Settings</span>
                         <span id="checkpoint-badge" style="font-size:0.75rem; color:#38bdf8;"></span>
                     </div>
                     <span class="toggle-icon">▲</span>
@@ -551,8 +547,8 @@
                 
                 <div class="panel-body">
                     <div class="form-group">
-                        <label>Output Dir / Carpeta Salida (Auto):</label>
-                        <input type="text" id="train_output_dir" value="./MiniMaxH3_lora_output" readonly title="Ruta informativa generada automáticamente">
+                        <label>Output Dir (Auto):</label>
+                        <input type="text" id="train_output_dir" value="./MiniMaxH3_lora_output" readonly title="Path generated automatically, for information">
                     </div>
 
                     <div class="form-row-3">
@@ -589,12 +585,12 @@
                         <div class="form-group">
                             <label>Weight Decay:</label>
                             <input type="number" step="0.00001" min="0" id="train_weight_decay"
-                                   value="0.0" title="Frena el DESPLAZAMIENTO de los pesos: en cada paso los empuja un poco hacia cero, asi que entrenar mas lejos cuesta mas. Importa aqui porque el modo en que se rompe este LoRA no es el sobreajuste normal, es la distancia recorrida: el timbre o el concepto mejoran cuanto mas se mueven los pesos, y lo que NO se entrena (el video en un dataset de voz, el prompt) se degrada sobre ese mismo eje. Bajar el LR no lo evita, solo tarda mas en llegar al mismo sitio; esto mueve el punto de cruce. 0 = desactivado. Un valor tipico es 1e-4. Sube el loss un poco: es lo esperado. / Brakes weight DISPLACEMENT: every step nudges the weights back toward zero, so travelling further costs more. It matters because this LoRA does not fail by ordinary overfitting but by distance travelled -- what IS trained improves the further the weights move, and what is NOT trained (the video branch on a voice dataset, prompt following) degrades along that same axis. Lowering the LR does not avoid it, it only takes longer to arrive; this moves the crossing point. 0 = off, 1e-4 is typical. It raises the loss slightly, which is expected.">
+                                   value="0.0" title="Slows down how far the weights DRIFT: every step pushes them slightly towards zero, so training further costs more. It matters here because this LoRA does not break by ordinary overfitting but by distance travelled: the timbre or the concept improve the more the weights move, and what is NOT trained (the video in a voice dataset, the prompt) degrades along that same axis. Lowering the LR does not prevent it, it only takes longer to reach the same place; this moves the crossover point. 0 = off. A typical value is 1e-4. The loss goes up a little: that is expected.">
                         </div>
                         <div class="form-group">
                             <label>Caption Dropout:</label>
                             <input type="number" step="0.01" min="0" max="1" id="train_caption_dropout"
-                                   value="0.05" title="Fraccion de pasos que entrenan con el caption VACIO. 0,05 = uno de cada veinte. Conserva la capacidad de seguir el prompt: sin esto, una ejecucion larga aprende que la palabra clave esta siempre presente y deja de atender al resto del texto -- el fallo de 'tiene el timbre perfecto pero habla en un idioma raro'. Tambien es lo que mantiene el comportamiento sin prompt, del que depende el CFG en la generacion. 0 = desactivado; 0,05 es el valor por defecto y rara vez hace falta tocarlo. Por encima de ~0,15 el concepto tarda mucho mas en aprenderse. / Fraction of steps trained with an EMPTY caption. 0.05 = one in twenty. It preserves prompt following: without it a long run learns the trigger is always there and stops attending to the rest of the text -- the 'perfect timbre but speaking gibberish' failure. It also keeps the unconditional behaviour that CFG relies on at generation time. 0 = off; 0.05 is the default and rarely needs changing. Above ~0.15 the concept takes much longer to learn.">
+                                   value="0.05" title="Fraction of steps that train with an EMPTY caption. 0.05 = one in twenty. It keeps the ability to follow the prompt: without it, a long run learns that the trigger word is always there and stops paying attention to the rest of the text -- the 'perfect timbre but speaks a strange language' failure. It is also what keeps the no-prompt behaviour that CFG relies on at generation time. 0 = off; 0.05 is the default and rarely needs changing. Above ~0.15 the concept takes much longer to learn.">
                         </div>
                     </div>
 
@@ -609,7 +605,7 @@
                         </div>
                         <div class="form-group">
                             <label>VAE Device:</label>
-                            <select id="train_preview_vae_device" title="El decoder del VAE son 4,8 GB en bf16: en una tarjeta de 16 GB NO cabe junto al DiT. En CPU tarda 1-2 min y no toca la VRAM. / The VAE decoder needs 4.8 GB in bf16 and does not fit next to the DiT on a 16 GB card. CPU takes 1-2 min and touches no VRAM.">
+                            <select id="train_preview_vae_device" title="The VAE decoder is 4.8 GB in bf16: on a 16 GB card it does NOT fit next to the DiT. On CPU it takes 1-2 min and does not touch the VRAM.">
                                 <option value="cpu" selected>CPU (safe)</option>
                                 <option value="cuda">CUDA (+4.8 GB)</option>
                             </select>
@@ -625,7 +621,7 @@
                             <input type="checkbox" id="train_use_turbo" checked onchange="toggleTurboMode(this.checked)" style="width: 18px; height: 18px; cursor: pointer;">
                         </div>
                         <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
-                            <label style="font-size:0.75rem; color:var(--text-muted); margin:0; white-space:nowrap;">Strength / Potencia:</label>
+                            <label style="font-size:0.75rem; color:var(--text-muted); margin:0; white-space:nowrap;">Strength:</label>
                             <input type="number" step="0.05" id="train_turbo_strength" value="1.0" style="padding:3px 8px; font-size:0.8rem; width:80px;">
                         </div>
                         <span style="font-size: 0.7rem; color: var(--text-muted); display: block; margin-top: 4px;">
@@ -634,16 +630,16 @@
                     </div>
 
                     <div class="form-group">
-                        <label>VRAM Profile / Perfil de VRAM:</label>
-                        <select id="train_vram_profile" onchange="applyVramProfile(this.value)" title="Calcula GPU VRAM, Swap y Headroom para el tamano de tarjeta elegido, con TU resolucion y TUS captions. Elegir 8/10/12 SIMULA esa tarjeta en la que tienes. / Computes the three fields for the chosen card size using your resolution and captions. Picking 8/10/12 SIMULATES that card on the one you have.">
-                            <option value="auto" selected>Auto &mdash; detectar mi GPU / detect my GPU</option>
+                        <label>VRAM Profile:</label>
+                        <select id="train_vram_profile" onchange="applyVramProfile(this.value)" title="Works out GPU VRAM, Swap and Headroom for the chosen card size, with YOUR resolution and YOUR captions. Choosing 8/10/12 SIMULATES that card on the one you have.">
+                            <option value="auto" selected>Auto &mdash; detect my GPU</option>
                             <option value="32">GPU 32 GB VRAM</option>
                             <option value="24">GPU 24 GB VRAM</option>
                             <option value="16">GPU 16 GB VRAM</option>
                             <option value="12">GPU 12 GB VRAM</option>
                             <option value="10">GPU 10 GB VRAM</option>
                             <option value="8">GPU 8 GB VRAM</option>
-                            <option value="custom">Custom / Personalizado</option>
+                            <option value="custom">Custom</option>
                         </select>
                         <span id="vram_auto_info" style="font-size:0.7rem; color:var(--text-muted); display:block; margin-top:4px; line-height:1.35;"></span>
                     </div>
@@ -666,7 +662,7 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label>Block Swap Storage:</label>
-                            <select id="train_park_mode" title="Where the blocks that do not fit in VRAM live. RAM is the default and the right choice for almost everyone. Disk parks them in a memory-mapped file instead: same speed, but the memory becomes evictable, so a machine short on RAM degrades rather than running out. In exchange it writes up to 16 GB at startup and needs that free space. / Donde viven los bloques que no caben en VRAM. RAM es lo predeterminado y lo adecuado para casi todo el mundo. Disk los aparca en un fichero mapeado en memoria: misma velocidad, pero esa memoria pasa a ser desalojable, asi que una maquina con poca RAM degrada en vez de quedarse sin memoria. A cambio escribe hasta 16 GB al arrancar y necesita ese espacio libre.">
+                            <select id="train_park_mode" title="Where the blocks that do not fit in VRAM live. RAM is the default and the right choice for almost everyone. Disk parks them in a memory-mapped file instead: same speed, but the memory becomes evictable, so a machine short on RAM degrades rather than running out. In exchange it writes up to 16 GB at startup and needs that free space.">
                                 <option value="auto" selected>Auto (RAM + Disk)</option>
                                 <option value="ram">RAM</option>
                                 <option value="disk">Disk</option>
@@ -675,25 +671,25 @@
                         <div class="form-group">
                             <label>Resident Blocks (0 = auto):</label>
                             <input type="number" step="1" min="0" max="50" id="train_resident_blocks" value="0"
-                                   title="Blocks kept in VRAM out of 50. 0 lets the VRAM plan decide. The plan only counts WEIGHTS (base + N x block + overhead), and its 2.5 GB overhead was calibrated on 300-700 token image sequences. A video clip is 3,000+ tokens, the activations dominate, and the plan overshoots: it asks for 30 resident blocks and saturates the card. Set it by hand for video and lower it until the peak fits. Fewer blocks = less VRAM and slower. / Bloques que se quedan en VRAM de los 50. 0 deja decidir al plan de VRAM. El plan solo cuenta PESOS, y su overhead de 2,5 GB se calibro con secuencias de imagen de 300-700 tokens. Un clip son mas de 3.000, las activaciones mandan y el plan se pasa: pide 30 residentes y satura la tarjeta. Con video, ponlo a mano y bajalo hasta que el pico quepa. Menos bloques = menos VRAM y mas lento.">
+                                   title="Blocks kept in VRAM out of 50. 0 lets the VRAM plan decide. The plan only counts WEIGHTS (base + N x block + overhead), and its 2.5 GB overhead was calibrated on 300-700 token image sequences. A video clip is 3,000+ tokens, the activations dominate, and the plan overshoots: it asks for 30 resident blocks and saturates the card. Set it by hand for video and lower it until the peak fits. Fewer blocks = less VRAM and slower.">
                         </div>
                         <div class="form-group">
                             <label>RAM Limit (GB, 0 = off):</label>
-                            <input type="number" step="1" min="0" id="train_ram_limit_gb" value="0" title="Only used in Auto mode. Ceiling for TOTAL system RAM, the figure you see in Task Manager. 0 = no limit, everything stays in RAM. Above 0, the blocks that would push the machine past it are parked in a memory-mapped file instead. / Solo se usa en modo Auto. Techo de la RAM TOTAL del sistema, la cifra que ves en el Administrador de tareas. 0 = sin limite, todo se queda en RAM. Por encima de 0, los bloques que pasarian de ese techo se aparcan en un fichero mapeado en memoria.">
+                            <input type="number" step="1" min="0" id="train_ram_limit_gb" value="0" title="Only used in Auto mode. Ceiling for TOTAL system RAM, the figure you see in Task Manager. 0 = no limit, everything stays in RAM. Above 0, the blocks that would push the machine past it are parked in a memory-mapped file instead.">
                         </div>
                         <div class="form-group">
-                            <label>Train Audio / Entrenar Audio:</label>
-                            <label class="chk-inline" title="Trains the audio branch as well as the video one: the loss becomes the average of both. Needs a pre-cache built with clips that HAVE an audio track -- with the silent placeholder this only makes training slower for nothing. The audio rows ride in the same packed sequence, so a 124 frame clip goes from 1,332 to 1,746 tokens: about 1 GB more VRAM and 1 s/it. The VRAM plan already counts them. / Entrena la rama de audio ademas de la de video: la loss pasa a ser la media de las dos. Necesita una pre-cache hecha con clips que TENGAN pista de audio; con el relleno de silencio esto solo hace el entrenamiento mas lento sin ganar nada. Las filas de audio van en la misma secuencia empaquetada, asi que un clip de 124 fotogramas pasa de 1.332 a 1.746 tokens: cerca de 1 GB mas de VRAM y 1 s/it. El plan de VRAM ya las cuenta.">
+                            <label>Train Audio:</label>
+                            <label class="chk-inline" title="Trains the audio branch as well as the video one: the loss becomes the average of both. Needs a pre-cache built with clips that HAVE an audio track -- with the silent placeholder this only makes training slower for nothing. The audio rows ride in the same packed sequence, so a 124 frame clip goes from 1,332 to 1,746 tokens: about 1 GB more VRAM and 1 s/it. The VRAM plan already counts them.">
                                 <input type="checkbox" id="train_use_audio_loss">
-                                <span>Enable / Activar</span>
+                                <span>Enable</span>
                             </label>
                         </div>
                         <div class="form-group">
                             <label>Sage Attention 2.2.0 (previews only):</label>
                             <label class="chk-inline"
-                                   title="DOES NOTHING WHEN TRAINING, and the trainer says so in the log. SageAttention ships inference kernels with no backward pass: its output comes back with requires_grad=False, so the q/k/v LoRAs would receive zero gradient and the LoRA would train wrong without a single error message. Native attention is used instead, which is already memory-efficient. The setting is kept for previews, where there is no backward and Sage would be usable. / NO HACE NADA AL ENTRENAR, y el entrenador lo dice en el log. SageAttention son kernels de inferencia sin backward: su salida vuelve con requires_grad=False, asi que los LoRA de q/k/v se quedarian sin gradiente y el LoRA saldria mal sin un solo mensaje de error. Se usa la atencion nativa, que ya es eficiente en memoria. El ajuste se conserva para las previews, donde no hay backward y Sage si valdria.">
+                                   title="DOES NOTHING WHEN TRAINING, and the trainer says so in the log. SageAttention ships inference kernels with no backward pass: its output comes back with requires_grad=False, so the q/k/v LoRAs would receive zero gradient and the LoRA would train wrong without a single error message. Native attention is used instead, which is already memory-efficient. The setting is kept for previews, where there is no backward and Sage would be usable.">
                                 <input type="checkbox" id="train_use_sage_attention">
-                                <span>Enable / Activar</span>
+                                <span>Enable</span>
                             </label>
                         </div>
                         <!-- DEBUG ON/OFF - OCULTO DE LA INTERFAZ CON display:none;
@@ -726,24 +722,20 @@
                     <div class="btn-row" style="margin-top:12px;">
                         <button type="button" class="btn btn-secondary btn-tall" onclick="triggerLoadJson('train')">
                             <span class="main-text">Load JSON</span>
-                            <span class="sub-text">Cargar JSON</span>
                         </button>
                         <button type="button" class="btn btn-secondary btn-tall" onclick="saveTrainSettings()">
                             <span class="main-text">Save JSON</span>
-                            <span class="sub-text">Guardar JSON</span>
                         </button>
                     </div>
 
                     <!-- Botones Delete / Start / Stop -->
                     <div class="btn-row-3" style="margin-top:8px;">
                         <button type="button" class="btn btn-danger btn-tall" onclick="deleteProjectData('training')"
-                                title="Empties this project's output folder: LoRA checkpoints, the resume point, previews and the log. The pre-cache and the dataset are NOT touched. / Vacia la carpeta de salida de este proyecto: checkpoints del LoRA, el punto de reanudacion, las previews y el log. La pre-cache y el dataset NO se tocan.">
+                                title="Empties this project's output folder: LoRA checkpoints, the resume point, previews and the log. The pre-cache and the dataset are NOT touched.">
                             <span class="main-text">Delete Training</span>
-                            <span class="sub-text">Borrar Entrenamiento</span>
                         </button>
                         <button type="button" class="btn btn-success btn-tall" id="btn-train" onclick="runTrain()">
                             <span class="main-text">Start / Resume</span>
-                            <span class="sub-text">Iniciar / Reanudar</span>
                         </button>
                         <!-- Stop en ambar, no en rojo: rojo es "destruye datos" y esto
                              solo pausa. Compartir color con Delete Training invita a
@@ -753,7 +745,6 @@
                              exactly when someone is in a hurry. -->
                         <button type="button" class="btn btn-warning btn-tall" id="btn-stop" onclick="stopScript()" disabled>
                             <span class="main-text">Stop Training</span>
-                            <span class="sub-text">Detener</span>
                         </button>
                     </div>
                 </div>
@@ -765,45 +756,44 @@
             <!-- 2b. Previews del entrenamiento (CERRADO POR DEFECTO): se guardan en el mismo train_settings_minimaxh3.json -->
             <div id="pnl_preview" class="panel collapsed">
                 <div class="panel-title" onclick="togglePanel(this)">
-                    <span>2b. Training Previews / Previews</span>
+                    <span>2b. Training Previews</span>
                     <span class="toggle-icon">▼</span>
                 </div>
 
                 <div class="panel-body">
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Preview Every / Cada (0=OFF):</label>
-                            <input type="number" id="train_preview_every" value="0" title="Cada cuantos pasos se genera una previsualizacion. 0 la desactiva por completo y no cuesta nada. / How often to render a preview. 0 disables it entirely.">
+                            <label>Preview Every (0 = off):</label>
+                            <input type="number" id="train_preview_every" value="0" title="How many steps between previews. 0 turns them off completely and costs nothing.">
                         </div>
                         <div class="form-group">
-                            <label>Caption Mode / Modo Prompt:</label>
-                            <select id="train_preview_caption_mode" onchange="toggleCaptionMode(this.value)" title="De donde sale el prompt de cada preview. / Where each preview's prompt comes from.">
-                                <option value="first" selected>First / Primero (comparable)</option>
-                                <option value="random">Random / Aleatorio (variado)</option>
-                                <option value="rotate">Rotate / Rotar (cubre el dataset)</option>
-                                <option value="custom">Custom / Prompt Manual</option>
+                            <label>Caption Mode:</label>
+                            <select id="train_preview_caption_mode" onchange="toggleCaptionMode(this.value)" title="Where the prompt of each preview comes from.">
+                                <option value="first" selected>First (comparable)</option>
+                                <option value="random">Random (varied)</option>
+                                <option value="rotate">Rotate (covers the dataset)</option>
+                                <option value="custom">Custom prompt</option>
                             </select>
                         </div>
                     </div>
 
                     <!-- PROMPT MANUAL: solo visible en modo Custom -->
                     <div class="form-group" id="custom_prompt_container" style="display:none; margin-top: 4px;">
-                        <label style="color:#38bdf8; font-weight:600;">Custom Preview Prompt / Prompt Manual:</label>
+                        <label style="color:#38bdf8; font-weight:600;">Custom Preview Prompt:</label>
                         <textarea id="train_preview_custom_prompt" rows="2" placeholder="a portrait of mrrtsgrl wearing a red coat, standing in the snow"></textarea>
                         <span style="font-size: 0.7rem; color: var(--warning); display: block; margin-top: 4px; line-height:1.35;">
-                            ⚠ El entrenador NO lleva text encoder. Guarda el JSON de Pre-Caché y <b>relanza el Pre-Caché</b> para codificar este prompt (salta las imágenes ya cacheadas, ~2 min). /
-                            The trainer has no text encoder: save the Pre-Cache JSON and <b>re-run the Pre-Cache</b> to encode this prompt (it skips already-cached images, ~2 min).
+                            ⚠ The trainer has no text encoder: save the Pre-Cache JSON and re-run the Pre-Cache to encode this prompt (it skips already-cached images, ~2 min).
                         </span>
                     </div>
 
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Preview Steps / Pasos Preview:</label>
-                            <input type="number" id="train_preview_steps" value="20" title="Pasos del sampler. MiniMax-H3 no esta destilado en pasos: por debajo de 10 sale sin definir, 12-30 es el rango util. / Sampler steps; the model is not step-distilled, 12-30 is the useful range.">
+                            <label>Preview Steps:</label>
+                            <input type="number" id="train_preview_steps" value="20" title="Sampler steps. MiniMax-H3 is not step-distilled: below 10 it comes out undefined, 12-30 is the useful range.">
                         </div>
                         <div class="form-group">
-                            <label>Preview Seed (-1 = usa Seed):</label>
-                            <input type="number" id="train_preview_seed" value="-1" title="Fijar la semilla hace que todas las previews partan del MISMO ruido, que es lo que permite comparar un paso con otro. / A fixed seed makes every preview start from the same noise, which is what makes them comparable.">
+                            <label>Preview Seed (-1 = use Seed):</label>
+                            <input type="number" id="train_preview_seed" value="-1" title="A fixed seed makes every preview start from the SAME noise, which is what lets you compare one step with another.">
                         </div>
                     </div>
 
@@ -827,7 +817,7 @@
                          and LTX 2.3, raising CFG here only degrades the image and
                          doubles the cost. Hidden, not removed. -->
                     <div class="form-group" style="display: none;">
-                        <label>Preview CFG / CFG Preview:</label>
+                        <label>Preview CFG:</label>
                         <input type="number" step="0.1" id="train_preview_cfg" value="1.0">
                     </div>
 
@@ -844,8 +834,8 @@
                          Pinned at 6.0 and hidden, so nobody is invited to change something
                          that almost always makes the preview worse. Hidden, not removed. -->
                     <div class="form-group" style="display: none;">
-                        <label>Preview Sampler / Muestreador:</label>
-                        <select id="train_preview_shift" title="MiniMax-H3 solo tiene UN sampler (MiniMaxH3Scheduler: Euler de flow rectificado, eta=0). Lo unico ajustable es su desplazamiento sigma. Para una imagen suelta, shift 12 deja TODOS los pasos por encima de sigma 0.30 y satura el color. / H3 ships exactly one sampler; its sigma shift is the only knob. For a still image, shift 12 keeps every step above sigma 0.30 and oversaturates colour.">
+                        <label>Preview Sampler:</label>
+                        <select id="train_preview_shift" title="MiniMax-H3 has only ONE sampler (MiniMaxH3Scheduler: rectified-flow Euler, eta=0). The only knob is its sigma shift. For a single image, shift 12 keeps EVERY step above sigma 0.30 and oversaturates the colour.">
                             <option value="12">Rectified Flow Euler · shift 12.0 (official video)</option>
                             <option value="6" selected>Rectified Flow Euler · shift 6.0</option>
 							<option value="4.5">Rectified Flow Euler · shift 4.5</option>
@@ -857,9 +847,8 @@
 
                     <!-- Mismo guardado que Training: durante el entrenamiento se aplica en el siguiente paso -->
                     <button type="button" class="btn btn-secondary btn-tall btn-full" onclick="saveTrainSettings()" style="margin-top:12px;"
-                            title="Saves the training settings, previews included. While training, they apply on the next step. / Guarda los ajustes de entrenamiento, previews incluidas. Durante el entrenamiento se aplican en el siguiente paso.">
+                            title="Saves the training settings, previews included. While training, they apply on the next step.">
                         <span class="main-text">Save JSON</span>
-                        <span class="sub-text">Guardar JSON</span>
                     </button>
                 </div>
             </div>
@@ -879,41 +868,41 @@
                  part of. -->
             <div id="pnl_refmod" class="panel panel-refmod collapsed">
                 <div class="panel-title" onclick="togglePanel(this)">
-                    <span>RefMod / Referencia directa &mdash; sin entrenamiento</span>
+                    <span>RefMod &mdash; direct reference, no training</span>
                     <span class="toggle-icon">▼</span>
                 </div>
 
                 <div class="panel-body">
                     <div class="form-group">
-                        <label>Source folder / Carpeta de referencias:</label>
-                        <input type="text" id="refmod_source" value="" placeholder="(dataset)" title="Folder with the reference files. It defaults to your dataset, but a RefMod wants a HANDFUL of references, not a training set: pointing it at 99 samples produces an enormous mod that the token budget then guts anyway. Make a small folder with your best two or three takes. / Carpeta con los ficheros de referencia. Por defecto es tu dataset, pero un RefMod quiere UN PUNADO de referencias, no un set de entrenamiento: apuntarlo a 99 muestras produce un mod enorme que luego el presupuesto de tokens destroza igualmente. Haz una carpeta pequena con tus dos o tres mejores tomas.">
+                        <label>Source folder:</label>
+                        <input type="text" id="refmod_source" value="" placeholder="(dataset)" title="Folder with the reference files. It defaults to your dataset, but a RefMod wants a HANDFUL of references, not a training set: pointing it at 99 samples produces an enormous mod that the token budget then guts anyway. Make a small folder with your best two or three takes.">
                     </div>
 
                     <div class="form-group">
-                        <label>Mod name / Nombre del mod:</label>
-                        <input type="text" id="refmod_name" value="" placeholder="mi_referencia">
+                        <label>Mod name:</label>
+                        <input type="text" id="refmod_name" value="" placeholder="my_reference">
                     </div>
 
                     <div class="form-group">
-                        <label>Output / Carpeta de salida (models/refmods):</label>
-                        <div style="display:flex; gap:8px;"><input type="text" id="refmod_output" value="" title="Where the .safetensors lands. Point it straight at ComfyUI's models/refmods and the mod shows up in the Load H3 RefMods dropdown with no copying -- that is why RefMod has no separate export step the way the LoRA does: there is nothing to convert, the file the encoder writes IS the file ComfyUI loads. Empty = ./refmods inside the project. With 'both', two files are written: name_audio and name_visual. / Donde aterriza el .safetensors. Apuntalo directamente a models/refmods de ComfyUI y el mod aparece en el desplegable de Load H3 RefMods sin copiar nada -- por eso RefMod no tiene un paso de export aparte como el LoRA: no hay nada que convertir, el fichero que escribe el codificador ES el que carga ComfyUI. Vacio = ./refmods dentro del proyecto. Con 'ambos' se escriben dos ficheros: name_audio y name_visual."
+                        <label>Output folder (models/refmods):</label>
+                        <div style="display:flex; gap:8px;"><input type="text" id="refmod_output" value="" title="Where the .safetensors lands. Point it straight at ComfyUI's models/refmods and the mod shows up in the Load H3 RefMods dropdown with no copying -- that is why RefMod has no separate export step the way the LoRA does: there is nothing to convert, the file the encoder writes IS the file ComfyUI loads. Empty = ./refmods inside the project. With 'both', two files are written: name_audio and name_visual."
                                placeholder="C:/ComfyUI/models/refmods">
-                            <button type="button" class="btn btn-secondary btn-sm" onclick="browseFolderNative('refmod')">Browse / Explorar</button>
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="browseFolderNative('refmod')">Browse</button>
                         </div>
                     </div>
 
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Extract / Extraer:</label>
-                            <select id="refmod_kind" onchange="refmodEstimate()" title="What gets encoded. A RefMod is not a LoRA: it changes no weights, it hands the DiT a pre-encoded reference it attends to through every block. USE THIS FOR IMAGE, NOT FOR VOICE -- and that is a measured conclusion, not a preference. An audio RefMod becomes a standalone 'audio' ref block that the model places on its own temporal cursor, unbound to any identity: the file is correct (its latent decodes back to the source voice at 0.97 correlation) but the generated voice does not resemble it. H3's real audio reference path is the NATIVE MiniMaxH3ReferenceToVideo node: its ref_audios input for a voice alone, or ref_videos + ref_video_audios paired by index, which emits the 'video_audio' block where sound and picture share one temporal origin -- the binding a RefMod cannot express. The native node also declares its references at tokenize time (minimax_ref_items), so the text encoder knows they exist; a RefMod is injected afterwards, when the text conditioning is already closed. Of the 1,480 RefMods published on HuggingFace, not one carries audio. / Que se codifica. Un RefMod no es un LoRA: no cambia ningun peso, le entrega al DiT una referencia ya codificada que atiende en todos los bloques. USALO PARA IMAGEN, NO PARA VOZ, y es una conclusion medida, no una preferencia. Un RefMod de audio se convierte en un bloque 'audio' suelto que el modelo coloca en su propio cursor temporal, sin atar a ninguna identidad: el fichero es correcto (su latente decodificado da la voz original con correlacion 0,97) pero la voz generada no se le parece. El camino real del audio en H3 es el nodo NATIVO MiniMaxH3ReferenceToVideo: su entrada ref_audios para la voz sola, o ref_videos + ref_video_audios emparejados por numero, que emite el bloque 'video_audio' donde sonido e imagen comparten origen temporal -- la union que un RefMod no puede expresar. El nodo nativo ademas declara sus referencias al tokenizar el prompt (minimax_ref_items), asi que el codificador de texto sabe que existen; un RefMod se inyecta despues, con el condicionamiento de texto ya cerrado. De los 1.480 RefMods publicados en HuggingFace, ninguno lleva audio.">
+                            <label>Extract:</label>
+                            <select id="refmod_kind" onchange="refmodEstimate()" title="What gets encoded. A RefMod is not a LoRA: it changes no weights, it hands the DiT a pre-encoded reference it attends to through every block. USE THIS FOR IMAGE, NOT FOR VOICE -- and that is a measured conclusion, not a preference. An audio RefMod becomes a standalone 'audio' ref block that the model places on its own temporal cursor, unbound to any identity: the file is correct (its latent decodes back to the source voice at 0.97 correlation) but the generated voice does not resemble it. H3's real audio reference path is the NATIVE MiniMaxH3ReferenceToVideo node: its ref_audios input for a voice alone, or ref_videos + ref_video_audios paired by index, which emits the 'video_audio' block where sound and picture share one temporal origin -- the binding a RefMod cannot express. The native node also declares its references at tokenize time (minimax_ref_items), so the text encoder knows they exist; a RefMod is injected afterwards, when the text conditioning is already closed. Of the 1,480 RefMods published on HuggingFace, not one carries audio.">
                                 <option value="audio">Audio</option>
                                 <option value="visual" selected>Video / Image</option>
-                                <option value="both">Both / Ambos</option>
+                                <option value="both">Both</option>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>Concept type / Tipo:</label>
-                            <select id="refmod_concept" title="What the reference represents. Stored in the mod and read back by the loader. 'identity' is a specific person or character, 'style' a look or grade rather than a concrete subject, 'generic' anything else. On the audio pass the type is always 'voice'. / Que representa la referencia. Se guarda en el mod y el cargador lo lee. 'identity' es una persona o personaje concreto, 'style' un look o etalonaje mas que un sujeto, 'generic' cualquier otra cosa. En la pasada de audio el tipo es siempre 'voice'.">
+                            <label>Concept type:</label>
+                            <select id="refmod_concept" title="What the reference represents. Stored in the mod and read back by the loader. 'identity' is a specific person or character, 'style' a look or grade rather than a concrete subject, 'generic' anything else. On the audio pass the type is always 'voice'.">
                                 <option value="identity" selected>identity</option>
                                 <option value="style">style</option>
                                 <option value="generic">generic</option>
@@ -925,32 +914,32 @@
                         <div class="form-group">
                             <label>Audio tokens:</label>
                             <input type="number" id="refmod_tokens_audio" value="1024" min="0" step="80"
-                                   oninput="refmodEstimate()" title="Token budget for the audio mod. Audio latents run at 40 per second and channel, and a token is two of them, so this is 80 TOKENS PER SECOND: 1,024 = 12.8 s. These tokens are not a one-off cost -- they join the sequence the DiT attends over on EVERY step of EVERY generation, so a long voice reference makes all your renders slower (attention cost grows with the square of the sequence). The earlier default of 400 (5 s) came from reasoning rather than measurement, the same reasoning that left the visual budget six times short. There is no published corpus of audio RefMods to calibrate against, so treat this as a knob to sweep, not a figure that is known to be right. / Presupuesto de tokens del mod de audio. Los latentes de audio van a 40 por segundo y canal, y un token son dos, asi que esto son 80 TOKENS POR SEGUNDO: 1.024 = 12,8 s. No es un coste de una vez: estos tokens entran en la secuencia que el DiT atiende en CADA paso de CADA generacion, asi que una referencia de voz larga ralentiza todos tus renders (el coste de la atencion crece con el cuadrado de la secuencia). El valor anterior de 400 (5 s) salio de razonar, no de medir -- el mismo razonamiento que dejo el presupuesto visual seis veces corto. No hay corpus publico de RefMods de audio con el que calibrarlo, asi que tratalo como un parametro a barrer y no como una cifra que se sepa acertada.">
+                                   oninput="refmodEstimate()" title="Token budget for the audio mod. Audio latents run at 40 per second and channel, and a token is two of them, so this is 80 TOKENS PER SECOND: 1,024 = 12.8 s. These tokens are not a one-off cost -- they join the sequence the DiT attends over on EVERY step of EVERY generation, so a long voice reference makes all your renders slower (attention cost grows with the square of the sequence). The earlier default of 400 (5 s) came from reasoning rather than measurement, the same reasoning that left the visual budget six times short. There is no published corpus of audio RefMods to calibrate against, so treat this as a knob to sweep, not a figure that is known to be right.">
                         </div>
                         <div class="form-group">
                             <label>Visual tokens:</label>
                             <input type="number" id="refmod_tokens_visual" value="5632" min="0" step="256"
-                                   oninput="refmodEstimate()" title="Token budget for the visual mod. One token covers 32x32 real pixels: a 512x512 still is 256 tokens, a 1024x1024 one is 1,024. The default comes from the published corpus rather than from theory -- 1,480 RefMods on HuggingFace, sampled headers showing 22 stills at 512px (5,632 tokens) or 8 at 1024px (8,192). Identity is built from MANY VARIED STILLS, not from video frames. Spend the budget either way: few sharp frames or many small ones. Beware that this is paid on every step of every generation -- a 192x192 clip of 124 frames is only 1,332 tokens, so a 5,632 token mod is four times the video you generate, and attention cost grows with the square of the sequence. Over budget, near-duplicate frames are dropped first and the rest resampled. / Presupuesto de tokens del mod visual. Un token cubre 32x32 pixeles reales: una imagen de 512x512 son 256 tokens y una de 1024x1024 son 1.024. El valor por defecto sale del corpus publicado, no de la teoria: 1.480 RefMods en HuggingFace, y las cabeceras muestreadas dan 22 stills a 512px (5.632 tokens) u 8 a 1024px (8.192). La identidad se construye con MUCHAS IMAGENES FIJAS VARIADAS, no con fotogramas de video. El presupuesto se gasta de las dos formas: pocos fotogramas nitidos o muchos pequenos. Ojo, esto se paga en cada paso de cada generacion -- un clip de 192x192 y 124 fotogramas son solo 1.332 tokens, asi que un mod de 5.632 es cuatro veces el video que generas, y el coste de la atencion crece con el cuadrado de la secuencia. Si te pasas, primero se tiran los fotogramas casi duplicados y el resto se remuestrea.">
+                                   oninput="refmodEstimate()" title="Token budget for the visual mod. One token covers 32x32 real pixels: a 512x512 still is 256 tokens, a 1024x1024 one is 1,024. The default comes from the published corpus rather than from theory -- 1,480 RefMods on HuggingFace, sampled headers showing 22 stills at 512px (5,632 tokens) or 8 at 1024px (8,192). Identity is built from MANY VARIED STILLS, not from video frames. Spend the budget either way: few sharp frames or many small ones. Beware that this is paid on every step of every generation -- a 192x192 clip of 124 frames is only 1,332 tokens, so a 5,632 token mod is four times the video you generate, and attention cost grows with the square of the sequence. Over budget, near-duplicate frames are dropped first and the rest resampled.">
                         </div>
                         <div class="form-group">
-                            <label>Resolution / Resolución (lado largo / long edge):</label>
+                            <label>Resolution (long edge):</label>
                             <input type="number" id="refmod_resolution" value="512" min="128" step="64"
                                    oninput="refmodEstimate()"
-                                   title="Caps the LONG edge of each reference before encoding, and only DOWNSCALES. The long edge, not the short one, because what costs VRAM is the AREA and the short edge is the dimension that does not bound it: a 1:2 image at short edge 1024 would encode at 1024x2048, and a 1:3 panorama at 1024x3072. Measured peak on a 5080: 0.37 GB of VAE weights plus 2.82 GB per megapixel, so 512 costs 1.1 GB and 1024 costs 3.3. Frame count barely matters -- each frame is encoded on its own. This is NOT the training resolution from panel 1: there you train at 192 or 256 because the cost is per step across thousands of steps; here the encode happens once. 512 is what most of the published corpus uses. / Limita el lado LARGO de cada referencia antes de codificar, y solo REDUCE. El lado largo y no el corto porque lo que cuesta VRAM es el AREA, y el lado corto es justo la dimension que no la acota: una imagen 1:2 con lado corto 1024 se codificaria a 1024x2048, y un panoramico 1:3 a 1024x3072. Pico medido en una 5080: 0,37 GB de pesos del VAE mas 2,82 GB por megapixel, asi que 512 cuesta 1,1 GB y 1024 cuesta 3,3. El numero de fotogramas apenas influye: cada uno se codifica por separado. NO es la resolucion de entrenamiento del panel 1: alli el coste es por paso y son miles de pasos, aqui el encode se hace una vez. 512 es lo que usa la mayoria del corpus publicado.">
+                                   title="Caps the LONG edge of each reference before encoding, and only DOWNSCALES. The long edge, not the short one, because what costs VRAM is the AREA and the short edge is the dimension that does not bound it: a 1:2 image at short edge 1024 would encode at 1024x2048, and a 1:3 panorama at 1024x3072. Measured peak on a 5080: 0.37 GB of VAE weights plus 2.82 GB per megapixel, so 512 costs 1.1 GB and 1024 costs 3.3. Frame count barely matters -- each frame is encoded on its own. This is NOT the training resolution from panel 1: there you train at 192 or 256 because the cost is per step across thousands of steps; here the encode happens once. 512 is what most of the published corpus uses.">
                         </div>
                     </div>
 
                     <div class="form-group">
                         <label style="display:flex; align-items:center; gap:8px; cursor:pointer;"
-                               title="Write ONE .safetensors holding both references instead of two (name_audio and name_visual). Only applies when 'Both' produced more than one reference. A bundle is a CONTAINER, not a fusion: each reference keeps its own tensor and metadata and the loader expands them into independent blocks, exactly as two separate files would. It does NOT bind the voice to the face, whatever the name suggests -- the format's own spec says it "does not concatenate audio with visual latents or change H3 conditioning semantics". Off by default because a bundle needs ComfyUI-MiniMaxH3Mod 0.2.6 or newer, while the separate files are read by every version. / Escribe UN solo .safetensors con las dos referencias dentro en vez de dos (name_audio y name_visual). Solo aplica si 'Ambos' produjo mas de una referencia. Un bundle es un CONTENEDOR, no una fusion: cada referencia conserva su propio tensor y sus metadatos, y el cargador las despliega como bloques independientes, igual que harian dos ficheros sueltos. NO ata la voz a la cara, aunque el nombre lo sugiera: su propia especificacion dice que "no concatena el audio con los latentes visuales ni cambia la semantica del conditioning de H3". Desactivado por defecto porque un bundle exige ComfyUI-MiniMaxH3Mod 0.2.6 o posterior, mientras que los ficheros sueltos los lee cualquier version.">
+                               title="Write ONE .safetensors holding both references instead of two (name_audio and name_visual). Only applies when 'Both' produced more than one reference. A bundle is a CONTAINER, not a fusion: each reference keeps its own tensor and metadata and the loader expands them into independent blocks, exactly as two separate files would. It does NOT bind the voice to the face, whatever the name suggests -- the format's own spec says it “does not concatenate audio with visual latents or change H3 conditioning semantics”. Off by default because a bundle needs ComfyUI-MiniMaxH3Mod 0.2.6 or newer, while the separate files are read by every version.">
                             <input type="checkbox" id="refmod_bundle" style="width:auto; margin:0;">
-                            Bundle: un solo fichero / one single file
+                            Bundle: one single file
                         </label>
                     </div>
 
                     <div class="form-group">
-                        <label>Description / Descripción (opcional):</label>
-                        <input type="text" id="refmod_description" value="" title="Optional text describing the concept ('a ginger woman with messy hair', 'an animation style'). It is stored inside the mod, and the ComfyUI loader emits it on its prompt_hint output merged with the concept type -- "identity: a ginger woman with messy hair" -- so you can concatenate it onto the positive prompt instead of retyping it. IT IS NOT A TRIGGER WORD, AND A REFMOD DOES NOT USE ONE. A trigger exists to give a LoRA a rare token to hang moved weights on; a RefMod moves no weights. Its latent is injected into the conditioning's refs and the DiT attends to it whether or not any particular word appears in the prompt. This is a crib sheet for describing the subject, not a way to invoke the mod: the mod is already acting. / Texto opcional que describe el concepto. Se guarda dentro del mod y el cargador de ComfyUI lo emite por su salida prompt_hint junto al tipo de concepto -- "identity: una mujer pelirroja despeinada" -- para concatenarlo al prompt positivo sin reescribirlo. NO ES UNA PALABRA CLAVE, Y UN REFMOD NO USA NINGUNA. El trigger existe para darle a un LoRA un token raro donde enganchar los pesos que ha movido; un RefMod no mueve ninguno. Su latente se inyecta en los refs del conditioning y el DiT lo atiende aparezca o no una palabra concreta en el prompt. Esto es una chuleta para describir al sujeto, no una forma de invocar el mod: el mod ya esta actuando."
+                        <label>Description (optional):</label>
+                        <input type="text" id="refmod_description" value="" title="Optional text describing the concept ('a ginger woman with messy hair', 'an animation style'). It is stored inside the mod, and the ComfyUI loader emits it on its prompt_hint output merged with the concept type -- “identity: a ginger woman with messy hair” -- so you can concatenate it onto the positive prompt instead of retyping it. IT IS NOT A TRIGGER WORD, AND A REFMOD DOES NOT USE ONE. A trigger exists to give a LoRA a rare token to hang moved weights on; a RefMod moves no weights. Its latent is injected into the conditioning's refs and the DiT attends to it whether or not any particular word appears in the prompt. This is a crib sheet for describing the subject, not a way to invoke the mod: the mod is already acting."
                                placeholder="a ginger woman with messy hair">
                     </div>
 
@@ -958,13 +947,11 @@
 
                     <div class="btn-row">
                         <button type="button" class="btn btn-secondary btn-tall" onclick="saveRefmodSettings()"
-                                title="Stores every field in this panel in refmod_settings_minimaxh3.json, so the next launch comes back exactly here -- the output folder above all, which is the one nobody wants to retype. / Guarda todos los campos de este panel en refmod_settings_minimaxh3.json, para que el proximo arranque vuelva exactamente aqui: sobre todo la carpeta de salida, que es la que nadie quiere reescribir.">
+                                title="Stores every field in this panel in refmod_settings_minimaxh3.json, so the next launch comes back exactly here -- the output folder above all, which is the one nobody wants to retype.">
                             <span class="main-text">Save JSON</span>
-                            <span class="sub-text">Guardar JSON</span>
                         </button>
                         <button type="button" class="btn btn-success btn-tall" onclick="createRefmod()">
                             <span class="main-text">Create RefMod</span>
-                            <span class="sub-text">Crear RefMod</span>
                         </button>
                     </div>
                 </div>
@@ -976,52 +963,52 @@
         <!-- Right Column: Terminal, Dataset Manager & Previews -->
         <div class="panel console-container">
             <div class="panel-title" style="cursor:default;">
-                <span>Console Output / Terminal de Consola</span>
-                <span class="status-badge badge-idle" id="status-badge">IDLE / INACTIVO</span>
+                <span>Console Output</span>
+                <span class="status-badge badge-idle" id="status-badge">IDLE</span>
             </div>
             
-            <div class="terminal" id="terminal"></div>
+            <div class="terminal no-i18n" id="terminal"></div>
 
             <!-- Dataset Manager -->
             <div>
                 <div class="panel-title ds-title" style="cursor:default;">
-                    <span>Dataset Manager / Gestor (<span id="ds-count">0</span> img, <span id="ds-txt-count">0</span> txt)</span>
+                    <span><span>Dataset Manager</span> (<span id="ds-count" class="no-i18n">0</span> img, <span id="ds-txt-count" class="no-i18n">0</span> txt)</span>
                     <div class="ds-toolbar">
-                        <input type="text" class="ds-search" id="ds-search" placeholder="Search / Buscar..." oninput="filterDatasetGrid()">
+                        <input type="text" class="ds-search" id="ds-search" placeholder="Search..." oninput="filterDatasetGrid()">
                         <input type="file" id="ds-upload" multiple hidden>
                         <button type="button" class="btn btn-primary btn-sm" id="btn-ds-upload" onclick="ftUpload()"
-                                title="Uploads files or a .zip into the dataset folder (you can also drag them here). Useful from another device or RunPod. / Sube archivos o un .zip a la carpeta del dataset (también puedes arrastrarlos aquí). Útil desde otro equipo o RunPod.">⬆ Upload / Subir</button>
-                        <button type="button" class="btn btn-secondary btn-sm" onclick="setGridMode('compact')">Compact / Pequeño</button>
+                                title="Uploads files or a .zip into the dataset folder (you can also drag them here). Useful from another device or RunPod.">⬆ Upload</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="setGridMode('compact')">Compact</button>
                         <button type="button" class="btn btn-secondary btn-sm" onclick="setGridMode('normal')">Normal</button>
-                        <button type="button" class="btn btn-secondary btn-sm" onclick="setGridMode('large')">Expand / Grande</button>
-                        <button type="button" class="btn btn-secondary btn-sm" id="btn-toggle-ds" onclick="toggleDatasetGrid()">Hide / Ocultar</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="setGridMode('large')">Expand</button>
+                        <button type="button" class="btn btn-secondary btn-sm" id="btn-toggle-ds" onclick="toggleDatasetGrid()">Hide</button>
                         <select class="ds-caption-kind" id="ds-common-mode"
-                                title="What to do with the common description. Append leaves the existing caption alone and adds the sentence at the end, which is what you want when a captioner already described the picture and you only need to add what is heard. Replace wipes the caption and writes just this text, for takes that all describe the same thing. Appending twice does not duplicate the sentence. / Que hacer con la descripcion comun. Anadir deja el caption existente y pone la frase al final, que es lo que quieres cuando un generador ya describio la imagen y solo falta lo que se oye. Reemplazar borra el caption y escribe solo este texto, para tomas que describen todas lo mismo. Anadir dos veces no duplica la frase.">
-                            <option value="append">Append / A&ntilde;adir</option>
-                            <option value="replace">Replace / Reemplazar</option>
-                            <option value="remove">Remove / Quitar</option>
+                                title="What to do with the common description. Append leaves the existing caption alone and adds the sentence at the end, which is what you want when a captioner already described the picture and you only need to add what is heard. Replace wipes the caption and writes just this text, for takes that all describe the same thing. Appending twice does not duplicate the sentence.">
+                            <option value="append">Append</option>
+                            <option value="replace">Replace</option>
+                            <option value="remove">Remove</option>
                         </select>
                         <input type="text" class="ds-search" id="ds-common-caption" style="min-width:300px;"
-                               placeholder="Common description / Descripcion comun"
-                               title="A single description written into EVERY caption, replacing what was there. The trigger word is prepended, as everywhere else. Meant for datasets where all the samples describe the same thing: the takes that come out of Split, or voice recordings, which have no automatic captioner because Qwen3-VL cannot hear. Leave it empty and the button beside it only prepends the trigger, as it always did. / Una sola descripcion que se escribe en TODOS los captions, reemplazando lo que hubiera. La palabra trigger se antepone, como en el resto del programa. Pensado para datasets donde todas las muestras describen lo mismo: las tomas que salen de Split, o grabaciones de voz, que no tienen generador automatico porque Qwen3-VL no oye. Dejalo vacio y el boton de al lado solo antepone el trigger, como siempre.">
+                               placeholder="Common description"
+                               title="A single description written into EVERY caption, replacing what was there. The trigger word is prepended, as everywhere else. Meant for datasets where all the samples describe the same thing: the takes that come out of Split, or voice recordings, which have no automatic captioner because Qwen3-VL cannot hear. Leave it empty and the button beside it only prepends the trigger, as it always did.">
                         <button type="button" class="btn btn-warning btn-sm" onclick="addTriggerToAllCaptions()"
-                                title="Applies to EVERY caption in the dataset at once: puts the trigger word at the front where it is missing, and adds or replaces the common description according to the selector. With the description box empty it only does the trigger, which is what this button always did. Pressing it twice changes nothing the second time. / Aplica de una vez a TODOS los captions del dataset: pone la palabra trigger al principio donde falte, y anade o reemplaza la descripcion comun segun el selector. Con la caja de descripcion vacia solo hace lo del trigger, que es lo que este boton hacia siempre. Pulsarlo dos veces no cambia nada la segunda.">
-                            Apply to All / Aplicar a todos</button>
+                                title="Applies to EVERY caption in the dataset at once: puts the trigger word at the front where it is missing, and adds or replaces the common description according to the selector. With the description box empty it only does the trigger, which is what this button always did. Pressing it twice changes nothing the second time.">
+                            Apply to All</button>
                         <button type="button" class="btn btn-warning btn-sm" id="btn-vocals" onclick="extractVocals()"
-                                title="Separates voice from music and effects in every audio file of the dataset, with Mel-Band RoFormer. Use it on material taken from a film or an interview, where the dialogue rides over music and a LoRA would clone the mix instead of the voice. Do NOT use it on a clean recording: separation is destructive, it leaves artefacts on sibilants and transients, and the LoRA learns those too. It does not remove reverb either. Run it BEFORE Split, so the cuts come from one pass of the model. The model (~600 MB) downloads on first use into ./MelBandRoFormer, and needs einops, rotary_embedding_torch and librosa in the venv. Originals are moved to _originals. / Separa la voz de la musica y los efectos en todos los ficheros de audio del dataset, con Mel-Band RoFormer. Uselo con material de una pelicula o una entrevista, donde el dialogo va sobre musica y un LoRA clonaria la mezcla en vez de la voz. NO lo uses sobre una grabacion limpia: la separacion es destructiva, deja resonancias en las eses y en los transitorios, y el LoRA las aprende tambien. Tampoco quita reverberacion. Pasalo ANTES de Split, para que los cortes salgan de una sola pasada del modelo. El modelo (~600 MB) se descarga la primera vez en ./MelBandRoFormer, y necesita einops, rotary_embedding_torch y librosa en el venv. Los originales van a _originals.">
-                            Extract Vocals / Separar voz
+                                title="Separates voice from music and effects in every audio file of the dataset, with Mel-Band RoFormer. Use it on material taken from a film or an interview, where the dialogue rides over music and a LoRA would clone the mix instead of the voice. Do NOT use it on a clean recording: separation is destructive, it leaves artefacts on sibilants and transients, and the LoRA learns those too. It does not remove reverb either. Run it BEFORE Split, so the cuts come from one pass of the model. The model (~600 MB) downloads on first use into ./MelBandRoFormer, and needs einops, rotary_embedding_torch and librosa in the venv. Originals are moved to _originals.">
+                            Extract Vocals
                         </button>
                         <button type="button" class="btn btn-warning btn-sm" id="btn-split" onclick="splitSamples()"
-                                title="Splits every sample longer than the Frames setting into consecutive takes of that length, so one long recording becomes many training samples. Works on audio, video and video+audio. Audio is cut at silences whenever one falls inside the window, so takes end on a pause instead of mid-word; video is cut on the frame. The leftover tail is kept if it reaches the minimum, and the originals are moved to _originals. A 30 s recording at 124 frames becomes six or seven takes: more samples, shorter sequences, and inside the duration range the model was trained on. / Trocea toda muestra mas larga que el ajuste Frames en tomas consecutivas de esa duracion, asi una grabacion larga se convierte en muchas muestras de entrenamiento. Vale para audio, video y video+audio. El audio se corta por los silencios siempre que haya uno dentro de la ventana, para que las tomas acaben en una pausa y no a media palabra; el video se corta por fotograma. La cola sobrante se conserva si llega al minimo, y los originales van a _originals. Una grabacion de 30 s a 124 fotogramas se convierte en seis o siete tomas: mas muestras, secuencias mas cortas, y dentro del rango de duracion con el que se entreno el modelo.">
-                            Split / Trocear
+                                title="Splits every sample longer than the Frames setting into consecutive takes of that length, so one long recording becomes many training samples. Works on audio, video and video+audio. Audio is cut at silences whenever one falls inside the window, so takes end on a pause instead of mid-word; video is cut on the frame. The leftover tail is kept if it reaches the minimum, and the originals are moved to _originals. A 30 s recording at 124 frames becomes six or seven takes: more samples, shorter sequences, and inside the duration range the model was trained on.">
+                            Split
                         </button>
                         <button type="button" class="btn btn-danger btn-sm" onclick="clearAllCaptions()"
-                                title="Deletes the .txt of every sample in the dataset. The files are removed, not emptied: an empty .txt still counts as a caption, so the grid would show it green and the pre-cache would train on blank text without saying anything. There is no undo -- if a captioner wrote them, running it again rewrites them; if you wrote them by hand, they are gone. / Borra el .txt de todas las muestras del dataset. Los ficheros se eliminan, no se vacian: un .txt vacio sigue contando como caption, asi que la rejilla lo pintaria en verde y la pre-cache entrenaria con texto en blanco sin decir nada. No hay deshacer: si los escribio un generador, se vuelven a generar; si los escribiste a mano, se pierden.">
-                            Clear Captions / Borrar
+                                title="Deletes the .txt of every sample in the dataset. The files are removed, not emptied: an empty .txt still counts as a caption, so the grid would show it green and the pre-cache would train on blank text without saying anything. There is no undo -- if a captioner wrote them, running it again rewrites them; if you wrote them by hand, they are gone.">
+                            Clear Captions
                         </button>
                         <button type="button" class="btn btn-danger btn-sm" onclick="clearDataset()"
-                                title="Deletes every file of the dataset folder and its .txt captions (subfolders are kept). There is no undo. / Borra todos los ficheros de la carpeta del dataset y sus captions .txt (las subcarpetas se conservan). No hay deshacer.">Clear Dataset / Vaciar Dataset</button>
-                        <button type="button" class="btn btn-success btn-sm" onclick="loadDatasetInfo()">Refresh / Actualizar</button>
+                                title="Deletes every file of the dataset folder and its .txt captions (subfolders are kept). There is no undo.">Clear Dataset</button>
+                        <button type="button" class="btn btn-success btn-sm" onclick="loadDatasetInfo()">Refresh</button>
                     </div>
                 </div>
 
@@ -1039,9 +1026,8 @@
                      costs a whole training run. -->
                 <div class="ds-prepare-bar">
                     <button type="button" class="btn btn-primary btn-sm" id="btn-fps" onclick="convertFps()"
-                            title="Leaves every clip at exactly 24 fps with a valid 17n+5 frame count (5, 22, 39, 56, 73, 90, 107, 124, 141, 158), WITHOUT cutting anything off the end: the whole clip is kept and time is stretched or squeezed by the couple of percent needed to land on a valid count. That matters because the payoff of an effect lives in the last frames, and if training never sees them the model learns a transformation that stops halfway. Re-encodes at crf 16 (visually lossless); originals are moved to _originals, which the pre-cache ignores. / Deja cada clip a 24 fps exactos y con un recuento valido 17n+5 (5, 22, 39, 56, 73, 90, 107, 124, 141, 158), SIN recortar nada por el final: se conserva el clip entero y se estira o comprime el tiempo el dos por ciento que haga falta para caer en un recuento valido. Importa porque el remate de un efecto esta en los ultimos fotogramas, y si el entrenamiento no los ve, el modelo aprende una transformacion que se queda a medias. Recodifica a crf 16 (sin perdida visible); los originales van a _originals, que la pre-cache ignora.">Prepare clips</button>
-                    <span class="ds-step-hint">Step 1 &mdash; run this before captioning /
-                        Paso 1 &mdash; hazlo antes de los captions</span>
+                            title="Leaves every clip at exactly 24 fps with a valid 17n+5 frame count (5, 22, 39, 56, 73, 90, 107, 124, 141, 158), WITHOUT cutting anything off the end: the whole clip is kept and time is stretched or squeezed by the couple of percent needed to land on a valid count. That matters because the payoff of an effect lives in the last frames, and if training never sees them the model learns a transformation that stops halfway. Re-encodes at crf 16 (visually lossless); originals are moved to _originals, which the pre-cache ignores.">Prepare clips</button>
+                    <span class="ds-step-hint">Step 1 &mdash; run this before captioning</span>
                 </div>
 
                 <!-- Auto-captioning: usa el mismo Qwen3-VL que ya trae el repo NF4,
@@ -1050,10 +1036,10 @@
                      so it downloads no extra model. See 0_caption_MiniMaxH3.py. -->
                 <div class="ds-caption-bar">
                     <button type="button" class="btn btn-primary btn-sm" id="btn-caption" onclick="runCaption()"
-                            title="Writes one .txt per image with Qwen3-VL-4B, putting the trigger word first. The model downloads itself the first time (~8 GB) and then loads in 4-bit, about 3 GB of VRAM, so it fits on any card from 6 GB up. It is a one-off pass over the dataset. / Escribe un .txt por imagen con Qwen3-VL-4B, poniendo la palabra trigger al principio. El modelo se descarga solo la primera vez (~8 GB) y luego carga en 4 bits, unos 3 GB de VRAM, asi que entra en cualquier tarjeta desde 6 GB. Es una pasada unica sobre el dataset.">
-                        <span id="btn-caption-label">Create Captions / Crear Captions</span>
+                            title="Writes one .txt per image with Qwen3-VL-4B, putting the trigger word first. The model downloads itself the first time (~8 GB) and then loads in 4-bit, about 3 GB of VRAM, so it fits on any card from 6 GB up. It is a one-off pass over the dataset.">
+                        <span id="btn-caption-label">Create Captions</span>
                     </button>
-                    <span class="ds-step-hint">Step 2 / Paso 2</span>
+                    <span class="ds-step-hint">Step 2</span>
                     <!-- Un prompt por tipo de contenido, elegido con el selector.
                          Antes eran dos campos de texto uno al lado del otro y el de
                          clips se mostraba u ocultaba segun el dataset; con audio y
@@ -1067,17 +1053,17 @@
                          shows only the one being edited, and all four are saved. -->
                     <select class="ds-caption-kind" id="caption_prompt_kind"
                             onchange="switchCaptionPrompt()"
-                            title="Which prompt you are editing. Each content type needs a different one: an image is described by what it LOOKS like, a clip by what CHANGES over time, and audio by how it SOUNDS. The captioner picks the right one per file, so the prompt for a type you do not have simply sits unused. / Que prompt estas editando. Cada tipo pide uno distinto: una imagen se describe por su ASPECTO, un clip por lo que CAMBIA con el tiempo, y el audio por como SUENA. El generador elige el que toca en cada fichero, asi que el prompt de un tipo que no tengas se queda sin usar.">
+                            title="Which prompt you are editing. Each content type needs a different one: an image is described by what it LOOKS like, a clip by what CHANGES over time, and audio by how it SOUNDS. The captioner picks the right one per file, so the prompt for a type you do not have simply sits unused.">
                         <option value="image">Image</option>
                         <option value="video">Video</option>
                         <option value="audio">Audio</option>
                         <option value="video_audio">Video + Audio</option>
                     </select>
                     <textarea class="ds-search ds-caption-prompt" id="caption_prompt_text" rows="4"
-                              placeholder="Prompt for the captioner / Prompt para el generador"></textarea>
-                    <label class="ds-inline-label" title="Off = only images with no caption are processed. / Desactivado = solo se procesan las imagenes sin caption.">
+                              placeholder="Prompt for the captioner"></textarea>
+                    <label class="ds-inline-label" title="Off = only images with no caption are processed.">
                         <input type="checkbox" id="caption_overwrite" checked>
-                        Overwrite / Rehacer
+                        Overwrite
                     </label>
                 </div>
 
@@ -1085,15 +1071,15 @@
                      deja juzgar el movimiento, que es lo que se viene a mirar.
                      Starts in Large: with video clips a 75 px thumbnail is too small to
                      judge the motion, which is the reason to look at all. -->
-                <div class="ds-grid large" id="ds-grid"></div>
+                <div class="ds-grid large no-i18n" id="ds-grid"></div>
                 <div class="ds-resizer" id="ds-resizer"
-                     title="Drag to make the dataset grid taller or shorter. Double-click to go back to the default height. / Arrastra para hacer la rejilla del dataset mas alta o mas baja. Doble clic para volver a la altura por defecto."></div>
+                     title="Drag to make the dataset grid taller or shorter. Double-click to go back to the default height."></div>
             </div>
 
             <!-- Previews -->
             <div>
                 <div class="panel-title" style="cursor:default;"></div>
-                <div class="gallery" id="gallery"></div>
+                <div class="gallery no-i18n" id="gallery"></div>
             </div>
         </div>
     </div>
@@ -1102,7 +1088,7 @@
     <div class="modal" id="modal" onmousedown="modalOverlayDown(event)" onclick="modalOverlayClick(event)">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div style="display:flex; justify-content:space-between; align-items:center;">
-                <h3 id="modal-filename" style="font-size:1rem;">Filename</h3>
+                <h3 id="modal-filename" class="no-i18n" style="font-size:1rem;">Filename</h3>
                 <span style="font-size:0.8rem; color:var(--text-muted);">Click outside or button to close</span>
             </div>
             <img id="modal-img" src="" alt="Dataset Image">
@@ -1131,8 +1117,8 @@
                 <textarea id="modal-txt"></textarea>
             </div>
             <div style="display:flex; gap:10px;">
-                <button type="button" class="btn btn-success btn-full" onclick="saveCurrentCaption()">Save Caption / Guardar Caption</button>
-                <button type="button" class="btn btn-secondary btn-full" onclick="closeModal()">Close / Cerrar</button>
+                <button type="button" class="btn btn-success btn-full" onclick="saveCurrentCaption()">Save Caption</button>
+                <button type="button" class="btn btn-secondary btn-full" onclick="closeModal()">Close</button>
             </div>
         </div>
     </div>
@@ -1140,20 +1126,25 @@
     <!-- Modal: Folder Browser Backup -->
     <div class="modal" id="folder-modal" onclick="closeFolderModal(event)">
         <div class="modal-content" onclick="event.stopPropagation()" style="max-width:600px;">
-            <h3>Select Directory / Seleccionar Carpeta</h3>
-            <div style="font-size:0.85rem; color:var(--text-muted);" id="browser-current-path">/</div>
+            <h3>Select Directory</h3>
+            <div style="font-size:0.85rem; color:var(--text-muted);" id="browser-current-path" class="no-i18n">/</div>
             
-            <div class="drive-selector" id="drive-selector"></div>
-            <div class="dir-list" id="dir-list"></div>
+            <div class="drive-selector no-i18n" id="drive-selector"></div>
+            <div class="dir-list no-i18n" id="dir-list"></div>
 
             <div style="display:flex; gap:10px; margin-top:10px;">
-                <button type="button" class="btn btn-primary btn-full" onclick="confirmFolderSelection()">Use Selected Folder / Usar Carpeta</button>
-                <button type="button" class="btn btn-secondary btn-full" onclick="closeFolderModal()">Cancel / Cancelar</button>
+                <button type="button" class="btn btn-primary btn-full" onclick="confirmFolderSelection()">Use Selected Folder</button>
+                <button type="button" class="btn btn-secondary btn-full" onclick="closeFolderModal()">Cancel</button>
             </div>
         </div>
     </div>
 
     <script>
+        // Paso actual en la consola: "Step 12/1000" en inglés o en el idioma elegido.
+        function stepRe() {
+            const word = t('Step').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            return new RegExp(`(?:Step|${word})\\s+(\\d+)/(\\d+)`, 'i');
+        }
         let allDatasetImages = [];
         let currentEditingFilename = '';
         let browserPath = '';
@@ -1242,12 +1233,12 @@
                 });
                 const data = await res.json();
                 if (data.status === 'ok') {
-                    alert('✓ LoRA folder saved for every trainer / Carpeta de LoRAs guardada para todos los entrenadores!');
+                    alert('✓ ' + t('LoRA folder saved for every trainer!'));
                 } else {
                     alert(`[!] Error: ${data.error}`);
                 }
             } catch (e) {
-                alert(`[!] Network Error / Error de red: ${e}`);
+                alert(`[!] ${t('Network error')}: ${e}`);
             }
         }
 
@@ -1261,12 +1252,12 @@
                 });
                 const data = await res.json();
                 if (data.status === 'ok') {
-                    alert('✓ HF Token saved / Token de HF guardado!');
+                    alert('✓ ' + t('HF Token saved!'));
                 } else {
                     alert(`[!] Error: ${data.error}`);
                 }
             } catch (e) {
-                alert(`[!] Network Error / Error de red: ${e}`);
+                alert(`[!] ${t('Network error')}: ${e}`);
             }
         }
 
@@ -1483,7 +1474,7 @@
             const formArea = parseInt(document.getElementById('precache_target_area').value) || 262144;
             let area = formArea;
             let textTokens = parseInt(document.getElementById('precache_max_seq_len').value) || 100;
-            let source = 'peor caso, sin cache / worst case, no cache';
+            let source = t('worst case, no cache');
             let stale = false;
 
             // LA CACHE MANDA sobre el formulario: el entrenamiento usa SUS latentes,
@@ -1493,7 +1484,7 @@
             if (vramCacheInfo && vramCacheInfo.available) {
                 if (vramCacheInfo.max_text_tokens > 0) textTokens = vramCacheInfo.max_text_tokens;
                 if (vramCacheInfo.cached_target_area > 0) area = vramCacheInfo.cached_target_area;
-                source = `cache de ${vramCacheInfo.images} img`;
+                source = t('cache of {n} img', { n: vramCacheInfo.images });
                 stale = !!(vramCacheInfo.cached_target_area &&
                            vramCacheInfo.cached_target_area !== formArea);
             }
@@ -1619,7 +1610,7 @@
         async function applyVramProfile(key) {
             const info = document.getElementById('vram_auto_info');
             if (String(key) === 'custom') {
-                if (info) info.innerHTML = 'Valores manuales / manual values.';
+                if (info) info.innerHTML = t('Manual values.');
                 return;
             }
             try {
@@ -1628,15 +1619,15 @@
             } catch (e) { vramCacheInfo = null; }
 
             let targetGb = parseFloat(key);
-            let modo = `simulando / simulating ${targetGb} GB`;
+            let modo = t('simulating {gb} GB', { gb: targetGb });
             if (String(key) === 'auto') {
                 if (!detectedVramGb) {
-                    if (info) info.innerHTML = '<span style="color:var(--warning)">GPU no detectada '
-                        + 'todavia; espera unos segundos y vuelve a elegir Auto. / GPU not detected yet.</span>';
+                    if (info) info.innerHTML = '<span style="color:var(--warning)">'
+                        + t('GPU not detected yet; wait a few seconds and choose Auto again.') + '</span>';
                     return;
                 }
                 targetGb = detectedVramGb;
-                modo = `GPU detectada / detected: ${targetGb.toFixed(1)} GB`;
+                modo = t('GPU detected: {gb} GB', { gb: targetGb.toFixed(1) });
             }
 
             const r = vramComputeFor(targetGb);
@@ -1646,19 +1637,20 @@
 
             if (!info) return;
             if (!r.fits || r.blocks === 0) {
-                info.innerHTML = `<span style="color:var(--danger)">No cabe en ${targetGb} GB a esta `
-                    + `resolucion (pico ${r.peak.toFixed(2)} GB &gt; ${r.usable.toFixed(2)} utilizables). `
-                    + `Baja la resolucion del pre-cache. / Does not fit; lower the pre-cache resolution.</span>`;
+                info.innerHTML = '<span style="color:var(--danger)">'
+                    + t('Does not fit in {gb} GB at this resolution (peak {peak} GB > {usable} usable). Lower the pre-cache resolution.',
+                        { gb: targetGb, peak: r.peak.toFixed(2), usable: r.usable.toFixed(2) }) + '</span>';
                 return;
             }
-            let txt = `${modo} &middot; ${r.blocks}/50 bloques residentes &middot; pico estimado `
-                    + `${r.peak.toFixed(2)} GB de ${r.usable.toFixed(2)} utilizables `
-                    + `(${(r.usable - r.peak).toFixed(2)} de aire). Secuencia ${r.seq.total} tokens = `
-                    + `${r.seq.textTokens} texto + ${r.seq.videoTokens} video + 4 audio [${r.seq.source}].`;
+            let txt = `${modo} &middot; ` + t('{blocks}/50 resident blocks', { blocks: r.blocks }) + ' &middot; '
+                    + t('estimated peak {peak} GB of {usable} usable ({spare} spare).',
+                        { peak: r.peak.toFixed(2), usable: r.usable.toFixed(2), spare: (r.usable - r.peak).toFixed(2) }) + ' '
+                    + t('Sequence {total} tokens = {text} text + {video} video + 4 audio [{source}].',
+                        { total: r.seq.total, text: r.seq.textTokens, video: r.seq.videoTokens, source: r.seq.source });
             if (r.seq.stale) {
-                txt += ` <span style="color:var(--warning)">La cache se hizo con area ${r.seq.area} y el `
-                     + `formulario dice ${r.seq.formArea}: manda la cache. / The cache was built at a `
-                     + `different area than the form; the cache wins.</span>`;
+                txt += ' <span style="color:var(--warning)">'
+                     + t('The cache was built at area {area} and the form says {form}: the cache wins.', { area: r.seq.area, form: r.seq.formArea })
+                     + '</span>';
             }
             info.innerHTML = txt;
         }
@@ -1700,7 +1692,7 @@
             }
             sel.value = match;
             const info = document.getElementById('vram_auto_info');
-            if (info && match === 'custom') info.innerHTML = 'Valores manuales / manual values.';
+            if (info && match === 'custom') info.innerHTML = t('Manual values.');
         }
 
         async function loadSettings() {
@@ -1794,13 +1786,9 @@
                 if (!st.running) return;
                 setRunningState(true);
                 appendTerminal(
-                    '\n[SYSTEM] A process is already running (' + st.script + ', PID ' + st.pid +
-                    '). The console was detached by the page reload, but the run continues and ' +
-                    'Stop works.\n' +
-                    '[SYSTEM] Hay un proceso en marcha (' + st.script + ', PID ' + st.pid +
-                    '). La consola se desconecto al recargar la pagina, pero el proceso sigue y ' +
-                    'Stop funciona.\n' +
-                    '[SYSTEM] Full output / Salida completa: train_log.txt',
+                    '\n[SYSTEM] ' + t('A process is already running ({script}, PID {pid}). The console was detached by the page reload, but the run continues and Stop works.',
+                                     { script: st.script, pid: st.pid }) +
+                    '\n[SYSTEM] ' + t('Full output') + ': train_log.txt',
                     false, 'term-warning');
             } catch (e) {}
         }
@@ -1875,10 +1863,10 @@
                         await saveTrainSettings();
                     }
 
-                    alert(`✓ Configuration loaded / Configuración cargada desde:\n${file.name}`);
+                    alert('✓ ' + t('Configuration loaded from:') + `\n${file.name}`);
                     loadDatasetInfo();
                 } catch (err) {
-                    alert(`[!] JSON Error / Error al leer JSON: ${err}`);
+                    alert(`[!] ${t('Error reading JSON')}: ${err}`);
                 }
             };
             reader.readAsText(file);
@@ -1948,7 +1936,7 @@
                     if (perfil && perfil.value) applyVramProfile(perfil.value);
                 } catch (e) {}
                 const listStr = data.all_saved ? data.all_saved.join('\n • ') : data.file;
-                alert(`✓ Pre-Cache Settings saved / Configuración Pre-Caché guardada en:\n • ${listStr}`);
+                alert('✓ ' + t('Pre-Cache settings saved to:') + `\n • ${listStr}`);
             }
         }
 
@@ -2005,7 +1993,7 @@
             const data = await res.json();
             if (data.status === 'ok') {
                 const listStr = data.all_saved ? data.all_saved.join('\n • ') : data.file;
-                alert(`✓ Train Settings saved / Configuración de Entrenamiento guardada en:\n • ${listStr}`);
+                alert('✓ ' + t('Train settings saved to:') + `\n • ${listStr}`);
             }
         }
 
@@ -2015,9 +2003,9 @@
                 const data = await res.json();
                 const badge = document.getElementById('checkpoint-badge');
                 if (data.has_checkpoint) {
-                    badge.innerText = `[Resume Step / Paso ${data.current_step}]`;
+                    badge.innerText = `[${t('Resume step {step}', { step: data.current_step })}]`;
                 } else {
-                    badge.innerText = '[New / Nuevo]';
+                    badge.innerText = `[${t('New')}]`;
                 }
             } catch (e) {}
         }
@@ -2038,7 +2026,7 @@
 
         async function startScript(scriptName) {
             document.getElementById('terminal').innerHTML = '';
-            appendTerminal(`[SYSTEM] Launching / Iniciando ${scriptName}...`);
+            appendTerminal(`[SYSTEM] ${t('Launching {script}...', { script: scriptName })}`);
             setRunningState(true);
 
             userRequestedStop = false;
@@ -2071,7 +2059,7 @@
                                 if (msg.type === 'output') {
                                     appendTerminal(msg.text, msg.replace);
 
-                                    const stepMatch = msg.text.match(/Step\/Paso\s+(\d+)\/(\d+)/i);
+                                    const stepMatch = msg.text.match(stepRe());
                                     if (stepMatch) {
                                         lastExecutedStep = parseInt(stepMatch[1]);
                                         totalTargetSteps = parseInt(stepMatch[2]);
@@ -2086,29 +2074,29 @@
                                             const isPausedEarly = userRequestedStop || (lastExecutedStep > 0 && lastExecutedStep < totalFormSteps);
 
                                             if (isPausedEarly) {
-                                                successMsg = "\n[SYSTEM] ⏸ Training paused successfully! Checkpoint saved. / ¡Entrenamiento pausado con éxito! Checkpoint guardado.";
+                                                successMsg = '\n[SYSTEM] ⏸ ' + t('Training paused successfully! Checkpoint saved.');
                                                 msgClass = 'term-warning';
                                             } else {
-                                                successMsg = "\n[SYSTEM] ✓ LoRA Training completed successfully! / ¡Entrenamiento del LoRA finalizado con éxito!";
+                                                successMsg = '\n[SYSTEM] ✓ ' + t('LoRA training completed successfully!');
                                                 msgClass = 'term-success';
                                             }
                                         } else if (scriptName === 'precache') {
                                             if (userRequestedStop) {
-                                                successMsg = "\n[SYSTEM] ⏸ Pre-Cache stopped by user. / Pre-Caché detenida por el usuario.";
+                                                successMsg = '\n[SYSTEM] ⏸ ' + t('Pre-Cache stopped by user.');
                                                 msgClass = 'term-warning';
                                             } else {
-                                                successMsg = "\n[SYSTEM] ✓ Pre-Cache completed successfully! / ¡Pre-Caché finalizada con éxito!";
+                                                successMsg = '\n[SYSTEM] ✓ ' + t('Pre-Cache completed successfully!');
                                                 msgClass = 'term-success';
                                             }
                                         } else if (scriptName === 'caption') {
-                                            successMsg = "\n[SYSTEM] ✓ Captions finished. / ¡Captions finalizados!";
+                                            successMsg = '\n[SYSTEM] ✓ ' + t('Captions finished!');
                                         } else {
-                                            successMsg = `\n[SYSTEM] ✓ Finished successfully with code / Finalizado con éxito con código: ${msg.code}`;
+                                            successMsg = `\n[SYSTEM] ✓ ${t('Finished successfully with code')}: ${msg.code}`;
                                         }
 
                                         appendTerminal(successMsg, false, msgClass);
                                     } else {
-                                        appendTerminal(`\n[SYSTEM] ⚠ Process finished with code / Proceso finalizado con código: ${msg.code}`, false, 'term-danger');
+                                        appendTerminal(`\n[SYSTEM] ⚠ ${t('Process finished with code')}: ${msg.code}`, false, 'term-danger');
                                     }
                                 }
                             } catch (e) {}
@@ -2116,7 +2104,7 @@
                     }
                 }
             } catch (err) {
-                appendTerminal(`\n[SYSTEM] Execution error / Error de ejecución: ${err}`, false, 'term-danger');
+                appendTerminal(`\n[SYSTEM] ${t('Execution error')}: ${err}`, false, 'term-danger');
             } finally {
                 setRunningState(false);
                 // Los scripts que escriben en la carpeta del dataset dejan la
@@ -2141,9 +2129,7 @@
         function updateCaptionButton(imageCount, captionCount) {
             const label = document.getElementById('btn-caption-label');
             if (!label) return;
-            label.innerText = (captionCount > 0)
-                ? 'Redo Captions / Rehacer Captions'
-                : 'Create Captions / Crear Captions';
+            label.innerText = (captionCount > 0) ? t('Redo Captions') : t('Create Captions');
         }
 
         // ------------------------------------------------------------------
@@ -2183,10 +2169,10 @@
         // The field's tooltip follows the type: what to watch for in an image
         // prompt is not what to watch for in a clip prompt.
         const CAPTION_PROMPT_TITLE = {
-            image: "What the model is asked about each image. The default aims for one plain paragraph covering subject, clothing, framing, setting and lighting. The trigger word is added separately, at the front. / Lo que se le pide al modelo sobre cada imagen. El de por defecto busca un parrafo llano con sujeto, ropa, encuadre, escenario e iluminacion. La palabra trigger se anade aparte, al principio.",
-            video: "What the model is asked about each CLIP. Different from the image prompt: for a clip what matters is what CHANGES over time, not what it looks like. Keep the word limit inside the prompt, or the model spends its budget describing content and the caption gets cut mid-sentence. / Lo que se le pide al modelo sobre cada CLIP. Distinto del de imagen: en un clip importa lo que CAMBIA con el tiempo, no el aspecto. Deja el limite de palabras dentro del prompt, o el modelo gasta el presupuesto describiendo contenido y el caption sale cortado a media frase.",
-            audio: "Audio training works; what does not exist is an automatic captioner for it, because Qwen3-VL cannot hear. Write these captions by hand, or fill them all at once with the common description box in the Dataset Manager. The prompt is kept for the day there is a model that listens. It asks for timbre, delivery and acoustic space rather than a transcript, because the model learns how it sounds, not the words. / El entrenamiento de audio funciona; lo que no existe es un generador automatico de captions para el, porque Qwen3-VL no oye. Escribelos a mano, o rellenalos todos de una vez con la caja de descripcion comun del Dataset Manager. El prompt se conserva para el dia que haya un modelo que escuche. Pide timbre, entrega y espacio acustico en vez de una transcripcion, porque el modelo aprende como suena, no las palabras.",
-            video_audio: "Video plus audio training works. The captioner describes only the picture, since Qwen3-VL cannot hear, so the usual way is to let it write the visual part and then append the audio sentence to every caption with the common description box. This prompt puts the picture first and the sound second, the order the packed sequence uses. / El entrenamiento de video mas audio funciona. El generador solo describe la imagen, porque Qwen3-VL no oye, asi que lo habitual es dejar que escriba la parte visual y despues anadir la frase de audio a todos los captions con la caja de descripcion comun. Este prompt pone primero la imagen y despues el sonido, que es el orden de la secuencia empaquetada."
+            image: "What the model is asked about each image. The default aims for one plain paragraph covering subject, clothing, framing, setting and lighting. The trigger word is added separately, at the front.",
+            video: "What the model is asked about each CLIP. Different from the image prompt: for a clip what matters is what CHANGES over time, not what it looks like. Keep the word limit inside the prompt, or the model spends its budget describing content and the caption gets cut mid-sentence.",
+            audio: "Audio training works; what does not exist is an automatic captioner for it, because Qwen3-VL cannot hear. Write these captions by hand, or fill them all at once with the common description box in the Dataset Manager. The prompt is kept for the day there is a model that listens. It asks for timbre, delivery and acoustic space rather than a transcript, because the model learns how it sounds, not the words.",
+            video_audio: "Video plus audio training works. The captioner describes only the picture, since Qwen3-VL cannot hear, so the usual way is to let it write the visual part and then append the audio sentence to every caption with the common description box. This prompt puts the picture first and the sound second, the order the packed sequence uses."
         };
 
         let captionPrompts = Object.assign({}, CAPTION_PROMPT_DEFAULTS);
@@ -2218,7 +2204,7 @@
             const campo = document.getElementById('caption_prompt_text');
             if (!campo) return;
             campo.value = captionPrompts[captionPromptKind] || '';
-            campo.title = CAPTION_PROMPT_TITLE[captionPromptKind] || '';
+            campo.title = t(CAPTION_PROMPT_TITLE[captionPromptKind] || '');
             captionPromptPainted = true;
         }
 
@@ -2271,9 +2257,7 @@
             const captioned = parseInt(document.getElementById('ds-txt-count').innerText) || 0;
             const overwrite = document.getElementById('caption_overwrite').checked;
             if (captioned > 0 && overwrite) {
-                if (!confirm('This will OVERWRITE the ' + captioned + ' caption(s) that already exist.\n\n' +
-                             'Esto SOBRESCRIBIR\u00c1 los ' + captioned + ' caption(s) que ya existen.\n\n' +
-                             'Continue? / \u00bfContinuar?')) return;
+                if (!confirm(t('This will OVERWRITE the {n} caption(s) that already exist.', { n: captioned }) + '\n\n' + t('Continue?'))) return;
             }
             // Se mandan los CUATRO, no solo el visible: el dataset puede tener
             // imagenes y clips a la vez y el generador necesita los dos prompts.
@@ -2306,7 +2290,7 @@
 
         async function stopScript() {
             userRequestedStop = true;
-            appendTerminal('\n[SYSTEM] Sending stop signal... / Enviando señal de detención...');
+            appendTerminal('\n[SYSTEM] ' + t('Sending stop signal...'));
             await fetch('/api/stop', { method: 'POST' });
         }
 
@@ -2315,11 +2299,11 @@
             const finalName = document.getElementById('export_final_name').value.trim();
 
             if (!targetDir) {
-                alert('Please select or enter a target Models directory / Por favor selecciona la carpeta destino models/lora.');
+                alert(t('Please select or enter the target models/lora folder.'));
                 return;
             }
 
-            appendTerminal(`\n[SYSTEM] Exporting LoRA model to / Exportando LoRA a: ${targetDir}...`);
+            appendTerminal(`\n[SYSTEM] ${t('Exporting LoRA to')}: ${targetDir}...`);
 
             try {
                 const res = await fetch('/api/export-lora', {
@@ -2329,14 +2313,14 @@
                 });
                 const data = await res.json();
                 if (data.status === 'ok') {
-                    alert(`✓ LoRA exported successfully / LoRA exportado con éxito:\n${data.filename}\n\nCopied from / Copiado desde: ${data.source}`);
-                    appendTerminal(`[SYSTEM] ✓ Export completed / Exportación completada: ${data.dest}`, false, 'term-success');
+                    alert(`✓ ${t('LoRA exported successfully')}:\n${data.filename}\n\n${t('Copied from')}: ${data.source}`);
+                    appendTerminal(`[SYSTEM] ✓ ${t('Export completed')}: ${data.dest}`, false, 'term-success');
                 } else {
-                    alert(`[!] Export Error / Error de exportación: ${data.error}`);
-                    appendTerminal(`[SYSTEM] [!] Export failed: ${data.error}`, false, 'term-danger');
+                    alert(`[!] ${t('Export error')}: ${data.error}`);
+                    appendTerminal(`[SYSTEM] [!] ${t('Export error')}: ${data.error}`, false, 'term-danger');
                 }
             } catch (e) {
-                alert(`[!] Network Error / Error de red: ${e}`);
+                alert(`[!] ${t('Network error')}: ${e}`);
             }
         }
 
@@ -2348,10 +2332,10 @@
             const badge = document.getElementById('status-badge');
             if (running) {
                 badge.className = 'status-badge badge-running';
-                badge.innerText = 'RUNNING / EN EJECUCIÓN';
+                badge.innerText = t('RUNNING');
             } else {
                 badge.className = 'status-badge badge-idle';
-                badge.innerText = 'IDLE / INACTIVO';
+                badge.innerText = t('IDLE');
             }
         }
 
@@ -2393,7 +2377,7 @@
                 
                 const hasCaption = img.has_txt && img.caption && img.caption.trim().length > 0;
                 const dotClass = hasCaption ? 'caption-dot dot-green' : 'caption-dot dot-red';
-                const dotTitle = hasCaption ? 'Caption OK / Texto existente' : 'No Caption / Sin texto';
+                const dotTitle = hasCaption ? t('Caption OK') : t('No caption');
 
                 // El fragmento #t=0.1 hace que el navegador pinte el frame de 0,1 s
                 // como poster. Sin el, muchos navegadores dejan el hueco en negro
@@ -2420,19 +2404,18 @@
                 const insignia = (esVideo && img.has_audio !== null && img.has_audio !== undefined)
                     ? `<img class="ds-audio-badge" src="/assets/${img.has_audio ? 'audio_solo' : 'audio_mute'}.png"
                             alt="${img.has_audio ? 'has audio' : 'no audio'}"
-                            title="${img.has_audio ? 'Has an audio track / Tiene pista de audio'
-                                                  : 'No audio track: trains picture only / Sin pista de audio: solo entrena imagen'}">`
+                            title="${img.has_audio ? t('Has an audio track') : t('No audio track: trains picture only')}">`
                     : '';
 
                 card.innerHTML = `
                     <div class="img-wrapper${esVideo ? ' is-video' : ''}">
                         ${medio}
                         ${insignia}
-                        <button type="button" class="ds-del" title="Remove from dataset / Eliminar del dataset">&#128465;</button>
+                        <button type="button" class="ds-del" title="${t('Remove from dataset')}">&#128465;</button>
                         <span class="${dotClass}" title="${dotTitle}"></span>
                         <div class="img-filename-tag">${img.file}</div>
                     </div>
-                    <div class="caption">${img.caption || '<em>No .txt caption / Sin texto</em>'}</div>
+                    <div class="caption">${img.caption || `<em>${t('No .txt caption')}</em>`}</div>
                 `;
                 const delBtn = card.querySelector('.ds-del');
                 if (delBtn) delBtn.onclick = (ev) => { ev.stopPropagation(); deleteDatasetImage(img.file); };
@@ -2475,9 +2458,8 @@
         }
 
         async function deleteDatasetImage(file) {
-            const msg = 'Remove "' + file + '" and its .txt caption from the dataset?\n\n'
-                      + '\u00bfEliminar "' + file + '" y su caption .txt del dataset?\n\n'
-                      + 'The files are deleted from disk. / Los ficheros se borran del disco.';
+            const msg = t('Remove "{name}" and its .txt caption from the dataset?', { name: file }) + '\n\n'
+                      + t('The files are deleted from disk.');
             if (!confirm(msg)) return;
             try {
                 const res = await fetch('/api/delete-dataset-image', {
@@ -2486,7 +2468,7 @@
                     body: JSON.stringify({ file: file })
                 });
                 const data = await res.json();
-                if (data.status !== 'ok') { alert('Error: ' + (data.error || 'unknown')); return; }
+                if (data.status !== 'ok') { alert('Error: ' + (data.error || t('unknown'))); return; }
                 loadDatasetInfo();
             } catch (e) { alert('Error: ' + e); }
         }
@@ -2654,9 +2636,9 @@
                 const res = await fetch('/api/save-refmod', { method: 'POST', body: JSON.stringify(datos) });
                 const data = await res.json();
                 if (data.status === 'ok') {
-                    alert('RefMod settings saved / Configuracion RefMod guardada: ' + data.file);
+                    alert(t('RefMod settings saved:') + ' ' + data.file);
                 } else {
-                    alert('Error: ' + (data.error || 'unknown'));
+                    alert('Error: ' + (data.error || t('unknown')));
                 }
             } catch (e) {
                 alert('Error: ' + e);
@@ -2700,11 +2682,11 @@
             const tv = parseInt(document.getElementById('refmod_tokens_visual').value) || 0;
             const partes = [];
             if (kind !== 'visual' && ta > 0) {
-                partes.push(`audio ${ta} tok = ${(ta / 80).toFixed(1)} s de voz / of voice`);
+                partes.push(t('audio {n} tok = {s} s of voice', { n: ta, s: (ta / 80).toFixed(1) }));
             }
             if (kind !== 'audio' && tv > 0) {
                 const px = Math.round(Math.sqrt(tv) * 32);
-                partes.push(`visual ${tv} tok = una imagen de ~${px}\u00d7${px} / one ~${px}\u00d7${px} image`);
+                partes.push(t('visual {n} tok = one ~{px}×{px} image', { n: tv, px }));
             }
             const total = (kind !== 'visual' ? ta : 0) + (kind !== 'audio' ? tv : 0);
             // La referencia se paga en CADA generacion, asi que compararla con lo
@@ -2721,8 +2703,8 @@
             // the machine down without warning.
             const lado = parseInt(document.getElementById('refmod_resolution').value) || 512;
             const picoGb = 0.37 + 2.82 * (lado * lado / 1e6);
-            partes.push(`<b>${total}</b> tok añadidos a cada generación / added to every generation`);
-            partes.push(`extraer: ~${picoGb.toFixed(1)} GB de VRAM / to extract`);
+            partes.push(t('{n} tok added to every generation', { n: `<b>${total}</b>` }));
+            partes.push(t('extracting: ~{gb} GB of VRAM', { gb: picoGb.toFixed(1) }));
             el.innerHTML = partes.join(' &nbsp;\u00b7&nbsp; ');
         }
 
@@ -2739,7 +2721,7 @@
                 output: document.getElementById('refmod_output').value.trim(),
                 bundle: document.getElementById('refmod_bundle').checked
             };
-            if (!cuerpo.name) { alert('Pon un nombre al mod. / Name the mod first.'); return; }
+            if (!cuerpo.name) { alert(t('Name the mod first.')); return; }
 
             const btn = event && event.target ? event.target : null;
             const prev = btn ? btn.innerText : '';
@@ -2747,7 +2729,7 @@
             let enCurso = true;
             seguirTaskLog(function () { return enCurso; });
             appendTerminal('[REFMOD] ' + new Date().toLocaleTimeString()
-                           + ' - encoding / codificando...', false, 'term-warning');
+                           + ' - ' + t('encoding...'), false, 'term-warning');
             try {
                 const res = await fetch('/api/extract-refmod', {
                     method: 'POST',
@@ -2761,19 +2743,18 @@
                 // The endpoint may not exist yet and Flask answers that with HTML,
                 // so res.json() would throw a parse error explaining nothing.
                 if (!res.ok && res.status === 404) {
-                    appendTerminal('[REFMOD] /api/extract-refmod no existe todavia en el servidor '
-                                   + '/ not implemented on the server yet', false, 'term-danger');
-                    alert('El backend de RefMod todavia no esta. / The RefMod backend is not there yet.');
+                    appendTerminal('[REFMOD] /api/extract-refmod: ' + t('not implemented on the server yet'), false, 'term-danger');
+                    alert(t('The RefMod backend is not there yet.'));
                     return;
                 }
                 const data = await res.json();
                 if (data.status === 'error') {
-                    appendTerminal('[REFMOD] ' + (data.error || 'unknown'), false, 'term-danger');
-                    alert('Error: ' + (data.error || 'unknown'));
+                    appendTerminal('[REFMOD] ' + (data.error || t('unknown')), false, 'term-danger');
+                    alert('Error: ' + (data.error || t('unknown')));
                     return;
                 }
                 (data.details || []).forEach(function (x) { appendTerminal('   ' + x, false, 'term-success'); });
-                appendTerminal('[REFMOD] ' + (data.message || 'done / hecho'), false, 'term-success');
+                appendTerminal('[REFMOD] ' + (data.message || t('done')), false, 'term-success');
             } catch (e) {
                 alert('Error: ' + e);
             } finally {
@@ -2783,20 +2764,18 @@
         }
 
         async function extractVocals() {
-            const msg = 'Separate voice from music in every audio file?\n\n'
-                      + '\u00bfSeparar la voz de la m\u00fasica en todos los audios?\n\n'
-                      + '\u2022 first use downloads ~600 MB / la primera vez descarga ~600 MB\n'
-                      + '\u2022 run this BEFORE Split / hazlo ANTES de Split\n'
-                      + '\u2022 destructive: do not use on clean recordings\n'
-                      + '\u2022 destructivo: no lo uses en grabaciones limpias\n\n'
-                      + 'Originals are moved to _originals.';
+            const msg = t('Separate voice from music in every audio file?') + '\n\n'
+                      + '\u2022 ' + t('first use downloads ~600 MB') + '\n'
+                      + '\u2022 ' + t('run this BEFORE Split') + '\n'
+                      + '\u2022 ' + t('destructive: do not use on clean recordings') + '\n\n'
+                      + t('Originals are moved to _originals.');
             if (!confirm(msg)) return;
 
             const btn = document.getElementById('btn-vocals');
             const prev = btn ? btn.innerText : '';
             if (btn) { btn.disabled = true; btn.innerText = '...'; }
             appendTerminal('[VOCALS] ' + new Date().toLocaleTimeString()
-                           + ' - separating, this takes a while / separando, tarda un rato...',
+                           + ' - ' + t('separating, this takes a while...'),
                            false, 'term-warning');
             let enCurso = true;
             seguirTaskLog(function () { return enCurso; });
@@ -2805,14 +2784,14 @@
                 const data = await res.json();
                 enCurso = false;
                 if (data.status === 'error') {
-                    appendTerminal('[VOCALS] ' + (data.error || 'unknown'), false, 'term-danger');
-                    alert('Error: ' + (data.error || 'unknown'));
+                    appendTerminal('[VOCALS] ' + (data.error || t('unknown')), false, 'term-danger');
+                    alert('Error: ' + (data.error || t('unknown')));
                     return;
                 }
-                appendTerminal('[VOCALS] ' + (data.processed || 0) + ' file(s) / ficheros', false, 'term-success');
+                appendTerminal('[VOCALS] ' + t('{n} file(s)', { n: data.processed || 0 }), false, 'term-success');
                 (data.details || []).forEach(function (x) { appendTerminal('   ' + x); });
                 (data.errors || []).forEach(function (x) { appendTerminal('   ' + x, false, 'term-danger'); });
-                if (data.backup) appendTerminal('   originals / originales: ' + data.backup);
+                if (data.backup) appendTerminal('   ' + t('originals') + ': ' + data.backup);
                 loadDatasetInfo();
             } catch (e) {
                 alert('Error: ' + e);
@@ -2825,12 +2804,10 @@
         async function splitSamples() {
             const frames = parseInt(document.getElementById('precache_num_frames').value) || 124;
             const seg = (frames / 24).toFixed(3);
-            const msg = 'Split every sample longer than ' + frames + ' frames (' + seg + ' s)?\n\n'
-                      + '\u00bfTrocear toda muestra mas larga que ' + frames + ' fotogramas (' + seg + ' s)?\n\n'
-                      + '\u2022 audio is cut at silences / el audio se corta por los silencios\n'
-                      + '\u2022 video is cut on the frame / el video se corta por fotograma\n\n'
-                      + 'Originals are moved to _originals.\n'
-                      + 'Los originales se mueven a _originals.';
+            const msg = t('Split every sample longer than {frames} frames ({s} s)?', { frames, s: seg }) + '\n\n'
+                      + '\u2022 ' + t('audio is cut at silences') + '\n'
+                      + '\u2022 ' + t('video is cut on the frame') + '\n\n'
+                      + t('Originals are moved to _originals.');
             if (!confirm(msg)) return;
 
             const btn = document.getElementById('btn-split');
@@ -2843,13 +2820,12 @@
                     body: JSON.stringify({ frames: frames })
                 });
                 const data = await res.json();
-                if (data.status === 'error') { alert('Error: ' + (data.error || 'unknown')); return; }
-                let out = data.split + ' split / troceadas, ' + data.skipped + ' untouched / sin tocar'
-                        + ' -> ' + data.produced + ' takes / tomas';
+                if (data.status === 'error') { alert('Error: ' + (data.error || t('unknown'))); return; }
+                let out = t('{a} split, {b} untouched -> {c} takes', { a: data.split, b: data.skipped, c: data.produced });
                 if (data.details && data.details.length) out += '\n\n' + data.details.join('\n');
-                if (data.warnings && data.warnings.length) out += '\n\nWarnings / Avisos:\n' + data.warnings.join('\n');
-                if (data.errors && data.errors.length) out += '\n\nErrors:\n' + data.errors.join('\n');
-                if (data.backup) out += '\n\nOriginals / Originales: ' + data.backup;
+                if (data.warnings && data.warnings.length) out += '\n\n' + t('Warnings:') + '\n' + data.warnings.join('\n');
+                if (data.errors && data.errors.length) out += '\n\n' + t('Errors:') + '\n' + data.errors.join('\n');
+                if (data.backup) out += '\n\n' + t('Originals:') + ' ' + data.backup;
                 appendTerminal('');
                 appendTerminal('[SPLIT] ' + new Date().toLocaleTimeString(), false,
                                data.errors && data.errors.length ? 'term-danger' : 'term-success');
@@ -2864,16 +2840,11 @@
         }
 
         async function convertFps() {
-            const msg = 'Prepare every clip for MiniMax-H3?\n\n'
-                      + '\u00bfPreparar todos los clips para MiniMax-H3?\n\n'
-                      + '\u2022 exactly 24 fps / 24 fps exactos\n'
-                      + '\u2022 frame count 17n+5, keeping the WHOLE clip\n'
-                      + '\u2022 recuento 17n+5, conservando el clip ENTERO\n\n'
-                      + 'Nothing is cut off the end; time is stretched by the couple of percent\n'
-                      + 'needed to reach a valid count. Re-encodes at crf 16.\n'
-                      + 'No se recorta nada por el final; se estira el tiempo el dos por ciento\n'
-                      + 'que haga falta para llegar a un recuento valido. Recodifica a crf 16.\n\n'
-                      + 'Originals are saved in _originals. / Los originales se guardan en _originals.';
+            const msg = t('Prepare every clip for MiniMax-H3?') + '\n\n'
+                      + '\u2022 ' + t('exactly 24 fps') + '\n'
+                      + '\u2022 ' + t('frame count 17n+5, keeping the WHOLE clip') + '\n\n'
+                      + t('Nothing is cut off the end; time is stretched by the couple of percent needed to reach a valid count. Re-encodes at crf 16.') + '\n\n'
+                      + t('Originals are saved in _originals.');
             if (!confirm(msg)) return;
 
             const btn = document.getElementById('btn-fps');
@@ -2894,9 +2865,8 @@
                     body: JSON.stringify({ fps: 24 })
                 });
                 const data = await res.json();
-                if (data.status === 'error') { alert('Error: ' + (data.error || 'unknown')); return; }
-                let out = data.converted + ' converted / convertidos, '
-                        + data.skipped + ' untouched / sin tocar';
+                if (data.status === 'error') { alert('Error: ' + (data.error || t('unknown'))); return; }
+                let out = t('{a} converted, {b} untouched', { a: data.converted, b: data.skipped });
                 if (data.details && data.details.length) out += '\n\n' + data.details.join('\n');
                 // Los saltados importan tanto como los convertidos: un clip que ya
                 // tenia recuento valido se queda como esta, y si venia recortado de
@@ -2905,11 +2875,11 @@
                 // had a valid count is left as it is, and if it arrived truncated it
                 // stays truncated. Silently, that looked like success.
                 if (data.skipped_details && data.skipped_details.length) {
-                    out += '\n\nUntouched / Sin tocar:\n' + data.skipped_details.join('\n');
+                    out += '\n\n' + t('Untouched:') + '\n' + data.skipped_details.join('\n');
                 }
-                if (data.warnings && data.warnings.length) out += '\n\nWarnings / Avisos:\n' + data.warnings.join('\n');
-                if (data.errors && data.errors.length) out += '\n\nErrors:\n' + data.errors.join('\n');
-                if (data.backup) out += '\n\nOriginals / Originales: ' + data.backup;
+                if (data.warnings && data.warnings.length) out += '\n\n' + t('Warnings:') + '\n' + data.warnings.join('\n');
+                if (data.errors && data.errors.length) out += '\n\n' + t('Errors:') + '\n' + data.errors.join('\n');
+                if (data.backup) out += '\n\n' + t('Originals:') + ' ' + data.backup;
 
                 // El parte va SOLO a la consola. En un alert no se puede
                 // seleccionar el texto, y este es justo el parte que hay que releer
@@ -2939,15 +2909,15 @@
         async function clearDataset() {
             const n = parseInt(document.getElementById('ds-count').innerText) || 0;
             const path = document.getElementById('dataset_path').value;
-            if (!n) { alert('The dataset is already empty. / El dataset ya está vacío.'); return; }
+            if (!n) { alert(t('The dataset is already empty.')); return; }
             // Se pide escribir el número: un confirm normal se acepta por reflejo y esto no tiene deshacer.
-            const resp = prompt(`This DELETES the ${n} files of the dataset and their .txt captions:\n${path}\nThere is no undo.\n\nEsto BORRA los ${n} ficheros del dataset y sus captions .txt. No hay deshacer.\n\nType ${n} to confirm / Escribe ${n} para confirmar:`);
+            const resp = prompt(t('This DELETES the {n} files of the dataset and their .txt captions:', { n }) + `\n${path}\n` + t('There is no undo.') + '\n\n' + t('Type {n} to confirm:', { n }));
             if (String(resp || '').trim() !== String(n)) return;
             try {
                 const res = await fetch('/api/clear-dataset', { method: 'POST' });
                 const data = await res.json();
-                if (data.status === 'error') { alert('Error: ' + (data.error || 'unknown')); return; }
-                appendTerminal(`[DATASET] ${data.removed || 0} file(s) deleted / fichero(s) borrado(s): ${data.path}`, false, 'term-warning');
+                if (data.status === 'error') { alert('Error: ' + (data.error || t('unknown'))); return; }
+                appendTerminal(`[DATASET] ${t('{n} file(s) deleted', { n: data.removed || 0 })}: ${data.path}`, false, 'term-warning');
                 (data.errors || []).forEach(x => appendTerminal('   ' + x, false, 'term-danger'));
                 loadDatasetInfo();
             } catch (e) { alert('Error: ' + e); }
@@ -2955,10 +2925,10 @@
 
         async function deleteProjectData(target) {
             const texts = {
-                precache: 'This will delete the current pre-cache.\n\nEsto borrar\u00e1 la pre-cach\u00e9 actual.',
-                training: 'This will delete all the current training.\n\nEsto eliminar\u00e1 todo el entrenamiento actual.'
+                precache: t('This will delete the current pre-cache.'),
+                training: t('This will delete all the current training.')
             };
-            if (!confirm(texts[target] + '\n\nContinue? / \u00bfContinuar?')) return;
+            if (!confirm(texts[target] + '\n\n' + t('Continue?'))) return;
             try {
                 const res = await fetch('/api/delete-project-data', {
                     method: 'POST',
@@ -2966,10 +2936,10 @@
                     body: JSON.stringify({ target: target })
                 });
                 const data = await res.json();
-                if (data.status === 'error') { alert('Error: ' + (data.error || 'unknown')); return; }
-                let out = data.removed + ' item(s) deleted / elemento(s) borrado(s)\n' + data.path;
+                if (data.status === 'error') { alert('Error: ' + (data.error || t('unknown'))); return; }
+                let out = t('{n} item(s) deleted', { n: data.removed }) + '\n' + data.path;
                 if (data.errors && data.errors.length) {
-                    out += '\n\nCould not delete / No se pudo borrar:\n' + data.errors.join('\n');
+                    out += '\n\n' + t('Could not delete:') + '\n' + data.errors.join('\n');
                 }
                 alert(out);
                 if (target === 'precache') { loadDatasetInfo(); }
@@ -2989,7 +2959,7 @@
             grid.classList.remove('compact', 'large', 'hidden');
             if (mode === 'compact') grid.classList.add('compact');
             if (mode === 'large') grid.classList.add('large');
-            document.getElementById('btn-toggle-ds').innerText = 'Hide / Ocultar';
+            document.getElementById('btn-toggle-ds').innerText = t('Hide');
         }
 
         function toggleDatasetGrid() {
@@ -2997,34 +2967,31 @@
             const btn = document.getElementById('btn-toggle-ds');
             if (grid.classList.contains('hidden')) {
                 grid.classList.remove('hidden');
-                btn.innerText = 'Hide / Ocultar';
+                btn.innerText = t('Hide');
             } else {
                 grid.classList.add('hidden');
-                btn.innerText = 'Show / Mostrar';
+                btn.innerText = t('Show');
             }
         }
 
         async function clearAllCaptions() {
             const n = parseInt(document.getElementById('ds-txt-count').innerText) || 0;
             if (!n) {
-                alert('There are no captions to delete. / No hay captions que borrar.');
+                alert(t('There are no captions to delete.'));
                 return;
             }
             // Se pide el numero por escrito. Un boton rojo con un confirm normal
             // se acepta por reflejo, y esto no tiene deshacer.
             // The count is typed in. A red button with an ordinary confirm gets
             // accepted by reflex, and this has no undo.
-            const resp = prompt('This DELETES the .txt of all ' + n + ' captions. There is no undo.\n'
-                              + 'Esto BORRA el .txt de los ' + n + ' captions. No hay deshacer.\n\n'
-                              + 'Type the number ' + n + ' to confirm / Escribe ' + n + ' para confirmar:');
+            const resp = prompt(t('This DELETES the .txt of all {n} captions. There is no undo.', { n }) + '\n\n' + t('Type {n} to confirm:', { n }));
             if (String(resp || '').trim() !== String(n)) return;
 
             try {
                 const res = await fetch('/api/clear-captions', { method: 'POST' });
                 const data = await res.json();
-                if (data.status === 'error') { alert('Error: ' + (data.error || 'unknown')); return; }
-                appendTerminal('[CAPTIONS] ' + (data.removed || 0) + ' .txt deleted / borrados',
-                               false, 'term-warning');
+                if (data.status === 'error') { alert('Error: ' + (data.error || t('unknown'))); return; }
+                appendTerminal('[CAPTIONS] ' + t('{n} .txt deleted', { n: data.removed || 0 }), false, 'term-warning');
                 if (data.errors && data.errors.length) {
                     data.errors.forEach(function (x) { appendTerminal('   ' + x, false, 'term-danger'); });
                 }
@@ -3038,8 +3005,7 @@
             const comun = comunEl ? comunEl.value.trim() : '';
 
             if (!trigger && !comun) {
-                alert('Enter a Trigger Word, a common description, or both.\n\n'
-                    + 'Escribe una palabra trigger, una descripci\u00f3n com\u00fan, o ambas.');
+                alert(t('Enter a Trigger Word, a common description, or both.'));
                 return;
             }
 
@@ -3054,23 +3020,13 @@
 
             let msg;
             if (!comun) {
-                msg = 'Add trigger "' + trigger + '" to all dataset captions? / '
-                    + '\u00bfA\u00f1adir palabra clave a todos los captions?';
+                msg = t('Add the trigger "{trigger}" to all dataset captions?', { trigger });
             } else if (modo === 'replace') {
-                msg = 'REPLACE every caption with:\n\n'
-                    + '    ' + (trigger ? trigger + ', ' : '') + comun + '\n\n'
-                    + 'REEMPLAZAR todos los captions por ese texto.\n'
-                    + 'Lo que hubiera escrito se pierde.';
+                msg = t('REPLACE every caption with this text? What was written is lost.') + '\n\n    ' + (trigger ? trigger + ', ' : '') + comun;
             } else if (modo === 'remove') {
-                msg = 'REMOVE this text from every caption, leaving the rest:\n\n'
-                    + '    ' + comun + '\n\n'
-                    + 'QUITAR ese texto de todos los captions, conservando el resto.\n'
-                    + 'Sirve para deshacer un trigger a\u00f1adido por error.';
+                msg = t('REMOVE this text from every caption, keeping the rest?') + '\n\n    ' + comun;
             } else {
-                msg = 'APPEND this sentence at the end of every caption:\n\n'
-                    + '    ' + comun + '\n\n'
-                    + 'A\u00d1ADIR esa frase al final de cada caption.\n'
-                    + 'Lo que ya estaba escrito se conserva.';
+                msg = t('APPEND this text at the end of every caption? What was already written is kept.') + '\n\n    ' + comun;
             }
             if (!confirm(msg)) return;
 
@@ -3080,11 +3036,11 @@
             });
             try {
                 const data = await res.json();
-                appendTerminal('[CAPTIONS] ' + (data.updated_count || 0)
-                               + (!comun ? ' caption(s) updated / actualizados'
-                                         : (modo === 'replace' ? ' caption(s) replaced / reemplazados'
-                                         : (modo === 'remove'  ? ' caption(s) cleaned / limpiados'
-                                                               : ' caption(s) extended / ampliados'))),
+                const n = data.updated_count || 0;
+                appendTerminal('[CAPTIONS] ' + (!comun ? t('{n} caption(s) updated', { n })
+                                         : (modo === 'replace' ? t('{n} caption(s) replaced', { n })
+                                         : (modo === 'remove'  ? t('{n} caption(s) cleaned', { n })
+                                                               : t('{n} caption(s) extended', { n })))),
                                false, 'term-success');
             } catch (e) {}
             loadDatasetInfo();
@@ -3099,12 +3055,12 @@
                 data.previews.forEach(filename => {
                     const card = document.createElement('div');
                     card.className = 'preview-card';
-                    card.onclick = () => openModal(`/api/preview/${filename}`, filename, `Generated preview / Previsualización: ${filename}`);
+                    card.onclick = () => openModal(`/api/preview/${filename}`, filename, `${t('Generated preview')}: ${filename}`);
 
                     let stepTag = filename;
                     const match = filename.match(/preview_step_(\d+)\.png/i);
                     if (match) {
-                        stepTag = `Step / Paso ${match[1]}`;
+                        stepTag = t('Step {n}', { n: match[1] });
                     }
 
                     card.innerHTML = `
@@ -3296,8 +3252,7 @@
             // pass over sixty-nine, it is not.
             const campo = document.getElementById('modal-txt');
             if (campo && campo.value !== captionAlAbrir) {
-                if (!confirm('The caption has unsaved changes. Close and lose them?\n\n'
-                           + 'El caption tiene cambios sin guardar. \u00bfCerrar y perderlos?')) {
+                if (!confirm(t('The caption has unsaved changes. Close and lose them?'))) {
                     return;
                 }
             }
@@ -3337,7 +3292,7 @@
                 // teaches people to dismiss it unread, and the day it matters it
                 // will be dismissed too.
                 captionAlAbrir = newCaption;
-                alert('✓ Caption saved / Caption guardado!');
+                alert('✓ ' + t('Caption saved!'));
                 closeModal();
                 loadDatasetInfo();
             }
@@ -3353,7 +3308,7 @@
             const data = await res.json();
             
             browserPath = data.current_path;
-            document.getElementById('browser-current-path').innerText = `${browserPath} (${data.image_count} images inside)`;
+            document.getElementById('browser-current-path').innerText = `${browserPath} (${t('{n} images inside', { n: data.image_count })})`;
             
             const driveSel = document.getElementById('drive-selector');
             driveSel.innerHTML = '';
@@ -3373,7 +3328,7 @@
 
             const parentDiv = document.createElement('div');
             parentDiv.className = 'dir-item';
-            parentDiv.innerHTML = `<strong>📁 .. [Up / Subir]</strong>`;
+            parentDiv.innerHTML = `<strong>📁 .. [${t('Up')}]</strong>`;
             parentDiv.onclick = () => openFolderBrowserWeb(target, data.parent_path);
             dirList.appendChild(parentDiv);
 
