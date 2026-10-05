@@ -44,6 +44,10 @@ echo [EN] Syncing latest updates from GitHub...
 echo [ES] Sincronizando ultimas actualizaciones desde GitHub...
 echo.
 
+rem Version actual, para listar despues los cambios nuevos / Current version, to list the new changes afterwards
+set "OLD_HEAD="
+for /f "delims=" %%h in ('git rev-parse -q --verify HEAD 2^>nul') do set "OLD_HEAD=%%h"
+
 rem 4. Rama a actualizar: la de esta carpeta (main, dev...); main si no hay ninguna
 rem    Branch to update: this folder's branch (main, dev...); main if there is none
 set "BRANCH="
@@ -85,6 +89,23 @@ echo.
 echo [EN] Update process completed.
 echo [ES] Proceso de actualizacion completado.
 echo.
+
+rem Cambios desde la version anterior (titulos de los commits) / Changes since the previous version (commit titles)
+if not defined OLD_HEAD goto CHANGES_DONE
+set "NEW_COUNT="
+for /f %%n in ('git rev-list --no-merges --count %OLD_HEAD%..HEAD 2^>nul') do set "NEW_COUNT=%%n"
+if not defined NEW_COUNT goto CHANGES_DONE
+if "%NEW_COUNT%"=="0" (
+    echo [EN] You already had the latest version: no new changes.
+    echo [ES] Ya tenias la ultima version: no hay cambios nuevos.
+    echo.
+    goto CHANGES_DONE
+)
+echo [EN] Changes since your previous version (%NEW_COUNT%, newest first):
+echo [ES] Cambios desde tu version anterior (%NEW_COUNT%, los mas recientes primero):
+git --no-pager log --no-merges -n 40 --format="  - %%s" %OLD_HEAD%..HEAD
+echo.
+:CHANGES_DONE
 
 rem 6. Librerias nuevas o actualizadas de requirements.txt / New or updated libraries from requirements.txt
 echo Actualizando librerias de Python... / Updating Python libraries...
