@@ -95,7 +95,7 @@ def serve(app, port_key):
             note = "  [!] " + t("No password: remote access refused")
         else:
             note = ""
-        print(f"  {t('remote.network')}: http://{lan_address()}:{port}{note}")
+        print(f"  {t('Network')}: http://{lan_address()}:{port}{note}")
     app.run(host=host, port=port, debug=False, threaded=True)
 
 
