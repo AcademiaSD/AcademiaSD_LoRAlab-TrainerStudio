@@ -53,35 +53,16 @@ from safetensors import safe_open
 from i18n import t
 
 # ============================================================================
-# BILINGUAL LOGGING / LOGS BILINGUES
+# LOGS (en el idioma de la interfaz / in the interface language)
 # ============================================================================
 LOGS_DEV = 1
 
 
-class _Bi(str):
-    """Bilingual string that formats each half separately.
-    Cadena bilingue que formatea cada mitad por separado.
-
-    Behaves like the joined "EN / ES" string, but .format(*args) applies the SAME args to
-    the English half and to the Spanish half, instead of trying to consume them twice.
-    Se comporta como la cadena unida "EN / ES", pero .format(*args) aplica los MISMOS
-    argumentos a la mitad inglesa y a la espanola, en vez de intentar consumirlos dos veces.
-    """
-
-    def __new__(cls, en, es):
-        obj = super().__new__(cls, u"{} / {}".format(en, es))
-        obj._en = en
-        obj._es = es
-        return obj
-
-    def format(self, *args, **kwargs):
-        return u"{} / {}".format(self._en.format(*args, **kwargs),
-                                 self._es.format(*args, **kwargs))
-
-
 def L(en, es):
-    """Bilingual single-line message / Mensaje bilingue en una sola linea."""
-    return _Bi(en, es)
+    """Mensaje en el idioma elegido en el lanzador (i18n). El español se queda aquí como referencia
+    y es el que lleva GUI/locales/es.json; .format() se aplica después, sobre el texto traducido.
+    Message in the language chosen in the launcher; .format() is applied to the translated text."""
+    return t(en)
 
 
 def log_dev(msg, level=1):
@@ -1139,9 +1120,9 @@ def rebuild_rope_buffers(model, fallback_config=None):
             if int(new_buf.numel()) != n:
                 raise RuntimeError("numel mismatch {} != {}".format(int(new_buf.numel()), n))
             if float(new_buf.abs().sum()) == 0.0:
-                raise RuntimeError("rebuilt table is all zeros / la tabla reconstruida es todo ceros")
+                raise RuntimeError(t("rebuilt table is all zeros"))
             if n > 1 and not bool((new_buf[1:] <= new_buf[:-1]).all()):
-                raise RuntimeError("table is not monotonically decreasing / la tabla no decrece")
+                raise RuntimeError(t("table is not monotonically decreasing"))
 
             mod.register_buffer("inv_freq", new_buf.clone(), persistent=False)
             orig = getattr(mod, "original_inv_freq", None)
@@ -3285,8 +3266,7 @@ def preprocess_minimaxh3():
                     .format(filename, total, H3_BASE_FRAMES))
 
             bw, bh = bucket_size(vw, vh)
-            log_dev("    Bucket: {}x{} | {} de {} fotogramas -> {} latentes".format(
-                bw, bh, keep, total, h3_latent_frames(keep)))
+            log_dev("    " + t("Bucket: {0}x{1} | {2} of {3} frames -> {4} latents", bw, bh, keep, total, h3_latent_frames(keep)))
             if keep < total:
                 log_dev(L("    Trimming {} -> {} frames (H3 needs 17n+5).",
                           "    Recortando {} -> {} fotogramas (H3 exige 17n+5).")
@@ -3318,8 +3298,7 @@ def preprocess_minimaxh3():
             if keep is None:
                 raise RuntimeError(L("Could not read the audio: {}",
                                      "No se pudo leer el audio: {}").format(filename))
-            log_dev("    Audio: {:.3f}s -> {} fotogramas equivalentes ({:.3f}s a 24 fps)".format(
-                dur, keep, keep / 24.0))
+            log_dev("    " + t("Audio: {0:.3f}s -> {1} equivalent frames ({2:.3f}s at 24 fps)", dur, keep, keep / 24.0))
 
             bw = bh = MULTIPLE
             negro = Image.new("RGB", (bw, bh), (0, 0, 0))

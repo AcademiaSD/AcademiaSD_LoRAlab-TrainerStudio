@@ -59,6 +59,7 @@ import tempfile
 
 import torch
 from safetensors.torch import save_file
+from i18n import t
 
 # Clave de los metadatos en la cabecera del safetensors, tal como la lee
 # core.py del nodo. Si esto cambia, los mods dejan de cargar.
@@ -325,16 +326,15 @@ def extraer_audio(fuentes, audio_vae, max_tokens=400, log=print):
                 continue
             z = P.encode_audio_latent(audio_vae, pcm)     # [1, 32, 2T]
             if z.ndim != 3 or z.shape[1] != 32 or z.shape[2] % 2:
-                log("[REFMOD] {}: unexpected latent {}, skipped / latente "
-                    "inesperado, se salta".format(os.path.basename(ruta), tuple(z.shape)))
+                log("[REFMOD] {}: ".format(os.path.basename(ruta)) + t("unexpected latent {0}, skipped", tuple(z.shape)))
                 continue
-            t = z.shape[2] // 2
+            tv = z.shape[2] // 2
             # [1,32,2T] canal-mayor -> [1,32,2,T]. El orden coincide: las
             # primeras T posiciones son el canal izquierdo.
             # Channel-major [1,32,2T] -> [1,32,2,T]; the first T positions are
             # the left channel, which is what the node expects.
-            trozos.append(z.reshape(1, 32, 2, t).float())
-            usados.append("{} ({:.2f}s)".format(os.path.basename(ruta), t / 40.0))
+            trozos.append(z.reshape(1, 32, 2, tv).float())
+            usados.append("{} ({:.2f}s)".format(os.path.basename(ruta), tv / 40.0))
             if tope_latentes and sum(x.shape[-1] for x in trozos) >= tope_latentes:
                 break
         except Exception as exc:
@@ -345,10 +345,7 @@ def extraer_audio(fuentes, audio_vae, max_tokens=400, log=print):
 
     latente = torch.cat(trozos, dim=-1)
     if tope_latentes and latente.shape[-1] > tope_latentes:
-        log("[REFMOD] audio: {} latents -> {} to fit the {} token budget / {} "
-            "latentes -> {} por el presupuesto de {} tokens"
-            .format(latente.shape[-1], tope_latentes, max_tokens,
-                    latente.shape[-1], tope_latentes, max_tokens))
+        log("[REFMOD] audio: " + t("{0} latents -> {1} to fit the {2} token budget", latente.shape[-1], tope_latentes, max_tokens))
         latente = latente[..., :tope_latentes].clone()
     return latente.to(torch.float16), usados
 
@@ -495,12 +492,10 @@ def extraer_visual(fuentes, video_vae, resolution=1024, max_tokens=1024, log=pri
     ancho, alto = _lienzo(visuales[0], resolution, P)
     por_frame = (alto // 16 // 2) * (ancho // 16 // 2)
     if por_frame <= 0:
-        raise ValueError("Lienzo invalido {}x{}".format(ancho, alto))
+        raise ValueError(t("Invalid canvas {0}x{1}", ancho, alto))
     tope_t = max(1, max_tokens // por_frame) if max_tokens else None
-    log("[REFMOD] canvas {}x{} px = {} tokens/frame | estimated peak {:.1f} GB{} "
-        "/ lienzo, tokens por fotograma, pico estimado"
-        .format(ancho, alto, por_frame, pico_vram_estimado(ancho, alto, True),
-                "; {} latents fit / latentes caben".format(tope_t) if tope_t else ""))
+    log("[REFMOD] " + t("canvas {0}x{1} px = {2} tokens/frame | estimated peak {3:.1f} GB", ancho, alto, por_frame, pico_vram_estimado(ancho, alto, True))
+        + ("; " + t("{0} latents fit", tope_t) if tope_t else ""))
 
     # EL PRESUPUESTO SE REPARTE, NO SE AGOTA EN EL PRIMERO.
     #
@@ -535,9 +530,7 @@ def extraer_visual(fuentes, video_vae, resolution=1024, max_tokens=1024, log=pri
             # One latent per frame, so the quota no longer has to land on the
             # 17n+5 grid: any number >= 1 works and the budget is fully used.
             cupo_video = resto // len(videos) if resto >= 1 else 0
-        log("[REFMOD] share: {} image(s) at 1 latent + {} video(s) at {} latents "
-            "/ reparto: imagenes a 1 latente, videos a N latentes"
-            .format(reservado, len(videos), cupo_video if cupo_video else 0))
+        log("[REFMOD] " + t("share: {0} image(s) at 1 latent + {1} video(s) at {2} latents", reservado, len(videos), cupo_video if cupo_video else 0))
 
     trozos, usados = [], []
     for ruta in visuales:
@@ -591,8 +584,7 @@ def extraer_visual(fuentes, video_vae, resolution=1024, max_tokens=1024, log=pri
                 cuantos = cupo_video if cupo_video is not None else (
                     max(1, tope_t - puestos) if tope_t else 8)
                 if cuantos < 1:
-                    log("[REFMOD] {}: no quota left, skipped / sin cupo, se salta"
-                        .format(nombre))
+                    log("[REFMOD] {}: ".format(nombre) + t("no quota left, skipped"))
                     continue
                 frames = _frames_repartidos(P, ruta, cuantos, ancho, alto, disponible)
                 from PIL import Image
@@ -621,8 +613,6 @@ def extraer_visual(fuentes, video_vae, resolution=1024, max_tokens=1024, log=pri
         # Uniformly resampled rather than cut from the end: in vision the last
         # frames carry as much as the first, unlike audio.
         idx = torch.linspace(0, latente.shape[2] - 1, tope_t).round().long()
-        log("[REFMOD] visual: {} latent frames -> {} to fit the {} token budget "
-            "/ fotogramas latentes -> N por el presupuesto"
-            .format(latente.shape[2], tope_t, max_tokens))
+        log("[REFMOD] visual: " + t("{0} latent frames -> {1} to fit the {2} token budget", latente.shape[2], tope_t, max_tokens))
         latente = latente[:, :, idx].clone()
     return latente.to(torch.float16), usados

@@ -770,7 +770,7 @@ def run_script():
             if active_process is not None and active_process.poll() is None:
                 return jsonify({
                     "status": "error",
-                    "error": f"Process already running / Proceso en ejecucion: {active_script}"
+                    "error": t("Process already running: {name}", name=active_script)
                 }), 409
 
             command = [
@@ -1532,8 +1532,7 @@ def extract_refmod():
         carpeta = Path(origen) if origen else get_dataset_dir()
         if not carpeta.is_dir():
             return jsonify({"status": "error",
-                            "error": "Source folder not found / No existe la carpeta: "
-                                     "{}".format(carpeta)}), 404
+                            "error": t("Source folder not found: {path}", path=carpeta)}), 404
 
         salida = str(data.get("output", "")).strip()
         destino = Path(salida) if salida else (BASE_DIR / "refmods")
@@ -1558,10 +1557,8 @@ def extract_refmod():
         empaquetar = bool(data.get("bundle", False))
         descripcion = str(data.get("description", "")).strip()
 
-        log_tarea("[REFMOD] {} file(s) in {} / fichero(s) en"
-                  .format(len(fuentes), carpeta))
-        log_tarea("[REFMOD] encode mode | type {} | output {} / modo encode, tipo, salida"
-                  .format(concepto, destino))
+        log_tarea("[REFMOD] " + t("{n} file(s) in {path}", n=len(fuentes), path=carpeta))
+        log_tarea("[REFMOD] " + t("encode mode | type {kind} | output {path}", kind=concepto, path=destino))
 
         P = refmod.precache()
 
@@ -1580,17 +1577,15 @@ def extract_refmod():
 
         try:
             if kind in ("audio", "both"):
-                log_tarea("[REFMOD] cargando el VAE de audio / loading the audio VAE...")
+                log_tarea("[REFMOD] " + t("loading the audio VAE..."))
                 avae = P.load_h3_audio_vae(P.NF4_MODEL_ID) if hay_audio else None
                 if avae is None:
-                    detalles.append("audio: the audio VAE is missing and could not be "
-                                    "downloaded / falta el VAE de audio")
+                    detalles.append("audio: " + t("the audio VAE is missing and could not be downloaded"))
                 else:
                     lat, usados = refmod.extraer_audio(fuentes, avae, tok_a, log=log_tarea)
                     del avae
                     if lat is None:
-                        detalles.append("audio: no source carried an audio track "
-                                    "/ ninguna fuente traia pista de audio")
+                        detalles.append("audio: " + t("no source carried an audio track"))
                     else:
                         piezas.append((lat, "audio", dict(
                             name=nombre + "_audio", source="audio",
@@ -1600,18 +1595,15 @@ def extract_refmod():
 
             if kind in ("visual", "both"):
                 if not hay_video:
-                    detalles.append("visual: the video VAE is missing and could not be "
-                                    "downloaded / falta el VAE de video")
-                    raise RuntimeError("El VAE de video no esta disponible. / "
-                                       "The video VAE is not available.")
-                log_tarea("[REFMOD] cargando el VAE de video / loading the video VAE...")
+                    detalles.append("visual: " + t("the video VAE is missing and could not be downloaded"))
+                    raise RuntimeError(t("The video VAE is not available."))
+                log_tarea("[REFMOD] " + t("loading the video VAE..."))
                 vvae = refmod.preparar_video_vae(
                     P.load_h3_video_vae(P.NF4_MODEL_ID, P.MODEL_ID, strict=False))
                 lat, usados = refmod.extraer_visual(fuentes, vvae, res, tok_v, log=log_tarea)
                 del vvae
                 if lat is None:
-                    detalles.append("visual: no source was an image or a video "
-                                    "/ ninguna fuente era imagen o video")
+                    detalles.append("visual: " + t("no source was an image or a video"))
                 else:
                     tipo = "image" if int(lat.shape[2]) == 1 else "video"
                     piezas.append((lat, tipo, dict(
@@ -1650,8 +1642,7 @@ def extract_refmod():
                                 .format(kw["name"], tipo, refmod.token_count(lat, tipo)))
         else:
             if empaquetar:
-                detalles.append("bundle skipped: more than one reference is needed "
-                                "/ bundle omitido, hace falta mas de una referencia")
+                detalles.append(t("bundle skipped: more than one reference is needed"))
             for lat, tipo, kw in piezas:
                 ruta = refmod.guardar(lat, tipo, kw["name"],
                                       str(destino / kw["name"]),
@@ -1668,11 +1659,9 @@ def extract_refmod():
             log_tarea("[REFMOD] " + d)
         if not escritos:
             return jsonify({"status": "error",
-                            "error": "Nothing was written. / No se escribio nada. "
-                                     + " | ".join(detalles)}), 400
+                            "error": t("Nothing was written.") + " " + " | ".join(detalles)}), 400
         return jsonify({"status": "ok", "files": escritos, "details": detalles,
-                        "message": "{} fichero(s) escrito(s) / file(s) written"
-                                   .format(len(escritos))})
+                        "message": t("{n} file(s) written", n=len(escritos))})
     except Exception as exc:
         import traceback
         log_tarea("[REFMOD][ERROR] " + traceback.format_exc().strip().splitlines()[-1])
@@ -1736,7 +1725,7 @@ def extract_vocals():
 
         dataset_dir = get_dataset_dir()
         if not dataset_dir.is_dir():
-            return jsonify({"status": "error", "error": "No dataset folder / No hay dataset"}), 404
+            return jsonify({"status": "error", "error": t("No dataset folder")}), 404
 
         # LOS CLIPS DE VIDEO TAMBIEN CUENTAN.
         #
@@ -1776,8 +1765,8 @@ def extract_vocals():
 
         import torch
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        log_tarea("[VOCALS] Device: {} | model folder: ./MelBandRoFormer".format(device))
-        log_tarea("[VOCALS] {} file(s) to process / ficheros a procesar".format(len(muestras)))
+        log_tarea("[VOCALS] " + t("Device: {device} | model folder: {path}", device=device, path="./MelBandRoFormer"))
+        log_tarea("[VOCALS] " + t("{n} file(s) to process", n=len(muestras)))
         modelo = sep.cargar(str(BASE_DIR / "MelBandRoFormer"), device, log=log_tarea)
         if modelo is None:
             return jsonify({"status": "error",
@@ -1790,7 +1779,7 @@ def extract_vocals():
             try:
                 pcm = sep.leer_pcm(m, ffmpeg)
                 if pcm.size == 0:
-                    errores.append("{}: empty / vacio".format(m.name))
+                    errores.append("{}: {}".format(m.name, t("empty")))
                     continue
                 voz = sep.separar_voz(modelo, pcm, device)
 
@@ -1820,8 +1809,7 @@ def extract_vocals():
                     except Exception:
                         pass
                     if r.returncode != 0 or not tmp.is_file():
-                        errores.append("{}: remux fallo / remux failed -- {}"
-                                       .format(m.name, (r.stderr or "").strip()[:160]))
+                        errores.append("{}: {} -- {}".format(m.name, t("remux failed"), (r.stderr or "").strip()[:160]))
                         continue
                 else:
                     sep.escribir_pcm(voz, tmp, ffmpeg)
@@ -1895,7 +1883,7 @@ def split_samples():
 
         dataset_dir = get_dataset_dir()
         if not dataset_dir.is_dir():
-            return jsonify({"status": "error", "error": "No dataset folder / No hay dataset"}), 404
+            return jsonify({"status": "error", "error": t("No dataset folder")}), 404
 
         muestras = sorted(f for f in dataset_dir.iterdir()
                           if f.is_file() and f.suffix.lower() in DATASET_EXTS
@@ -1911,8 +1899,7 @@ def split_samples():
                      "-of", "csv=p=0", str(m)],
                     capture_output=True, text=True, timeout=120).stdout.strip())
             except Exception:
-                errores.append("{}: could not read the duration / no se pudo leer la duracion"
-                               .format(m.name))
+                errores.append("{}: {}".format(m.name, t("could not read the duration")))
                 continue
 
             if dur <= ventana + 1e-6:
@@ -1984,7 +1971,7 @@ def split_samples():
             shutil.move(str(m), str(backup / m.name))
             troceadas += 1
             producidas += len(hechos)
-            detalles.append("{} ({:.1f}s -> {} takes / tomas)".format(m.name, dur, len(hechos)))
+            detalles.append("{} ({:.1f}s -> {})".format(m.name, dur, t("{n} takes", n=len(hechos))))
 
         return jsonify({"status": "ok" if not errores else "partial",
                         "split": troceadas, "skipped": saltadas, "produced": producidas,
@@ -2064,14 +2051,14 @@ def convert_fps():
 
         dataset_dir = get_dataset_dir()
         if not dataset_dir.is_dir():
-            return jsonify({"status": "error", "error": "No dataset folder / No hay dataset"}), 404
+            return jsonify({"status": "error", "error": t("No dataset folder")}), 404
 
         clips = sorted(f for f in dataset_dir.iterdir()
                        if f.is_file() and f.suffix.lower() in VIDEO_EXTS)
         if not clips:
             return jsonify({"status": "ok", "converted": 0, "skipped": 0, "errors": [],
                             "details": [], "warnings": [],
-                            "message": "No clips / No hay clips"})
+                            "message": t("No clips")})
 
         # Los originales van a una subcarpeta. Ni el pre-cache ni el Dataset
         # Manager recorren subdirectorios, asi que no se entrenaran dos veces.
@@ -2083,7 +2070,7 @@ def convert_fps():
         for clip in clips:
             info = _video_info(clip)
             if info is None:
-                errors.append("{}: could not read the clip / no se pudo leer el clip".format(clip.name))
+                errors.append("{}: {}".format(clip.name, t("could not read the clip")))
                 continue
             fps, frames, width, height = info
 
@@ -2115,10 +2102,8 @@ def convert_fps():
             # Dimensions are NOT touched: the pre-cache rescales to the target area
             # honouring `multiple`, and cropping here would lose framing. Warn only.
             if width % H3_SPATIAL_MULTIPLE or height % H3_SPATIAL_MULTIPLE:
-                warnings.append("{}: {}x{} is not a multiple of {} (the pre-cache will "
-                                "rescale it) / no es multiplo de {} (el pre-cache lo "
-                                "reescalara)".format(clip.name, width, height,
-                                                     H3_SPATIAL_MULTIPLE, H3_SPATIAL_MULTIPLE))
+                warnings.append("{}: ".format(clip.name) + t("{w}x{h} is not a multiple of {m} (the pre-cache will rescale it)",
+                                                            w=width, h=height, m=H3_SPATIAL_MULTIPLE))
 
             tiene_audio = _has_audio(clip)
             necesita_fps = abs(fps - target) >= 0.05
@@ -2205,7 +2190,7 @@ def convert_fps():
                     cambios.append("{} -> {} frames".format(frames, keep))
                 cambios.append("{:.2f}s -> {:.2f}s".format(duracion, duracion_nueva))
                 cambios.append("audio: {}".format(
-                    "32 kHz stereo" if tiene_audio else "none / sin pista"))
+                    "32 kHz stereo" if tiene_audio else t("no track")))
                 converted.append("{} ({})".format(clip.name, ", ".join(cambios)))
             except subprocess.CalledProcessError as exc:
                 # Sin el stderr de ffmpeg, un fallo aqui solo dice un codigo de
@@ -2243,7 +2228,7 @@ def delete_project_data():
             path = get_train_output_dir()
         else:
             return jsonify({"status": "error",
-                            "error": "Unknown target / destino desconocido: {}".format(target)}), 400
+                            "error": t("Unknown target: {name}", name=target)}), 400
 
         # Un proceso en marcha tiene ficheros abiertos: borrar por debajo deja
         # el entrenamiento escribiendo en un checkpoint que ya no existe.
@@ -2256,7 +2241,7 @@ def delete_project_data():
 
         if not path.is_dir():
             return jsonify({"status": "ok", "removed": 0, "path": str(path),
-                            "message": "Nothing to delete / No habia nada que borrar"})
+                            "message": t("Nothing to delete")})
 
         removed, errors = _wipe_dir(path)
         return jsonify({"status": "ok" if not errors else "partial",
@@ -2271,7 +2256,7 @@ def delete_dataset_image():
     try:
         filename = str(request.get_json(force=True).get("file", "")).strip()
         if not filename:
-            return jsonify({"status": "error", "error": "No file / sin fichero"}), 400
+            return jsonify({"status": "error", "error": t("No file")}), 400
 
         dataset_dir = get_dataset_dir()
         target = (dataset_dir / filename).resolve()
@@ -2282,10 +2267,10 @@ def delete_dataset_image():
         # before deleting anything.
         if dataset_dir.resolve() not in target.parents:
             return jsonify({"status": "error",
-                            "error": "Path outside the dataset / ruta fuera del dataset"}), 400
+                            "error": t("Path outside the dataset")}), 400
         if not target.is_file():
             return jsonify({"status": "error",
-                            "error": "Not found / no existe: {}".format(filename)}), 404
+                            "error": t("Not found: {name}", name=filename)}), 404
 
         removed = []
         target.unlink()

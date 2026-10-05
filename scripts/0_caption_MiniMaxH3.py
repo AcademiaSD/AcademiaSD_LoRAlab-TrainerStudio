@@ -173,23 +173,14 @@ PRECACHE_CONFIG = os.path.join(BASE_DIR, "settings", "pre_cache_settings_minimax
 
 
 def L(en, es):
-    """Ingles primero, siempre. / English first, always."""
-    return "{} / {}".format(en, es)
+    """Mensaje en el idioma elegido en el lanzador (i18n); el español queda aquí como referencia.
+    Message in the language chosen in the launcher."""
+    return t(en)
 
 
 def LF(en, es, *args):
-    """L() con formato, formateando cada idioma por separado.
-
-    L(a, b).format(x) es una trampa: al unir las dos mitades los marcadores de
-    ambas comparten la misma lista de argumentos, asi que hay que pasar cada
-    valor DOS veces y basta olvidarse una para que reviente en tiempo de
-    ejecucion. LF formatea cada mitad por su cuenta y el problema desaparece.
-
-    L() with formatting, formatting each language separately. L(a, b).format(x)
-    is a trap: joining the halves makes both share one argument list, so every
-    value must be passed TWICE and forgetting once blows up at run time.
-    """
-    return "{} / {}".format(en.format(*args), es.format(*args))
+    """L() con formato: traduce y formatea con los argumentos. / L() with formatting."""
+    return t(en, *args)
 
 
 def log(msg="", flush=True):
