@@ -108,6 +108,13 @@ A bar in the Dataset Manager (in place of the auto-caption when LoRA Type = Slid
 
 The prompts can be written by hand or by **Write prompts** (`scripts/slider_prompts.py`): the user fills in three fields in any language (effect, maximum +5, optional minimum −5) and Qwen3-VL-8B, the shared auto-caption model, fills in the detailed fields below in English from a fixed template (subject, position 0, the four edit instructions with concrete halfway states, and whether to vary people and hair). With no minimum, or a minimum that is just the normal state, the slider is one-sided: position 0 is that state and −50 / −100 stay empty. The fields stay editable.
 
+Two options for subjects that are not faces, found with an "alien hands" test where Klein only tinted palms green:
+
+- **Variations**: poses, angles or framings, one per line; each base image takes one (a hand holding a cup, a fist, seen from the back...). Without them every base shares the subject's pose.
+- **Chain edits**: ±100 is edited from the ±50 image instead of from the base. Edit models are trained to keep the structure of the image and resist changes of shape; two smaller edits build up a deformation that one large edit does not make. Any image that is regenerated also regenerates the edits that start from it.
+
+Write prompts fills in both: ten variations for the subject, and chaining when the effect changes shapes, proportions or anatomy.
+
 1. **Subject**: what the images show ("head and shoulders portrait of a person", "full body photo of a person").
 2. **The ends**: text for the 100 end and the −100 or 0 end ("very long hair" / "very short hair"). Optional intermediate levels (e.g. 50) with milder wording ("slightly long hair"). Intensity words are less reliable, so they are optional.
 3. **Base images**: generated from the subject with varied people, places and light (as `experiments/slider/gen_pairs.py` does), or **the user's own images**, e.g. their character, for a "my character, older/younger" slider.

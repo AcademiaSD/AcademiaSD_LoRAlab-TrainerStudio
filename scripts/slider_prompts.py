@@ -39,12 +39,18 @@ MAXIMUM (+5, position +100): {max_text}
 MINIMUM (-5, position -100): {min_text}
 
 Answer ONLY with this JSON, every text in English:
-{{"subject": "...", "neutral": "...", "edits": {{"-100": "...", "-50": "...", "50": "...", "100": "..."}}, \
-"vary_people": true, "vary_hair": true}}
+{{"subject": "...", "neutral": "...", "variations": ["...", "..."], "edits": {{"-100": "...", "-50": "...", "50": "...", \
+"100": "..."}}, "vary_people": true, "vary_hair": true, "chain": false}}
 
 Rules:
-- "subject": what the base images show, as the start of an image prompt, WITHOUT the concept or its ends. \
-Examples: "Head and shoulders photo portrait", "Close-up photo of a human hand, palm facing the camera, fingers spread".
+- "subject": what the base images show, as the start of an image prompt, WITHOUT the concept or its ends, and \
+WITHOUT a fixed pose or angle (the variations give it). Examples: "Head and shoulders photo portrait", "Close-up photo \
+of a human hand".
+- "variations": 10 short, different poses, angles or framings of the subject, one is added to each base image so \
+the dataset is varied. Each one must keep the part that changes clearly visible. For a hand: "resting flat on a \
+wooden table", "holding a coffee cup", "making a fist", "waving, seen from the back", "pointing with the index \
+finger"... For a face: "looking straight at the camera", "head turned slightly to the left", "seen in three-quarter \
+view"...
 - "neutral": the state at position 0, a short comma-separated description added after the subject. If both ends \
 are given, it is the middle state, so there is room to change in both directions (for hair length: "medium-length \
 hair"). If the MINIMUM is empty or describes the normal, ordinary state of the subject, position 0 IS that state: \
@@ -59,14 +65,20 @@ words like "slightly" or "a bit" on their own. Name only what changes; the editi
 - "vary_people": true if the subject is a person or part of a person's body (the base images then show people of \
 different age, sex and origin); false otherwise.
 - "vary_hair": false if the effect is about hair or the subject does not show hair; true otherwise.
+- "chain": true if the effect changes shapes, proportions or anatomy (growing, stretching, deforming, adding or \
+removing parts): "100" is then edited from the "50" image, so the change builds up in two smaller edits. false for \
+changes of expression, color, texture or style.
 
 Example. EFFECT: facial expression. MAXIMUM: very happy. MINIMUM: very sad.
-{{"subject": "Head and shoulders photo portrait", "neutral": "neutral relaxed expression, mouth closed, looking at \
-the camera", "edits": {{"-100": "Make the person look very sad, close to crying: inner eyebrows raised, eyes watery \
+{{"subject": "Head and shoulders photo portrait", "neutral": "neutral relaxed expression, mouth closed", \
+"variations": ["looking straight at the camera", "head turned slightly to the left", "seen in three-quarter view", \
+"head tilted slightly down", "looking slightly up", "seen from a low angle", "head turned slightly to the right", \
+"looking at the camera over the shoulder", "seen in profile with the face clearly visible", "leaning slightly \
+forward"], "edits": {{"-100": "Make the person look very sad, close to crying: inner eyebrows raised, eyes watery \
 and downcast, mouth corners pulled down", "-50": "Make the person look a little sad: mouth corners slightly lowered, \
 inner eyebrows a bit raised, eyes looking down", "50": "Make the person smile with a soft closed-mouth smile and \
 slightly narrowed eyes", "100": "Make the person laugh, with a broad smile showing the teeth and crinkled eyes"}}, \
-"vary_people": true, "vary_hair": true}}"""
+"vary_people": true, "vary_hair": true, "chain": false}}"""
 
 
 def read_json(path):
@@ -91,6 +103,8 @@ def parse_answer(text):
         "edits": {p: str(edits.get(p) or edits.get("+" + p) or "").strip() for p in POSITIONS},
         "vary_people": bool(data.get("vary_people", True)),
         "vary_hair": bool(data.get("vary_hair", True)),
+        "variations": [str(v).strip() for v in (data.get("variations") or []) if str(v).strip()][:20],
+        "chain": bool(data.get("chain", False)),
     }
     if not out["subject"] or not (out["edits"]["100"] or out["edits"]["-100"]):
         raise ValueError("incomplete answer / respuesta incompleta")
@@ -148,6 +162,9 @@ def main():
     for p in POSITIONS:
         print(f"  {('+' if not p.startswith('-') else '') + p:>5}             : {result['edits'][p] or '-'}")
     print(f"  Vary people / hair: {result['vary_people']} / {result['vary_hair']}")
+    print(f"  Chained / Encadenar: {result['chain']}")
+    for v in result["variations"]:
+        print(f"    · {v}")
     print("\n✓ Prompts written: review them and press Generate Pairs / Prompts escritos: revísalos y pulsa Generar Pares")
     return 0
 

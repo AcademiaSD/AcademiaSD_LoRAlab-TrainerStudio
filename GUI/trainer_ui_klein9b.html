@@ -693,6 +693,11 @@
                     </select>
                     <span class="ds-step-hint">before Pre-Cache / antes del Pre-Caché</span>
                     <input type="text" class="ds-search sg-wide" id="sg_subject" placeholder="Subject / Tema: Head and shoulders photo portrait">
+                    <textarea class="ds-search sg-wide" id="sg_variations" rows="3"
+                              title="Poses, angles or framings of the subject, one per line: each base image takes one, so the dataset is varied. / Posturas, ángulos o encuadres del sujeto, uno por línea: cada imagen base toma uno, para que el dataset sea variado."
+                              placeholder="Variations, one per line (optional) / Variaciones, una por línea (opcional):&#10;resting flat on a wooden table&#10;holding a coffee cup"></textarea>
+                    <label class="ds-inline-label" title="+100 is edited from the +50 image (and -100 from -50) instead of from the base: the change builds up in two smaller edits. Edit models resist changes of shape; chaining helps to stretch, grow or deform. / +100 se edita desde la imagen +50 (y -100 desde -50) en lugar de desde la base: el cambio se acumula en dos ediciones más pequeñas. Los modelos de edición se resisten a cambiar formas; encadenar ayuda a estirar, hacer crecer o deformar.">
+                        <input type="checkbox" id="sg_chain"> Chain edits (±100 from ±50) / Encadenar ediciones</label>
                     <input type="text" class="ds-search sg-wide" id="sg_neutral" placeholder="Position 0 (optional) / Posición 0 (opcional): neutral relaxed expression, mouth closed, looking at the camera">
                     <input type="text" class="ds-search sg-half" id="sg_edit_-100" placeholder="-100: Make the person look very sad...">
                     <input type="text" class="ds-search sg-half" id="sg_edit_100" placeholder="+100: Make the person laugh...">
@@ -1608,6 +1613,8 @@
             if (s.people) document.getElementById('sg_people').value = s.people;
             if (s.vary_people !== undefined) document.getElementById('sg_vary_people').checked = !!s.vary_people;
             if (s.vary_hair !== undefined) document.getElementById('sg_vary_hair').checked = !!s.vary_hair;
+            if (s.chain !== undefined) document.getElementById('sg_chain').checked = !!s.chain;
+            document.getElementById('sg_variations').value = (Array.isArray(s.variations) ? s.variations : []).join('\n');
             if (s.anchors !== undefined) document.getElementById('sg_anchors').value = s.anchors;
             if (s.size) document.getElementById('sg_size').value = String(s.size);
         }
@@ -1622,6 +1629,8 @@
                 people: parseInt(document.getElementById('sg_people').value) || 0,
                 vary_people: document.getElementById('sg_vary_people').checked,
                 vary_hair: document.getElementById('sg_vary_hair').checked,
+                chain: document.getElementById('sg_chain').checked,
+                variations: document.getElementById('sg_variations').value.split('\n').map(v => v.trim()).filter(v => v),
                 anchors: parseInt(document.getElementById('sg_anchors').value) || 0,
                 size: parseInt(document.getElementById('sg_size').value),
                 effect: document.getElementById('sg_effect').value.trim(),
@@ -1639,7 +1648,7 @@
             if (!effect || !maxText) { alert('Write the effect and the maximum (+5). / Escribe el efecto y el máximo (+5).'); return; }
             if (sgWriter.ready === false && !confirm(`Qwen3-VL-8B is not downloaded yet: ~${sgWriter.download_gb} GB will be downloaded first (shared with the auto-caption).\n\nQwen3-VL-8B aún no está descargado: primero se descargarán ~${sgWriter.download_gb} GB (compartido con el auto-caption).\n\nContinue? / ¿Continuar?`)) return;
             const d = sliderGenData();
-            if ((d.subject || SG_POSITIONS.some(p => d.edits[p])) && !confirm('This replaces the detailed prompts below. / Esto sustituye los prompts detallados de abajo.\n\nContinue? / ¿Continuar?')) return;
+            if ((d.subject || d.variations.length || SG_POSITIONS.some(p => d.edits[p])) && !confirm('This replaces the detailed prompts below. / Esto sustituye los prompts detallados de abajo.\n\nContinue? / ¿Continuar?')) return;
             try {
                 const res = await fetch('/api/save-slider-gen-settings', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },

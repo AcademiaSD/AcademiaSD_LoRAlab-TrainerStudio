@@ -49,6 +49,8 @@ DEFAULTS = {
     "people": 24,
     "vary_people": True,  # edad, sexo y origen distintos en cada base
     "vary_hair": True,    # peinado distinto en cada base (desactivar en sliders de pelo)
+    "variations": [],     # posturas / ángulos / encuadres del sujeto: cada base toma uno
+    "chain": False,       # +100 se edita desde +50 (y -100 desde -50): la deformación se acumula
     "anchors": 12,
     "base": "generate",   # "generate": las crea el modelo | "mine": las grupo_0 del dataset
     "size": 768,
@@ -205,6 +207,10 @@ def plan(cfg):
             existing[stem] = os.path.join(ds, f)
 
     positions = [p for p in POSITIONS if str(cfg["edits"].get(p, "")).strip()]
+    variations = cfg["variations"]
+    if isinstance(variations, str):
+        variations = variations.splitlines()
+    variations = [v.strip().rstrip(".") for v in variations if str(v).strip()]
     rng = random.Random(cfg["seed"])
     groups = []  # (grupo, ruta_base, prompt_base o None)
     if cfg["base"] == "mine":
@@ -217,21 +223,29 @@ def plan(cfg):
             who = f" of {PEOPLE[i % len(PEOPLE)]}" if cfg["vary_people"] else ""
             # Paso 7 en la lista de peinados: que persona y pelo no vayan siempre juntos.
             hair = f", with {HAIRS[i * 7 % len(HAIRS)]}" if cfg["vary_hair"] else ""
-            prompt = f"{cfg['subject'].strip().rstrip('.')}{who}{hair}, {rng.choice(PLACES)}, {rng.choice(LIGHTS)}"
+            pose = f", {variations[i % len(variations)]}" if variations else ""
+            prompt = f"{cfg['subject'].strip().rstrip('.')}{who}{pose}{hair}, {rng.choice(PLACES)}, {rng.choice(LIGHTS)}"
             if cfg["neutral"].strip():
                 prompt += f", {cfg['neutral'].strip().rstrip('.')}"
             groups.append((f"g{i:02d}", os.path.join(ds, f"g{i:02d}_0.png"), prompt + "."))
 
+    # Las ±50 antes que las ±100: encadenadas, cada extremo se edita desde la intermedia de su lado.
+    order = [p for p in ("-50", "-100", "50", "100") if p in positions]
     jobs = []
     for gi, (group, base_path, base_prompt) in enumerate(groups):
         new_base = base_prompt is not None and f"{group}_0" not in existing
         if new_base:
             jobs.append(("base", base_path, {"prompt": base_prompt, "seed": cfg["seed"] + gi}))
-        for p in positions:
+        remade = set()
+        for p in order:
+            prev = {"-100": "-50", "100": "50"}.get(p) if cfg["chain"] else None
+            prev = prev if prev in positions else None
+            src = existing.get(f"{group}_{prev}", os.path.join(ds, f"{group}_{prev}.png")) if prev else base_path
             out = os.path.join(ds, f"{group}_{p}.png")
-            # Una base nueva invalida las ediciones que partían de la anterior.
-            if new_base or f"{group}_{p}" not in existing:
-                jobs.append(("edit", out, {"base": base_path, "prompt": f"{cfg['edits'][p].strip().rstrip('.')}. {KEEP}",
+            # Una imagen de partida nueva invalida las ediciones que partían de la anterior.
+            if new_base or prev in remade or f"{group}_{p}" not in existing:
+                remade.add(p)
+                jobs.append(("edit", out, {"base": src, "prompt": f"{cfg['edits'][p].strip().rstrip('.')}. {KEEP}",
                                            "seed": cfg["seed"] + 1000 + gi * 10 + POSITIONS.index(p)}))
     for j in range(int(cfg["anchors"])):
         if f"anc{j:02d}_anc" not in existing:
@@ -255,7 +269,8 @@ def main():
     groups, positions, jobs, total = plan(cfg)
     log(f"Slider dataset: {cfg['dataset_path']}", f"Dataset del slider: {cfg['dataset_path']}")
     log(f"  Engine / Motor: {ENGINES[cfg['engine']].name} | groups / grupos: {len(groups)} | positions / posiciones: "
-        f"0, {', '.join(positions)} | anchors: {cfg['anchors']} | {cfg['size']} px")
+        f"0, {', '.join(positions)} | anchors: {cfg['anchors']} | {cfg['size']} px"
+        + (" | chained edits / ediciones encadenadas" if cfg["chain"] else ""))
     if not positions:
         log("[!] Write at least one edit (-100, -50, +50 or +100)", "Escribe al menos una edición (-100, -50, +50 o +100)")
         sys.exit(1)
