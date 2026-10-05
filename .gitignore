@@ -41,3 +41,6 @@ HF_token.json
 *_bak*.py
 *_bak*.html
 *.bak
+
+# Experimentos: imágenes, LoRAs y entrenadores generados / Experiments: generated images, LoRAs and trainers
+experiments/*/work/
