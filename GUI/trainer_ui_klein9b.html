@@ -272,10 +272,24 @@
 
                     <div class="form-group">
                         <label title="Normal: one image + caption per sample. Edit: name_before / name_after pairs + instruction in name.txt. / Normal: una imagen + caption por muestra. Edición: pares nombre_before / nombre_after + instrucción en nombre.txt.">LoRA Type / Tipo de LoRA:</label>
-                        <select id="lora_type" onchange="applyLoraType()">
+                        <select id="lora_type" onchange="applyLoraType(true)">
                             <option value="normal">Normal LoRA (image + caption / imagen + caption)</option>
                             <option value="edit">Edit LoRA (before / after pairs / pares antes / después)</option>
+                            <option value="slider">Slider LoRA (dial: group_position images / imágenes grupo_posición)</option>
                         </select>
+                    </div>
+
+                    <!-- SLIDER (docs/SLIDERS.md): solo con LoRA Type = Slider -->
+                    <div class="form-group" id="slider_precache_container" style="display:none; background:#0f172a; padding:10px; border-radius:8px; border:1px solid var(--panel-border);">
+                        <label title="Edit: the dial modifies a photo you give it (strength 0 = the photo as it is). Text-to-image: the dial modifies what the model generates (same prompt and seed, more or less of the concept). Changing it needs a new Pre-Cache (only the texts are encoded again). / Edición: el dial modifica una foto que le das (fuerza 0 = la foto tal cual). Texto a imagen: el dial modifica lo que genera el modelo (mismo prompt y semilla, más o menos del concepto). Cambiarlo pide un Pre-Caché nuevo (solo se vuelven a codificar los textos).">Slider Mode / Modo del Slider:</label>
+                        <select id="slider_mode" onchange="applyLoraType()">
+                            <option value="edit">Edit: modifies a photo / Edición: modifica una foto</option>
+                            <option value="t2i">Text-to-image: modifies the generation / Texto a imagen: modifica la generación</option>
+                        </select>
+                        <span style="font-size:0.7rem; color:var(--text-muted); display:block; margin-top:6px;">
+                            Name the images <b>group_position</b>, position -100…100 (boca1_0, boca1_50, boca1_100; cara1_-100, cara1_0, cara1_100). Each group needs 2+ positions; missing ones are extrapolated. <b>group_anc</b> = anchor, an image that must not change. Optional <b>group.txt</b> caption that does not mention the concept.<br>
+                            Llama a las imágenes <b>grupo_posición</b>, posición -100…100 (boca1_0, boca1_50, boca1_100; cara1_-100, cara1_0, cara1_100). Cada grupo necesita 2 o más posiciones; las que falten se extrapolan. <b>grupo_anc</b> = anchor, una imagen que no debe cambiar. Caption opcional <b>grupo.txt</b> que no mencione el concepto.
+                        </span>
                     </div>
 
                     <div class="form-group">
@@ -422,6 +436,18 @@
                         </select>
                     </div>
 
+                    <!-- SLIDER: solo con LoRA Type = Slider -->
+                    <div class="form-row" id="slider_train_container" style="display:none;">
+                        <div class="form-group">
+                            <label title="ComfyUI strength that gives position 100 of the dataset: 5 means 100 = 5, 50 = 2.5, -100 = -5. A strength change of 5 always moves 100 positions. / Fuerza en ComfyUI que da la posición 100 del dataset: con 5, 100 = 5, 50 = 2,5, -100 = -5. Un cambio de fuerza de 5 siempre recorre 100 posiciones.">Strength at 100% / Fuerza al 100%:</label>
+                            <input type="number" step="0.5" min="0.5" id="train_slider_strength_100" value="5">
+                        </div>
+                        <div class="form-group">
+                            <label for="train_slider_ultra" title="LoRA only on the 8 double blocks (text-image fusion) and the first 8 single blocks (composition), leaving fine detail alone: the dial holds much higher strengths. Best result of the prototype. / LoRA solo en los 8 bloques dobles (fusión texto-imagen) y los 8 primeros simples (composición), sin tocar el detalle fino: el dial aguanta fuerzas mucho más altas. El mejor resultado del prototipo.">Ultra (composition blocks / bloques de composición):</label>
+                            <input type="checkbox" id="train_slider_ultra" checked style="width:18px; height:18px; cursor:pointer;">
+                        </div>
+                    </div>
+
                     <div class="form-row">
                         <div class="form-group">
                             <label>Batch Size:</label>
@@ -524,7 +550,7 @@
                         <textarea id="train_preview_custom_prompt" rows="2" placeholder="Escribe aquí tu prompt personalizado para la previsualización..."></textarea>
                         <div id="edit_image_container" style="display:none;">
                         <label style="color:#38bdf8; font-weight:600; margin-top:6px;"
-                               title="Edit datasets (name_before / name_after) only. The preview applies the instruction above to this image. Use one that is NOT in the dataset: it is the only way to see whether the effect generalizes. Empty = the 'before' of the first pair. Encoded by Pre-Cache. / Solo datasets de edición (nombre_before / nombre_after). La preview aplica la instrucción de arriba a esta imagen. Usa una que NO esté en el dataset: es la única forma de ver si el efecto generaliza. Vacío = el 'antes' del primer par. Lo codifica el Pre-Caché.">
+                               title="Edit datasets (name_before / name_after) only. The preview applies the instruction above to this image. Use one that is NOT in the dataset: it is the only way to see whether the effect generalizes. Empty = the 'before' of the first pair. Edit sliders: the dial strip applies to this image (empty = the first image of the first group). Encoded by Pre-Cache. / Solo datasets de edición (nombre_before / nombre_after) y sliders de edición. La preview aplica la instrucción de arriba a esta imagen. Usa una que NO esté en el dataset: es la única forma de ver si el efecto generaliza. Vacío = el 'antes' del primer par. Sliders de edición: la tira del dial se aplica a esta imagen (vacío = la primera imagen del primer grupo). Lo codifica el Pre-Caché.">
                             Edit Preview Image (before) / Imagen de antes (edición):</label>
                         <div style="display:flex; gap:8px;">
                             <input type="text" id="preview_edit_image" value="" placeholder="(empty = first pair / vacío = primer par)">
@@ -705,18 +731,27 @@
             }
         }
 
-        function applyLoraType() {
-            const edit = document.getElementById('lora_type').value === 'edit';
-            document.getElementById('edit_image_container').style.display = edit ? 'block' : 'none';
+        // fromUser: el usuario acaba de elegir el tipo (no al cargar ajustes guardados).
+        function applyLoraType(fromUser = false) {
+            const type = document.getElementById('lora_type').value;
+            const slider = type === 'slider';
+            const sliderEdit = slider && document.getElementById('slider_mode').value === 'edit';
+            document.getElementById('edit_image_container').style.display = (type === 'edit' || sliderEdit) ? 'block' : 'none';
+            document.getElementById('slider_precache_container').style.display = slider ? 'block' : 'none';
+            document.getElementById('slider_train_container').style.display = slider ? 'flex' : 'none';
+            // Un slider es una sola dirección: rank 4 basta y no deja sitio a efectos secundarios.
+            if (fromUser && slider && document.getElementById('train_lora_rank').value === '16'
+                    && document.getElementById('train_lora_alpha').value === '16') {
+                document.getElementById('train_lora_rank').value = 4;
+                document.getElementById('train_lora_alpha').value = 4;
+            }
+            toggleCaptionMode(document.getElementById('train_preview_caption_mode').value);
         }
 
         function toggleCaptionMode(mode) {
-            const container = document.getElementById('custom_prompt_container');
-            if (mode === 'custom') {
-                container.style.display = 'block';
-            } else {
-                container.style.display = 'none';
-            }
+            // El slider siempre usa el prompt manual (y en edición su imagen) para la tira del dial.
+            const slider = document.getElementById('lora_type').value === 'slider';
+            document.getElementById('custom_prompt_container').style.display = (mode === 'custom' || slider) ? 'block' : 'none';
         }
 
         async function updateSystemStats() {
@@ -830,6 +865,7 @@
                     if (p.trigger_word) document.getElementById('trigger_word').value = p.trigger_word;
                     if (p.dataset_path) document.getElementById('dataset_path').value = p.dataset_path;
                     document.getElementById('lora_type').value = p.lora_type || 'normal';
+                    document.getElementById('slider_mode').value = p.slider_mode || 'edit';
                     applyLoraType();
                     if (p.target_area) {
                         document.getElementById('precache_target_area').value = p.target_area;
@@ -867,7 +903,10 @@
                     if (t.preview_size !== undefined) document.getElementById('train_preview_size').value = String(t.preview_size);
                     if (t.use_turbo !== undefined) document.getElementById('train_use_turbo').checked = t.use_turbo;
                     if (t.turbo_lora_strength !== undefined) document.getElementById('train_turbo_strength').value = t.turbo_lora_strength;
+                    if (t.slider_strength_100 !== undefined) document.getElementById('train_slider_strength_100').value = t.slider_strength_100;
+                    if (t.slider_ultra !== undefined) document.getElementById('train_slider_ultra').checked = t.slider_ultra;
                     if (t.export_final_name) document.getElementById('export_final_name').value = t.export_final_name;
+                    applyLoraType();
                 }
                 updateProjectPaths();
                 loadDatasetInfo();
@@ -892,10 +931,10 @@
                     if (data.project_name !== undefined) document.getElementById('project_name').value = data.project_name;
                     if (data.trigger_word !== undefined) document.getElementById('trigger_word').value = data.trigger_word;
                     if (data.dataset_path !== undefined) document.getElementById('dataset_path').value = data.dataset_path;
-                    if (data.lora_type !== undefined) {
-                        document.getElementById('lora_type').value = data.lora_type;
-                        applyLoraType();
-                    }
+                    if (data.lora_type !== undefined) document.getElementById('lora_type').value = data.lora_type;
+                    if (data.slider_mode !== undefined) document.getElementById('slider_mode').value = data.slider_mode;
+                    if (data.slider_strength_100 !== undefined) document.getElementById('train_slider_strength_100').value = data.slider_strength_100;
+                    if (data.slider_ultra !== undefined) document.getElementById('train_slider_ultra').checked = data.slider_ultra;
                     
                     if (data.target_area !== undefined) {
                         document.getElementById('precache_target_area').value = data.target_area;
@@ -934,6 +973,7 @@
                     if (data.turbo_lora_strength !== undefined) document.getElementById('train_turbo_strength').value = data.turbo_lora_strength;
                     if (data.export_final_name !== undefined) document.getElementById('export_final_name').value = data.export_final_name;
 
+                    applyLoraType();
                     updateProjectPaths();
                     
                     if (currentLoadTarget === 'precache') {
@@ -1012,6 +1052,7 @@
                 max_side: parseInt(document.getElementById('precache_max_side').value),
                 cache_dir: document.getElementById('precache_cache_dir').value,
                 lora_type: document.getElementById('lora_type').value,
+                slider_mode: document.getElementById('slider_mode').value,
                 preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim(),
                 preview_edit_image: document.getElementById('preview_edit_image').value.trim()
             };
@@ -1046,6 +1087,9 @@
                 preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim(),
                 preview_edit_image: document.getElementById('preview_edit_image').value.trim(),
                 lora_type: document.getElementById('lora_type').value,
+                slider_mode: document.getElementById('slider_mode').value,
+                slider_strength_100: parseFloat(document.getElementById('train_slider_strength_100').value),
+                slider_ultra: document.getElementById('train_slider_ultra').checked,
                 preview_steps: parseInt(document.getElementById('train_preview_steps').value),
                 preview_cfg: parseFloat(document.getElementById('train_preview_cfg').value),
                 preview_size: parseInt(document.getElementById('train_preview_size').value),

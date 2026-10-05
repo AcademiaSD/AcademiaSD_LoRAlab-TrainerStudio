@@ -247,6 +247,7 @@ All times were measured on an RTX 5080 16 GB.
 - Trains on **FLUX.2 [klein] Base 9B** (the undistilled model, the one meant for fine-tuning). The LoRA also loads on the distilled **FLUX.2 [klein] 9B**; it is not compatible with the 4B models.
 - The 9B transformer and the Qwen3-8B text encoder of the pre-cache are **NF4**: 8.8 GB to download instead of 34.7 GB.
 - **Normal LoRAs** (characters, objects, styles) and **Edit LoRAs** with the same `name_before.png` / `name_after.png` pairs as Qwen-Image 2.1. Klein's text encoder only reads the instruction: the "before" goes to the transformer as a clean reference image, as in the official pipeline, and the loss is computed only on the "after".
+- 🧪 **Slider LoRAs** (experimental): one LoRA whose strength is a dial along a concept (hair length, age, an expression...), usually from −5 to +5 in ComfyUI. Images named `group_position` (`boca1_0`, `boca1_50`, `boca1_100`, positions −100…100; missing ones are extrapolated) and optional `group_anc` anchors. **Edit** mode modifies a photo you give it; **Text-to-image** mode modifies the generation. Choose **LoRA Type → Slider**. Rank 4, **Ultra** blocks and previews with the dial at −100 %, −50 %, 0, 50 % and 100 %. Design and recipe: [docs/SLIDERS.md](docs/SLIDERS.md).
 - **Captioner:** Qwen3-VL-8B NF4, shared with LTX-2.3, Z-Image and Anima, with **Normal** and **Edit** modes.
 - **Previews:** 28 steps / CFG 4, or **Turbo** with kalle07's Klein 9B turbo LoRA (4 steps / CFG 1; downloaded the first time, ~350 MB), and **Preview Size** as in Z-Image.
 - **LoRA Targets:** *Blocks* (attention + MLP of the 8 double and 24 single blocks, default) or *All*. ComfyUI loads the exported LoRA directly.
@@ -457,7 +458,8 @@ Code adapted or copied from other projects, and the work it builds on:
 
 | Project | Used for | License |
 | :--- | :--- | :--- |
-| [Fizgig](https://github.com/shootthesound/Fizgig) by [@shootthesound](https://github.com/shootthesound) | MiniMax H3 sigma sampling (`sample_sigmas`) and the video VAE encoder (`MiniMaxH3VideoVAEEncoder`), adapted | Apache-2.0 |
+| [Fizgig](https://github.com/shootthesound/Fizgig) by [@shootthesound](https://github.com/shootthesound) | MiniMax H3 sigma sampling (`sample_sigmas`) and the video VAE encoder (`MiniMaxH3VideoVAEEncoder`), adapted. The Slider LoRA recipe (push strength, low rank, training only the composition blocks) follows what Fizgig describes for its sliders (no code used) | Apache-2.0 |
+| [Concept Sliders](https://sliders.baulab.info/) by Gandikota et al. | The idea behind Slider LoRAs: one LoRA trained in both directions of a concept (`scripts/slider_core.py`; no code used) | MIT |
 | [ComfyUI](https://github.com/Comfy-Org/ComfyUI) | Origin of the MiniMax H3 video VAE that Fizgig ported; native layer names and LoRA layouts the exports follow | GPL-3.0 |
 | [Diffusers](https://github.com/huggingface/diffusers) | Model classes and pipelines; MiniMax H3 audio positions copied from `build_packed_sequence` | Apache-2.0 |
 | [Mel-Band-Roformer-Vocal-Model](https://github.com/KimberleyJensen/Mel-Band-Roformer-Vocal-Model) by KimberleyJensen | `scripts/melband/mel_band_roformer.py`, vendored with its source header (vocal separation for MiniMax H3 audio datasets) | not stated |

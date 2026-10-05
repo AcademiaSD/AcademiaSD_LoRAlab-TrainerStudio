@@ -20,6 +20,7 @@ import webbrowser
 from console_stream import read_console
 import remote_access
 import file_transfer
+import slider_core
 from pathlib import Path
 
 
@@ -82,7 +83,7 @@ UI_FILE = BASE_DIR / "GUI" / "trainer_ui_klein9b.html"
 LOGO_FILE = ASSETS_DIR / "logo.png" if (ASSETS_DIR / "logo.png").exists() else BASE_DIR / "logo.png"
 
 PRECACHE_CONFIG = SETTINGS_DIR / "pre_cache_settings_klein9b.json"
-PREVIEW_KEYS = ("lora_type", "preview_custom_prompt", "preview_edit_image")
+PREVIEW_KEYS = ("lora_type", "slider_mode", "preview_custom_prompt", "preview_edit_image")
 TRAIN_CONFIG = SETTINGS_DIR / "train_settings_klein9b.json"
 HF_TOKEN_CONFIG = SETTINGS_DIR / "HF_token.json"
 EXPORT_CONFIG = SETTINGS_DIR / "export_settings.json"  # compartido / shared by every trainer
@@ -644,7 +645,8 @@ def save_train():
         trigger = data.get("trigger_word", "").strip()
         if trigger and prompt and trigger.lower() not in prompt.lower():
             prompt = f"{trigger}, {prompt}"
-        wanted = [prompt, data.get("preview_edit_image", "").strip() if data.get("lora_type") == "edit" else ""]
+        edit_image = data.get("lora_type") == "edit" or (data.get("lora_type") == "slider" and data.get("slider_mode", "edit") == "edit")
+        wanted = [prompt, data.get("preview_edit_image", "").strip() if edit_image else ""]
         cache_dir = resolve_config_path(data["cache_dir"], cache_dir_name)
         encoded = [(cache_dir / f).read_text(encoding="utf-8") if (cache_dir / f).exists() else None
                    for f in ("_custom_prompt.txt", "_custom_image.txt")]
@@ -824,9 +826,16 @@ def serve_preview(filename):
 EDIT_SUFFIXES = ("_before", "_after")
 
 
-def caption_path(image_path):
+def slider_dataset():
+    return read_json_file(PRECACHE_CONFIG, {}).get("lora_type") == "slider"
+
+
+def caption_path(image_path, slider=None):
     # En un par de edición (nombre_before / nombre_after) el caption es uno solo: nombre.txt.
+    # En un slider, uno por grupo: boca1_0, boca1_50... -> boca1.txt.
     stem = image_path.stem
+    if slider if slider is not None else slider_dataset():
+        return image_path.with_name(slider_core.caption_stem(stem) + ".txt")
     for suffix in EDIT_SUFFIXES:
         if stem.endswith(suffix):
             return image_path.with_name(stem[:-len(suffix)] + ".txt")
@@ -834,8 +843,9 @@ def caption_path(image_path):
 
 
 def dataset_caption_paths(dataset_dir):
-    # Un .txt por muestra: los dos lados de un par comparten el suyo y solo cuentan una vez.
-    return list(dict.fromkeys(caption_path(f) for f in sorted(dataset_dir.iterdir())
+    # Un .txt por muestra: los dos lados de un par (o las imágenes de un grupo) comparten el suyo y solo cuentan una vez.
+    slider = slider_dataset()
+    return list(dict.fromkeys(caption_path(f, slider) for f in sorted(dataset_dir.iterdir())
                               if f.is_file() and f.suffix.lower() in DATASET_EXTS))
 
 
@@ -843,10 +853,11 @@ def dataset_caption_paths(dataset_dir):
 def dataset_info():
     dataset_dir = get_dataset_dir()
     images = []
+    slider = slider_dataset()
     if dataset_dir.is_dir():
         for file_path in sorted(dataset_dir.iterdir()):
             if file_path.is_file() and file_path.suffix.lower() in DATASET_EXTS:
-                txt_path = caption_path(file_path)
+                txt_path = caption_path(file_path, slider)
                 caption = ""
                 if txt_path.exists():
                     try:
@@ -989,12 +1000,19 @@ def delete_dataset_image():
             return jsonify({"status": "error", "error": f"Not found / No existe: {filename}"}), 404
 
         files = [target]
-        for suffix in EDIT_SUFFIXES:
-            if target.stem.endswith(suffix):
-                base = target.stem[:-len(suffix)]
-                files = [f for f in dataset_dir.iterdir() if f.is_file() and f.suffix.lower() in DATASET_EXTS
-                         and f.stem in (base + "_before", base + "_after")]
-        files.append(caption_path(target))
+        if slider_dataset():
+            # Slider: solo esa imagen; el caption del grupo se va con la última.
+            caption = caption_path(target, True)
+            if not any(f != target and f.suffix.lower() in DATASET_EXTS and caption_path(f, True) == caption
+                       for f in dataset_dir.iterdir() if f.is_file()):
+                files.append(caption)
+        else:
+            for suffix in EDIT_SUFFIXES:
+                if target.stem.endswith(suffix):
+                    base = target.stem[:-len(suffix)]
+                    files = [f for f in dataset_dir.iterdir() if f.is_file() and f.suffix.lower() in DATASET_EXTS
+                             and f.stem in (base + "_before", base + "_after")]
+            files.append(caption_path(target))
 
         removed = []
         for f in files:

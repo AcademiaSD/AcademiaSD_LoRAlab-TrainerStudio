@@ -1,6 +1,6 @@
 # Slider LoRAs for FLUX.2 Klein 9B (edit) — prototype
 
-> 🧪 Experimental, not part of the trainers yet. It works and is documented here so it can become a **"Slider"** LoRA type in the Klein 9B trainer (and later Qwen-Image 2.1).
+> 🧪 Prototype. It is now built into the Klein 9B trainer as **LoRA Type → Slider** (see [docs/SLIDERS.md](../../docs/SLIDERS.md)), so these scripts are kept only as the record of the tests. `make_slider_trainer.py` patches the trainer as it was then and no longer applies to the current one.
 
 A slider is a LoRA whose **strength is a dial between two looks**. With a fixed prompt, `Keep the photo exactly as it is.`, the strength alone decides the result on any photo: negative → sad, 0 → unchanged, positive → happy.
 
