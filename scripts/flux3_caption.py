@@ -190,7 +190,8 @@ def merge_ocr(rows, texts):
     Los textos del OCR ([{"bbox_2d", "text"}]) corrigen las palabras citadas en la fila de texto con
     la que se solapan; los que no se solapan con ninguna se añaden como filas nuevas. Un texto diminuto
     (una marca en un producto) no lleva fila propia, porque FLUX 3 no respeta cajas tan pequeñas: pasa al
-    desc del objeto que lo contiene, o se descarta si no está dentro de ninguno.
+    desc del objeto que lo contiene (salvo que ese desc ya cite un texto), o se descarta si no está
+    dentro de ninguno.
     """
     for x in texts:
         box = to_bbox(x.get("bbox_2d"))
@@ -209,7 +210,9 @@ def merge_ocr(rows, texts):
             holder = [r for r in rows if "_Text_" not in r.get("id", "") and contains(r["bbox"], box)]
             if holder:
                 host = min(holder, key=lambda r: (r["bbox"][2] - r["bbox"][0]) * (r["bbox"][3] - r["bbox"][1]))
-                host["desc"] = f'{host["desc"].rstrip(".")}, with the small text "{quoted}" on it.'
+                # Si el desc ya cita un texto, manda esa lectura: es la misma que usa el caption.
+                if '"' not in host["desc"]:
+                    host["desc"] = f'{host["desc"].rstrip(".")}. It has the small text "{quoted}" on it.'
         else:
             rows.append({"id": f"{text_language(text)}_Text_1", "bbox": box,
                          "desc": f'Text reading "{quoted}", in the same type style, color and placement as in the scene.'})
