@@ -388,15 +388,16 @@ def browse_dir():
 # =============================================================================
 
 def add_lora_options_suffix(name, lora_file):
-    """Añade _rs (rsLoRA) y/o _plus (LoRA+) al nombre según los metadatos del propio LoRA, para que
-    el fichero diga cómo se entrenó. No lo repite si el nombre ya lo lleva."""
+    """Añade _rs (rsLoRA), _plus (LoRA+) o _lokr (LoKr) al nombre según los metadatos del propio LoRA,
+    para que el fichero diga cómo se entrenó. No lo repite si el nombre ya lo lleva."""
     try:
         from safetensors import safe_open
         with safe_open(str(lora_file), framework="pt") as f:
             meta = f.metadata() or {}
     except Exception:
         return name
-    suffix = ("_rs" if meta.get("rslora") == "true" else "") + ("_plus" if meta.get("loraplus_ratio") else "")
+    suffix = ("_rs" if meta.get("rslora") == "true" else "") + ("_plus" if meta.get("loraplus_ratio") else "") \
+        + ("_lokr" if meta.get("lokr_factor") else "")
     stem = name[:-len(".safetensors")]
     if not suffix or stem.lower().endswith(suffix):
         return name

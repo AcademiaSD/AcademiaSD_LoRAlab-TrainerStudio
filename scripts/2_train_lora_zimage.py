@@ -59,6 +59,8 @@ DEFAULTS = {
     "use_rslora": False,
     "use_loraplus": False,
     "loraplus_ratio": 16.0,
+    "use_lokr": False,
+    "lokr_factor": 16,
     "weight_decay": 0.0,
     "max_grad_norm": 1.0,
     "save_every": 50,
@@ -102,6 +104,12 @@ LORA_TARGETS      = "all" if cfg.get("lora_targets", DEFAULTS["lora_targets"]) =
 USE_RSLORA        = bool(cfg.get("use_rslora",   DEFAULTS["use_rslora"]))
 USE_LORAPLUS      = bool(cfg.get("use_loraplus", DEFAULTS["use_loraplus"]))
 LORAPLUS_RATIO    = float(cfg.get("loraplus_ratio", DEFAULTS["loraplus_ratio"]))
+# LoKr (LyCORIS): en vez de B·A, cada capa aprende w1 ⊗ (w2_a·w2_b). Mucho más pequeño que un LoRA.
+# rsLoRA y LoRA+ son propias de LoRA: con LoKr no se usan.
+USE_LOKR          = bool(cfg.get("use_lokr",     DEFAULTS["use_lokr"]))
+LOKR_FACTOR       = max(1, int(cfg.get("lokr_factor", DEFAULTS["lokr_factor"])))
+if USE_LOKR:
+    USE_RSLORA = USE_LORAPLUS = False
 WEIGHT_DECAY      = cfg.get("weight_decay",      DEFAULTS["weight_decay"])
 MAX_GRAD_NORM     = cfg.get("max_grad_norm",     DEFAULTS["max_grad_norm"])
 SAVE_EVERY        = cfg.get("save_every",        DEFAULTS["save_every"])
@@ -142,6 +150,7 @@ print(f"  {t('Total Steps'):<22}: {TOTAL_STEPS}")
 print(f"  {t('Learning Rate'):<22}: {LR}")
 print(f"  {'LoRA Rank/Alpha':<22}: {LORA_RANK}/{LORA_ALPHA}")
 print(f"  {'rsLoRA / LoRA+':<22}: {'on' if USE_RSLORA else 'off'} / {f'x{LORAPLUS_RATIO:g}' if USE_LORAPLUS else 'off'}")
+print(f"  {'LoKr':<22}: {f'factor {LOKR_FACTOR}' if USE_LOKR else 'off'}")
 print(f"  {t('LoRA Targets'):<22}: {LORA_TARGETS}")
 print(f"  {'Batch / Grad Accum':<22}: {BATCH_SIZE}/{GRAD_ACCUM_STEPS}")
 print(f"  {'Timesteps / Shift':<22}: {TIMESTEP_SAMPLING} / {TRAIN_SHIFT}")
@@ -324,7 +333,7 @@ def build_lora_metadata(step):
         "trained_with": "AcademiaSD LoRAlab Z-Image",
         "ss_sd_model_name": "Z-Image",
         "ss_base_model_version": "Z-Image",
-        "ss_network_module": "peft.LoraModel",
+        "ss_network_module": "lycoris.kohya" if USE_LOKR else "peft.LoraModel",
         "ss_network_dim": LORA_RANK,
         "ss_network_alpha": export_alpha(),
         "lora_targets": LORA_TARGETS,
@@ -348,6 +357,9 @@ def build_lora_metadata(step):
     if USE_RSLORA or USE_LORAPLUS:
         meta["ss_network_args"] = json.dumps({"rslora": USE_RSLORA,
                                               "loraplus_lr_ratio": LORAPLUS_RATIO if USE_LORAPLUS else None})
+    if USE_LOKR:
+        meta["lokr_factor"] = LOKR_FACTOR
+        meta["ss_network_args"] = json.dumps({"algo": "lokr", "factor": LOKR_FACTOR})
 
     trigger = TRIGGER_WORD.strip()
     if trigger:
@@ -381,12 +393,110 @@ def _export_lora(model, path, step):
     # por capa: sin él, ComfyUI aplicaría el LoRA con escala 1 en lugar de alpha/rank.
     alpha = float(export_alpha())
     clean = {}
+    if USE_LOKR:
+        # Claves LyCORIS que lee ComfyUI: <capa>.lokr_w1 / lokr_w2_a / lokr_w2_b / alpha (escala alpha/rank).
+        for name, layer in model.lokr_layers().items():
+            for key, v in layer.export_tensors().items():
+                clean[f"transformer.{name}.{key}"] = v
+            clean[f"transformer.{name}.alpha"] = torch.tensor(alpha)
+        save_file(clean, path, metadata=build_lora_metadata(step))
+        return
     for k, v in get_peft_model_state_dict(model).items():
         k = "transformer." + k.replace("base_model.model.", "")
         clean[k] = v.to(torch.bfloat16).cpu().contiguous()
         if k.endswith(".lora_A.weight"):
             clean[k[:-len(".lora_A.weight")] + ".alpha"] = torch.tensor(alpha)  # uno por capa: safetensors no admite tensores compartidos
     save_file(clean, path, metadata=build_lora_metadata(step))
+
+
+def lokr_factorization(dim, factor):
+    """Parte dim en (m, n), m <= n, como LyCORIS y ComfyUI: con factor exacto si divide a dim;
+    si no, el divisor más cercano a √dim."""
+    if 0 < factor < dim and dim % factor == 0:
+        m, n = factor, dim // factor
+        return (m, n) if m <= n else (n, m)
+    m, n = 1, dim
+    for i in range(1, int(dim ** 0.5) + 1):
+        if dim % i == 0:
+            m, n = i, dim // i
+    return m, n
+
+
+class LoKrLinear(torch.nn.Module):
+    """
+    LoKr sobre una capa lineal (también NF4): salida = base(x) + alpha/rank · x·(w1 ⊗ w2)ᵀ, con
+    w2 = w2_a·w2_b. La matriz grande no se construye nunca: (A⊗B)·vec(X) = vec(A·X·Bᵀ), así que
+    cuesta unos pocos MB de VRAM por capa en vez de una matriz del tamaño del peso.
+    """
+
+    def __init__(self, base, rank, alpha, factor):
+        super().__init__()
+        self.base = base
+        (self.a, self.b), (self.c, self.d) = (lokr_factorization(base.out_features, factor),
+                                              lokr_factorization(base.in_features, factor))
+        self.scale = alpha / rank
+        # Inicialización de LyCORIS: w1 y w2_a aleatorias, w2_b a cero (el LoKr empieza sin efecto).
+        self.lokr_w1 = torch.nn.Parameter(torch.empty(self.a, self.c))
+        self.lokr_w2_a = torch.nn.Parameter(torch.empty(self.b, rank))
+        self.lokr_w2_b = torch.nn.Parameter(torch.zeros(rank, self.d))
+        torch.nn.init.kaiming_uniform_(self.lokr_w1, a=math.sqrt(5))
+        torch.nn.init.kaiming_uniform_(self.lokr_w2_a, a=math.sqrt(5))
+
+    def forward(self, x, *args, **kwargs):
+        out = self.base(x, *args, **kwargs)
+        X = x.to(self.lokr_w1.dtype).reshape(*x.shape[:-1], self.c, self.d)
+        y = torch.einsum("ac,...cr->...ar", self.lokr_w1, X @ self.lokr_w2_b.T) @ self.lokr_w2_a.T
+        return out + (self.scale * y.reshape(*x.shape[:-1], self.a * self.b)).to(out.dtype)
+
+    def export_tensors(self):
+        return {k: getattr(self, k).detach().to(torch.bfloat16).cpu().contiguous()
+                for k in ("lokr_w1", "lokr_w2_a", "lokr_w2_b")}
+
+
+class LoKrModel(torch.nn.Module):
+    """Envuelve el transformer con la misma forma que el modelo de PEFT (base_model.model), para que
+    las previews y el Turbo LoRA lo usen igual. Guarda y carga sus pesos sin PEFT."""
+
+    def __init__(self, transformer, target_modules, rank, alpha, factor):
+        super().__init__()
+        self.base_model = torch.nn.Module()
+        self.base_model.model = transformer
+        for p in transformer.parameters():
+            p.requires_grad_(False)
+        for name in target_modules:
+            parent_name, _, child = name.rpartition(".")
+            parent = transformer.get_submodule(parent_name) if parent_name else transformer
+            setattr(parent, child, LoKrLinear(getattr(parent, child), rank, alpha, factor).to(transformer.device))
+        self.config = {"r": rank, "lora_alpha": alpha, "lokr_factor": factor}
+
+    def forward(self, *args, **kwargs):
+        return self.base_model.model(*args, **kwargs)
+
+    def lokr_layers(self):
+        return {n: m for n, m in self.base_model.model.named_modules() if isinstance(m, LoKrLinear)}
+
+    def lokr_state_dict(self):
+        return {f"{n}.{k}": getattr(m, k).detach().float().cpu().contiguous()
+                for n, m in self.lokr_layers().items() for k in ("lokr_w1", "lokr_w2_a", "lokr_w2_b")}
+
+    def load_lokr_state_dict(self, sd):
+        layers = self.lokr_layers()
+        for key, v in sd.items():
+            name, _, attr = key.rpartition(".")
+            getattr(layers[name], attr).data.copy_(v)
+
+    def save_pretrained(self, directory):
+        save_file(self.lokr_state_dict(), os.path.join(directory, LOKR_WEIGHTS))
+        with open(os.path.join(directory, LOKR_CONFIG), "w", encoding="utf-8") as f:
+            json.dump(self.config, f)
+
+    def print_trainable_parameters(self):
+        n = sum(p.numel() for p in self.parameters() if p.requires_grad)
+        print(f"trainable params: {n:,} (LoKr)")
+
+
+LOKR_WEIGHTS = "lokr_model.safetensors"
+LOKR_CONFIG = "lokr_config.json"
 
 
 class VaeHolder:
@@ -607,7 +717,7 @@ def is_target(name, module):
 
 def train_zimage():
     # Al reanudar se toman del checkpoint (el alpha se exporta con el LoRA).
-    global LORA_RANK, LORA_ALPHA, USE_RSLORA, USE_LORAPLUS, LORAPLUS_RATIO
+    global LORA_RANK, LORA_ALPHA, USE_RSLORA, USE_LORAPLUS, LORAPLUS_RATIO, USE_LOKR, LOKR_FACTOR
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.benchmark = True
 
@@ -637,8 +747,30 @@ def train_zimage():
     # Reanudar es continuar EL MISMO LoRA: capas, rank y alpha salen del checkpoint, no de la GUI.
     # Si se construyera con otros, el optimizador no encajaría y quedaría una mezcla de pesos.
     # Las capas se leen de los PESOS guardados: adapter_config.json las guarda abreviadas.
-    resume_weights = os.path.join(RESUME_DIR, "adapter_model.safetensors")
-    if os.path.exists(STEP_FILE) and os.path.exists(resume_weights):
+    # El checkpoint dice además si era LoRA o LoKr: se sigue con el mismo método.
+    lora_weights = os.path.join(RESUME_DIR, "adapter_model.safetensors")
+    lokr_weights = os.path.join(RESUME_DIR, LOKR_WEIGHTS)
+    if os.path.exists(STEP_FILE) and (os.path.exists(lora_weights) or os.path.exists(lokr_weights)):
+        saved_lokr = not os.path.exists(lora_weights)
+        if saved_lokr != USE_LOKR:
+            print("\n[!] " + t("Resuming with the checkpoint's method: {m} (settings ask for {m2}; it applies to new trainings).",
+                              m="LoKr" if saved_lokr else "LoRA", m2="LoKr" if USE_LOKR else "LoRA"))
+        USE_LOKR = saved_lokr
+    resume_weights = lokr_weights if USE_LOKR else lora_weights
+    if os.path.exists(STEP_FILE) and os.path.exists(resume_weights) and USE_LOKR:
+        with safe_open(resume_weights, framework="pt", device="cpu") as f:
+            saved_targets = sorted({k.rsplit(".", 1)[0] for k in f.keys()})
+        with open(os.path.join(RESUME_DIR, LOKR_CONFIG), "r", encoding="utf-8") as f:
+            saved_cfg = json.load(f)
+        saved = (len(saved_targets), saved_cfg["r"], saved_cfg["lora_alpha"])
+        if saved != (len(target_modules), LORA_RANK, LORA_ALPHA) or saved_cfg["lokr_factor"] != LOKR_FACTOR:
+            print("\n[!] " + t("Resuming with the checkpoint's LoKr: {n} layers, rank {r}, alpha {a}, factor {f} "
+                              "(settings ask for {n2} layers, rank {r2}, alpha {a2}, factor {f2}; they apply to new trainings).",
+                              n=saved[0], r=saved[1], a=saved[2], f=saved_cfg["lokr_factor"],
+                              n2=len(target_modules), r2=LORA_RANK, a2=LORA_ALPHA, f2=LOKR_FACTOR))
+        target_modules, LORA_RANK, LORA_ALPHA = saved_targets, saved[1], saved[2]
+        LOKR_FACTOR = saved_cfg["lokr_factor"]
+    elif os.path.exists(STEP_FILE) and os.path.exists(resume_weights):
         with safe_open(resume_weights, framework="pt", device="cpu") as f:
             saved_targets = sorted({k.split(".lora_")[0].replace("base_model.model.", "", 1) for k in f.keys()})
         with open(os.path.join(RESUME_DIR, "adapter_config.json"), "r", encoding="utf-8") as f:
@@ -664,13 +796,16 @@ def train_zimage():
                               a=saved_opts[0], b=saved_opts[1], a2=USE_RSLORA, b2=USE_LORAPLUS))
         USE_RSLORA, USE_LORAPLUS, LORAPLUS_RATIO = saved_opts
 
-    lora_config = LoraConfig(
-        r=LORA_RANK, lora_alpha=LORA_ALPHA, lora_dropout=0.0,
-        target_modules=target_modules, use_dora=False, init_lora_weights=True,
-        use_rslora=USE_RSLORA,
-    )
-
-    model = get_peft_model(transformer, lora_config)
+    if USE_LOKR:
+        USE_RSLORA = USE_LORAPLUS = False
+        model = LoKrModel(transformer, target_modules, LORA_RANK, LORA_ALPHA, LOKR_FACTOR)
+    else:
+        lora_config = LoraConfig(
+            r=LORA_RANK, lora_alpha=LORA_ALPHA, lora_dropout=0.0,
+            target_modules=target_modules, use_dora=False, init_lora_weights=True,
+            use_rslora=USE_RSLORA,
+        )
+        model = get_peft_model(transformer, lora_config)
     # LoRA y estados del optimizador en FP32: en 8/16 bits se pierde el detalle fino (caras).
     for p in model.parameters():
         if p.requires_grad:
@@ -702,7 +837,11 @@ def train_zimage():
             with open(STEP_FILE, "r", encoding="utf-8") as f:
                 start_step = int(f.read().strip())
             with open(resume_weights, "rb") as f:
-                set_peft_model_state_dict(model, {k: v.float() for k, v in load(f.read()).items()})
+                saved_sd = {k: v.float() for k, v in load(f.read()).items()}
+            if USE_LOKR:
+                model.load_lokr_state_dict(saved_sd)
+            else:
+                set_peft_model_state_dict(model, saved_sd)
             optimizer.load_state_dict(torch.load(OPT_FILE, weights_only=False))
             print(t("Resuming training from step {n}...", n=start_step))
         except Exception as e:
@@ -718,6 +857,10 @@ def train_zimage():
         print("\n" + t("Saving checkpoint state at step {n}...", n=current_s))
         os.makedirs(RESUME_DIR, exist_ok=True)
         model.save_pretrained(RESUME_DIR)
+        # Solo puede quedar uno: los pesos del otro método serían de un entrenamiento anterior.
+        stale = os.path.join(RESUME_DIR, "adapter_model.safetensors" if USE_LOKR else LOKR_WEIGHTS)
+        if os.path.exists(stale):
+            os.remove(stale)
         with open(os.path.join(RESUME_DIR, "lora_options.json"), "w", encoding="utf-8") as f:
             json.dump({"use_loraplus": USE_LORAPLUS, "loraplus_ratio": LORAPLUS_RATIO}, f)
         torch.save(optimizer.state_dict(), OPT_FILE)
