@@ -16,6 +16,7 @@
   <img src="https://img.shields.io/badge/Python-3.13-blue.svg" alt="Python">
   <img src="https://img.shields.io/badge/PyTorch-2.14%20cu130-orange.svg" alt="PyTorch">
   <img src="https://img.shields.io/badge/UI-Flask%20%2B%20HTML5-purple.svg" alt="Web UI">
+  <img src="https://img.shields.io/badge/Languages-8-teal.svg" alt="8 languages">
   <a href="https://console.runpod.io/deploy?template=lfxvtg5rrb&ref=jbvdshm0"><img src="https://img.shields.io/badge/Deploy%20on-RunPod-673ab7.svg" alt="Deploy on RunPod"></a>
 </p>
 
@@ -60,7 +61,7 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 
 **Linux:** ya tiene soporte para Linux. Cada `.bat` tiene su `.sh` equivalente; la instalación y el uso están en [docs/Linux.md](docs/Linux.md). Gracias a **[Jonathan Hecl (@jonathanhecl)](https://github.com/jonathanhecl)** por aportarlo.
 
-Toda la interfaz y los mensajes de consola están en inglés y en español.
+**Idiomas:** la interfaz y los mensajes de consola están en inglés, español, alemán, francés, portugués, italiano, japonés y coreano. Elige el idioma en el selector **🌍 Language** de la parte inferior del lanzador y pulsa **💾 Save settings**; por defecto está en inglés. Los prompts de los captions siguen siempre en inglés, que es lo que entienden los modelos. Detalles en la sección *Languages*.
 
 > ⚠️ **Sobre los valores por defecto:** las pruebas se han hecho para comprobar que cada entrenamiento funciona, no para buscar el mejor rendimiento ni la mejor calidad. Haz tus propias pruebas con distintas configuraciones (pasos, learning rate, rank, resolución, captions) para mejorar la calidad de tus LoRAs.
 
@@ -147,6 +148,33 @@ Also in every trainer:
 - Exported LoRAs carry kohya-style metadata (trigger word, rank, steps, resolution) that CivitAI and LoRA managers read.
 - Optional **Hugging Face token** for faster downloads. Your settings and token are stored in `settings\`, which is never uploaded.
 - Each project uses its own folders: `cached_data_<model>_<project>` for the pre-cache and `<model>_lora_output_<project>` for checkpoints, previews and LoRAs.
+
+---
+
+## 🌍 Languages
+
+The launcher, every trainer interface and the console messages are available in **English, Español, Deutsch, Français, Português, Italiano, 日本語 and 한국어**. English is the default.
+
+1. At the bottom of the launcher, pick a language in **🌍 Language**: the launcher switches at once, as a preview.
+2. Press **💾 Save settings**. The choice is stored in `settings/ui.json` and applies to every trainer.
+3. A trainer page that is already open changes after reloading it; the scripts (captioner, pre-cache, training) use the new language on their next run.
+
+What stays in English on purpose:
+
+- **Caption prompts and the captions themselves**, because that is the language the models were trained on.
+- Technical names and log tags: settings such as `vram_budget_gb` or `max_seq_len`, markers such as `[NF4-TE]` or `[BACKFILL]`, model names and paths.
+- The `.bat` and `.sh` windows of the installer, the updater and the launchers.
+
+**Improving a translation.** Each language is one file, `GUI/locales/<code>.json` (`es`, `de`, `fr`, `pt`, `it`, `ja`, `ko`). The key is the English text and the value is its translation:
+
+```json
+{
+  "Start Pre-Cache": "Iniciar Pre-Caché",
+  "{n} images inside": "{n} imágenes dentro"
+}
+```
+
+Keep every `{marker}` of the English text, in the same order when it has no name (`{}`). A text with no translation is shown in English, so nothing breaks while a translation is incomplete; edit the file, reload the page, and the change is there. The German, French, Portuguese, Italian, Japanese and Korean translations are first versions: if a term sounds wrong in your language, open an [issue](../../issues) or a pull request with the fix.
 
 ---
 
@@ -413,13 +441,14 @@ AcademiaSD_LoRAlab-TrainerStudio/
 ├── Install_LoRAlab-TrainerStudio.bat, Install_Triton&SageAtten220.bat (and their .sh)
 ├── requirements.txt                  # Dependencies, for your own environment (LORALAB_PYTHON)
 ├── code/                             # Run_LoRAlab-<Model>.bat / .sh
-├── scripts/                          # launcher.py, server_<model>.py, 0_caption / 1_pre_cache / 2_train_lora, remote_access.py, file_transfer.py, refmod.py, melband/
-├── GUI/                              # launcher.html, launcher.json, trainer_ui_<model>.html
+├── scripts/                          # launcher.py, server_<model>.py, 0_caption / 1_pre_cache / 2_train_lora, remote_access.py, file_transfer.py, i18n.py, refmod.py, melband/
+├── GUI/                              # launcher.html, launcher.json, trainer_ui_<model>.html, i18n.js
+│   └── locales/                      # Translations: <language>.json (English is the built-in text)
 ├── docs/                             # Technical notes per trainer
 ├── assets/                           # Covers and logos
 ├── tools/<model>/                    # NF4 converters and dataset tools
 ├── Example_Dataset/                  # Small example dataset (MiniMax-H3)
-└── settings/                         # Your settings, HF token and network.json (created on first use, never uploaded)
+└── settings/                         # Your settings, HF token, network.json and ui.json (created on first use, never uploaded)
 ```
 
 Models (`Krea-2-NF4`, `LTX23-NF4`, `MiniMax-H3-NF4`, `Qwen-Image21-NF4`, `Z-Image_NF4`, `Anima-Base`, `FLUX.2-Klein-9B_NF4`, `Ideogram4-NF4`, `SDXL-Models`, captioners), caches and LoRA outputs are created next to these folders on first use.
