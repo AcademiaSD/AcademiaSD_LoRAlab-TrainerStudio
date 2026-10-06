@@ -47,7 +47,7 @@ async function ftDownload() {
     const rows = data.files.length
         ? data.files.map(f => `<a href="/api/download-output/${encodeURIComponent(f.name)}" download
               style="display:flex;justify-content:space-between;gap:16px;padding:8px 10px;border-radius:6px;color:var(--text-main);text-decoration:none;background:var(--bg-dark);border:1px solid var(--panel-border);">
-              <span>⬇ ${f.name}</span><span style="color:var(--text-muted);">${(f.size / 1048576).toFixed(1)} MB</span></a>`).join('')
+              <span>⬇ ${f.download_name || f.name}</span><span style="color:var(--text-muted);">${(f.size / 1048576).toFixed(1)} MB</span></a>`).join('')
         : `<div style="color:var(--text-muted);">${t('No LoRA yet.')}</div>`;
     box.innerHTML = `<div style="width:min(560px,92vw);max-height:80vh;overflow:auto;display:flex;flex-direction:column;gap:8px;padding:20px;
             background:var(--panel-bg);border:1px solid var(--panel-border);border-radius:12px;">
