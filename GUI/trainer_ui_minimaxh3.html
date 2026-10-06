@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AcademiaSD MiniMax-H3 LoRAlab</title>
     <script src="/i18n.js"></script>
+    <script src="/notify.js"></script>
 
     <!-- Favicon de la pestaña del navegador -->
     <link rel="icon" type="image/png" href="/assets/logo_128.png">
@@ -1233,12 +1234,12 @@
                 });
                 const data = await res.json();
                 if (data.status === 'ok') {
-                    alert('✓ ' + t('LoRA folder saved for every trainer!'));
+                    toast('✓ ' + t('LoRA folder saved for every trainer!'), 'success');
                 } else {
-                    alert(`[!] Error: ${data.error}`);
+                    toast(`[!] Error: ${data.error}`, 'error');
                 }
             } catch (e) {
-                alert(`[!] ${t('Network error')}: ${e}`);
+                toast(`[!] ${t('Network error')}: ${e}`, 'error');
             }
         }
 
@@ -1252,12 +1253,12 @@
                 });
                 const data = await res.json();
                 if (data.status === 'ok') {
-                    alert('✓ ' + t('HF Token saved!'));
+                    toast('✓ ' + t('HF Token saved!'), 'success');
                 } else {
-                    alert(`[!] Error: ${data.error}`);
+                    toast(`[!] Error: ${data.error}`, 'error');
                 }
             } catch (e) {
-                alert(`[!] ${t('Network error')}: ${e}`);
+                toast(`[!] ${t('Network error')}: ${e}`, 'error');
             }
         }
 
@@ -1863,10 +1864,10 @@
                         await saveTrainSettings();
                     }
 
-                    alert('✓ ' + t('Configuration loaded from:') + `\n${file.name}`);
+                    toast('✓ ' + t('Configuration loaded from:') + `\n${file.name}`, 'success');
                     loadDatasetInfo();
                 } catch (err) {
-                    alert(`[!] ${t('Error reading JSON')}: ${err}`);
+                    toast(`[!] ${t('Error reading JSON')}: ${err}`, 'error');
                 }
             };
             reader.readAsText(file);
@@ -1936,7 +1937,7 @@
                     if (perfil && perfil.value) applyVramProfile(perfil.value);
                 } catch (e) {}
                 const listStr = data.all_saved ? data.all_saved.join('\n • ') : data.file;
-                alert('✓ ' + t('Pre-Cache settings saved to:') + `\n • ${listStr}`);
+                toast('✓ ' + t('Pre-Cache settings saved to:') + `\n • ${listStr}`, 'success');
             }
         }
 
@@ -1993,7 +1994,7 @@
             const data = await res.json();
             if (data.status === 'ok') {
                 const listStr = data.all_saved ? data.all_saved.join('\n • ') : data.file;
-                alert('✓ ' + t('Train settings saved to:') + `\n • ${listStr}`);
+                toast('✓ ' + t('Train settings saved to:') + `\n • ${listStr}`, 'success');
             }
         }
 
@@ -2024,22 +2025,16 @@
             term.scrollTop = term.scrollHeight;
         }
 
-        async function startScript(scriptName) {
-            document.getElementById('terminal').innerHTML = '';
-            appendTerminal(`[SYSTEM] ${t('Launching {script}...', { script: scriptName })}`);
-            setRunningState(true);
+        let consoleSince = 0;
+        let consoleController = null;
 
-            userRequestedStop = false;
-            lastExecutedStep = 0;
-            totalTargetSteps = 0;
-
+        // La consola vive en el servidor: al reabrir la página (o abrirla desde otro navegador)
+        // se vuelve a enganchar y se repinta lo ya emitido, incluido el paso actual.
+        async function attachConsole() {
+            if (consoleController) consoleController.abort();
+            consoleController = new AbortController();
             try {
-                const response = await fetch('/api/run', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ script: scriptName })
-                });
-
+                const response = await fetch(`/api/console/stream?since=${consoleSince}`, { signal: consoleController.signal });
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder('utf-8');
                 let buffer = '';
@@ -2049,77 +2044,114 @@
                     if (done) break;
                     buffer += decoder.decode(value, { stream: true });
 
-                    const lines = buffer.split('\n\n');
-                    buffer = lines.pop();
+                    const parts = buffer.split('\n\n');
+                    buffer = parts.pop();
 
-                    for (const line of lines) {
-                        if (line.startsWith('data: ')) {
-                            try {
-                                const msg = JSON.parse(line.slice(6));
-                                if (msg.type === 'output') {
-                                    appendTerminal(msg.text, msg.replace);
+                    for (const part of parts) {
+                        if (!part.startsWith('data: ')) continue;
+                        let msg = null;
+                        try { msg = JSON.parse(part.slice(6)); } catch (e) { continue; }
 
-                                    const stepMatch = msg.text.match(stepRe());
-                                    if (stepMatch) {
-                                        lastExecutedStep = parseInt(stepMatch[1]);
-                                        totalTargetSteps = parseInt(stepMatch[2]);
-                                    }
-                                } else if (msg.type === 'done') {
-                                    if (msg.code === 0) {
-                                        let successMsg = "";
-                                        let msgClass = 'term-success';
+                        if (msg.type === 'line') {
+                            consoleSince = msg.seq;
+                            appendTerminal(msg.text, msg.replace);
 
-                                        if (scriptName === 'train') {
-                                            const totalFormSteps = parseInt(document.getElementById('train_total_steps').value) || totalTargetSteps;
-                                            const isPausedEarly = userRequestedStop || (lastExecutedStep > 0 && lastExecutedStep < totalFormSteps);
-
-                                            if (isPausedEarly) {
-                                                successMsg = '\n[SYSTEM] ⏸ ' + t('Training paused successfully! Checkpoint saved.');
-                                                msgClass = 'term-warning';
-                                            } else {
-                                                successMsg = '\n[SYSTEM] ✓ ' + t('LoRA training completed successfully!');
-                                                msgClass = 'term-success';
-                                            }
-                                        } else if (scriptName === 'precache') {
-                                            if (userRequestedStop) {
-                                                successMsg = '\n[SYSTEM] ⏸ ' + t('Pre-Cache stopped by user.');
-                                                msgClass = 'term-warning';
-                                            } else {
-                                                successMsg = '\n[SYSTEM] ✓ ' + t('Pre-Cache completed successfully!');
-                                                msgClass = 'term-success';
-                                            }
-                                        } else if (scriptName === 'caption') {
-                                            successMsg = '\n[SYSTEM] ✓ ' + t('Captions finished!');
-                                        } else {
-                                            successMsg = `\n[SYSTEM] ✓ ${t('Finished successfully with code')}: ${msg.code}`;
-                                        }
-
-                                        appendTerminal(successMsg, false, msgClass);
-                                    } else {
-                                        appendTerminal(`\n[SYSTEM] ⚠ ${t('Process finished with code')}: ${msg.code}`, false, 'term-danger');
-                                    }
-                                }
-                            } catch (e) {}
+                            const stepMatch = msg.text.match(stepRe());
+                            if (stepMatch) {
+                                lastExecutedStep = parseInt(stepMatch[1]);
+                                totalTargetSteps = parseInt(stepMatch[2]);
+                            }
+                        } else if (msg.type === 'done') {
+                            consoleSince = msg.seq;
+                            consoleDone(msg);
                         }
                     }
                 }
+            } catch (e) {
+                // AbortError al cerrar la pestaña: el entrenamiento sigue en el servidor.
+            }
+        }
+
+        function consoleDone(msg) {
+            if (msg.code === 0) {
+                let successMsg = "";
+                let msgClass = 'term-success';
+
+                if (msg.script === 'train') {
+                    const totalFormSteps = totalTargetSteps || parseInt(document.getElementById('train_total_steps').value);
+                    const isPausedEarly = userRequestedStop || (lastExecutedStep > 0 && lastExecutedStep < totalFormSteps);
+
+                    if (isPausedEarly) {
+                        successMsg = '\n[SYSTEM] ⏸ ' + t('Training paused successfully! Checkpoint saved.');
+                        msgClass = 'term-warning';
+                    } else {
+                        successMsg = '\n[SYSTEM] ✓ ' + t('LoRA training completed successfully!');
+                        msgClass = 'term-success';
+                    }
+                } else if (msg.script === 'precache') {
+                    if (userRequestedStop) {
+                        successMsg = '\n[SYSTEM] ⏸ ' + t('Pre-Cache stopped by user.');
+                        msgClass = 'term-warning';
+                    } else {
+                        successMsg = '\n[SYSTEM] ✓ ' + t('Pre-Cache completed successfully!');
+                        msgClass = 'term-success';
+                    }
+                } else {
+                    successMsg = `\n[SYSTEM] ✓ ${t('Finished successfully with code')}: ${msg.code}`;
+                }
+
+                appendTerminal(successMsg, false, msgClass);
+            } else if (msg.script === 'train' && msg.code === 2) {
+                appendTerminal('\n[SYSTEM] ✗ ' + t('Training could not be run: create the Pre-Cache first.'), false, 'term-danger');
+            } else {
+                appendTerminal(`\n[SYSTEM] ⚠ ${t('Process finished with code')}: ${msg.code}`, false, 'term-danger');
+            }
+
+            setRunningState(false);
+            loadPreviews();
+            checkCheckpointInfo();
+        }
+
+        async function startScript(scriptName) {
+            document.getElementById('terminal').innerHTML = '';
+            consoleSince = 0;
+            appendTerminal(`[SYSTEM] ${t('Launching {script}...', { script: scriptName })}`);
+            setRunningState(true);
+
+            userRequestedStop = false;
+            lastExecutedStep = 0;
+            totalTargetSteps = 0;
+
+            try {
+                const res = await fetch('/api/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ script: scriptName })
+                });
+                const data = await res.json();
+
+                if (data.status !== 'ok') {
+                    appendTerminal(`\n[SYSTEM] ${t('Execution error')}: ${data.error}`, false, 'term-danger');
+                    setRunningState(false);
+                    return;
+                }
+                attachConsole();
             } catch (err) {
                 appendTerminal(`\n[SYSTEM] ${t('Execution error')}: ${err}`, false, 'term-danger');
-            } finally {
                 setRunningState(false);
-                // Los scripts que escriben en la carpeta del dataset dejan la
-                // galeria desfasada: los .txt nuevos no salen hasta refrescar.
-                // Se hace SIEMPRE, tambien si fallo a medias, porque un fallo
-                // parcial deja unos cuantos captions escritos y conviene verlos.
-                // Scripts that write into the dataset folder leave the gallery
-                // stale: new .txt files do not show until a refresh. Done ALWAYS,
-                // including on a partial failure, which still writes some.
-                if (scriptName === 'caption' || scriptName === 'precache') {
-                    try { loadDatasetInfo(); } catch (e) {}
-                }
-                loadPreviews();
-                checkCheckpointInfo();
             }
+        }
+
+        // Si ya hay un entrenamiento en marcha al cargar la página, repinta la consola completa
+        // y el progreso, y sigue enganchado a lo que siga saliendo.
+        async function restoreConsole() {
+            try {
+                const st = await (await fetch('/api/status')).json();
+                if (st.running) {
+                    setRunningState(true);
+                    attachConsole();
+                }
+            } catch (e) {}
         }
 
         // El boton dice "Crear" o "Rehacer" segun si ya hay captions, para que
@@ -2257,7 +2289,7 @@
             const captioned = parseInt(document.getElementById('ds-txt-count').innerText) || 0;
             const overwrite = document.getElementById('caption_overwrite').checked;
             if (captioned > 0 && overwrite) {
-                if (!confirm(t('This will OVERWRITE the {n} caption(s) that already exist.', { n: captioned }) + '\n\n' + t('Continue?'))) return;
+                if (!await askConfirm(t('This will OVERWRITE the {n} caption(s) that already exist.', { n: captioned }) + '\n\n' + t('Continue?'))) return;
             }
             // Se mandan los CUATRO, no solo el visible: el dataset puede tener
             // imagenes y clips a la vez y el generador necesita los dos prompts.
@@ -2274,7 +2306,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(cuerpo)
                 });
-            } catch (e) { alert('Error: ' + e); return; }
+            } catch (e) { toast('Error: ' + e, 'error'); return; }
             startScript('caption');
         }
 
@@ -2299,7 +2331,7 @@
             const finalName = document.getElementById('export_final_name').value.trim();
 
             if (!targetDir) {
-                alert(t('Please select or enter the target models/lora folder.'));
+                toast(t('Please select or enter the target models/lora folder.'));
                 return;
             }
 
@@ -2313,14 +2345,14 @@
                 });
                 const data = await res.json();
                 if (data.status === 'ok') {
-                    alert(`✓ ${t('LoRA exported successfully')}:\n${data.filename}\n\n${t('Copied from')}: ${data.source}`);
+                    toast(`✓ ${t('LoRA exported successfully')}:\n${data.filename}\n\n${t('Copied from')}: ${data.source}`, 'success');
                     appendTerminal(`[SYSTEM] ✓ ${t('Export completed')}: ${data.dest}`, false, 'term-success');
                 } else {
-                    alert(`[!] ${t('Export error')}: ${data.error}`);
+                    toast(`[!] ${t('Export error')}: ${data.error}`, 'error');
                     appendTerminal(`[SYSTEM] [!] ${t('Export error')}: ${data.error}`, false, 'term-danger');
                 }
             } catch (e) {
-                alert(`[!] ${t('Network error')}: ${e}`);
+                toast(`[!] ${t('Network error')}: ${e}`, 'error');
             }
         }
 
@@ -2460,7 +2492,7 @@
         async function deleteDatasetImage(file) {
             const msg = t('Remove "{name}" and its .txt caption from the dataset?', { name: file }) + '\n\n'
                       + t('The files are deleted from disk.');
-            if (!confirm(msg)) return;
+            if (!await askConfirm(msg)) return;
             try {
                 const res = await fetch('/api/delete-dataset-image', {
                     method: 'POST',
@@ -2468,9 +2500,9 @@
                     body: JSON.stringify({ file: file })
                 });
                 const data = await res.json();
-                if (data.status !== 'ok') { alert('Error: ' + (data.error || t('unknown'))); return; }
+                if (data.status !== 'ok') { toast('Error: ' + (data.error || t('unknown')), 'error'); return; }
                 loadDatasetInfo();
-            } catch (e) { alert('Error: ' + e); }
+            } catch (e) { toast('Error: ' + e, 'error'); }
         }
 
         // La URL lleva el mtime del fichero. Reemplazar un audio EN SU SITIO no
@@ -2636,12 +2668,12 @@
                 const res = await fetch('/api/save-refmod', { method: 'POST', body: JSON.stringify(datos) });
                 const data = await res.json();
                 if (data.status === 'ok') {
-                    alert(t('RefMod settings saved:') + ' ' + data.file);
+                    toast(t('RefMod settings saved:') + ' ' + data.file);
                 } else {
-                    alert('Error: ' + (data.error || t('unknown')));
+                    toast('Error: ' + (data.error || t('unknown')), 'error');
                 }
             } catch (e) {
-                alert('Error: ' + e);
+                toast('Error: ' + e, 'error');
             }
         }
 
@@ -2721,7 +2753,7 @@
                 output: document.getElementById('refmod_output').value.trim(),
                 bundle: document.getElementById('refmod_bundle').checked
             };
-            if (!cuerpo.name) { alert(t('Name the mod first.')); return; }
+            if (!cuerpo.name) { toast(t('Name the mod first.')); return; }
 
             const btn = event && event.target ? event.target : null;
             const prev = btn ? btn.innerText : '';
@@ -2744,19 +2776,19 @@
                 // so res.json() would throw a parse error explaining nothing.
                 if (!res.ok && res.status === 404) {
                     appendTerminal('[REFMOD] /api/extract-refmod: ' + t('not implemented on the server yet'), false, 'term-danger');
-                    alert(t('The RefMod backend is not there yet.'));
+                    toast(t('The RefMod backend is not there yet.'));
                     return;
                 }
                 const data = await res.json();
                 if (data.status === 'error') {
                     appendTerminal('[REFMOD] ' + (data.error || t('unknown')), false, 'term-danger');
-                    alert('Error: ' + (data.error || t('unknown')));
+                    toast('Error: ' + (data.error || t('unknown')), 'error');
                     return;
                 }
                 (data.details || []).forEach(function (x) { appendTerminal('   ' + x, false, 'term-success'); });
                 appendTerminal('[REFMOD] ' + (data.message || t('done')), false, 'term-success');
             } catch (e) {
-                alert('Error: ' + e);
+                toast('Error: ' + e, 'error');
             } finally {
                 enCurso = false;
                 if (btn) { btn.disabled = false; btn.innerText = prev; }
@@ -2769,7 +2801,7 @@
                       + '\u2022 ' + t('run this BEFORE Split') + '\n'
                       + '\u2022 ' + t('destructive: do not use on clean recordings') + '\n\n'
                       + t('Originals are moved to _originals.');
-            if (!confirm(msg)) return;
+            if (!await askConfirm(msg)) return;
 
             const btn = document.getElementById('btn-vocals');
             const prev = btn ? btn.innerText : '';
@@ -2785,7 +2817,7 @@
                 enCurso = false;
                 if (data.status === 'error') {
                     appendTerminal('[VOCALS] ' + (data.error || t('unknown')), false, 'term-danger');
-                    alert('Error: ' + (data.error || t('unknown')));
+                    toast('Error: ' + (data.error || t('unknown')), 'error');
                     return;
                 }
                 appendTerminal('[VOCALS] ' + t('{n} file(s)', { n: data.processed || 0 }), false, 'term-success');
@@ -2794,7 +2826,7 @@
                 if (data.backup) appendTerminal('   ' + t('originals') + ': ' + data.backup);
                 loadDatasetInfo();
             } catch (e) {
-                alert('Error: ' + e);
+                toast('Error: ' + e, 'error');
             } finally {
                 enCurso = false;
                 if (btn) { btn.disabled = false; btn.innerText = prev; }
@@ -2808,7 +2840,7 @@
                       + '\u2022 ' + t('audio is cut at silences') + '\n'
                       + '\u2022 ' + t('video is cut on the frame') + '\n\n'
                       + t('Originals are moved to _originals.');
-            if (!confirm(msg)) return;
+            if (!await askConfirm(msg)) return;
 
             const btn = document.getElementById('btn-split');
             const prev = btn ? btn.innerText : '';
@@ -2820,7 +2852,7 @@
                     body: JSON.stringify({ frames: frames })
                 });
                 const data = await res.json();
-                if (data.status === 'error') { alert('Error: ' + (data.error || t('unknown'))); return; }
+                if (data.status === 'error') { toast('Error: ' + (data.error || t('unknown')), 'error'); return; }
                 let out = t('{a} split, {b} untouched -> {c} takes', { a: data.split, b: data.skipped, c: data.produced });
                 if (data.details && data.details.length) out += '\n\n' + data.details.join('\n');
                 if (data.warnings && data.warnings.length) out += '\n\n' + t('Warnings:') + '\n' + data.warnings.join('\n');
@@ -2833,7 +2865,7 @@
                 appendTerminal('');
                 loadDatasetInfo();
             } catch (e) {
-                alert('Error: ' + e);
+                toast('Error: ' + e, 'error');
             } finally {
                 if (btn) { btn.disabled = false; btn.innerText = prev; }
             }
@@ -2845,7 +2877,7 @@
                       + '\u2022 ' + t('frame count 17n+5, keeping the WHOLE clip') + '\n\n'
                       + t('Nothing is cut off the end; time is stretched by the couple of percent needed to reach a valid count. Re-encodes at crf 16.') + '\n\n'
                       + t('Originals are saved in _originals.');
-            if (!confirm(msg)) return;
+            if (!await askConfirm(msg)) return;
 
             const btn = document.getElementById('btn-fps');
             const prev = btn ? btn.innerText : '';
@@ -2865,7 +2897,7 @@
                     body: JSON.stringify({ fps: 24 })
                 });
                 const data = await res.json();
-                if (data.status === 'error') { alert('Error: ' + (data.error || t('unknown'))); return; }
+                if (data.status === 'error') { toast('Error: ' + (data.error || t('unknown')), 'error'); return; }
                 let out = t('{a} converted, {b} untouched', { a: data.converted, b: data.skipped });
                 if (data.details && data.details.length) out += '\n\n' + data.details.join('\n');
                 // Los saltados importan tanto como los convertidos: un clip que ya
@@ -2900,7 +2932,7 @@
                 appendTerminal('');
                 loadDatasetInfo();
             } catch (e) {
-                alert('Error: ' + e);
+                toast('Error: ' + e, 'error');
             } finally {
                 if (btn) { btn.disabled = false; btn.innerText = prev; }
             }
@@ -2909,18 +2941,18 @@
         async function clearDataset() {
             const n = parseInt(document.getElementById('ds-count').innerText) || 0;
             const path = document.getElementById('dataset_path').value;
-            if (!n) { alert(t('The dataset is already empty.')); return; }
+            if (!n) { toast(t('The dataset is already empty.')); return; }
             // Se pide escribir el número: un confirm normal se acepta por reflejo y esto no tiene deshacer.
             const resp = prompt(t('This DELETES the {n} files of the dataset and their .txt captions:', { n }) + `\n${path}\n` + t('There is no undo.') + '\n\n' + t('Type {n} to confirm:', { n }));
             if (String(resp || '').trim() !== String(n)) return;
             try {
                 const res = await fetch('/api/clear-dataset', { method: 'POST' });
                 const data = await res.json();
-                if (data.status === 'error') { alert('Error: ' + (data.error || t('unknown'))); return; }
+                if (data.status === 'error') { toast('Error: ' + (data.error || t('unknown')), 'error'); return; }
                 appendTerminal(`[DATASET] ${t('{n} file(s) deleted', { n: data.removed || 0 })}: ${data.path}`, false, 'term-warning');
                 (data.errors || []).forEach(x => appendTerminal('   ' + x, false, 'term-danger'));
                 loadDatasetInfo();
-            } catch (e) { alert('Error: ' + e); }
+            } catch (e) { toast('Error: ' + e, 'error'); }
         }
 
         async function deleteProjectData(target) {
@@ -2928,7 +2960,7 @@
                 precache: t('This will delete the current pre-cache.'),
                 training: t('This will delete all the current training.')
             };
-            if (!confirm(texts[target] + '\n\n' + t('Continue?'))) return;
+            if (!await askConfirm(texts[target] + '\n\n' + t('Continue?'))) return;
             try {
                 const res = await fetch('/api/delete-project-data', {
                     method: 'POST',
@@ -2936,14 +2968,14 @@
                     body: JSON.stringify({ target: target })
                 });
                 const data = await res.json();
-                if (data.status === 'error') { alert('Error: ' + (data.error || t('unknown'))); return; }
+                if (data.status === 'error') { toast('Error: ' + (data.error || t('unknown')), 'error'); return; }
                 let out = t('{n} item(s) deleted', { n: data.removed }) + '\n' + data.path;
                 if (data.errors && data.errors.length) {
                     out += '\n\n' + t('Could not delete:') + '\n' + data.errors.join('\n');
                 }
-                alert(out);
+                toast(out);
                 if (target === 'precache') { loadDatasetInfo(); }
-            } catch (e) { alert('Error: ' + e); }
+            } catch (e) { toast('Error: ' + e, 'error'); }
         }
 
         function filterDatasetGrid() {
@@ -2977,7 +3009,7 @@
         async function clearAllCaptions() {
             const n = parseInt(document.getElementById('ds-txt-count').innerText) || 0;
             if (!n) {
-                alert(t('There are no captions to delete.'));
+                toast(t('There are no captions to delete.'));
                 return;
             }
             // Se pide el numero por escrito. Un boton rojo con un confirm normal
@@ -2990,13 +3022,13 @@
             try {
                 const res = await fetch('/api/clear-captions', { method: 'POST' });
                 const data = await res.json();
-                if (data.status === 'error') { alert('Error: ' + (data.error || t('unknown'))); return; }
+                if (data.status === 'error') { toast('Error: ' + (data.error || t('unknown')), 'error'); return; }
                 appendTerminal('[CAPTIONS] ' + t('{n} .txt deleted', { n: data.removed || 0 }), false, 'term-warning');
                 if (data.errors && data.errors.length) {
                     data.errors.forEach(function (x) { appendTerminal('   ' + x, false, 'term-danger'); });
                 }
                 loadDatasetInfo();
-            } catch (e) { alert('Error: ' + e); }
+            } catch (e) { toast('Error: ' + e, 'error'); }
         }
 
         async function addTriggerToAllCaptions() {
@@ -3005,7 +3037,7 @@
             const comun = comunEl ? comunEl.value.trim() : '';
 
             if (!trigger && !comun) {
-                alert(t('Enter a Trigger Word, a common description, or both.'));
+                toast(t('Enter a Trigger Word, a common description, or both.'));
                 return;
             }
 
@@ -3028,7 +3060,7 @@
             } else {
                 msg = t('APPEND this text at the end of every caption? What was already written is kept.') + '\n\n    ' + comun;
             }
-            if (!confirm(msg)) return;
+            if (!await askConfirm(msg)) return;
 
             const res = await fetch('/api/batch-caption', {
                 method: 'POST',
@@ -3072,6 +3104,7 @@
             } catch (e) {}
         }
         setInterval(loadPreviews, 8000);
+        restoreConsole();
         loadPreviews();
 
         // ------------------------------------------------------------------
@@ -3243,7 +3276,7 @@
         // The caption text as opened, to tell whether it was touched.
         let captionAlAbrir = '';
 
-        function closeModal(e) {
+        async function closeModal(e) {
             // Cerrar con un caption editado y sin guardar tira el trabajo sin
             // avisar. Con un solo fichero se rehace en diez segundos; revisando
             // sesenta y nueve, no.
@@ -3252,7 +3285,7 @@
             // pass over sixty-nine, it is not.
             const campo = document.getElementById('modal-txt');
             if (campo && campo.value !== captionAlAbrir) {
-                if (!confirm(t('The caption has unsaved changes. Close and lose them?'))) {
+                if (!await askConfirm(t('The caption has unsaved changes. Close and lose them?'))) {
                     return;
                 }
             }
@@ -3292,7 +3325,7 @@
                 // teaches people to dismiss it unread, and the day it matters it
                 // will be dismissed too.
                 captionAlAbrir = newCaption;
-                alert('✓ ' + t('Caption saved!'));
+                toast('✓ ' + t('Caption saved!'), 'success');
                 closeModal();
                 loadDatasetInfo();
             }

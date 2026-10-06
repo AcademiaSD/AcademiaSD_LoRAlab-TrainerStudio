@@ -17,6 +17,7 @@ import logging
 import webbrowser
 
 from console_stream import read_console
+from trainer_stream import TrainerStream
 import i18n
 import remote_access
 import file_transfer
@@ -82,9 +83,7 @@ PRECACHE_SCRIPT = SCRIPTS_DIR / "1_pre_cache_MiniMaxH3.py"
 TRAIN_SCRIPT = SCRIPTS_DIR / "2_train_lora_MiniMaxH3.py"
 
 app = Flask(__name__)
-active_process = None
-active_script = None
-process_lock = threading.Lock()
+runtime = TrainerStream(BASE_DIR, SETTINGS_DIR, "minimaxh3")
 
 # LOG DE TAREAS QUE CORREN DENTRO DEL SERVIDOR.
 #
@@ -130,8 +129,6 @@ def task_log():
         nuevas = [t for n, t in TAREA_LOG if n > desde]
         ultimo = TAREA_LOG[-1][0] if TAREA_LOG else 0
     return jsonify({"lines": nuevas, "last": ultimo})
-output_buffer = []
-output_buffer_lock = threading.Lock()
 
 
 # =============================================================================
@@ -228,16 +225,7 @@ def get_script_for_name(script_name):
 
 
 def get_status():
-    global active_process
-    global active_script
-    with process_lock:
-        if active_process is None:
-            return {"running": False, "script": None, "pid": None}
-        if active_process.poll() is not None:
-            active_process = None
-            active_script = None
-            return {"running": False, "script": None, "pid": None}
-        return {"running": True, "script": active_script, "pid": active_process.pid}
+    return runtime.status()
 
 
 # =============================================================================
@@ -737,145 +725,30 @@ def checkpoint_info():
 
 @app.route("/api/output", methods=["GET"])
 def api_output():
-    global output_buffer
-    with output_buffer_lock:
-        if not output_buffer:
-            if active_process is None or active_process.poll() is not None:
-                code = active_process.returncode if active_process else 0
-                return jsonify({"text": "", "done": True, "code": code})
-            return jsonify({"text": "", "done": False})
-        text = "".join(output_buffer)
-        output_buffer = []
-        return jsonify({"text": text, "replace": False, "done": False})
-
+    # Resto del diseño anterior: la consola real está en /api/console/stream.
+    status = runtime.status()
+    if status["running"]:
+        return jsonify({"text": "", "done": False})
+    return jsonify({"text": "", "done": True, "code": runtime.last_code()})
 
 @app.route("/api/run", methods=["POST"])
 def run_script():
-    global active_process
-    global active_script
+    data = request.get_json(force=True) or {}
+    script_name = data.get("script")
+    script_path = get_script_for_name(script_name)
 
-    try:
-        data = request.get_json(force=True) or {}
-        script_name = data.get("script")
+    if script_path is None or not script_path.exists():
+        return jsonify({"status": "error", "error": t("Script not found: {name}", name=script_name)}), 404
 
-        script_path = get_script_for_name(script_name)
-
-        if script_path is None or not script_path.exists():
-            return jsonify({
-                "status": "error",
-                "error": t("Script not found: {name}", name=script_name)
-            }), 404
-
-        with process_lock:
-            if active_process is not None and active_process.poll() is None:
-                return jsonify({
-                    "status": "error",
-                    "error": t("Process already running: {name}", name=active_script)
-                }), 409
-
-            command = [
-                sys.executable,
-                "-u",
-                str(script_path)
-            ]
-
-            creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
-
-            process = subprocess.Popen(
-                command,
-                cwd=str(BASE_DIR),
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                creationflags=creation_flags
-            )
-
-            active_process = process
-            active_script = script_name
-
-        def stream():
-            global active_process
-            global active_script
-
-            yield f"data: {json.dumps({'type': 'start', 'script': script_name}, ensure_ascii=False)}\n\n"
-
-            try:
-                if process.stdout is not None:
-                    for text, replace in read_console(process.stdout):
-                        yield f"data: {json.dumps({'type': 'output', 'text': text, 'replace': replace}, ensure_ascii=False)}\n\n"
-
-                return_code = process.wait()
-
-                yield (
-                    "data: "
-                    + json.dumps(
-                        {
-                            "type": "done",
-                            "script": script_name,
-                            "code": return_code
-                        },
-                        ensure_ascii=False
-                    )
-                    + "\n\n"
-                )
-
-            except GeneratorExit:
-                pass
-
-            finally:
-                with process_lock:
-                    if active_process is process:
-                        active_process = None
-                        active_script = None
-
-        return Response(
-            stream(),
-            mimetype="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "X-Accel-Buffering": "no"
-            }
-        )
-
-    except Exception as exc:
-        with process_lock:
-            active_process = None
-            active_script = None
-
-        return jsonify({
-            "status": "error",
-            "error": str(exc)
-        }), 500
+    ok, error = runtime.start(script_name, script_path)
+    if not ok:
+        return jsonify({"status": "error", "error": error}), 409
+    return jsonify({"status": "ok", "script": script_name})
 
 @app.route("/api/stop", methods=["POST"])
 def stop_script():
-    global active_process
-    global active_script
-    with process_lock:
-        process = active_process
-        script = active_script
-    if process is None or process.poll() is not None:
-        with process_lock:
-            active_process = None
-            active_script = None
-        return jsonify({"status": "not_running"})
-    try:
-        if os.name == "nt":
-            process.send_signal(signal.CTRL_BREAK_EVENT)
-        else:
-            process.send_signal(signal.SIGINT)
-        return jsonify({"status": "terminating", "script": script})
-    except Exception as exc:
-        try:
-            process.terminate()
-        except Exception:
-            pass
-        return jsonify({"status": "terminated", "script": script})
+    return jsonify(runtime.stop())
 
-
-# =============================================================================
-# PREVIEWS & DATASET API
-# =============================================================================
 @app.route("/api/previews", methods=["GET"])
 def get_previews():
     output_dir = get_train_output_dir()
@@ -2327,6 +2200,7 @@ def open_browser():
 
 i18n.register(app)
 file_transfer.register(app, get_dataset_dir, get_train_output_dir, DATASET_EXTS)
+runtime.register(app)
 
 
 if __name__ == "__main__":

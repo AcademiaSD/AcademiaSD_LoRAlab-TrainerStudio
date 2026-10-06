@@ -1047,5 +1047,13 @@
   "LoKr factor: how each layer is split. Higher = smaller file and less capacity; lower = more capacity. 16 is the usual value; try 8 if the LoKr learns too little.": "Facteur LoKr : la façon dont chaque couche est découpée. Plus haut = fichier plus petit et moins de capacité ; plus bas = plus de capacité. 16 est la valeur habituelle ; essaie 8 si le LoKr apprend trop peu.",
   "Factor": "Facteur",
   "Resuming with the checkpoint's method: {m} (settings ask for {m2}; it applies to new trainings).": "Reprise avec la méthode du checkpoint : {m} (les réglages demandent {m2} ; cela s'applique aux nouveaux entraînements).",
-  "Resuming with the checkpoint's LoKr: {n} layers, rank {r}, alpha {a}, factor {f} (settings ask for {n2} layers, rank {r2}, alpha {a2}, factor {f2}; they apply to new trainings).": "Reprise avec le LoKr du checkpoint : {n} couches, rank {r}, alpha {a}, facteur {f} (les réglages demandent {n2} couches, rank {r2}, alpha {a2}, facteur {f2} ; ils s'appliquent aux nouveaux entraînements)."
+  "Resuming with the checkpoint's LoKr: {n} layers, rank {r}, alpha {a}, factor {f} (settings ask for {n2} layers, rank {r2}, alpha {a2}, factor {f2}; they apply to new trainings).": "Reprise avec le LoKr du checkpoint : {n} couches, rank {r}, alpha {a}, facteur {f} (les réglages demandent {n2} couches, rank {r2}, alpha {a2}, facteur {f2} ; ils s'appliquent aux nouveaux entraînements).",
+  "Continue": "Continuer",
+  "Delete": "Supprimer",
+  "Uploaded": "Téléversé",
+  "Uploading {i}/{n}": "Téléversement {i}/{n}",
+  "Retry failed files": "Réessayer les fichiers en échec",
+  "{ok} uploaded, {n} failed. Use Retry failed.": "{ok} téléversés, {n} en échec. Utilisez « Réessayer les fichiers en échec ».",
+  "No log yet.": "Pas encore de journal.",
+  "Download console log": "Télécharger le journal de la console"
 }

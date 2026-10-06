@@ -55,32 +55,64 @@ def register(app, get_dataset_dir, get_output_dir, dataset_exts):
     def file_transfer_js():
         return send_from_directory(str(GUI_DIR), "file_transfer.js")
 
+    @app.route("/notify.js")
+    def notify_js():
+        return send_from_directory(str(GUI_DIR), "notify.js")
+
     @app.route("/api/upload-dataset", methods=["POST"])
     def upload_dataset():
         folder = get_dataset_dir()
         folder.mkdir(parents=True, exist_ok=True)
-        saved, skipped = 0, []
+        saved, skipped, failed = [], [], []
+
+        def save_stream(src, dest, name):
+            try:
+                with open(dest, "wb") as out:
+                    while chunk := src.read(1 << 20):
+                        out.write(chunk)
+                saved.append(dest.name)
+            except OSError as exc:
+                failed.append({"name": name, "error": str(exc)})
+
         for item in request.files.getlist("files"):
-            if item.filename.lower().endswith(".zip"):
-                with zipfile.ZipFile(item.stream) as z:
-                    for info in z.infolist():
-                        dest = None if info.is_dir() or "__MACOSX" in info.filename else _target(folder, info.filename)
-                        if dest is None or dest.suffix.lower() not in allowed:
-                            if not info.is_dir():
+            name = item.filename or ""
+            if name.lower().endswith(".zip"):
+                try:
+                    with zipfile.ZipFile(item.stream) as z:
+                        for info in z.infolist():
+                            if info.is_dir() or "__MACOSX" in info.filename:
+                                continue
+                            dest = _target(folder, info.filename)
+                            if dest is None or dest.suffix.lower() not in allowed:
                                 skipped.append(info.filename)
-                            continue
-                        with z.open(info) as src, open(dest, "wb") as out:
-                            while chunk := src.read(1 << 20):
-                                out.write(chunk)
-                        saved += 1
+                                continue
+                            try:
+                                with z.open(info) as src:
+                                    save_stream(src, dest, info.filename)
+                            except OSError as exc:
+                                failed.append({"name": info.filename, "error": str(exc)})
+                except (zipfile.BadZipFile, OSError) as exc:
+                    failed.append({"name": name, "error": str(exc)})
                 continue
-            dest = _target(folder, item.filename)
+
+            dest = _target(folder, name)
             if dest is None or dest.suffix.lower() not in allowed:
-                skipped.append(item.filename)
+                skipped.append(name)
                 continue
-            item.save(dest)
-            saved += 1
-        return jsonify({"status": "ok", "saved": saved, "skipped": skipped[:50], "path": str(folder)})
+            try:
+                item.save(dest)
+                saved.append(dest.name)
+            except OSError as exc:
+                failed.append({"name": name, "error": str(exc)})
+
+        return jsonify({
+            "status": "ok" if not failed else "partial",
+            "saved": len(saved),
+            "saved_names": saved,
+            "skipped": skipped[:50],
+            "failed": failed[:50],
+            "path": str(folder),
+        })
 
     def download_name(f):
         # Solo cambia el nombre de los LoRAs entrenados con rsLoRA, LoRA+ o LoKr.
