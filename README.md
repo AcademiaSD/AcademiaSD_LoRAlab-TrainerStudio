@@ -151,6 +151,22 @@ Also in every trainer:
 
 ---
 
+## 🎛️ LoRA options: rsLoRA, LoRA+ and LoKr
+
+Under **LoRA Rank / Alpha**, the trainers have extra checkboxes. They change **how** the LoRA learns, so they are fixed for the whole training (to change them, *Delete Training* and start again; the pre-cache is reused).
+
+| Option | What it does | Trainers |
+| :--- | :--- | :--- |
+| **rsLoRA** | Scales the LoRA by `alpha/√rank` instead of `alpha/rank`, so high ranks keep learning. Ticking it lowers alpha to keep the same strength. | Z-Image, FLUX.2 Klein 9B, Qwen-Image 2.1, Krea 2, Anima, Ideogram 4, SDXL |
+| **LoRA+** | The `B` matrix of every layer learns 16× faster than `A`: usually the same quality in fewer steps. Lower the LR if it burns early. | same as rsLoRA |
+| **LoKr** + **Factor** | Replaces LoRA with a Kronecker product (LyCORIS). Much smaller files (~3 MB instead of ~40 MB at rank 8), good for characters with small datasets, more sensitive to the LR. rsLoRA and LoRA+ turn off. | Z-Image, FLUX.2 Klein 9B, Qwen-Image 2.1, Krea 2, Anima |
+
+- The exported file is a **standard LoRA / LyCORIS file** that ComfyUI and Forge load as usual (with rsLoRA, the alpha is converted so it acts exactly as trained).
+- **Send to Models** and **⬇ Download LoRA** add **`_rs`**, **`_plus`** or **`_lokr`** to the name, taken from the file's own metadata, so you always know how it was trained. The *Final LoRA Filename* field shows the suffix as you tick the boxes.
+- No extra VRAM: LoKr never builds the full weight matrix, and the other two only change the scaling and the optimizer.
+
+---
+
 ## 🌍 Languages
 
 The launcher, every trainer interface and the console messages are available in **English, Español, Deutsch, Français, Português, Italiano, 日本語 and 한국어**. English is the default.
@@ -441,7 +457,7 @@ AcademiaSD_LoRAlab-TrainerStudio/
 ├── Install_LoRAlab-TrainerStudio.bat, Install_Triton&SageAtten220.bat (and their .sh)
 ├── requirements.txt                  # Dependencies, for your own environment (LORALAB_PYTHON)
 ├── code/                             # Run_LoRAlab-<Model>.bat / .sh
-├── scripts/                          # launcher.py, server_<model>.py, 0_caption / 1_pre_cache / 2_train_lora, remote_access.py, file_transfer.py, i18n.py, refmod.py, melband/
+├── scripts/                          # launcher.py, server_<model>.py, 0_caption / 1_pre_cache / 2_train_lora, remote_access.py, file_transfer.py, i18n.py, lora_options.py, refmod.py, melband/
 ├── GUI/                              # launcher.html, launcher.json, trainer_ui_<model>.html, i18n.js
 │   └── locales/                      # Translations: <language>.json (English is the built-in text)
 ├── docs/                             # Technical notes per trainer
@@ -493,6 +509,8 @@ Code adapted or copied from other projects, and the work it builds on:
 | [BS-RoFormer](https://github.com/lucidrains/BS-RoFormer) by lucidrains | Architecture the Mel-Band RoFormer code derives from | MIT |
 | [librosa](https://github.com/librosa/librosa) | Mel filter bank reimplemented in `scripts/melband/mel_converter.py` | ISC |
 | [ai-toolkit](https://github.com/ostris/ai-toolkit) by ostris | Reference for the MiniMax H3 LoRA key layout and the caption text-encoder allowlist | MIT |
+| [LyCORIS](https://github.com/KohakuBlueleaf/LyCORIS) by KohakuBlueleaf | The LoKr method in `scripts/lora_options.py`: Kronecker factorization, initialization and `lokr_*` key layout (reimplemented for NF4 layers) | Apache-2.0 |
+| [rsLoRA](https://arxiv.org/abs/2312.03732) (Kalajdzievski) and [LoRA+](https://arxiv.org/abs/2402.12354) (Hayou, Ghosh, Yu) | The `alpha/√rank` scaling and the separate learning rate for `lora_B` | papers |
 | [kohya-ss sd-scripts](https://github.com/kohya-ss/sd-scripts) | `ss_*` LoRA metadata convention, SDXL LoRA key format and 75-token caption chunking | Apache-2.0 |
 
 Models and LoRAs downloaded at run time (not part of this repository): MelBandRoFormer weights by [Kijai](https://huggingface.co/Kijai/MelBandRoFormer_comfy), the Klein 9B turbo preview LoRA by [kalle07](https://huggingface.co/kalle07/FLUX.2-klein-9B-turbo-lora-set), the Qwen-Image 2.1 turbo LoRA by [Viggle](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo), Z-Image-Fun-Lora-Distill by [Alibaba PAI](https://huggingface.co/alibaba-pai/Z-Image-Fun-Lora-Distill), and the ungated Ideogram 4 NF4 mirror by [Unsloth](https://huggingface.co/unsloth/ideogram-4-nf4-diffusers). Thanks to all of them.

@@ -30,6 +30,7 @@ from peft import LoraConfig, get_peft_model, get_peft_model_state_dict, set_peft
 from safetensors import safe_open
 from safetensors.torch import save_file, load
 from i18n import t
+import lora_options
 
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
 STEP_WORD = t("Step")
@@ -51,6 +52,11 @@ DEFAULTS = {
     "warmup_steps": 100,
     "lora_rank": 16,
     "lora_alpha": 16,
+    "use_rslora": False,
+    "use_loraplus": False,
+    "loraplus_ratio": 16.0,
+    "use_lokr": False,
+    "lokr_factor": 16,
     "lora_targets": "blocks",
     "precision": "bf16",
     "weight_decay": 0.0,
@@ -89,6 +95,16 @@ LORA_ALPHA        = cfg.get("lora_alpha",        DEFAULTS["lora_alpha"])
 LORA_TARGETS      = "all" if cfg.get("lora_targets", DEFAULTS["lora_targets"]) == "all" else "blocks"
 # NF4: las capas lineales de los bloques transformer en 4 bits al cargar (para GPUs de portátil de 4-6 GB).
 PRECISION         = "nf4" if cfg.get("precision", DEFAULTS["precision"]) == "nf4" else "bf16"
+# rsLoRA escala el LoRA por alpha/√rank en vez de alpha/rank; LoRA+ da a lora_B un LR ratio veces mayor.
+# Las dos cambian cómo aprende, no el formato: el LoRA exportado es estándar (ver export_alpha).
+# LoKr (LyCORIS) sustituye a LoRA: cada capa aprende w1 ⊗ (w2_a·w2_b); con él no se usan las otras dos.
+USE_RSLORA        = bool(cfg.get("use_rslora",   DEFAULTS["use_rslora"]))
+USE_LORAPLUS      = bool(cfg.get("use_loraplus", DEFAULTS["use_loraplus"]))
+LORAPLUS_RATIO    = float(cfg.get("loraplus_ratio", DEFAULTS["loraplus_ratio"]))
+USE_LOKR          = False  # LoKr no está disponible en este entrenador
+LOKR_FACTOR       = DEFAULTS["lokr_factor"]
+if USE_LOKR:
+    USE_RSLORA = USE_LORAPLUS = False
 WEIGHT_DECAY      = cfg.get("weight_decay",      DEFAULTS["weight_decay"])
 MAX_GRAD_NORM     = cfg.get("max_grad_norm",     DEFAULTS["max_grad_norm"])
 MIN_SNR_GAMMA     = cfg.get("min_snr_gamma",     DEFAULTS["min_snr_gamma"])
@@ -124,6 +140,8 @@ print(f"  {t('Output Dir'):<22}: {OUTPUT_DIR}")
 print(f"  {t('Total Steps'):<22}: {TOTAL_STEPS}")
 print(f"  {t('Learning Rate'):<22}: {LR}")
 print(f"  {'LoRA Rank/Alpha':<22}: {LORA_RANK}/{LORA_ALPHA}")
+print(f"  {'rsLoRA / LoRA+':<22}: {'on' if USE_RSLORA else 'off'} / {f'x{LORAPLUS_RATIO:g}' if USE_LORAPLUS else 'off'}")
+print(f"  {'LoKr':<22}: {f'factor {LOKR_FACTOR}' if USE_LOKR else 'off'}")
 print(f"  {t('LoRA Targets'):<22}: {LORA_TARGETS}")
 print(f"  {t('Precision'):<22}: {PRECISION.upper()}")
 print(f"  {'Batch / Grad Accum':<22}: {BATCH_SIZE}/{GRAD_ACCUM_STEPS}")
@@ -177,9 +195,9 @@ def build_lora_metadata(step):
         "trained_with": "AcademiaSD LoRAlab SDXL",
         "ss_sd_model_name": MODEL["name"],
         "ss_base_model_version": "sdxl_base_v1-0",
-        "ss_network_module": "networks.lora",
+        "ss_network_module": "lycoris.kohya" if USE_LOKR else "networks.lora",
         "ss_network_dim": LORA_RANK,
-        "ss_network_alpha": LORA_ALPHA,
+        "ss_network_alpha": export_alpha(),
         "lora_targets": LORA_TARGETS,
         "ss_learning_rate": LR,
         "ss_lr_scheduler": "cosine_with_warmup",
@@ -193,6 +211,19 @@ def build_lora_metadata(step):
         "ss_mixed_precision": "bf16",
         "precision": PRECISION,
     }
+
+    # La GUI lee estas claves al exportar o descargar para poner el sufijo _rs / _plus / _lokr al nombre.
+    if USE_RSLORA:
+        meta["rslora"] = "true"
+        meta["rslora_train_alpha"] = LORA_ALPHA
+    if USE_LORAPLUS:
+        meta["loraplus_ratio"] = LORAPLUS_RATIO
+    if USE_RSLORA or USE_LORAPLUS:
+        meta["ss_network_args"] = json.dumps({"rslora": USE_RSLORA,
+                                              "loraplus_lr_ratio": LORAPLUS_RATIO if USE_LORAPLUS else None})
+    if USE_LOKR:
+        meta["lokr_factor"] = LOKR_FACTOR
+        meta["ss_network_args"] = json.dumps({"algo": "lokr", "factor": LOKR_FACTOR})
 
     trigger = TRIGGER_WORD.strip()
     if trigger:
@@ -213,6 +244,10 @@ def build_lora_metadata(step):
     return {k: str(v) for k, v in meta.items()}
 
 
+def export_alpha():
+    return lora_options.export_alpha(LORA_ALPHA, LORA_RANK, USE_RSLORA)
+
+
 def _export_lora(model, path, step):
     """
     Formato kohya (lora_unet_<capa>.lora_down / lora_up / alpha), el estándar de SDXL: lo cargan
@@ -223,7 +258,7 @@ def _export_lora(model, path, step):
         name, part = k.replace("base_model.model.", "").rsplit(".lora_", 1)
         key = "lora_unet_" + name.replace(".", "_")
         clean[f"{key}.lora_{'down' if part.startswith('A') else 'up'}.weight"] = v.to(torch.bfloat16).cpu().contiguous()
-        clean[f"{key}.alpha"] = torch.tensor(float(LORA_ALPHA))
+        clean[f"{key}.alpha"] = torch.tensor(float(export_alpha()))
     save_file(clean, path, metadata=build_lora_metadata(step))
 
 
@@ -410,7 +445,7 @@ def lora_target_names(unet):
 
 
 def train_sdxl():
-    global LORA_RANK, LORA_ALPHA
+    global LORA_RANK, LORA_ALPHA, USE_RSLORA, USE_LORAPLUS, LORAPLUS_RATIO, USE_LOKR, LOKR_FACTOR
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.benchmark = True
 
@@ -435,8 +470,30 @@ def train_sdxl():
     target_modules = lora_target_names(unet)
     print(t("Target LoRA layers: {n} ({kind})", n=len(target_modules), kind=LORA_TARGETS))
 
-    resume_weights = os.path.join(RESUME_DIR, "adapter_model.safetensors")
-    if os.path.exists(STEP_FILE) and os.path.exists(resume_weights):
+    # El checkpoint dice además si era LoRA o LoKr: se sigue con el mismo método.
+    lora_weights = os.path.join(RESUME_DIR, "adapter_model.safetensors")
+    lokr_weights = os.path.join(RESUME_DIR, lora_options.LOKR_WEIGHTS)
+    if os.path.exists(STEP_FILE) and (os.path.exists(lora_weights) or os.path.exists(lokr_weights)):
+        saved_lokr = not os.path.exists(lora_weights)
+        if saved_lokr != USE_LOKR:
+            print("\n[!] " + t("Resuming with the checkpoint's method: {m} (settings ask for {m2}; it applies to new trainings).",
+                              m="LoKr" if saved_lokr else "LoRA", m2="LoKr" if USE_LOKR else "LoRA"))
+        USE_LOKR = saved_lokr
+    resume_weights = lokr_weights if USE_LOKR else lora_weights
+    if os.path.exists(STEP_FILE) and os.path.exists(resume_weights) and USE_LOKR:
+        with safe_open(resume_weights, framework="pt", device="cpu") as f:
+            saved_targets = sorted({k.rsplit(".", 1)[0] for k in f.keys()})
+        with open(os.path.join(RESUME_DIR, lora_options.LOKR_CONFIG), "r", encoding="utf-8") as f:
+            saved_cfg = json.load(f)
+        saved = (len(saved_targets), saved_cfg["r"], saved_cfg["lora_alpha"])
+        if saved != (len(target_modules), LORA_RANK, LORA_ALPHA) or saved_cfg["lokr_factor"] != LOKR_FACTOR:
+            print("\n[!] " + t("Resuming with the checkpoint's LoKr: {n} layers, rank {r}, alpha {a}, factor {f} "
+                              "(settings ask for {n2} layers, rank {r2}, alpha {a2}, factor {f2}; they apply to new trainings).",
+                              n=saved[0], r=saved[1], a=saved[2], f=saved_cfg["lokr_factor"],
+                              n2=len(target_modules), r2=LORA_RANK, a2=LORA_ALPHA, f2=LOKR_FACTOR))
+        target_modules, LORA_RANK, LORA_ALPHA = saved_targets, saved[1], saved[2]
+        LOKR_FACTOR = saved_cfg["lokr_factor"]
+    elif os.path.exists(STEP_FILE) and os.path.exists(resume_weights):
         with safe_open(resume_weights, framework="pt", device="cpu") as f:
             saved_targets = sorted({k.split(".lora_")[0].replace("base_model.model.", "", 1) for k in f.keys()})
         with open(os.path.join(RESUME_DIR, "adapter_config.json"), "r", encoding="utf-8") as f:
@@ -447,17 +504,43 @@ def train_sdxl():
                               "(settings ask for {n2} layers, rank {r2}, alpha {a2}; they apply to new trainings).",
                               n=saved[0], r=saved[1], a=saved[2], n2=len(target_modules), r2=LORA_RANK, a2=LORA_ALPHA))
         target_modules, LORA_RANK, LORA_ALPHA = saved_targets, saved[1], saved[2]
+        # rsLoRA lo guarda PEFT en adapter_config.json; LoRA+ va en lora_options.json. Un checkpoint
+        # anterior a estas opciones no tiene ninguno de los dos: se entrenó sin ellas.
+        opts_file = os.path.join(RESUME_DIR, "lora_options.json")
+        opts = {}
+        if os.path.exists(opts_file):
+            with open(opts_file, "r", encoding="utf-8") as f:
+                opts = json.load(f)
+        saved_opts = (bool(saved_cfg.get("use_rslora", False)), bool(opts.get("use_loraplus", False)),
+                      float(opts.get("loraplus_ratio", LORAPLUS_RATIO)))
+        if saved_opts[:2] != (USE_RSLORA, USE_LORAPLUS):
+            print("\n[!] " + t("Resuming with the checkpoint's options: rsLoRA {a}, LoRA+ {b} "
+                              "(settings ask for rsLoRA {a2}, LoRA+ {b2}; they apply to new trainings).",
+                              a=saved_opts[0], b=saved_opts[1], a2=USE_RSLORA, b2=USE_LORAPLUS))
+        USE_RSLORA, USE_LORAPLUS, LORAPLUS_RATIO = saved_opts
 
-    lora_config = LoraConfig(r=LORA_RANK, lora_alpha=LORA_ALPHA, lora_dropout=0.0,
-                             target_modules=target_modules, init_lora_weights=True)
-    model = get_peft_model(unet, lora_config)
+    if USE_LOKR:
+        USE_RSLORA = USE_LORAPLUS = False
+        model = lora_options.LoKrModel(unet, target_modules, LORA_RANK, LORA_ALPHA, LOKR_FACTOR)
+    else:
+        lora_config = LoraConfig(r=LORA_RANK, lora_alpha=LORA_ALPHA, lora_dropout=0.0,
+                                 target_modules=target_modules, init_lora_weights=True, use_rslora=USE_RSLORA)
+        model = get_peft_model(unet, lora_config)
     for p in model.parameters():
         if p.requires_grad:
             p.data = p.data.float()
     model.print_trainable_parameters()
 
     trainable = [p for p in model.parameters() if p.requires_grad]
-    optimizer = torch.optim.AdamW(trainable, lr=LR, weight_decay=WEIGHT_DECAY)
+    # LoRA+: lora_B en su propio grupo, con el LR multiplicado (lr_mult se aplica en cada paso).
+    if USE_LORAPLUS:
+        lora_b = [p for n, p in model.named_parameters() if p.requires_grad and "lora_B" in n]
+        lora_a = [p for n, p in model.named_parameters() if p.requires_grad and "lora_B" not in n]
+        optimizer = torch.optim.AdamW([{"params": lora_a, "lr_mult": 1.0},
+                                       {"params": lora_b, "lr_mult": LORAPLUS_RATIO}],
+                                      lr=LR, weight_decay=WEIGHT_DECAY)
+    else:
+        optimizer = torch.optim.AdamW(trainable, lr=LR, weight_decay=WEIGHT_DECAY)
 
     def lr_at(step):
         if step < WARMUP_STEPS:
@@ -473,7 +556,11 @@ def train_sdxl():
             with open(STEP_FILE, "r", encoding="utf-8") as f:
                 start_step = int(f.read().strip())
             with open(resume_weights, "rb") as f:
-                set_peft_model_state_dict(model, {k: v.float() for k, v in load(f.read()).items()})
+                saved_sd = load(f.read())
+            if USE_LOKR:
+                model.load_lokr_state_dict(saved_sd)
+            else:
+                set_peft_model_state_dict(model, {k: v.float() for k, v in saved_sd.items()})
             optimizer.load_state_dict(torch.load(OPT_FILE, weights_only=False))
             print(t("Resuming training from step {n}...", n=start_step))
         except Exception as e:
@@ -489,6 +576,12 @@ def train_sdxl():
         print("\n" + t("Saving checkpoint state at step {n}...", n=current_s))
         os.makedirs(RESUME_DIR, exist_ok=True)
         model.save_pretrained(RESUME_DIR)
+        # Solo puede quedar uno: los pesos del otro método serían de un entrenamiento anterior.
+        stale = os.path.join(RESUME_DIR, "adapter_model.safetensors" if USE_LOKR else lora_options.LOKR_WEIGHTS)
+        if os.path.exists(stale):
+            os.remove(stale)
+        with open(os.path.join(RESUME_DIR, "lora_options.json"), "w", encoding="utf-8") as f:
+            json.dump({"use_loraplus": USE_LORAPLUS, "loraplus_ratio": LORAPLUS_RATIO}, f)
         torch.save(optimizer.state_dict(), OPT_FILE)
         with open(STEP_FILE, "w", encoding="utf-8") as f:
             f.write(str(current_s))
@@ -598,7 +691,7 @@ def train_sdxl():
             if step % GRAD_ACCUM_STEPS == 0:
                 grad_norm = torch.nn.utils.clip_grad_norm_(trainable, MAX_GRAD_NORM).item()
                 for gparam in optimizer.param_groups:
-                    gparam["lr"] = lr_at(step)
+                    gparam["lr"] = lr_at(step) * gparam.get("lr_mult", 1.0)
                 optimizer.step()
                 optimizer.zero_grad(set_to_none=True)
 
