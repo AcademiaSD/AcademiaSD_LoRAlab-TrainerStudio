@@ -54,6 +54,13 @@
       "run": "Run_LoRAlab-Klein9B.bat"
     },
     {
+      "id": "ernie",
+      "name": "ERNIE-Image",
+      "description": "Text-to-image LoRAs",
+      "image": "assets/ernie/portada.jpg",
+      "run": "Run_LoRAlab-Ernie.bat"
+    },
+    {
       "id": "ideogram4",
       "name": "Ideogram 4",
       "description": "Image LoRAs",

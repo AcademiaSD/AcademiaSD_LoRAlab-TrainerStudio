@@ -1,0 +1,1820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AcademiaSD ERNIE-Image LoRAlab</title>
+    <script src="/i18n.js"></script>
+    <script src="/notify.js"></script>
+
+    <!-- Favicon de la pestaña del navegador -->
+    <link rel="icon" type="image/png" href="/assets/logo_128.png">
+    <link rel="shortcut icon" type="image/png" href="/assets/logo_128.png">
+
+    <style>
+        #edit_image_container, #preview_edit_image, #train_use_turbo { display:none !important; }
+        div.form-group:has(#train_use_turbo), div.form-group:has(#lora_type) { display:none !important; }
+        :root {
+            --bg-dark: #0f172a;
+            --panel-bg: #1e293b;
+            --panel-border: #334155;
+            --accent: #6366f1;
+            --accent-hover: #4f46e5;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: var(--bg-dark); color: var(--text-main); display: flex; flex-direction: column; min-height: 100vh; padding: 20px; }
+
+        header { display: flex; flex-direction: column; background: var(--panel-bg); padding: 18px 25px; border-radius: 12px; border: 1px solid var(--panel-border); margin-bottom: 20px; gap: 15px; }
+
+        /* Banner Superior Panorámico */
+        .banner-container { width: 100%; max-height: 140px; overflow: hidden; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: #020617; border: 1px solid var(--panel-border); }
+        .banner-img { width: 100%; height: 100%; max-height: 140px; object-fit: contain; display: block; }
+
+        .header-content { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; width: 100%; }
+        .logo-title { display: flex; align-items: center; gap: 15px; }
+        .logo-title h1 { font-size: 1.5rem; font-weight: 800; color: #fff; letter-spacing: -0.5px; }
+        .logo-title span { font-size: 0.85rem; color: var(--text-muted); display: block; }
+
+        /* Social Links */
+        .social-links { display: flex; gap: 8px; flex-wrap: wrap; }
+        .social-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; text-decoration: none; color: #fff; background: #0f172a; border: 1px solid var(--panel-border); transition: background 0.2s, border-color 0.2s; }
+        .social-btn:hover { border-color: var(--accent); background: #1a2332; }
+        .btn-yt { color: #ff0000; }
+        .btn-x { color: #f8fafc; }
+        .btn-discord { color: #5865f2; }
+        .btn-kofi { color: #ff5e5b; }
+
+        /* Hardware Monitor Cards (RAM, VRAM, GPU Temp) */
+        .hardware-monitor { display: flex; gap: 12px; }
+        .hw-card { background: #0f172a; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--panel-border); min-width: 140px; }
+        .hw-card .label { font-size: 0.7rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
+        .hw-card .value { font-size: 0.95rem; font-weight: bold; margin: 3px 0; color: #38bdf8; }
+        .progress-bar-bg { width: 100%; height: 6px; background: #334155; border-radius: 3px; overflow: hidden; }
+        .progress-bar-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.5s ease, background-color 0.5s ease; }
+
+        .main-grid { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 20px; flex: 1; }
+
+        /* Ajustes en 2 columnas desde 1400 px (1080p al 100 % y al 125 %); por debajo, en una.
+           Cada columna se apila por su cuenta, sin depender de la altura de la otra.
+           Settings in 2 columns from 1400 px (1080p at 100 % and 125 %); below that, in one.
+           Each column stacks on its own, whatever the height of the other one. */
+        .sidebar { display: flex; flex-direction: column; gap: 20px; width: 440px; }
+        .side-group { display: contents; }
+        .side-col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+        .side-a { order: 1; }
+        .side-b { order: 2; }
+        .side-c { order: 3; }
+        .side-d { order: 4; }
+        @media (min-width: 1400px) {
+            /* Pre-Caché + Export | Training + Previews */
+            .sidebar { display: grid; grid-template-columns: repeat(2, clamp(370px, 21vw, 440px)); align-items: start; width: auto; }
+            .side-group { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+        }
+        .panel { background: var(--panel-bg); border-radius: 12px; border: 1px solid var(--panel-border); padding: 20px; }
+
+        /* Títulos desplegables / Collapsible Panels */
+        .panel-title { font-size: 1.05rem; font-weight: 600; margin-bottom: 12px; color: #f1f5f9; border-bottom: 1px solid var(--panel-border); padding-bottom: 8px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; transition: color 0.15s; }
+        .panel-title:hover { color: #38bdf8; }
+        .panel.collapsed .panel-title { margin-bottom: 0; border-bottom: none; padding-bottom: 0; }
+        .panel.collapsed .panel-body { display: none; }
+        .toggle-icon { font-size: 0.75rem; color: var(--text-muted); font-weight: bold; }
+
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px; font-weight: 500; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; background: #0f172a; border: 1px solid var(--panel-border); color: #fff; padding: 8px 12px; border-radius: 6px; font-size: 0.9rem; outline: none; }
+        .form-group input[readonly] { background: #1a2332; color: #94a3b8; cursor: not-allowed; border-style: dashed; }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--accent); }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+        .btn { padding: 9px 14px; border-radius: 6px; font-weight: 600; cursor: pointer; border: none; font-size: 0.88rem; transition: background 0.2s, transform 0.1s; display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; }
+        .btn-full { width: 100%; }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-success { background: var(--success); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-secondary { background: #334155; color: white; }
+        .btn-secondary:hover { background: #475569; }
+        .btn-warning { background: var(--warning); color: black; }
+        .btn-sm { padding: 4px 10px; font-size: 0.75rem; width: auto; }
+
+        .btn-row { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 10px !important; width: 100% !important; box-sizing: border-box !important; }
+
+        .btn-tall { display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; padding: 8px 6px !important; line-height: 1.25 !important; text-align: center !important; min-height: 50px !important; width: 100% !important; box-sizing: border-box !important; }
+        .btn-tall .main-text { font-size: 0.85rem; font-weight: 700; color: inherit; }
+        .btn-tall .sub-text { font-size: 0.72rem; font-weight: 500; opacity: 0.85; margin-top: 2px; }
+
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .console-container { display: flex; flex-direction: column; gap: 20px; }
+        .terminal { background: #020617; border-radius: 8px; border: 1px solid var(--panel-border); padding: 15px; font-family: 'Consolas', 'Courier New', monospace; font-size: 0.85rem; color: #38bdf8; overflow-y: auto; white-space: pre-wrap; word-break: break-all; height: 320px; }
+        .terminal-line { margin-bottom: 2px; line-height: 1.4; }
+        .terminal-line.term-success { color: #10b981; font-weight: bold; }
+        .terminal-line.term-warning { color: #f59e0b; font-weight: bold; }
+        .terminal-line.term-danger { color: #ef4444; font-weight: bold; }
+
+        .ds-toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; flex: 1 1 480px; justify-content: flex-end; }
+        .ds-title { flex-wrap: wrap; gap: 8px; }
+        .ds-title > span:first-child { white-space: nowrap; }
+        .ds-search { flex: 1; min-width: 150px; background: #0f172a; border: 1px solid var(--panel-border); color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 0.8rem; }
+        .ds-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; max-height: 380px; overflow-y: auto; padding-right: 5px; }
+        .ds-grid.compact { grid-template-columns: repeat(auto-fill, minmax(95px, 1fr)); }
+        .ds-grid.large { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+        .ds-grid.hidden { display: none; }
+        .ds-resizer { height: 11px; margin: 2px 0 -6px 0; cursor: ns-resize; display: flex; align-items: center; justify-content: center; border-radius: 4px; touch-action: none; }
+        .ds-resizer::before { content: ""; width: 46px; height: 3px; border-radius: 2px; background: var(--panel-border); transition: background .12s; }
+        .ds-resizer:hover::before, .ds-resizer.dragging::before { background: #38bdf8; }
+        .ds-grid.hidden + .ds-resizer { display: none; }
+        .ds-caption-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 0 10px 0; border-bottom: 1px solid var(--panel-border); margin-bottom: 10px; }
+        .ds-caption-prompt { flex: 1 1 100%; min-width: 260px; min-height: 76px; resize: vertical; line-height: 1.45; font-family: inherit; }
+        .ds-mode-select { flex: 0 0 auto; background: #0f172a; color: #fff; border: 1px solid var(--panel-border); border-radius: 6px; padding: 6px 8px; font-size: 0.8rem; }
+        .ds-inline-label { display: flex; align-items: center; gap: 5px; font-size: 0.74rem; color: var(--text-muted); white-space: nowrap; cursor: pointer; }
+        .ds-step-hint { font-size: 0.74rem; color: var(--text-muted); }
+        .ds-del { position: absolute; top: 6px; left: 6px; width: 22px; height: 22px; border: none; border-radius: 5px; background: rgba(15,23,42,0.82); color: #fca5a5; font-size: 0.82rem; line-height: 1; cursor: pointer; z-index: 3; opacity: 0; transition: opacity 0.15s, background 0.15s; }
+        .ds-card:hover .ds-del { opacity: 1; }
+        .ds-del:hover { background: var(--danger); color: #fff; }
+
+        .ds-card { background: #0f172a; border: 1px solid var(--panel-border); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; cursor: pointer; transition: transform 0.15s, border-color 0.15s; }
+        .ds-card:hover { transform: translateY(-2px); border-color: var(--accent); }
+
+        .img-wrapper { position: relative; width: 100%; height: 115px; background: #020617; }
+        .ds-grid.compact .img-wrapper { height: 75px; }
+        .ds-grid.large .img-wrapper { height: 165px; }
+        .img-wrapper img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+        .caption-dot { position: absolute; top: 6px; right: 6px; width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid #0f172a; box-shadow: 0 0 5px rgba(0,0,0,0.8); z-index: 2; }
+        .dot-green { background-color: var(--success); }
+        .dot-red { background-color: var(--danger); }
+
+        .img-filename-tag { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(2px); padding: 3px 6px; font-size: 0.68rem; color: #f8fafc; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-top: 1px solid rgba(255,255,255,0.05); }
+        .ds-card .caption { padding: 6px; font-size: 0.72rem; color: var(--text-muted); height: 40px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.2; background: #0f172a; }
+
+        /* Galería de Previsualizaciones (AMPLIADA A GRAN ALTURA) */
+        .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; max-height: 800px; overflow-y: auto; padding-right: 5px; }
+        .preview-card { position: relative; border-radius: 8px; overflow: hidden; border: 1px solid var(--panel-border); cursor: pointer; background: #0f172a; transition: transform 0.15s, border-color 0.15s; }
+        .preview-card:hover { transform: translateY(-2px); border-color: #38bdf8; }
+        .preview-card img { width: 100%; height: 280px; object-fit: cover; display: block; }
+        .preview-filename-tag { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(2px); padding: 6px 8px; font-size: 0.8rem; color: #38bdf8; font-weight: 600; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        .status-badge { font-size: 0.75rem; padding: 3px 8px; border-radius: 12px; font-weight: bold; text-transform: uppercase; }
+        .badge-idle { background: #334155; color: #cbd5e1; }
+        .badge-running { background: var(--success); color: #fff; }
+
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000; justify-content: center; align-items: center; padding: 20px; }
+        .modal.active { display: flex; }
+        .modal-content { background: var(--panel-bg); border-radius: 12px; border: 1px solid var(--panel-border); max-width: 800px; width: 100%; padding: 20px; display: flex; flex-direction: column; gap: 15px; max-height: 90vh; }
+        .modal-content img { max-height: 55vh; object-fit: contain; border-radius: 8px; }
+        .modal-content textarea { width: 100%; height: 90px; background: #0f172a; border: 1px solid var(--panel-border); color: #fff; padding: 10px; border-radius: 6px; resize: none; font-size: 0.9rem; }
+
+        .drive-selector { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+        .dir-list { max-height: 250px; overflow-y: auto; background: #0f172a; border: 1px solid var(--panel-border); border-radius: 6px; padding: 8px; margin-top: 6px; }
+        .dir-item { padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center; }
+        .dir-item:hover { background: #1e293b; color: var(--accent); }
+    </style>
+</head>
+<body>
+
+    <!-- Selector Oculto para Cargar Ficheros JSON -->
+    <input type="file" id="json_file_input" accept=".json" style="display:none;" onchange="handleJsonFileLoad(event)">
+
+    <header>
+        <!-- Banner de la cabecera -->
+        <div class="banner-container">
+            <img src="/assets/logo.jpg" alt="AcademiaSD ERNIE-Image LoRAlab" class="banner-img" onerror="this.src='/assets/logo.jpg'; this.onerror=null;">
+        </div>
+
+        <div class="header-content">
+            <div class="logo-title">
+                <div>
+                    <h1>AcademiaSD ERNIE-Image LoRAlab</h1>
+                    <span>Web GUI & Automation</span>
+                </div>
+            </div>
+
+            <!-- Redes Sociales / Social Links -->
+            <div class="social-links">
+                <a href="https://www.youtube.com/@Academia_SD" target="_blank" class="social-btn"><span class="btn-yt">▶</span> YouTube</a>
+                <a href="https://twitter.com/Academia_S_D" target="_blank" class="social-btn"><span class="btn-x">𝕏</span> X (Twitter)</a>
+                <a href="https://discord.gg/Syuaduy678" target="_blank" class="social-btn"><span class="btn-discord">💬</span> Discord</a>
+                <a href="https://ko-fi.com/academiasd" target="_blank" class="social-btn"><span class="btn-kofi">☕</span> Ko-Fi</a>
+            </div>
+
+            <!-- Hardware Monitor (RAM, VRAM, GPU Temp) -->
+            <div class="hardware-monitor">
+                <div class="hw-card">
+                    <div class="label">RAM Usage</div>
+                    <div class="value" id="ram-text">-- GB</div>
+                    <div class="progress-bar-bg"><div class="progress-bar-fill" id="ram-bar"></div></div>
+                </div>
+                <div class="hw-card">
+                    <div class="label">VRAM Usage</div>
+                    <div class="value" id="vram-text">-- GB</div>
+                    <div class="progress-bar-bg"><div class="progress-bar-fill" id="vram-bar" style="background:#38bdf8;"></div></div>
+                </div>
+                <div class="hw-card">
+                    <div class="label">GPU Temp</div>
+                    <div class="value" id="gpu-temp-text">-- °C</div>
+                    <div class="progress-bar-bg"><div class="progress-bar-fill" id="gpu-temp-bar" style="background:var(--success);"></div></div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="main-grid">
+        <!-- Sidebar: Settings -->
+        <div class="sidebar">
+         <div class="side-group">
+          <div class="side-col side-a">
+
+            <!-- 0. Hugging Face Token Panel (CERRADO POR DEFECTO) -->
+            <div class="panel collapsed">
+                <div class="panel-title" onclick="togglePanel(this)">
+                    <span>Hugging Face Token (Optional)</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="panel-body">
+                    <div class="form-group" style="margin-bottom: 8px;">
+                        <label>HF Token:</label>
+                        <input type="password" id="hf_token" value="" placeholder="hf_..." autocomplete="off">
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-full" onclick="saveHfToken()">
+                        Save HF Token
+                    </button>
+                </div>
+            </div>
+
+            <!-- 1. Pre-Cache Settings Panel (ABIERTO POR DEFECTO) -->
+            <div class="panel">
+                <div class="panel-title" onclick="togglePanel(this)">
+                    <span>1. Pre-Cache Settings</span>
+                    <span class="toggle-icon">▲</span>
+                </div>
+                <div class="panel-body">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Project Name:</label>
+                            <input type="text" id="project_name" value="" placeholder="e.g. cherry2" oninput="updateProjectPaths()">
+                        </div>
+                        <div class="form-group">
+                            <label>Trigger Word:</label>
+                            <input type="text" id="trigger_word" value="">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Dataset Path:</label>
+                        <div style="display:flex; gap:8px;">
+                            <input type="text" id="dataset_path" value="./dataset" onchange="datasetPathChanged()">
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="browseFolderNative('dataset')">Browse</button>
+                        </div>
+                    </div>
+                    <div style="display:none"><select id="lora_type"><option value="normal" selected>Normal</option></select></div>
+
+                    <div class="form-group">
+                        <label>Cache Folder (Auto):</label>
+                        <input type="text" id="precache_cache_dir" value="./cached_data_ernie" readonly title="Path generated automatically, for information">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Resolution (px²):</label>
+                        <select id="target_area_select" onchange="syncResolution(this.value)">
+                            <option value="262144" selected>512 x 512 (262,144 px²)</option>
+                            <option value="589824">768 x 768 (589,824 px²)</option>
+                            <option value="1048576">1024 x 1024 (1,048,576 px²)</option>
+                            <option value="custom">Custom</option>
+                        </select>
+                        <input type="number" id="precache_target_area" value="262144" style="margin-top:6px; display:none;">
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Multiple:</label>
+                            <select id="precache_multiple">
+                                <option value="16" selected>16</option>
+                                <option value="32">32</option>
+                                <option value="64">64</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Max Side:</label>
+                            <input type="number" id="precache_max_side" value="1536">
+                        </div>
+                    </div>
+
+                    <!-- Botones Load JSON y Save JSON -->
+                    <div class="btn-row" style="margin-top:12px;">
+                        <button type="button" class="btn btn-secondary btn-tall" onclick="triggerLoadJson('precache')">
+                            <span class="main-text">Load JSON</span>
+                        </button>
+                        <button type="button" class="btn btn-secondary btn-tall" onclick="savePrecacheSettings()">
+                            <span class="main-text">Save JSON</span>
+                        </button>
+                    </div>
+
+                    <button type="button" class="btn btn-primary btn-tall btn-full" id="btn-precache" onclick="runPrecache()" style="margin-top:8px;">
+                        <span class="main-text">Start Pre-Cache</span>
+                    </button>
+                    <button type="button" class="btn btn-danger btn-sm btn-full" onclick="deleteProjectData('precache')" style="margin-top:6px;"
+                            title="Empties this project's pre-cache folder (latents and embeddings). The dataset is NOT touched.">
+                        Delete Pre-Cache
+                    </button>
+                </div>
+            </div>
+
+          </div>
+
+          <div class="side-col side-d">
+            <!-- 3. Export to WebUI Models Panel (ABIERTO POR DEFECTO) -->
+            <div class="panel">
+                <div class="panel-title" onclick="togglePanel(this)">
+                    <span>3. Export to WebUI</span>
+                    <span class="toggle-icon">▲</span>
+                </div>
+
+                <div class="panel-body">
+                    <div class="form-group">
+                        <label>Final LoRA Filename (.safetensors):</label>
+                        <input type="text" id="export_final_name" value="ernie_lora.safetensors" placeholder="mi_lora_ernie.safetensors">
+                    </div>
+
+                    <div class="form-group">
+                        <label>UI LoRA Folder (ComfyUI / Forge / A1111):</label>
+                        <div style="display:flex; gap:8px;">
+                            <input type="text" id="export_models_dir" value="" placeholder="C:/ComfyUI/models/loras">
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="browseFolderNative('export')">Browse</button>
+                        </div>
+                        <button type="button" class="btn btn-secondary btn-sm btn-full" onclick="saveExportPath()" style="margin-top:6px;"
+                                title="Saves this folder for all the LoRAlab trainers: they all open with it filled in.">
+                            Save Path
+                        </button>
+                    </div>
+
+                    <button type="button" class="btn btn-warning btn-tall btn-full" onclick="sendToModels()" style="margin-top:5px;">
+                        <span class="main-text">🚀 Send to Models</span>
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm btn-full" onclick="ftDownload()" style="margin-top:6px;"
+                            title="Downloads the LoRA to the device you are browsing from (another PC, RunPod...).">
+                        ⬇ Download LoRA
+                    </button>
+                </div>
+            </div>
+          </div>
+         </div>
+
+         <div class="side-group">
+          <div class="side-col side-b">
+            <!-- 2. Training Settings Panel (ABIERTO POR DEFECTO) -->
+            <div class="panel">
+                <div class="panel-title" onclick="togglePanel(this)">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span>2. Training Settings</span>
+                        <span id="checkpoint-badge" style="font-size:0.75rem; color:#38bdf8;"></span>
+                    </div>
+                    <span class="toggle-icon">▲</span>
+                </div>
+
+                <div class="panel-body">
+                    <div class="form-group">
+                        <label>Output Dir (Auto):</label>
+                        <input type="text" id="train_output_dir" value="./ernie_lora_output" readonly title="Path generated automatically, for information">
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Total Steps:</label>
+                            <input type="number" id="train_total_steps" value="1000">
+                        </div>
+                        <div class="form-group">
+                            <label>Learning Rate:</label>
+                            <input type="text" id="train_lr" value="0.0003">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>LoRA Rank (R):</label>
+                            <input type="number" id="train_lora_rank" value="16">
+                        </div>
+                        <div class="form-group">
+                            <label>LoRA Alpha (A):</label>
+                            <input type="number" id="train_lora_alpha" value="16">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group" title="Rank-stabilized LoRA: scales the LoRA by alpha/√rank instead of alpha/rank, so higher ranks keep learning instead of fading out. Ticking it lowers alpha to keep the same strength; raise it for a stronger effect. The exported LoRA is a standard one (its alpha is converted) and Send to Models adds _rs to its name. Fixed for the whole training: to change it, start a new one.">
+                            <label style="display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer;" for="train_use_rslora">
+                                <input type="checkbox" id="train_use_rslora" onchange="toggleRsLora(this.checked)" style="width: 18px; height: 18px; cursor: pointer;">
+                                rsLoRA
+                            </label>
+                        </div>
+                        <div class="form-group" title="LoRA+: the B matrix of every layer learns 16 times faster than A. It usually reaches the same quality in fewer steps; if the training looks unstable or burns early, lower the learning rate. The exported file is a normal LoRA and Send to Models adds _plus to its name. Fixed for the whole training: to change it, start a new one.">
+                            <label style="display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer;" for="train_use_loraplus">
+                                <input type="checkbox" id="train_use_loraplus" onchange="updateFinalNameSuffix()" style="width: 18px; height: 18px; cursor: pointer;">
+                                LoRA+
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group" title="LoKr (LyCORIS): each layer learns a Kronecker product w1 ⊗ w2 instead of B·A. The file is far smaller (about 3 MB instead of 40 MB at rank 8) and it often works well for characters with small datasets, but it is more sensitive to the learning rate. Rank and alpha apply to w2. ComfyUI and Forge load it like any LoRA, and Send to Models adds _lokr to its name. rsLoRA and LoRA+ are for LoRA only and turn off. Fixed for the whole training: to change it, start a new one.">
+                            <label style="display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer;" for="train_use_lokr">
+                                <input type="checkbox" id="train_use_lokr" onchange="toggleLokr(this.checked)" style="width: 18px; height: 18px; cursor: pointer;">
+                                LoKr
+                            </label>
+                        </div>
+                        <div class="form-group" title="LoKr factor: how each layer is split. Higher = smaller file and less capacity; lower = more capacity. 16 is the usual value; try 8 if the LoKr learns too little.">
+                            <label style="display: flex; align-items: center; gap: 8px; margin: 0;">
+                                <span>Factor:</span>
+                                <input type="number" id="train_lokr_factor" value="16" min="2" step="1" disabled style="padding: 3px 8px; width: 80px;">
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>LoRA Targets:</label>
+                        <select id="train_lora_targets"
+                                title="ERNIE LoRAs target the attention and feed-forward linears in its 36 shared DiT blocks. The trainer applies LoRA to those blocks.">
+                            <option value="blocks" selected>Blocks: attention + MLP (recommended)</option>
+                            <option value="all">All linear layers</option>
+                        </select>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Batch Size:</label>
+                            <input type="number" id="train_batch_size" value="1">
+                        </div>
+                        <div class="form-group">
+                            <label>Grad Accum Steps:</label>
+                            <input type="number" id="train_grad_accum" value="4">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Save Every:</label>
+                            <input type="number" id="train_save_every" value="100">
+                        </div>
+                        <div class="form-group">
+                            <label>Seed (-1 or 0 = Random):</label>
+                            <input type="number" id="train_seed" value="42">
+                        </div>
+                    </div>
+
+                    <!-- Botones Load JSON y Save JSON -->
+                    <div class="btn-row" style="margin-top:12px;">
+                        <button type="button" class="btn btn-secondary btn-tall" onclick="triggerLoadJson('train')">
+                            <span class="main-text">Load JSON</span>
+                        </button>
+                        <button type="button" class="btn btn-secondary btn-tall" onclick="saveTrainSettings()">
+                            <span class="main-text">Save JSON</span>
+                        </button>
+                    </div>
+
+                    <!-- Botones Start/Resume y Stop -->
+                    <div class="btn-row" style="margin-top:8px;">
+                        <button type="button" class="btn btn-success btn-tall" id="btn-train" onclick="runTrain()">
+                            <span class="main-text">Start / Resume</span>
+                        </button>
+                        <button type="button" class="btn btn-danger btn-tall" id="btn-stop" onclick="stopScript()" disabled>
+                            <span class="main-text">Stop Training</span>
+                        </button>
+                    </div>
+                    <div id="encode-status" style="display:none; margin-top:8px; padding:8px 10px; border:1px solid var(--warning); border-radius:6px; color:var(--warning); font-size:0.85rem;"></div>
+                    <button type="button" class="btn btn-danger btn-sm btn-full" onclick="deleteProjectData('training')" style="margin-top:6px;"
+                            title="Empties this project's output folder: LoRA checkpoints, resume point and previews. The pre-cache and the dataset are NOT touched.">
+                        Delete Training
+                    </button>
+                </div>
+            </div>
+          </div>
+
+          <div class="side-col side-c">
+            <!-- 2b. Previews del entrenamiento (CERRADO POR DEFECTO): se guardan en el mismo train_settings.json -->
+            <div class="panel collapsed">
+                <div class="panel-title" onclick="togglePanel(this)">
+                    <span>2b. Training Previews</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+
+                <div class="panel-body">
+                    <div style="display:none"><input type="checkbox" id="train_use_turbo"><input id="train_turbo_strength" value="1"><div id="edit_image_container"></div><input id="preview_edit_image" value=""></div>
+<div class="form-row">
+                        <div class="form-group">
+                            <label>Preview Every:</label>
+                            <input type="number" id="train_preview_every" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Caption Mode:</label>
+                            <select id="train_preview_caption_mode" onchange="toggleCaptionMode(this.value)">
+                                <option value="first">First</option>
+                                <option value="random">Random</option>
+                                <option value="rotate4">Rotate 4</option>
+                                <option value="custom">Custom prompt</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- CAMPO PROMPT MANUAL (SE MUESTRA SOLO EN MODO CUSTOM) -->
+                    <div class="form-group" id="custom_prompt_container" style="display:none; margin-top: 4px;">
+                        <label style="color:#38bdf8; font-weight:600;">Custom Preview Prompt:</label>
+                        <textarea id="train_preview_custom_prompt" rows="2" placeholder="Write your custom prompt for the preview here..."></textarea>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Preview Steps:</label>
+                            <input type="number" id="train_preview_steps" value="28">
+                        </div>
+                        <div class="form-group">
+                            <label>Preview CFG:</label>
+                            <input type="number" step="0.1" id="train_preview_cfg" value="4">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label title="Training = the size of the image in the pre-cache. 768 / 1024 keep more detail but need more VRAM; 512 is the recommended starting point for ERNIE-Image.">Preview Size:</label>
+                        <select id="train_preview_size">
+                            <option value="0" selected>Training</option>
+                            <option value="768">768 x 768 (area)</option>
+                            <option value="1024">1024 x 1024 (area)</option>
+                        </select>
+                    </div>
+
+                    <!-- Mismo guardado que Training: durante el entrenamiento se aplica en el siguiente paso -->
+                    <button type="button" class="btn btn-secondary btn-tall btn-full" onclick="saveTrainSettings()" style="margin-top:12px;"
+                            title="Saves the training settings, previews included. While training, they apply on the next step.">
+                        <span class="main-text">Save JSON</span>
+                    </button>
+                </div>
+            </div>
+          </div>
+         </div>
+        </div>
+
+        <!-- Right Column: Terminal, Dataset Inspector & Previews -->
+        <div class="panel console-container">
+            <div class="panel-title" style="cursor:default;">
+                <span>Console Output</span>
+                <span class="status-badge badge-idle" id="status-badge">IDLE</span>
+            </div>
+
+            <div class="terminal no-i18n" id="terminal"></div>
+
+            <!-- Dataset Manager -->
+            <div>
+                <div class="panel-title ds-title" style="cursor:default;">
+                    <span><span>Dataset Manager</span> (<span id="ds-count" class="no-i18n">0</span> img, <span id="ds-txt-count" class="no-i18n">0</span> txt)</span>
+                    <div class="ds-toolbar">
+                        <input type="text" class="ds-search" id="ds-search" placeholder="Search..." oninput="filterDatasetGrid()">
+                        <input type="file" id="ds-upload" multiple hidden>
+                        <button type="button" class="btn btn-primary btn-sm" id="btn-ds-upload" onclick="ftUpload()"
+                                title="Uploads files or a .zip into the dataset folder (you can also drag them here). Useful from another device or RunPod.">⬆ Upload</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="setGridMode('compact')">Compact</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="setGridMode('normal')">Normal</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="setGridMode('large')">Expand</button>
+                        <button type="button" class="btn btn-secondary btn-sm" id="btn-toggle-ds" onclick="toggleDatasetGrid()">Hide</button>
+                        <select class="ds-mode-select" id="ds-common-mode"
+                                title="What to do with the common text. Append adds it at the end of every caption (twice does not duplicate it), Replace writes only this text, Remove takes it out of every caption (undoes a wrong trigger).">
+                            <option value="append">Append</option>
+                            <option value="replace">Replace</option>
+                            <option value="remove">Remove</option>
+                        </select>
+                        <input type="text" class="ds-search" id="ds-common-caption" style="min-width:220px;"
+                               placeholder="Common text (optional)"
+                               title="Leave it empty and Apply to All only puts the trigger word first where it is missing.">
+                        <button type="button" class="btn btn-warning btn-sm" onclick="addTriggerToAllCaptions()">Apply to All</button>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="clearAllCaptions()"
+                                title="Deletes the .txt of every image. There is no undo.">Clear Captions</button>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="clearDataset()"
+                                title="Deletes every file of the dataset folder and its .txt captions (subfolders are kept). There is no undo.">Clear Dataset</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="loadDatasetInfo()">Refresh</button>
+                    </div>
+                </div>
+
+                <!-- Auto-caption con Qwen3-VL-8B NF4: el captioner compartido con LTX-2.3, Z-Image y Anima. -->
+                <div class="ds-caption-bar">
+                    <button type="button" class="btn btn-primary btn-sm" id="btn-caption" onclick="runCaption()"
+                            title="Writes one .txt per image with Qwen3-VL-8B (NF4, ~5.5 GB VRAM), with the trigger word first. Shared with LTX-2.3, Z-Image and Anima: the first time it downloads ~5 GB.">
+                        <span id="btn-caption-label">Create Captions</span>
+                    </button>
+                    <select class="ds-mode-select" id="caption_mode" onchange="switchCaptionMode()"
+                            title="ERNIE-Image is a text-to-image model: one description per image.">
+                        <option value="normal">Normal (character / object / style)</option>
+                    </select>
+                    <span class="ds-step-hint">Qwen3-VL-8B · before Pre-Cache</span>
+                    <label class="ds-inline-label" title="Off = only images with no caption are processed.">
+                        <input type="checkbox" id="caption_overwrite" checked>
+                        Overwrite
+                    </label>
+                    <textarea class="ds-search ds-caption-prompt" id="caption_prompt_text" rows="4"
+                              placeholder="Prompt for the captioner"></textarea>
+                </div>
+
+                <div class="ds-grid no-i18n" id="ds-grid"></div>
+                <div class="ds-resizer" id="ds-resizer"
+                     title="Drag to make the grid taller or shorter. Double-click to reset."></div>
+            </div>
+
+            <!-- Previews -->
+            <div>
+                <div class="panel-title" style="cursor:default;">Generated Step Previews</div>
+                <div class="gallery no-i18n" id="gallery"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Edit Caption & Inspection -->
+    <div class="modal" id="modal" onmousedown="modalOverlayDown(event)" onclick="modalOverlayClick(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h3 id="modal-filename" class="no-i18n" style="font-size:1rem;">Filename</h3>
+                <span style="font-size:0.8rem; color:var(--text-muted);">Click outside or button to close</span>
+            </div>
+            <img id="modal-img" src="" alt="Dataset Image">
+            <div class="form-group">
+                <label>Caption Text (.txt):</label>
+                <textarea id="modal-txt"></textarea>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <button type="button" class="btn btn-success btn-full" onclick="saveCurrentCaption()">Save Caption</button>
+                <button type="button" class="btn btn-secondary btn-full" onclick="closeModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Folder Browser Backup -->
+    <div class="modal" id="folder-modal" onclick="closeFolderModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()" style="max-width:600px;">
+            <h3>Select Directory</h3>
+            <div style="font-size:0.85rem; color:var(--text-muted);" id="browser-current-path" class="no-i18n">/</div>
+
+            <div class="drive-selector no-i18n" id="drive-selector"></div>
+            <div class="dir-list no-i18n" id="dir-list"></div>
+
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <button type="button" class="btn btn-primary btn-full" onclick="confirmFolderSelection()">Use Selected Folder</button>
+                <button type="button" class="btn btn-secondary btn-full" onclick="closeFolderModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Paso actual en la consola: "Step 12/1000" en inglés o en el idioma elegido.
+        function stepRe() {
+            const word = t('Step').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            return new RegExp(`(?:Step|${word})\\s+(\\d+)/(\\d+)`, 'i');
+        }
+        let allDatasetImages = [];
+        let currentEditingFilename = '';
+        let browserPath = '';
+        let currentBrowserTarget = 'dataset';
+        let currentLoadTarget = 'precache';
+
+        let userRequestedStop = false;
+        let lastExecutedStep = 0;
+        let totalTargetSteps = 0;
+
+        function togglePanel(headerEl) {
+            const panel = headerEl.closest('.panel');
+            panel.classList.toggle('collapsed');
+            const icon = headerEl.querySelector('.toggle-icon');
+            if (icon) {
+                icon.innerText = panel.classList.contains('collapsed') ? '▼' : '▲';
+            }
+        }
+
+        function toggleTurboMode(isTurbo) {
+            const stepsInput = document.getElementById('train_preview_steps');
+            const cfgInput = document.getElementById('train_preview_cfg');
+            const strengthInput = document.getElementById('train_turbo_strength');
+            if (isTurbo) {
+                stepsInput.value = 4;
+                cfgInput.value = 1;
+                if (strengthInput) strengthInput.value = 1.0;
+            } else {
+                stepsInput.value = 28;
+                cfgInput.value = 4;
+            }
+        }
+
+        function applyLoraType() {
+            const edit = document.getElementById('lora_type').value === 'edit';
+            document.getElementById('edit_image_container').style.display = edit ? 'block' : 'none';
+        }
+
+        function toggleCaptionMode(mode) {
+            const container = document.getElementById('custom_prompt_container');
+            if (mode === 'custom') {
+                container.style.display = 'block';
+            } else {
+                container.style.display = 'none';
+            }
+        }
+
+        async function updateSystemStats() {
+            try {
+                const res = await fetch('/api/system-stats');
+                const data = await res.json();
+                document.getElementById('ram-text').innerText = `${data.ram.used_gb} / ${data.ram.total_gb} GB`;
+                document.getElementById('ram-bar').style.width = `${data.ram.percent}%`;
+                document.getElementById('vram-text').innerText = `${data.vram.used_gb} / ${data.vram.total_gb} GB`;
+                document.getElementById('vram-bar').style.width = `${data.vram.percent}%`;
+
+                const temp = data.vram.temp_c || 0;
+                document.getElementById('gpu-temp-text').innerText = temp ? `${temp} °C` : 'N/A';
+
+                const tempBar = document.getElementById('gpu-temp-bar');
+                const tempPct = Math.min(100, Math.max(0, (temp / 100) * 100));
+                tempBar.style.width = `${tempPct}%`;
+
+                if (temp >= 80) {
+                    tempBar.style.backgroundColor = 'var(--danger)';
+                } else if (temp >= 70) {
+                    tempBar.style.backgroundColor = 'var(--warning)';
+                } else {
+                    tempBar.style.backgroundColor = 'var(--success)';
+                }
+            } catch (e) {}
+        }
+        setInterval(updateSystemStats, 3000);
+        updateSystemStats();
+
+        async function loadHfToken() {
+            try {
+                const res = await fetch('/api/hf-token');
+                const data = await res.json();
+                if (data.token) {
+                    document.getElementById('hf_token').value = data.token;
+                }
+            } catch (e) {}
+        }
+
+        async function saveExportPath() {
+            try {
+                const res = await fetch('/api/save-export-settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ export_models_dir: document.getElementById('export_models_dir').value.trim() })
+                });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    toast('✓ ' + t('LoRA folder saved for every trainer!'), 'success');
+                } else {
+                    toast(`[!] Error: ${data.error}`, 'error');
+                }
+            } catch (e) {
+                toast(`[!] ${t('Network error')}: ${e}`, 'error');
+            }
+        }
+
+        async function saveHfToken() {
+            const token = document.getElementById('hf_token').value.trim();
+            try {
+                const res = await fetch('/api/save-hf-token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: token })
+                });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    toast('✓ ' + t('HF Token saved!'), 'success');
+                } else {
+                    toast(`[!] Error: ${data.error}`, 'error');
+                }
+            } catch (e) {
+                toast(`[!] ${t('Network error')}: ${e}`, 'error');
+            }
+        }
+
+        function updateProjectPaths() {
+            const proj = document.getElementById('project_name').value.trim();
+            const cacheDir = proj ? `./cached_data_ernie_${proj}` : './cached_data_ernie';
+            const outputDir = proj ? `./ernie_lora_output_${proj}` : './ernie_lora_output';
+
+            document.getElementById('precache_cache_dir').value = cacheDir;
+            document.getElementById('train_output_dir').value = outputDir;
+
+            if (proj) {
+                document.getElementById('export_final_name').value = `ernie_lora_${proj}.safetensors`;
+                updateFinalNameSuffix();
+            }
+            checkCheckpointInfo();
+        }
+
+        function syncResolution(val) {
+            const customInput = document.getElementById('precache_target_area');
+            if (val === 'custom') {
+                customInput.style.display = 'block';
+            } else {
+                customInput.style.display = 'none';
+                customInput.value = val;
+            }
+        }
+
+        async function loadSettings() {
+            try {
+                await loadHfToken();
+                const res = await fetch('/api/settings');
+                const data = await res.json();
+                if (data.export && data.export.export_models_dir) document.getElementById('export_models_dir').value = data.export.export_models_dir;
+                if (data.pre_cache) {
+                    const p = data.pre_cache;
+                    if (p.project_name) document.getElementById('project_name').value = p.project_name;
+                    if (p.trigger_word) document.getElementById('trigger_word').value = p.trigger_word;
+                    if (p.dataset_path) document.getElementById('dataset_path').value = p.dataset_path;
+                    document.getElementById('lora_type').value = 'normal';
+                    applyLoraType();
+                    if (p.target_area) {
+                        document.getElementById('precache_target_area').value = p.target_area;
+                        const sel = document.getElementById('target_area_select');
+                        if (['262144', '589824', '1048576'].includes(String(p.target_area))) {
+                            sel.value = String(p.target_area);
+                        } else {
+                            sel.value = 'custom';
+                            document.getElementById('precache_target_area').style.display = 'block';
+                        }
+                    }
+                    if (p.multiple) document.getElementById('precache_multiple').value = p.multiple;
+                    if (p.max_side) document.getElementById('precache_max_side').value = p.max_side;
+                }
+                if (data.train) {
+                    const t = data.train;
+                    if (t.total_steps) document.getElementById('train_total_steps').value = t.total_steps;
+                    if (t.lr) document.getElementById('train_lr').value = t.lr;
+                    if (t.lora_rank) document.getElementById('train_lora_rank').value = t.lora_rank;
+                    if (t.lora_alpha) document.getElementById('train_lora_alpha').value = t.lora_alpha;
+                    if (t.use_rslora !== undefined) document.getElementById('train_use_rslora').checked = t.use_rslora;
+                    if (t.use_loraplus !== undefined) document.getElementById('train_use_loraplus').checked = t.use_loraplus;
+                    if (t.lokr_factor !== undefined) document.getElementById('train_lokr_factor').value = t.lokr_factor;
+                    if (t.use_lokr !== undefined) { document.getElementById('train_use_lokr').checked = t.use_lokr; setLokrState(t.use_lokr); }
+                    if (t.lora_targets) document.getElementById('train_lora_targets').value = t.lora_targets;
+                    if (t.batch_size) document.getElementById('train_batch_size').value = t.batch_size;
+                    if (t.grad_accum_steps) document.getElementById('train_grad_accum').value = t.grad_accum_steps;
+                    if (t.save_every) document.getElementById('train_save_every').value = t.save_every;
+                    if (t.seed !== undefined) document.getElementById('train_seed').value = t.seed;
+                    if (t.preview_every) document.getElementById('train_preview_every').value = t.preview_every;
+                    if (t.preview_caption_mode) {
+                        document.getElementById('train_preview_caption_mode').value = t.preview_caption_mode;
+                        toggleCaptionMode(t.preview_caption_mode);
+                    }
+                    if (t.preview_custom_prompt !== undefined) document.getElementById('train_preview_custom_prompt').value = t.preview_custom_prompt;
+                    if (t.preview_edit_image !== undefined) document.getElementById('preview_edit_image').value = t.preview_edit_image;
+                    if (t.preview_steps !== undefined) document.getElementById('train_preview_steps').value = t.preview_steps;
+                    if (t.preview_cfg !== undefined) document.getElementById('train_preview_cfg').value = t.preview_cfg;
+                    if (t.preview_size !== undefined) document.getElementById('train_preview_size').value = String(t.preview_size);
+                    if (t.use_turbo !== undefined) document.getElementById('train_use_turbo').checked = t.use_turbo;
+                    if (t.turbo_lora_strength !== undefined) document.getElementById('train_turbo_strength').value = t.turbo_lora_strength;
+                    if (t.export_final_name) document.getElementById('export_final_name').value = t.export_final_name;
+                    updateFinalNameSuffix();
+                }
+                updateProjectPaths();
+                loadDatasetInfo();
+            } catch (e) {}
+        }
+        loadSettings();
+
+        function triggerLoadJson(target) {
+            currentLoadTarget = target;
+            document.getElementById('json_file_input').click();
+        }
+
+        function handleJsonFileLoad(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+
+                    if (data.project_name !== undefined) document.getElementById('project_name').value = data.project_name;
+                    if (data.trigger_word !== undefined) document.getElementById('trigger_word').value = data.trigger_word;
+                    if (data.dataset_path !== undefined) document.getElementById('dataset_path').value = data.dataset_path;
+                    if (data.lora_type !== undefined) {
+                        document.getElementById('lora_type').value = 'normal';
+                        applyLoraType();
+                    }
+
+                    if (data.target_area !== undefined) {
+                        document.getElementById('precache_target_area').value = data.target_area;
+                        const sel = document.getElementById('target_area_select');
+                        if (['262144', '589824', '1048576'].includes(String(data.target_area))) {
+                            sel.value = String(data.target_area);
+                            document.getElementById('precache_target_area').style.display = 'none';
+                        } else {
+                            sel.value = 'custom';
+                            document.getElementById('precache_target_area').style.display = 'block';
+                        }
+                    }
+                    if (data.multiple !== undefined) document.getElementById('precache_multiple').value = data.multiple;
+                    if (data.max_side !== undefined) document.getElementById('precache_max_side').value = data.max_side;
+
+                    if (data.total_steps !== undefined) document.getElementById('train_total_steps').value = data.total_steps;
+                    if (data.lr !== undefined) document.getElementById('train_lr').value = data.lr;
+                    if (data.lora_rank !== undefined) document.getElementById('train_lora_rank').value = data.lora_rank;
+                    if (data.lora_alpha !== undefined) document.getElementById('train_lora_alpha').value = data.lora_alpha;
+                    if (data.use_rslora !== undefined) document.getElementById('train_use_rslora').checked = data.use_rslora;
+                    if (data.use_loraplus !== undefined) document.getElementById('train_use_loraplus').checked = data.use_loraplus;
+                    if (data.lokr_factor !== undefined) document.getElementById('train_lokr_factor').value = data.lokr_factor;
+                    if (data.use_lokr !== undefined) { document.getElementById('train_use_lokr').checked = data.use_lokr; setLokrState(data.use_lokr); }
+                    if (data.lora_targets !== undefined) document.getElementById('train_lora_targets').value = data.lora_targets;
+                    if (data.batch_size !== undefined) document.getElementById('train_batch_size').value = data.batch_size;
+                    if (data.grad_accum_steps !== undefined) document.getElementById('train_grad_accum').value = data.grad_accum_steps;
+                    if (data.save_every !== undefined) document.getElementById('train_save_every').value = data.save_every;
+                    if (data.seed !== undefined) document.getElementById('train_seed').value = data.seed;
+                    if (data.preview_every !== undefined) document.getElementById('train_preview_every').value = data.preview_every;
+                    if (data.preview_caption_mode !== undefined) {
+                        document.getElementById('train_preview_caption_mode').value = data.preview_caption_mode;
+                        toggleCaptionMode(data.preview_caption_mode);
+                    }
+                    if (data.preview_custom_prompt !== undefined) document.getElementById('train_preview_custom_prompt').value = data.preview_custom_prompt;
+                    if (data.preview_edit_image !== undefined) document.getElementById('preview_edit_image').value = data.preview_edit_image;
+                    if (data.preview_steps !== undefined) document.getElementById('train_preview_steps').value = data.preview_steps;
+                    if (data.preview_cfg !== undefined) document.getElementById('train_preview_cfg').value = data.preview_cfg;
+                    if (data.preview_size !== undefined) document.getElementById('train_preview_size').value = String(data.preview_size);
+                    if (data.use_turbo !== undefined) document.getElementById('train_use_turbo').checked = data.use_turbo;
+                    if (data.turbo_lora_strength !== undefined) document.getElementById('train_turbo_strength').value = data.turbo_lora_strength;
+                    if (data.export_final_name !== undefined) document.getElementById('export_final_name').value = data.export_final_name;
+                    updateFinalNameSuffix();
+
+                    updateProjectPaths();
+
+                    if (currentLoadTarget === 'precache') {
+                        await savePrecacheSettings();
+                    } else if (currentLoadTarget === 'train') {
+                        await saveTrainSettings();
+                    }
+
+                    toast('✓ ' + t('Configuration loaded from:') + `\n${file.name}`, 'success');
+                    loadDatasetInfo();
+                } catch (err) {
+                    toast(`[!] ${t('Error reading JSON')}: ${err}`, 'error');
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        async function browseFolderNative(target) {
+            currentBrowserTarget = target;
+            let currentPath = '';
+            if (target === 'dataset') currentPath = document.getElementById('dataset_path').value;
+            else if (target === 'export') currentPath = document.getElementById('export_models_dir').value;
+
+            try {
+                const res = await fetch('/api/select-folder', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ initial_dir: currentPath })
+                });
+                const data = await res.json();
+
+                if (data.status === 'ok' && data.path) {
+                    if (target === 'dataset') {
+                        document.getElementById('dataset_path').value = data.path;
+                        datasetPathChanged();
+                    } else if (target === 'export') {
+                        document.getElementById('export_models_dir').value = data.path;
+                    }
+                } else if (data.status === 'error') {
+                    openFolderBrowserWeb(target, currentPath);
+                }
+            } catch (e) {
+                openFolderBrowserWeb(target, currentPath);
+            }
+        }
+
+        async function browseImageNative() {
+            const current = document.getElementById('preview_edit_image').value;
+            try {
+                const res = await fetch('/api/select-file', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ initial_path: current })
+                });
+                const data = await res.json();
+                if (data.status === 'ok' && data.path) document.getElementById('preview_edit_image').value = data.path;
+                else if (data.status === 'error') toast(data.error);
+            } catch (e) { toast('Error: ' + e, 'error'); }
+        }
+
+        // El servidor lee la ruta del dataset de pre_cache_settings_ernie.json: hay que guardarla ANTES de
+        // refrescar el Dataset Manager, o seguiría mostrando la carpeta anterior.
+        async function datasetPathChanged() {
+            await savePrecacheSettings(true);
+        }
+
+        async function savePrecacheSettings(silent = false) {
+            const proj = document.getElementById('project_name').value.trim();
+            const precacheData = {
+                project_name: proj,
+                trigger_word: document.getElementById('trigger_word').value,
+                dataset_path: document.getElementById('dataset_path').value,
+                target_area: parseInt(document.getElementById('precache_target_area').value),
+                multiple: parseInt(document.getElementById('precache_multiple').value),
+                max_side: parseInt(document.getElementById('precache_max_side').value),
+                cache_dir: document.getElementById('precache_cache_dir').value,
+                lora_type: 'normal',
+                preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim(),
+                preview_edit_image: document.getElementById('preview_edit_image').value.trim()
+            };
+            const res = await fetch('/api/save-precache', { method: 'POST', body: JSON.stringify(precacheData) });
+            const data = await res.json();
+            if (data.status === 'ok') {
+                const listStr = data.all_saved ? data.all_saved.join('\n • ') : data.file;
+                if (!silent) toast('✓ ' + t('Pre-Cache settings saved to:') + `\n • ${listStr}`, 'success');
+                loadDatasetInfo();
+            }
+        }
+
+        // rsLoRA escala por alpha/√rank en vez de alpha/rank: al marcarlo se reajusta el alpha para que
+        // el LoRA conserve la misma fuerza (alpha/√rank), y al desmarcarlo se deshace.
+        function toggleRsLora(on) {
+            const rank = parseInt(document.getElementById('train_lora_rank').value) || 1;
+            const el = document.getElementById('train_lora_alpha');
+            const alpha = parseInt(el.value) || rank;
+            el.value = Math.max(1, Math.round(on ? alpha / Math.sqrt(rank) : alpha * Math.sqrt(rank)));
+            updateFinalNameSuffix();
+        }
+
+        // El nombre final lleva _rs / _plus / _lokr según las casillas; al exportar o descargar, el
+        // servidor lo corrige con lo que dicen los metadatos del LoRA entrenado.
+        function updateFinalNameSuffix() {
+            const el = document.getElementById('export_final_name');
+            const base = el.value.trim().replace(/(_rs)?(_plus)?(_lokr)?(\.safetensors)?$/i, '');
+            if (!base) return;
+            const lk = document.getElementById('train_use_lokr');
+            const sfx = lk && lk.checked ? '_lokr'
+                : (document.getElementById('train_use_rslora').checked ? '_rs' : '')
+                + (document.getElementById('train_use_loraplus').checked ? '_plus' : '');
+            el.value = base + sfx + '.safetensors';
+        }
+
+        // LoKr sustituye a LoRA: rsLoRA y LoRA+ (propias de LoRA) se apagan y el factor se activa.
+        function setLokrState(on) {
+            document.getElementById('train_use_rslora').disabled = on;
+            document.getElementById('train_use_loraplus').disabled = on;
+            document.getElementById('train_lokr_factor').disabled = !on;
+        }
+
+        function toggleLokr(on) {
+            const rs = document.getElementById('train_use_rslora');
+            if (on && rs.checked) { rs.checked = false; toggleRsLora(false); }
+            if (on) document.getElementById('train_use_loraplus').checked = false;
+            setLokrState(on);
+            updateFinalNameSuffix();
+        }
+
+        async function saveTrainSettings() {
+            const proj = document.getElementById('project_name').value.trim();
+            const trainData = {
+                project_name: proj,
+                trigger_word: document.getElementById('trigger_word').value,
+                dataset_path: document.getElementById('dataset_path').value,
+                cache_dir: document.getElementById('precache_cache_dir').value,
+                output_dir: document.getElementById('train_output_dir').value,
+                total_steps: parseInt(document.getElementById('train_total_steps').value),
+                lr: parseFloat(document.getElementById('train_lr').value),
+                lora_rank: parseInt(document.getElementById('train_lora_rank').value),
+                lora_alpha: parseInt(document.getElementById('train_lora_alpha').value),
+                use_rslora: document.getElementById('train_use_rslora').checked,
+                use_loraplus: document.getElementById('train_use_loraplus').checked,
+                use_lokr: document.getElementById('train_use_lokr').checked,
+                lokr_factor: parseInt(document.getElementById('train_lokr_factor').value) || 16,
+                lora_targets: document.getElementById('train_lora_targets').value,
+                batch_size: parseInt(document.getElementById('train_batch_size').value),
+                grad_accum_steps: parseInt(document.getElementById('train_grad_accum').value),
+                save_every: parseInt(document.getElementById('train_save_every').value),
+                seed: parseInt(document.getElementById('train_seed').value),
+                preview_every: parseInt(document.getElementById('train_preview_every').value),
+                preview_caption_mode: document.getElementById('train_preview_caption_mode').value,
+                preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim(),
+                preview_edit_image: document.getElementById('preview_edit_image').value.trim(),
+                lora_type: 'normal',
+                preview_steps: parseInt(document.getElementById('train_preview_steps').value),
+                preview_cfg: parseFloat(document.getElementById('train_preview_cfg').value),
+                preview_size: parseInt(document.getElementById('train_preview_size').value),
+                use_turbo: document.getElementById('train_use_turbo').checked,
+                turbo_lora_strength: parseFloat(document.getElementById('train_turbo_strength').value),
+                use_filter_bypass: false,
+                filter_bypass_strength: 0.01,
+                export_final_name: document.getElementById('export_final_name').value
+            };
+            const res = await fetch('/api/save-train', { method: 'POST', body: JSON.stringify(trainData) });
+            const data = await res.json();
+            setEncodingState(data.encoding, data.encoding_device);
+            if (data.status === 'ok') {
+                const listStr = data.all_saved ? data.all_saved.join('\n • ') : data.file;
+                // Con el entrenamiento en marcha, el trainer aplica los ajustes en caliente en el paso siguiente.
+                const live = document.getElementById('status-badge').classList.contains('badge-running')
+                    ? '\n\n' + t('Training is running: steps, save/preview every, preview settings, caption mode, prompt and LR apply on the next step. Rank, alpha, batch and resolution need Stop -> Resume.')
+                    : '';
+                const encoding = data.encoding
+                    ? '\n\n' + t('The preview prompt/image is being encoded on {device}. Start/Resume and Stop are disabled until it finishes.', { device: data.encoding_device })
+                    : '';
+                toast('✓ ' + t('Train settings saved to:') + `\n • ${listStr}${live}${encoding}`, 'success');
+            }
+            return data;
+        }
+
+        async function checkCheckpointInfo() {
+            try {
+                const res = await fetch('/api/checkpoint-info');
+                const data = await res.json();
+                const badge = document.getElementById('checkpoint-badge');
+                if (data.has_checkpoint) {
+                    badge.innerText = `[${t('Resume step {step}', { step: data.current_step })}]`;
+                } else {
+                    badge.innerText = `[${t('New')}]`;
+                }
+            } catch (e) {}
+        }
+
+        function appendTerminal(text, replace = false, extraClass = '') {
+            const term = document.getElementById('terminal');
+            // Barras de progreso con nombre ("Fetching 256 files: 26%|..."): varias a la vez (descargas) se
+            // actualizan cada una en su línea en vez de apilarse.
+            const bar = extraClass ? null : text.match(/^\s*([^:|\[]{3,60}):.*(\d%\||█|\| [\d.]+[kMGT]?B$)/);
+            const label = bar ? bar[1].trim() : '';
+            if (label) {
+                const same = [...term.children].slice(-8).find(el => el.dataset.bar === label);
+                if (same) {
+                    same.innerText = text;
+                    term.scrollTop = term.scrollHeight;
+                    return;
+                }
+                replace = false;
+            }
+            const last = term.lastElementChild;
+            if (replace && last && !last.dataset.bar) {
+                last.innerText = text;
+                if (extraClass) last.className = `terminal-line ${extraClass}`;
+            } else {
+                const div = document.createElement('div');
+                div.className = extraClass ? `terminal-line ${extraClass}` : 'terminal-line';
+                div.innerText = text;
+                if (label) div.dataset.bar = label;
+                term.appendChild(div);
+            }
+            term.scrollTop = term.scrollHeight;
+        }
+
+        let consoleSince = 0;
+        let consoleController = null;
+
+        // La consola vive en el servidor: al reabrir la página (o abrirla desde otro navegador)
+        // se vuelve a enganchar y se repinta lo ya emitido, incluido el paso actual.
+        async function attachConsole() {
+            if (consoleController) consoleController.abort();
+            consoleController = new AbortController();
+            try {
+                const response = await fetch(`/api/console/stream?since=${consoleSince}`, { signal: consoleController.signal });
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+
+                    const parts = buffer.split('\n\n');
+                    buffer = parts.pop();
+
+                    for (const part of parts) {
+                        if (!part.startsWith('data: ')) continue;
+                        let msg = null;
+                        try { msg = JSON.parse(part.slice(6)); } catch (e) { continue; }
+
+                        if (msg.type === 'line') {
+                            consoleSince = msg.seq;
+                            appendTerminal(msg.text, msg.replace);
+
+                            const stepMatch = msg.text.match(stepRe());
+                            if (stepMatch) {
+                                lastExecutedStep = parseInt(stepMatch[1]);
+                                totalTargetSteps = parseInt(stepMatch[2]);
+                            }
+                        } else if (msg.type === 'done') {
+                            consoleSince = msg.seq;
+                            consoleDone(msg);
+                        }
+                    }
+                }
+            } catch (e) {
+                // AbortError al cerrar la pestaña: el entrenamiento sigue en el servidor.
+            }
+        }
+
+        function consoleDone(msg) {
+            if (msg.code === 0) {
+                let successMsg = "";
+                let msgClass = 'term-success';
+
+                if (msg.script === 'train') {
+                    const totalFormSteps = totalTargetSteps || parseInt(document.getElementById('train_total_steps').value);
+                    const isPausedEarly = userRequestedStop || (lastExecutedStep > 0 && lastExecutedStep < totalFormSteps);
+
+                    if (isPausedEarly) {
+                        successMsg = '\n[SYSTEM] ⏸ ' + t('Training paused successfully! Checkpoint saved.');
+                        msgClass = 'term-warning';
+                    } else {
+                        successMsg = '\n[SYSTEM] ✓ ' + t('LoRA training completed successfully!');
+                        msgClass = 'term-success';
+                    }
+                } else if (msg.script === 'precache') {
+                    if (userRequestedStop) {
+                        successMsg = '\n[SYSTEM] ⏸ ' + t('Pre-Cache stopped by user.');
+                        msgClass = 'term-warning';
+                    } else {
+                        successMsg = '\n[SYSTEM] ✓ ' + t('Pre-Cache completed successfully!');
+                        msgClass = 'term-success';
+                    }
+                } else {
+                    successMsg = `\n[SYSTEM] ✓ ${t('Finished successfully with code')}: ${msg.code}`;
+                }
+
+                appendTerminal(successMsg, false, msgClass);
+            } else if (msg.script === 'train' && msg.code === 2) {
+                appendTerminal('\n[SYSTEM] ✗ ' + t('Training could not be run: create the Pre-Cache first.'), false, 'term-danger');
+            } else {
+                appendTerminal(`\n[SYSTEM] ⚠ ${t('Process finished with code')}: ${msg.code}`, false, 'term-danger');
+            }
+
+            setRunningState(false);
+            loadPreviews();
+            checkCheckpointInfo();
+        }
+
+        async function startScript(scriptName) {
+            document.getElementById('terminal').innerHTML = '';
+            consoleSince = 0;
+            appendTerminal(`[SYSTEM] ${t('Launching {script}...', { script: scriptName })}`);
+            setRunningState(true);
+
+            userRequestedStop = false;
+            lastExecutedStep = 0;
+            totalTargetSteps = 0;
+
+            try {
+                const res = await fetch('/api/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ script: scriptName })
+                });
+                const data = await res.json();
+
+                if (data.status !== 'ok') {
+                    appendTerminal(`\n[SYSTEM] ${t('Execution error')}: ${data.error}`, false, 'term-danger');
+                    setRunningState(false);
+                    return;
+                }
+                attachConsole();
+            } catch (err) {
+                appendTerminal(`\n[SYSTEM] ${t('Execution error')}: ${err}`, false, 'term-danger');
+                setRunningState(false);
+            }
+        }
+
+        // Si ya hay un entrenamiento en marcha al cargar la página, repinta la consola completa
+        // y el progreso, y sigue enganchado a lo que siga saliendo.
+        async function restoreConsole() {
+            try {
+                const st = await (await fetch('/api/status')).json();
+                if (st.running) {
+                    setRunningState(true);
+                    attachConsole();
+                }
+            } catch (e) {}
+        }
+
+        async function runPrecache() {
+            await savePrecacheSettings();
+            startScript('precache');
+        }
+
+        async function runTrain() {
+            const data = await saveTrainSettings();
+            if (data && data.encoding) {
+                // El trainer arrancaría con el prompt anterior: se lanza solo al terminar la codificación.
+                startAfterEncoding = true;
+                appendTerminal('\n[SYSTEM] ' + t('Training will start when the preview prompt is encoded.'));
+                return;
+            }
+            startScript('train');
+        }
+
+        async function stopScript() {
+            userRequestedStop = true;
+            appendTerminal('\n[SYSTEM] ' + t('Sending stop signal...'));
+            await fetch('/api/stop', { method: 'POST' });
+        }
+
+        async function sendToModels() {
+            const targetDir = document.getElementById('export_models_dir').value.trim();
+            const finalName = document.getElementById('export_final_name').value.trim();
+
+            if (!targetDir) {
+                toast(t('Please select or enter the target models/lora folder.'));
+                return;
+            }
+
+            appendTerminal(`\n[SYSTEM] ${t('Exporting LoRA to')}: ${targetDir}...`);
+
+            try {
+                const res = await fetch('/api/export-lora', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ target_dir: targetDir, final_name: finalName })
+                });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    toast(`✓ ${t('LoRA exported successfully')}:\n${data.filename}\n\n${t('Copied from')}: ${data.source}`, 'success');
+                    appendTerminal(`[SYSTEM] ✓ ${t('Export completed')}: ${data.dest}`, false, 'term-success');
+                } else {
+                    toast(`[!] ${t('Export error')}: ${data.error}`, 'error');
+                    appendTerminal(`[SYSTEM] [!] ${t('Export error')}: ${data.error}`, false, 'term-danger');
+                }
+            } catch (e) {
+                toast(`[!] ${t('Network error')}: ${e}`, 'error');
+            }
+        }
+
+        // Mientras el servidor codifica en CPU el prompt/imagen de la preview no se puede lanzar ni detener nada.
+        let isRunning = false, encodingStage = null, startAfterEncoding = false;
+        const ENCODING_TEXT = {
+            loading: d => '⏳ ' + t('Loading encoders on {device}...', { device: d }),
+            image: d => '⏳ ' + t('Encoding reference image latent on {device}...', { device: d }),
+            prompt: d => '⏳ ' + t('Encoding custom prompt on {device}...', { device: d })
+        };
+
+        function applyButtonState() {
+            const encoding = encodingStage !== null;
+            document.getElementById('btn-caption').disabled = isRunning || encoding;
+            document.getElementById('btn-precache').disabled = isRunning || encoding;
+            document.getElementById('btn-train').disabled = isRunning || encoding;
+            document.getElementById('btn-stop').disabled = !isRunning || encoding;
+        }
+
+        function setEncodingState(stage, device) {
+            const wasEncoding = encodingStage !== null;
+            encodingStage = stage || null;
+            const box = document.getElementById('encode-status');
+            box.style.display = encodingStage ? 'block' : 'none';
+            box.innerText = encodingStage ? ENCODING_TEXT[encodingStage](device) : '';
+            applyButtonState();
+            if (wasEncoding && !encodingStage && startAfterEncoding) {
+                startAfterEncoding = false;
+                startScript('train');
+            }
+        }
+
+        async function pollEncoding() {
+            try {
+                const res = await fetch('/api/status?_=' + Date.now());
+                const data = await res.json();
+                setEncodingState(data.encoding, data.encoding_device);
+            } catch (e) {}
+        }
+        setInterval(pollEncoding, 2000);
+
+        function setRunningState(running) {
+            isRunning = running;
+            applyButtonState();
+
+            const badge = document.getElementById('status-badge');
+            if (running) {
+                badge.className = 'status-badge badge-running';
+                badge.innerText = t('RUNNING');
+            } else {
+                badge.className = 'status-badge badge-idle';
+                badge.innerText = t('IDLE');
+            }
+        }
+
+        async function loadDatasetInfo() {
+            try {
+                // Sin cache-busting el navegador puede servir la respuesta anterior y Refresh no refresca.
+                const res = await fetch('/api/dataset-info?_=' + Date.now());
+                const data = await res.json();
+                allDatasetImages = data.images || [];
+                document.getElementById('ds-count').innerText = data.image_count;
+                document.getElementById('ds-txt-count').innerText = data.caption_count;
+                document.getElementById('btn-caption-label').innerText = data.caption_count > 0
+                    ? t('Redo Captions') : t('Create Captions');
+                renderDatasetGrid(allDatasetImages);
+            } catch (e) {}
+        }
+
+        // El mtime en la URL hace que una imagen reemplazada en su sitio no salga de la caché del navegador.
+        function mediaUrl(img) {
+            return '/api/dataset-image/' + encodeURIComponent(img.file) + (img.mtime ? '?v=' + img.mtime : '');
+        }
+
+        function renderDatasetGrid(images) {
+            const grid = document.getElementById('ds-grid');
+            grid.innerHTML = '';
+            images.forEach(img => {
+                const card = document.createElement('div');
+                card.className = 'ds-card';
+                card.onclick = (ev) => {
+                    if (ev.target.closest('.ds-del')) return;
+                    openModal(mediaUrl(img), img.file, img.caption || '');
+                };
+
+                const hasCaption = img.has_txt && img.caption && img.caption.trim().length > 0;
+                const dotClass = hasCaption ? 'caption-dot dot-green' : 'caption-dot dot-red';
+                const dotTitle = hasCaption ? t('Caption OK') : t('No caption');
+
+                card.innerHTML = `
+                    <div class="img-wrapper">
+                        <img src="${mediaUrl(img)}" alt="${img.file}">
+                        <button type="button" class="ds-del" title="${t('Remove from dataset')}">&#128465;</button>
+                        <span class="${dotClass}" title="${dotTitle}"></span>
+                        <div class="img-filename-tag">${img.file}</div>
+                    </div>
+                    <div class="caption">${img.caption || `<em>${t('No .txt caption')}</em>`}</div>
+                `;
+                card.querySelector('.ds-del').onclick = (ev) => { ev.stopPropagation(); deleteDatasetImage(img.file); };
+                grid.appendChild(card);
+            });
+        }
+
+        async function deleteDatasetImage(file) {
+            const what = t('Remove "{name}" and its .txt caption from the dataset?', { name: file });
+            if (!await askConfirm(what + '\n\n' + t('The files are deleted from disk.'))) return;
+            try {
+                const res = await fetch('/api/delete-dataset-image', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file: file })
+                });
+                const data = await res.json();
+                if (data.status !== 'ok') { toast('Error: ' + (data.error || t('unknown')), 'error'); return; }
+                loadDatasetInfo();
+            } catch (e) { toast('Error: ' + e, 'error'); }
+        }
+
+        async function clearAllCaptions() {
+            const n = parseInt(document.getElementById('ds-txt-count').innerText) || 0;
+            if (!n) {
+                toast(t('There are no captions to delete.'));
+                return;
+            }
+            // Se pide escribir el número: un confirm normal se acepta por reflejo y esto no tiene deshacer.
+            const resp = prompt(t('This DELETES the .txt of all {n} captions. There is no undo.', { n }) + '\n\n' + t('Type {n} to confirm:', { n }));
+            if (String(resp || '').trim() !== String(n)) return;
+            try {
+                const res = await fetch('/api/clear-captions', { method: 'POST' });
+                const data = await res.json();
+                if (data.status === 'error') { toast('Error: ' + (data.error || t('unknown')), 'error'); return; }
+                appendTerminal(`[CAPTIONS] ${t('{n} .txt deleted', { n: data.removed || 0 })}`, false, 'term-warning');
+                (data.errors || []).forEach(x => appendTerminal('   ' + x, false, 'term-danger'));
+                loadDatasetInfo();
+            } catch (e) { toast('Error: ' + e, 'error'); }
+        }
+
+        async function clearDataset() {
+            const n = parseInt(document.getElementById('ds-count').innerText) || 0;
+            const path = document.getElementById('dataset_path').value;
+            if (!n) { toast(t('The dataset is already empty.')); return; }
+            // Se pide escribir el número: un confirm normal se acepta por reflejo y esto no tiene deshacer.
+            const resp = prompt(t('This DELETES the {n} files of the dataset and their .txt captions:', { n }) + `\n${path}\n` + t('There is no undo.') + '\n\n' + t('Type {n} to confirm:', { n }));
+            if (String(resp || '').trim() !== String(n)) return;
+            try {
+                const res = await fetch('/api/clear-dataset', { method: 'POST' });
+                const data = await res.json();
+                if (data.status === 'error') { toast('Error: ' + (data.error || t('unknown')), 'error'); return; }
+                appendTerminal(`[DATASET] ${t('{n} file(s) deleted', { n: data.removed || 0 })}: ${data.path}`, false, 'term-warning');
+                (data.errors || []).forEach(x => appendTerminal('   ' + x, false, 'term-danger'));
+                loadDatasetInfo();
+            } catch (e) { toast('Error: ' + e, 'error'); }
+        }
+
+        async function deleteProjectData(target) {
+            const texts = {
+                precache: t('This will delete the current pre-cache.'),
+                training: t('This will delete all the current training (checkpoints, resume point and previews).')
+            };
+            if (!await askConfirm(texts[target] + '\n\n' + t('Continue?'))) return;
+            try {
+                const res = await fetch('/api/delete-project-data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ target: target })
+                });
+                const data = await res.json();
+                if (data.status === 'error') { toast('Error: ' + (data.error || t('unknown')), 'error'); return; }
+                let out = t('{n} item(s) deleted', { n: data.removed }) + `\n${data.path}`;
+                if (data.errors && data.errors.length) out += '\n\n' + t('Could not delete:') + '\n' + data.errors.join('\n');
+                toast(out);
+                if (target === 'training') { checkCheckpointInfo(); loadPreviews(); }
+            } catch (e) { toast('Error: ' + e, 'error'); }
+        }
+
+        // Mismos prompts por defecto que 0_caption_ernie.py; se guardan en caption_settings_ernie.json al ejecutar.
+        const DEFAULT_CAPTION_PROMPTS = {
+            normal: 'Describe this image for an ERNIE-Image text-to-image model, in at most 150 words. '
+                + 'One single paragraph of plain prose, no lists and no preamble. Cover the main subject and what they are doing, '
+                + 'their appearance, hair and clothing, the pose, the framing and camera angle, the setting and background, '
+                + 'the lighting and the colors. Do not invent a name and do not mention that this is an image or a photo.'
+        };
+        const CAPTION_PROMPT_KEYS = { normal: 'caption_prompt' };
+        // ERNIE is text-to-image: the caption prompt has one mode.
+        const captionPrompts = { ...DEFAULT_CAPTION_PROMPTS };
+        let captionModeShown = 'normal';
+
+        function switchCaptionMode() {
+            captionModeShown = 'normal';
+            document.getElementById('caption_mode').value = 'normal';
+            document.getElementById('caption_prompt_text').value = captionPrompts.normal;
+        }
+
+        async function loadCaptionSettings() {
+            let data = {};
+            try {
+                data = await (await fetch('/api/caption-settings')).json();
+            } catch (e) {}
+            for (const mode in CAPTION_PROMPT_KEYS) {
+                if (data[CAPTION_PROMPT_KEYS[mode]]) captionPrompts[mode] = data[CAPTION_PROMPT_KEYS[mode]];
+            }
+            captionModeShown = 'normal';
+            document.getElementById('caption_mode').value = captionModeShown;
+            document.getElementById('caption_prompt_text').value = captionPrompts[captionModeShown];
+            if (data.overwrite !== undefined) document.getElementById('caption_overwrite').checked = !!data.overwrite;
+        }
+        loadCaptionSettings();
+
+        async function runCaption() {
+            const captioned = parseInt(document.getElementById('ds-txt-count').innerText) || 0;
+            const overwrite = document.getElementById('caption_overwrite').checked;
+            if (captioned > 0 && overwrite) {
+                if (!await askConfirm(t('This will OVERWRITE the {n} caption(s) that already exist.', { n: captioned }) + '\n\n' + t('Continue?'))) return;
+            }
+            // El captioner lee la carpeta del dataset y la palabra clave de pre_cache_settings_ernie.json.
+            await savePrecacheSettings();
+            switchCaptionMode();  // guarda en memoria lo que haya en el textarea
+            try {
+                await fetch('/api/save-caption-settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        caption_mode: captionModeShown,
+                        caption_prompt: captionPrompts.normal.trim(),
+                        overwrite: overwrite
+                    })
+                });
+            } catch (e) { toast('Error: ' + e, 'error'); return; }
+            startScript('caption');
+        }
+
+        function filterDatasetGrid() {
+            const q = document.getElementById('ds-search').value.toLowerCase();
+            const filtered = allDatasetImages.filter(img =>
+                img.file.toLowerCase().includes(q) || (img.caption && img.caption.toLowerCase().includes(q))
+            );
+            renderDatasetGrid(filtered);
+        }
+
+        function setGridMode(mode) {
+            const grid = document.getElementById('ds-grid');
+            grid.classList.remove('compact', 'large', 'hidden');
+            if (mode === 'compact') grid.classList.add('compact');
+            if (mode === 'large') grid.classList.add('large');
+            document.getElementById('btn-toggle-ds').innerText = t('Hide');
+        }
+
+        function toggleDatasetGrid() {
+            const grid = document.getElementById('ds-grid');
+            const btn = document.getElementById('btn-toggle-ds');
+            if (grid.classList.contains('hidden')) {
+                grid.classList.remove('hidden');
+                btn.innerText = t('Hide');
+            } else {
+                grid.classList.add('hidden');
+                btn.innerText = t('Show');
+            }
+        }
+
+        async function addTriggerToAllCaptions() {
+            const trigger = document.getElementById('trigger_word').value.trim();
+            const common = document.getElementById('ds-common-caption').value.trim();
+            const mode = document.getElementById('ds-common-mode').value;
+            if (!trigger && !common) {
+                toast(t('Enter a Trigger Word, a common text, or both.'));
+                return;
+            }
+
+            let msg;
+            if (!common) {
+                msg = t('Add the trigger "{trigger}" to all dataset captions?', { trigger });
+            } else if (mode === 'replace') {
+                msg = t('REPLACE every caption with this text? What was written is lost.') + `\n\n    ${trigger ? trigger + ', ' : ''}${common}`;
+            } else if (mode === 'remove') {
+                msg = t('REMOVE this text from every caption, keeping the rest?') + `\n\n    ${common}`;
+            } else {
+                msg = t('APPEND this text at the end of every caption? What was already written is kept.') + `\n\n    ${common}`;
+            }
+            if (!await askConfirm(msg)) return;
+
+            try {
+                const res = await fetch('/api/batch-caption', {
+                    method: 'POST',
+                    body: JSON.stringify({ trigger_word: trigger, common: common, mode: mode })
+                });
+                const data = await res.json();
+                if (data.status !== 'ok') { toast('Error: ' + (data.error || t('unknown')), 'error'); return; }
+                appendTerminal(`[CAPTIONS] ${t('{n} caption(s) updated', { n: data.updated_count || 0 })}`, false, 'term-success');
+                loadDatasetInfo();
+            } catch (e) { toast('Error: ' + e, 'error'); }
+        }
+
+        async function loadPreviews() {
+            try {
+                const res = await fetch('/api/previews');
+                const data = await res.json();
+                const gallery = document.getElementById('gallery');
+                gallery.innerHTML = '';
+                data.previews.forEach(filename => {
+                    const card = document.createElement('div');
+                    card.className = 'preview-card';
+                    card.onclick = () => openModal(`/api/preview/${filename}`, filename, `${t('Generated preview')}: ${filename}`);
+
+                    let stepTag = filename;
+                    const match = filename.match(/preview_step_(\d+)\.png/i);
+                    if (match) {
+                        stepTag = t('Step {n}', { n: match[1] });
+                    }
+
+                    card.innerHTML = `
+                        <img src="/api/preview/${filename}" alt="${filename}">
+                        <div class="preview-filename-tag">${stepTag}</div>
+                    `;
+                    gallery.appendChild(card);
+                });
+            } catch (e) {}
+        }
+        setInterval(loadPreviews, 8000);
+        restoreConsole();
+        loadPreviews();
+
+        // Texto del caption tal como se abrió, para saber si se ha editado.
+        let captionAtOpen = '';
+
+        function openModal(imgSrc, filename, text) {
+            currentEditingFilename = filename;
+            captionAtOpen = text;
+            document.getElementById('modal-filename').innerText = filename;
+            document.getElementById('modal-img').src = imgSrc;
+            document.getElementById('modal-txt').value = text;
+            document.getElementById('modal').classList.add('active');
+        }
+
+        // El click se dispara al SOLTAR: seleccionar texto del caption y soltar fuera cerraba el modal.
+        // Solo se cierra si la pulsación empezó en el fondo.
+        let modalPressedOnBackdrop = false;
+
+        function modalOverlayDown(e) {
+            modalPressedOnBackdrop = (e.target === e.currentTarget);
+        }
+
+        function modalOverlayClick(e) {
+            if (e.target !== e.currentTarget || !modalPressedOnBackdrop) return;
+            closeModal();
+        }
+
+        async function closeModal(force) {
+            if (force !== true && document.getElementById('modal-txt').value !== captionAtOpen
+                    && !await askConfirm(t('The caption has unsaved changes. Close and lose them?'))) {
+                return;
+            }
+            document.getElementById('modal').classList.remove('active');
+        }
+
+        const DS_GRID_MIN = 380;
+        const DS_GRID_STORE = 'ds_grid_height';
+
+        function applyDsGridHeight(px) {
+            const grid = document.getElementById('ds-grid');
+            const alto = Math.min(Math.max(DS_GRID_MIN, Math.round(window.innerHeight * 0.85)), Math.max(DS_GRID_MIN, Math.round(px)));
+            grid.style.maxHeight = alto + 'px';
+        }
+
+        (function initDsResizer() {
+            const handle = document.getElementById('ds-resizer');
+            const grid = document.getElementById('ds-grid');
+            // Un localStorage bloqueado (ventana privada) no debe impedir dibujar la rejilla.
+            try {
+                const saved = parseInt(localStorage.getItem(DS_GRID_STORE), 10);
+                if (saved > 0) applyDsGridHeight(saved);
+            } catch (e) {}
+
+            let startY = 0, startH = 0;
+            handle.addEventListener('pointerdown', ev => {
+                ev.preventDefault();
+                startY = ev.clientY;
+                startH = grid.getBoundingClientRect().height;
+                handle.classList.add('dragging');
+                handle.setPointerCapture(ev.pointerId);
+            });
+            handle.addEventListener('pointermove', ev => {
+                if (handle.classList.contains('dragging')) applyDsGridHeight(startH + (ev.clientY - startY));
+            });
+            const release = ev => {
+                if (!handle.classList.contains('dragging')) return;
+                handle.classList.remove('dragging');
+                try { handle.releasePointerCapture(ev.pointerId); } catch (e) {}
+                try { localStorage.setItem(DS_GRID_STORE, String(Math.round(grid.getBoundingClientRect().height))); } catch (e) {}
+            };
+            handle.addEventListener('pointerup', release);
+            handle.addEventListener('pointercancel', release);
+            handle.addEventListener('dblclick', () => {
+                applyDsGridHeight(DS_GRID_MIN);
+                try { localStorage.removeItem(DS_GRID_STORE); } catch (e) {}
+            });
+            window.addEventListener('resize', () => applyDsGridHeight(grid.getBoundingClientRect().height));
+        })();
+
+        async function saveCurrentCaption() {
+            const newCaption = document.getElementById('modal-txt').value;
+            const res = await fetch('/api/save-caption', {
+                method: 'POST',
+                body: JSON.stringify({ filename: currentEditingFilename, caption: newCaption })
+            });
+            const data = await res.json();
+            if (data.status === 'ok') {
+                toast('✓ ' + t('Caption saved!'), 'success');
+                closeModal(true);
+                loadDatasetInfo();
+            }
+        }
+
+        async function openFolderBrowserWeb(target = 'dataset', path = '') {
+            currentBrowserTarget = target;
+            if (!path) {
+                if (target === 'dataset') path = document.getElementById('dataset_path').value;
+                else if (target === 'export') path = document.getElementById('export_models_dir').value;
+            }
+            const res = await fetch(`/api/browse-dir?path=${encodeURIComponent(path)}`);
+            const data = await res.json();
+
+            browserPath = data.current_path;
+            document.getElementById('browser-current-path').innerText = `${browserPath} (${t('{n} images inside', { n: data.image_count })})`;
+
+            const driveSel = document.getElementById('drive-selector');
+            driveSel.innerHTML = '';
+            if (data.drives && data.drives.length > 0) {
+                data.drives.forEach(drv => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'btn btn-secondary btn-sm';
+                    btn.innerText = `💾 ${drv}`;
+                    btn.onclick = () => openFolderBrowserWeb(target, drv);
+                    driveSel.appendChild(btn);
+                });
+            }
+
+            const dirList = document.getElementById('dir-list');
+            dirList.innerHTML = '';
+
+            const parentDiv = document.createElement('div');
+            parentDiv.className = 'dir-item';
+            parentDiv.innerHTML = `<strong>📁 .. [${t('Up')}]</strong>`;
+            parentDiv.onclick = () => openFolderBrowserWeb(target, data.parent_path);
+            dirList.appendChild(parentDiv);
+
+            data.directories.forEach(d => {
+                const item = document.createElement('div');
+                item.className = 'dir-item';
+                item.innerHTML = `<span>📁 ${d.name}</span>`;
+                item.onclick = () => openFolderBrowserWeb(target, d.path);
+                dirList.appendChild(item);
+            });
+
+            document.getElementById('folder-modal').classList.add('active');
+        }
+
+        function confirmFolderSelection() {
+            if (currentBrowserTarget === 'dataset') {
+                document.getElementById('dataset_path').value = browserPath;
+                datasetPathChanged();
+            } else if (currentBrowserTarget === 'export') {
+                document.getElementById('export_models_dir').value = browserPath;
+            }
+            closeFolderModal();
+        }
+
+        function closeFolderModal(e) {
+            document.getElementById('folder-modal').classList.remove('active');
+        }
+    </script>
+    <script src="/file_transfer.js"></script>
+</body>
+</html>
