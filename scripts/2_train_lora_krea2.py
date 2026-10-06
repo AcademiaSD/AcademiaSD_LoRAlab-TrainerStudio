@@ -965,6 +965,7 @@ def run_preview(model, scheduler, embed, mask, neg, size, step, shift_cfg):
         sigmas = np.linspace(1.0, 1.0 / PREVIEW_STEPS, PREVIEW_STEPS)
         mu = calculate_shift(latents.shape[1], *shift_cfg)
         scheduler.set_timesteps(PREVIEW_STEPS, device=device, sigmas=sigmas, mu=mu)
+        scheduler.set_begin_index(0)
 
         with torch.no_grad():
             for ts in scheduler.timesteps:
@@ -975,7 +976,7 @@ def run_preview(model, scheduler, embed, mask, neg, size, step, shift_cfg):
                     pred_u = model(hidden_states=latents, encoder_hidden_states=neg[0], timestep=tt,
                                    position_ids=pos_ids, encoder_attention_mask=neg[1], return_dict=False)[0]
                     pred = pred + PREVIEW_CFG * (pred - pred_u)
-                latents = scheduler.step(pred, t, latents, return_dict=False)[0]
+                latents = scheduler.step(pred, ts, latents, return_dict=False)[0]
 
             vae = VaeHolder.get().to(device)
             lat = unpack_latents(latents, H // 8, W // 8).to(vae.dtype).unsqueeze(2)
