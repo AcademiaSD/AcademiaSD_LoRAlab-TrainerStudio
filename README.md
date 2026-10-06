@@ -165,6 +165,16 @@ Under **LoRA Rank / Alpha**, the trainers have extra checkboxes. They change **h
 - **Send to Models** and **⬇ Download LoRA** add **`_rs`**, **`_plus`** or **`_lokr`** to the name, taken from the file's own metadata, so you always know how it was trained. The *Final LoRA Filename* field shows the suffix as you tick the boxes.
 - No extra VRAM: LoKr never builds the full weight matrix, and the other two only change the scaling and the optimizer.
 
+**Which one to use.** All of them are optional: with no box ticked the trainer works exactly as before. Train the same dataset with the same steps, seed and LR to compare them; the pre-cache is shared, so only *Delete Training* is needed between runs.
+
+| Mode | Boxes | When it helps | Starting point | Name suffix |
+| :--- | :--- | :--- | :--- | :--- |
+| **LoRA** (default) | none | Everything: the safe choice | The trainer's defaults | — |
+| **rsLoRA** | rsLoRA | Higher ranks (32-64) for styles or many concepts: with plain LoRA, raising the rank adds little | Rank 32; the alpha it sets for you (≈ alpha/√rank) | `_rs` |
+| **LoRA+** | LoRA+ | Reaching the same result in fewer steps | Same LR; check the intermediate checkpoints, and lower the LR if it burns early | `_plus` |
+| **rsLoRA + LoRA+** | both | The two together: stable high ranks that also learn faster. They do not conflict: one changes the scaling, the other the optimizer | Rank 32, the alpha rsLoRA sets, and an LR about 2× lower than usual, because both make the training stronger | `_rs_plus` |
+| **LoKr** | LoKr (+ Factor) | Characters and objects with small datasets, or when file size matters | Rank 8, alpha 8, factor 16, same LR as LoRA; factor 8 or a higher LR if it learns too little | `_lokr` |
+
 ---
 
 ## 🌍 Languages
