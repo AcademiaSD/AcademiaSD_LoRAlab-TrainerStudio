@@ -402,6 +402,35 @@
                         </div>
                     </div>
 
+                    <div class="form-row">
+                        <div class="form-group" title="Rank-stabilized LoRA: scales the LoRA by alpha/√rank instead of alpha/rank, so higher ranks keep learning instead of fading out. Ticking it lowers alpha to keep the same strength; raise it for a stronger effect. The exported LoRA is a standard one (its alpha is converted) and Send to Models adds _rs to its name. Fixed for the whole training: to change it, start a new one.">
+                            <label style="display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer;" for="train_use_rslora">
+                                <input type="checkbox" id="train_use_rslora" onchange="toggleRsLora(this.checked)" style="width: 18px; height: 18px; cursor: pointer;">
+                                rsLoRA
+                            </label>
+                        </div>
+                        <div class="form-group" title="LoRA+: the B matrix of every layer learns 16 times faster than A. It usually reaches the same quality in fewer steps; if the training looks unstable or burns early, lower the learning rate. The exported file is a normal LoRA and Send to Models adds _plus to its name. Fixed for the whole training: to change it, start a new one.">
+                            <label style="display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer;" for="train_use_loraplus">
+                                <input type="checkbox" id="train_use_loraplus" onchange="updateFinalNameSuffix()" style="width: 18px; height: 18px; cursor: pointer;">
+                                LoRA+
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group" title="LoKr (LyCORIS): each layer learns a Kronecker product w1 ⊗ w2 instead of B·A. The file is far smaller (about 3 MB instead of 40 MB at rank 8) and it often works well for characters with small datasets, but it is more sensitive to the learning rate. Rank and alpha apply to w2. ComfyUI and Forge load it like any LoRA, and Send to Models adds _lokr to its name. rsLoRA and LoRA+ are for LoRA only and turn off. Fixed for the whole training: to change it, start a new one.">
+                            <label style="display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer;" for="train_use_lokr">
+                                <input type="checkbox" id="train_use_lokr" onchange="toggleLokr(this.checked)" style="width: 18px; height: 18px; cursor: pointer;">
+                                LoKr
+                            </label>
+                        </div>
+                        <div class="form-group" title="LoKr factor: how each layer is split. Higher = smaller file and less capacity; lower = more capacity. 16 is the usual value; try 8 if the LoKr learns too little.">
+                            <label style="display: flex; align-items: center; gap: 8px; margin: 0;">
+                                <span>Factor:</span>
+                                <input type="number" id="train_lokr_factor" value="16" min="2" step="1" disabled style="padding: 3px 8px; width: 80px;">
+                            </label>
+                        </div>
+
                     <div class="form-group">
                         <label>LoRA Targets:</label>
                         <select id="train_lora_targets"
@@ -758,6 +787,7 @@
             
             if (proj) {
                 document.getElementById('export_final_name').value = `anima_lora_${proj}.safetensors`;
+                updateFinalNameSuffix();
             }
             checkCheckpointInfo();
         }
@@ -802,6 +832,10 @@
                     if (t.lr) document.getElementById('train_lr').value = t.lr;
                     if (t.lora_rank) document.getElementById('train_lora_rank').value = t.lora_rank;
                     if (t.lora_alpha) document.getElementById('train_lora_alpha').value = t.lora_alpha;
+                    if (t.use_rslora !== undefined) document.getElementById('train_use_rslora').checked = t.use_rslora;
+                    if (t.use_loraplus !== undefined) document.getElementById('train_use_loraplus').checked = t.use_loraplus;
+                    if (t.lokr_factor !== undefined) document.getElementById('train_lokr_factor').value = t.lokr_factor;
+                    if (t.use_lokr !== undefined) { document.getElementById('train_use_lokr').checked = t.use_lokr; setLokrState(t.use_lokr); }
                     if (t.lora_targets) document.getElementById('train_lora_targets').value = t.lora_targets;
                     if (t.precision) document.getElementById('train_precision').value = t.precision;
                     if (t.batch_size) document.getElementById('train_batch_size').value = t.batch_size;
@@ -818,6 +852,7 @@
                     if (t.preview_cfg !== undefined) document.getElementById('train_preview_cfg').value = t.preview_cfg;
                     if (t.preview_size !== undefined) document.getElementById('train_preview_size').value = String(t.preview_size);
                     if (t.export_final_name) document.getElementById('export_final_name').value = t.export_final_name;
+                    updateFinalNameSuffix();
                 }
                 updateProjectPaths();
                 loadDatasetInfo();
@@ -861,6 +896,10 @@
                     if (data.lr !== undefined) document.getElementById('train_lr').value = data.lr;
                     if (data.lora_rank !== undefined) document.getElementById('train_lora_rank').value = data.lora_rank;
                     if (data.lora_alpha !== undefined) document.getElementById('train_lora_alpha').value = data.lora_alpha;
+                    if (data.use_rslora !== undefined) document.getElementById('train_use_rslora').checked = data.use_rslora;
+                    if (data.use_loraplus !== undefined) document.getElementById('train_use_loraplus').checked = data.use_loraplus;
+                    if (data.lokr_factor !== undefined) document.getElementById('train_lokr_factor').value = data.lokr_factor;
+                    if (data.use_lokr !== undefined) { document.getElementById('train_use_lokr').checked = data.use_lokr; setLokrState(data.use_lokr); }
                     if (data.lora_targets !== undefined) document.getElementById('train_lora_targets').value = data.lora_targets;
                     if (data.precision !== undefined) document.getElementById('train_precision').value = data.precision;
                     if (data.batch_size !== undefined) document.getElementById('train_batch_size').value = data.batch_size;
@@ -877,6 +916,7 @@
                     if (data.preview_cfg !== undefined) document.getElementById('train_preview_cfg').value = data.preview_cfg;
                     if (data.preview_size !== undefined) document.getElementById('train_preview_size').value = String(data.preview_size);
                     if (data.export_final_name !== undefined) document.getElementById('export_final_name').value = data.export_final_name;
+                    updateFinalNameSuffix();
 
                     updateProjectPaths();
                     
@@ -952,6 +992,44 @@
             }
         }
 
+        // rsLoRA escala por alpha/√rank en vez de alpha/rank: al marcarlo se reajusta el alpha para que
+        // el LoRA conserve la misma fuerza (alpha/√rank), y al desmarcarlo se deshace.
+        function toggleRsLora(on) {
+            const rank = parseInt(document.getElementById('train_lora_rank').value) || 1;
+            const el = document.getElementById('train_lora_alpha');
+            const alpha = parseInt(el.value) || rank;
+            el.value = Math.max(1, Math.round(on ? alpha / Math.sqrt(rank) : alpha * Math.sqrt(rank)));
+            updateFinalNameSuffix();
+        }
+
+        // El nombre final lleva _rs / _plus / _lokr según las casillas; al exportar o descargar, el
+        // servidor lo corrige con lo que dicen los metadatos del LoRA entrenado.
+        function updateFinalNameSuffix() {
+            const el = document.getElementById('export_final_name');
+            const base = el.value.trim().replace(/(_rs)?(_plus)?(_lokr)?(\.safetensors)?$/i, '');
+            if (!base) return;
+            const lk = document.getElementById('train_use_lokr');
+            const sfx = lk && lk.checked ? '_lokr'
+                : (document.getElementById('train_use_rslora').checked ? '_rs' : '')
+                + (document.getElementById('train_use_loraplus').checked ? '_plus' : '');
+            el.value = base + sfx + '.safetensors';
+        }
+
+        // LoKr sustituye a LoRA: rsLoRA y LoRA+ (propias de LoRA) se apagan y el factor se activa.
+        function setLokrState(on) {
+            document.getElementById('train_use_rslora').disabled = on;
+            document.getElementById('train_use_loraplus').disabled = on;
+            document.getElementById('train_lokr_factor').disabled = !on;
+        }
+
+        function toggleLokr(on) {
+            const rs = document.getElementById('train_use_rslora');
+            if (on && rs.checked) { rs.checked = false; toggleRsLora(false); }
+            if (on) document.getElementById('train_use_loraplus').checked = false;
+            setLokrState(on);
+            updateFinalNameSuffix();
+        }
+
         async function saveTrainSettings() {
             const proj = document.getElementById('project_name').value.trim();
             const trainData = {
@@ -964,6 +1042,10 @@
                 lr: parseFloat(document.getElementById('train_lr').value),
                 lora_rank: parseInt(document.getElementById('train_lora_rank').value),
                 lora_alpha: parseInt(document.getElementById('train_lora_alpha').value),
+                use_rslora: document.getElementById('train_use_rslora').checked,
+                use_loraplus: document.getElementById('train_use_loraplus').checked,
+                use_lokr: document.getElementById('train_use_lokr').checked,
+                lokr_factor: parseInt(document.getElementById('train_lokr_factor').value) || 16,
                 lora_targets: document.getElementById('train_lora_targets').value,
                 precision: document.getElementById('train_precision').value,
                 batch_size: parseInt(document.getElementById('train_batch_size').value),
