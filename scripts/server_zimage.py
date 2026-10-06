@@ -387,6 +387,22 @@ def browse_dir():
 # EXPORTAR LORA A CARPETA MODELS
 # =============================================================================
 
+def add_lora_options_suffix(name, lora_file):
+    """Añade _rs (rsLoRA) y/o _plus (LoRA+) al nombre según los metadatos del propio LoRA, para que
+    el fichero diga cómo se entrenó. No lo repite si el nombre ya lo lleva."""
+    try:
+        from safetensors import safe_open
+        with safe_open(str(lora_file), framework="pt") as f:
+            meta = f.metadata() or {}
+    except Exception:
+        return name
+    suffix = ("_rs" if meta.get("rslora") == "true" else "") + ("_plus" if meta.get("loraplus_ratio") else "")
+    stem = name[:-len(".safetensors")]
+    if not suffix or stem.lower().endswith(suffix):
+        return name
+    return stem + suffix + ".safetensors"
+
+
 @app.route("/api/export-lora", methods=["POST"])
 def export_lora():
     try:
@@ -428,6 +444,7 @@ def export_lora():
         if not source_file or not source_file.exists():
             return jsonify({"status": "error", "error": t("No .safetensors files found in: {path}", path=output_dir)}), 404
 
+        custom_name = add_lora_options_suffix(custom_name, source_file)
         dest_file = target_dir / custom_name
         shutil.copy2(source_file, dest_file)
 

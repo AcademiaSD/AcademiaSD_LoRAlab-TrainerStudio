@@ -56,6 +56,9 @@ DEFAULTS = {
     "lora_rank": 8,
     "lora_alpha": 8,
     "lora_targets": "blocks",
+    "use_rslora": False,
+    "use_loraplus": False,
+    "loraplus_ratio": 16.0,
     "weight_decay": 0.0,
     "max_grad_norm": 1.0,
     "save_every": 50,
@@ -94,6 +97,11 @@ WARMUP_STEPS      = cfg.get("warmup_steps",      DEFAULTS["warmup_steps"])
 LORA_RANK         = cfg.get("lora_rank",         DEFAULTS["lora_rank"])
 LORA_ALPHA        = cfg.get("lora_alpha",        DEFAULTS["lora_alpha"])
 LORA_TARGETS      = "all" if cfg.get("lora_targets", DEFAULTS["lora_targets"]) == "all" else "blocks"
+# rsLoRA escala el LoRA por alpha/√rank en vez de alpha/rank; LoRA+ da a lora_B un LR ratio veces mayor.
+# Las dos cambian cómo aprende, no el formato: el LoRA exportado es estándar (ver _export_lora).
+USE_RSLORA        = bool(cfg.get("use_rslora",   DEFAULTS["use_rslora"]))
+USE_LORAPLUS      = bool(cfg.get("use_loraplus", DEFAULTS["use_loraplus"]))
+LORAPLUS_RATIO    = float(cfg.get("loraplus_ratio", DEFAULTS["loraplus_ratio"]))
 WEIGHT_DECAY      = cfg.get("weight_decay",      DEFAULTS["weight_decay"])
 MAX_GRAD_NORM     = cfg.get("max_grad_norm",     DEFAULTS["max_grad_norm"])
 SAVE_EVERY        = cfg.get("save_every",        DEFAULTS["save_every"])
@@ -133,6 +141,7 @@ print(f"  {t('Output Dir'):<22}: {OUTPUT_DIR}")
 print(f"  {t('Total Steps'):<22}: {TOTAL_STEPS}")
 print(f"  {t('Learning Rate'):<22}: {LR}")
 print(f"  {'LoRA Rank/Alpha':<22}: {LORA_RANK}/{LORA_ALPHA}")
+print(f"  {'rsLoRA / LoRA+':<22}: {'on' if USE_RSLORA else 'off'} / {f'x{LORAPLUS_RATIO:g}' if USE_LORAPLUS else 'off'}")
 print(f"  {t('LoRA Targets'):<22}: {LORA_TARGETS}")
 print(f"  {'Batch / Grad Accum':<22}: {BATCH_SIZE}/{GRAD_ACCUM_STEPS}")
 print(f"  {'Timesteps / Shift':<22}: {TIMESTEP_SAMPLING} / {TRAIN_SHIFT}")
@@ -317,7 +326,7 @@ def build_lora_metadata(step):
         "ss_base_model_version": "Z-Image",
         "ss_network_module": "peft.LoraModel",
         "ss_network_dim": LORA_RANK,
-        "ss_network_alpha": LORA_ALPHA,
+        "ss_network_alpha": export_alpha(),
         "lora_targets": LORA_TARGETS,
         "ss_learning_rate": LR,
         "ss_lr_scheduler": "cosine_with_warmup",
@@ -329,6 +338,16 @@ def build_lora_metadata(step):
         "ss_seed": SEED,
         "ss_mixed_precision": "bf16",
     }
+
+    # La GUI lee estas dos claves al exportar para añadir el sufijo _rs / _plus al nombre.
+    if USE_RSLORA:
+        meta["rslora"] = "true"
+        meta["rslora_train_alpha"] = LORA_ALPHA
+    if USE_LORAPLUS:
+        meta["loraplus_ratio"] = LORAPLUS_RATIO
+    if USE_RSLORA or USE_LORAPLUS:
+        meta["ss_network_args"] = json.dumps({"rslora": USE_RSLORA,
+                                              "loraplus_lr_ratio": LORAPLUS_RATIO if USE_LORAPLUS else None})
 
     trigger = TRIGGER_WORD.strip()
     if trigger:
@@ -351,15 +370,22 @@ def build_lora_metadata(step):
     return {k: str(v) for k, v in meta.items()}
 
 
+def export_alpha():
+    """Alpha que se escribe en el LoRA exportado. ComfyUI y el resto aplican alpha/rank; con rsLoRA
+    el LoRA se entrenó con alpha/√rank, así que se guarda alpha·√rank para que actúe igual."""
+    return LORA_ALPHA * math.sqrt(LORA_RANK) if USE_RSLORA else LORA_ALPHA
+
+
 def _export_lora(model, path, step):
     # Formato PEFT/diffusers que carga ComfyUI (une to_q/to_k/to_v en su qkv). Se incluye alpha
     # por capa: sin él, ComfyUI aplicaría el LoRA con escala 1 en lugar de alpha/rank.
+    alpha = torch.tensor(float(export_alpha()))
     clean = {}
     for k, v in get_peft_model_state_dict(model).items():
         k = "transformer." + k.replace("base_model.model.", "")
         clean[k] = v.to(torch.bfloat16).cpu().contiguous()
         if k.endswith(".lora_A.weight"):
-            clean[k[:-len(".lora_A.weight")] + ".alpha"] = torch.tensor(float(LORA_ALPHA))
+            clean[k[:-len(".lora_A.weight")] + ".alpha"] = alpha
     save_file(clean, path, metadata=build_lora_metadata(step))
 
 
@@ -580,7 +606,8 @@ def is_target(name, module):
 
 
 def train_zimage():
-    global LORA_RANK, LORA_ALPHA  # al reanudar se toman del checkpoint (el alpha se exporta con el LoRA)
+    # Al reanudar se toman del checkpoint (el alpha se exporta con el LoRA).
+    global LORA_RANK, LORA_ALPHA, USE_RSLORA, USE_LORAPLUS, LORAPLUS_RATIO
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.benchmark = True
 
@@ -622,10 +649,25 @@ def train_zimage():
                               "(settings ask for {n2} layers, rank {r2}, alpha {a2}; they apply to new trainings).",
                               n=saved[0], r=saved[1], a=saved[2], n2=len(target_modules), r2=LORA_RANK, a2=LORA_ALPHA))
         target_modules, LORA_RANK, LORA_ALPHA = saved_targets, saved[1], saved[2]
+        # rsLoRA lo guarda PEFT en adapter_config.json; LoRA+ va en lora_options.json. Un checkpoint
+        # anterior a estas opciones no tiene ninguno de los dos: se entrenó sin ellas.
+        opts_file = os.path.join(RESUME_DIR, "lora_options.json")
+        opts = {}
+        if os.path.exists(opts_file):
+            with open(opts_file, "r", encoding="utf-8") as f:
+                opts = json.load(f)
+        saved_opts = (bool(saved_cfg.get("use_rslora", False)), bool(opts.get("use_loraplus", False)),
+                      float(opts.get("loraplus_ratio", LORAPLUS_RATIO)))
+        if saved_opts[:2] != (USE_RSLORA, USE_LORAPLUS):
+            print("\n[!] " + t("Resuming with the checkpoint's options: rsLoRA {a}, LoRA+ {b} "
+                              "(settings ask for rsLoRA {a2}, LoRA+ {b2}; they apply to new trainings).",
+                              a=saved_opts[0], b=saved_opts[1], a2=USE_RSLORA, b2=USE_LORAPLUS))
+        USE_RSLORA, USE_LORAPLUS, LORAPLUS_RATIO = saved_opts
 
     lora_config = LoraConfig(
         r=LORA_RANK, lora_alpha=LORA_ALPHA, lora_dropout=0.0,
         target_modules=target_modules, use_dora=False, init_lora_weights=True,
+        use_rslora=USE_RSLORA,
     )
 
     model = get_peft_model(transformer, lora_config)
@@ -636,7 +678,15 @@ def train_zimage():
     model.print_trainable_parameters()
 
     trainable = [p for p in model.parameters() if p.requires_grad]
-    optimizer = torch.optim.AdamW(trainable, lr=LR, weight_decay=WEIGHT_DECAY)
+    # LoRA+: lora_B en su propio grupo, con el LR multiplicado (lr_mult se aplica en cada paso).
+    if USE_LORAPLUS:
+        lora_b = [p for n, p in model.named_parameters() if p.requires_grad and "lora_B" in n]
+        lora_a = [p for n, p in model.named_parameters() if p.requires_grad and "lora_B" not in n]
+        optimizer = torch.optim.AdamW([{"params": lora_a, "lr_mult": 1.0},
+                                       {"params": lora_b, "lr_mult": LORAPLUS_RATIO}],
+                                      lr=LR, weight_decay=WEIGHT_DECAY)
+    else:
+        optimizer = torch.optim.AdamW(trainable, lr=LR, weight_decay=WEIGHT_DECAY)
 
     def lr_at(step):
         if step < WARMUP_STEPS:
@@ -668,6 +718,8 @@ def train_zimage():
         print("\n" + t("Saving checkpoint state at step {n}...", n=current_s))
         os.makedirs(RESUME_DIR, exist_ok=True)
         model.save_pretrained(RESUME_DIR)
+        with open(os.path.join(RESUME_DIR, "lora_options.json"), "w", encoding="utf-8") as f:
+            json.dump({"use_loraplus": USE_LORAPLUS, "loraplus_ratio": LORAPLUS_RATIO}, f)
         torch.save(optimizer.state_dict(), OPT_FILE)
         with open(STEP_FILE, "w", encoding="utf-8") as f:
             f.write(str(current_s))
@@ -772,7 +824,7 @@ def train_zimage():
             if step % GRAD_ACCUM_STEPS == 0:
                 grad_norm = torch.nn.utils.clip_grad_norm_(trainable, MAX_GRAD_NORM).item()
                 for gparam in optimizer.param_groups:
-                    gparam["lr"] = lr_at(step)
+                    gparam["lr"] = lr_at(step) * gparam.get("lr_mult", 1.0)
                 optimizer.step()
                 optimizer.zero_grad(set_to_none=True)
 

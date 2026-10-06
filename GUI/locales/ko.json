@@ -1039,5 +1039,8 @@
   "no source carried an audio track": "오디오 트랙이 있는 원본이 없습니다",
   "Nothing was written.": "아무것도 쓰지 않았습니다.",
   "remux failed": "remux 실패",
-  "Downloading {0} ({1}) from {2} ...": "{2}에서 {0} ({1}) 다운로드 중..."
+  "Downloading {0} ({1}) from {2} ...": "{2}에서 {0} ({1}) 다운로드 중...",
+  "Rank-stabilized LoRA: scales the LoRA by alpha/√rank instead of alpha/rank, so higher ranks keep learning instead of fading out. Ticking it lowers alpha to keep the same strength; raise it for a stronger effect. The exported LoRA is a standard one (its alpha is converted) and Send to Models adds _rs to its name. Fixed for the whole training: to change it, start a new one.": "랭크 안정화 LoRA: LoRA를 alpha/rank 대신 alpha/√rank로 스케일해서, 높은 랭크에서도 효과가 약해지지 않고 계속 학습합니다. 체크하면 같은 강도를 유지하도록 alpha가 낮아지며, 더 강한 효과를 원하면 올리세요. 내보낸 LoRA는 표준 형식이고(alpha가 변환됨) Send to Models가 이름에 _rs를 붙입니다. 학습 내내 고정됩니다: 바꾸려면 새 학습을 시작하세요.",
+  "LoRA+: the B matrix of every layer learns 16 times faster than A. It usually reaches the same quality in fewer steps; if the training looks unstable or burns early, lower the learning rate. The exported file is a normal LoRA and Send to Models adds _plus to its name. Fixed for the whole training: to change it, start a new one.": "LoRA+: 각 레이어의 B 행렬이 A보다 16배 빠르게 학습합니다. 보통 더 적은 스텝으로 같은 품질에 도달합니다. 학습이 불안정하거나 일찍 타 버리면 학습률을 낮추세요. 내보낸 파일은 일반 LoRA이고 Send to Models가 이름에 _plus를 붙입니다. 학습 내내 고정됩니다: 바꾸려면 새 학습을 시작하세요.",
+  "Resuming with the checkpoint's options: rsLoRA {a}, LoRA+ {b} (settings ask for rsLoRA {a2}, LoRA+ {b2}; they apply to new trainings).": "체크포인트의 옵션으로 재개합니다: rsLoRA {a}, LoRA+ {b} (설정은 rsLoRA {a2}, LoRA+ {b2}이며, 새 학습에 적용됩니다)."
 }

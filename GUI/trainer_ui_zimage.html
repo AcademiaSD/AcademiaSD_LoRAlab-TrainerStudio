@@ -412,6 +412,21 @@
                     </div>
 
                     <div class="form-row">
+                        <div class="form-group" title="Rank-stabilized LoRA: scales the LoRA by alpha/√rank instead of alpha/rank, so higher ranks keep learning instead of fading out. Ticking it lowers alpha to keep the same strength; raise it for a stronger effect. The exported LoRA is a standard one (its alpha is converted) and Send to Models adds _rs to its name. Fixed for the whole training: to change it, start a new one.">
+                            <label style="display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer;" for="train_use_rslora">
+                                <input type="checkbox" id="train_use_rslora" onchange="toggleRsLora(this.checked)" style="width: 18px; height: 18px; cursor: pointer;">
+                                rsLoRA
+                            </label>
+                        </div>
+                        <div class="form-group" title="LoRA+: the B matrix of every layer learns 16 times faster than A. It usually reaches the same quality in fewer steps; if the training looks unstable or burns early, lower the learning rate. The exported file is a normal LoRA and Send to Models adds _plus to its name. Fixed for the whole training: to change it, start a new one.">
+                            <label style="display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer;" for="train_use_loraplus">
+                                <input type="checkbox" id="train_use_loraplus" style="width: 18px; height: 18px; cursor: pointer;">
+                                LoRA+
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
                         <div class="form-group">
                             <label>Batch Size:</label>
                             <input type="number" id="train_batch_size" value="1">
@@ -814,6 +829,8 @@
                     if (t.lora_rank) document.getElementById('train_lora_rank').value = t.lora_rank;
                     if (t.lora_alpha) document.getElementById('train_lora_alpha').value = t.lora_alpha;
                     if (t.lora_targets) document.getElementById('train_lora_targets').value = t.lora_targets;
+                    if (t.use_rslora !== undefined) document.getElementById('train_use_rslora').checked = t.use_rslora;
+                    if (t.use_loraplus !== undefined) document.getElementById('train_use_loraplus').checked = t.use_loraplus;
                     if (t.batch_size) document.getElementById('train_batch_size').value = t.batch_size;
                     if (t.grad_accum_steps) document.getElementById('train_grad_accum').value = t.grad_accum_steps;
                     if (t.save_every) document.getElementById('train_save_every').value = t.save_every;
@@ -874,6 +891,8 @@
                     if (data.lora_rank !== undefined) document.getElementById('train_lora_rank').value = data.lora_rank;
                     if (data.lora_alpha !== undefined) document.getElementById('train_lora_alpha').value = data.lora_alpha;
                     if (data.lora_targets !== undefined) document.getElementById('train_lora_targets').value = data.lora_targets;
+                    if (data.use_rslora !== undefined) document.getElementById('train_use_rslora').checked = data.use_rslora;
+                    if (data.use_loraplus !== undefined) document.getElementById('train_use_loraplus').checked = data.use_loraplus;
                     if (data.batch_size !== undefined) document.getElementById('train_batch_size').value = data.batch_size;
                     if (data.grad_accum_steps !== undefined) document.getElementById('train_grad_accum').value = data.grad_accum_steps;
                     if (data.save_every !== undefined) document.getElementById('train_save_every').value = data.save_every;
@@ -965,6 +984,15 @@
             }
         }
 
+        // rsLoRA escala por alpha/√rank en vez de alpha/rank: al marcarlo se reajusta el alpha para que
+        // el LoRA conserve la misma fuerza (alpha/√rank), y al desmarcarlo se deshace.
+        function toggleRsLora(on) {
+            const rank = parseInt(document.getElementById('train_lora_rank').value) || 1;
+            const el = document.getElementById('train_lora_alpha');
+            const alpha = parseInt(el.value) || rank;
+            el.value = Math.max(1, Math.round(on ? alpha / Math.sqrt(rank) : alpha * Math.sqrt(rank)));
+        }
+
         async function saveTrainSettings() {
             const proj = document.getElementById('project_name').value.trim();
             const trainData = {
@@ -978,6 +1006,8 @@
                 lora_rank: parseInt(document.getElementById('train_lora_rank').value),
                 lora_alpha: parseInt(document.getElementById('train_lora_alpha').value),
                 lora_targets: document.getElementById('train_lora_targets').value,
+                use_rslora: document.getElementById('train_use_rslora').checked,
+                use_loraplus: document.getElementById('train_use_loraplus').checked,
                 batch_size: parseInt(document.getElementById('train_batch_size').value),
                 grad_accum_steps: parseInt(document.getElementById('train_grad_accum').value),
                 save_every: parseInt(document.getElementById('train_save_every').value),
