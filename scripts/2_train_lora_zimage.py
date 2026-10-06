@@ -379,13 +379,13 @@ def export_alpha():
 def _export_lora(model, path, step):
     # Formato PEFT/diffusers que carga ComfyUI (une to_q/to_k/to_v en su qkv). Se incluye alpha
     # por capa: sin él, ComfyUI aplicaría el LoRA con escala 1 en lugar de alpha/rank.
-    alpha = torch.tensor(float(export_alpha()))
+    alpha = float(export_alpha())
     clean = {}
     for k, v in get_peft_model_state_dict(model).items():
         k = "transformer." + k.replace("base_model.model.", "")
         clean[k] = v.to(torch.bfloat16).cpu().contiguous()
         if k.endswith(".lora_A.weight"):
-            clean[k[:-len(".lora_A.weight")] + ".alpha"] = alpha
+            clean[k[:-len(".lora_A.weight")] + ".alpha"] = torch.tensor(alpha)  # uno por capa: safetensors no admite tensores compartidos
     save_file(clean, path, metadata=build_lora_metadata(step))
 
 
