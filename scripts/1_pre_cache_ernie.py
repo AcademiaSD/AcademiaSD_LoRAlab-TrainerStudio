@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Pre-cache ERNIE-Image text embeddings and FLUX.2-format VAE latents."""
-import gc, json, math, os, sys, subprocess
+import gc, json, math, os, sys
 import torch
 import torchvision.transforms.functional as VF
 from PIL import Image
@@ -45,22 +45,14 @@ def ensure_nf4_model():
                os.path.join(MODEL_ID,"tokenizer","tokenizer.json"))
     if all(os.path.isfile(p) for p in converted):
         return
-    raw="Ernie-Raw"
-    required=(os.path.join(raw,"transformer","config.json"),
-              os.path.join(raw,"text_encoder","model.safetensors"),
-              os.path.join(raw,"vae","diffusion_pytorch_model.safetensors"),
-              os.path.join(raw,"tokenizer","tokenizer.json"))
-    if not all(os.path.isfile(p) for p in required):
-        from huggingface_hub import snapshot_download
-        token=None
-        try:
-            token=json.load(open("settings/HF_token.json",encoding="utf-8")).get("token","").strip() or None
-        except Exception: pass
-        print("Downloading ERNIE-Image Diffusers weights to Ernie-Raw (the optional PE model is skipped).",flush=True)
-        snapshot_download(repo_id="baidu/ERNIE-Image",local_dir=raw,token=token,max_workers=6,
-            allow_patterns=["transformer/*","text_encoder/*","vae/*","scheduler/*","tokenizer/*","model_index.json","LICENSE","README.md",".gitattributes"])
-    print("Converting ERNIE transformer and text encoder to NF4. This is a one-time step.",flush=True)
-    subprocess.run([sys.executable,"tools/ernie/5_convert_ernie_nf4.py"],check=True)
+    from huggingface_hub import snapshot_download
+    repo_id="AcademiaSD/Ernie-NF4-for-LoRA-Training"
+    print(f"Downloading the prepared ERNIE NF4 model from Hugging Face ({repo_id}).",flush=True)
+    os.makedirs(MODEL_ID,exist_ok=True)
+    snapshot_download(repo_id=repo_id,local_dir=MODEL_ID)
+    missing=[p for p in converted if not os.path.isfile(p)]
+    if missing:
+        raise RuntimeError("The ERNIE NF4 repository download is incomplete; missing: "+", ".join(missing))
 
 def encode_text(te, tok, prompt, device):
     ids = tok(prompt, add_special_tokens=True, truncation=True, padding=False)["input_ids"]
