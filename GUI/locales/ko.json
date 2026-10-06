@@ -1047,5 +1047,13 @@
   "LoKr factor: how each layer is split. Higher = smaller file and less capacity; lower = more capacity. 16 is the usual value; try 8 if the LoKr learns too little.": "LoKr 계수: 각 레이어를 나누는 방식입니다. 높을수록 파일이 작고 용량이 줄며, 낮을수록 용량이 늘어납니다. 보통 16을 씁니다. LoKr가 너무 적게 배우면 8을 써 보세요.",
   "Factor": "계수",
   "Resuming with the checkpoint's method: {m} (settings ask for {m2}; it applies to new trainings).": "체크포인트의 방식으로 재개합니다: {m} (설정은 {m2}이며, 새 학습에 적용됩니다).",
-  "Resuming with the checkpoint's LoKr: {n} layers, rank {r}, alpha {a}, factor {f} (settings ask for {n2} layers, rank {r2}, alpha {a2}, factor {f2}; they apply to new trainings).": "체크포인트의 LoKr로 재개합니다: {n}개 레이어, rank {r}, alpha {a}, 계수 {f} (설정은 {n2}개 레이어, rank {r2}, alpha {a2}, 계수 {f2}이며, 새 학습에 적용됩니다)."
+  "Resuming with the checkpoint's LoKr: {n} layers, rank {r}, alpha {a}, factor {f} (settings ask for {n2} layers, rank {r2}, alpha {a2}, factor {f2}; they apply to new trainings).": "체크포인트의 LoKr로 재개합니다: {n}개 레이어, rank {r}, alpha {a}, 계수 {f} (설정은 {n2}개 레이어, rank {r2}, alpha {a2}, 계수 {f2}이며, 새 학습에 적용됩니다).",
+  "Continue": "계속",
+  "Delete": "삭제",
+  "Uploaded": "업로드됨",
+  "Uploading {i}/{n}": "업로드 중 {i}/{n}",
+  "Retry failed files": "실패한 파일 다시 시도",
+  "{ok} uploaded, {n} failed. Use Retry failed.": "{ok}개 업로드됨, {n}개 실패. '실패한 파일 다시 시도'를 사용하세요.",
+  "No log yet.": "아직 로그가 없습니다.",
+  "Download console log": "콘솔 로그 다운로드"
 }

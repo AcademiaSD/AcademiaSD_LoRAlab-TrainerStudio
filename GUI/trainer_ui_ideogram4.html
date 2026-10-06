@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AcademiaSD Ideogram 4 LoRAlab</title>
     <script src="/i18n.js"></script>
+    <script src="/notify.js"></script>
 
     <!-- Favicon de la pestaña del navegador -->
     <link rel="icon" type="image/png" href="/assets/logo_128.png">
@@ -728,12 +729,12 @@
                 });
                 const data = await res.json();
                 if (data.status === 'ok') {
-                    alert('✓ ' + t('LoRA folder saved for every trainer!'));
+                    toast('✓ ' + t('LoRA folder saved for every trainer!'), 'success');
                 } else {
-                    alert(`[!] Error: ${data.error}`);
+                    toast(`[!] Error: ${data.error}`, 'error');
                 }
             } catch (e) {
-                alert(`[!] ${t('Network error')}: ${e}`);
+                toast(`[!] ${t('Network error')}: ${e}`, 'error');
             }
         }
 
@@ -747,12 +748,12 @@
                 });
                 const data = await res.json();
                 if (data.status === 'ok') {
-                    alert('✓ ' + t('HF Token saved!'));
+                    toast('✓ ' + t('HF Token saved!'), 'success');
                 } else {
-                    alert(`[!] Error: ${data.error}`);
+                    toast(`[!] Error: ${data.error}`, 'error');
                 }
             } catch (e) {
-                alert(`[!] ${t('Network error')}: ${e}`);
+                toast(`[!] ${t('Network error')}: ${e}`, 'error');
             }
         }
 
@@ -899,10 +900,10 @@
                         await saveTrainSettings();
                     }
 
-                    alert('✓ ' + t('Configuration loaded from:') + `\n${file.name}`);
+                    toast('✓ ' + t('Configuration loaded from:') + `\n${file.name}`, 'success');
                     loadDatasetInfo();
                 } catch (err) {
-                    alert(`[!] ${t('Error reading JSON')}: ${err}`);
+                    toast(`[!] ${t('Error reading JSON')}: ${err}`, 'error');
                 }
             };
             reader.readAsText(file);
@@ -960,7 +961,7 @@
             const data = await res.json();
             if (data.status === 'ok') {
                 const listStr = data.all_saved ? data.all_saved.join('\n • ') : data.file;
-                if (!silent) alert('✓ ' + t('Pre-Cache settings saved to:') + `\n • ${listStr}`);
+                if (!silent) toast('✓ ' + t('Pre-Cache settings saved to:') + `\n • ${listStr}`, 'success');
                 loadDatasetInfo();
             }
         }
@@ -1027,7 +1028,7 @@
                 const encoding = data.encoding
                     ? '\n\n' + t('The preview prompt is being encoded on {device}. Start/Resume and Stop are disabled until it finishes.', { device: data.encoding_device })
                     : '';
-                alert('✓ ' + t('Train settings saved to:') + `\n • ${listStr}${live}${encoding}`);
+                toast('✓ ' + t('Train settings saved to:') + `\n • ${listStr}${live}${encoding}`, 'success');
             }
             return data;
         }
@@ -1074,22 +1075,16 @@
             term.scrollTop = term.scrollHeight;
         }
 
-        async function startScript(scriptName) {
-            document.getElementById('terminal').innerHTML = '';
-            appendTerminal(`[SYSTEM] ${t('Launching {script}...', { script: scriptName })}`);
-            setRunningState(true);
+        let consoleSince = 0;
+        let consoleController = null;
 
-            userRequestedStop = false;
-            lastExecutedStep = 0;
-            totalTargetSteps = 0;
-
+        // La consola vive en el servidor: al reabrir la página (o abrirla desde otro navegador)
+        // se vuelve a enganchar y se repinta lo ya emitido, incluido el paso actual.
+        async function attachConsole() {
+            if (consoleController) consoleController.abort();
+            consoleController = new AbortController();
             try {
-                const response = await fetch('/api/run', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ script: scriptName })
-                });
-
+                const response = await fetch(`/api/console/stream?since=${consoleSince}`, { signal: consoleController.signal });
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder('utf-8');
                 let buffer = '';
@@ -1099,67 +1094,114 @@
                     if (done) break;
                     buffer += decoder.decode(value, { stream: true });
 
-                    const lines = buffer.split('\n\n');
-                    buffer = lines.pop();
+                    const parts = buffer.split('\n\n');
+                    buffer = parts.pop();
 
-                    for (const line of lines) {
-                        if (line.startsWith('data: ')) {
-                            try {
-                                const msg = JSON.parse(line.slice(6));
-                                if (msg.type === 'output') {
-                                    appendTerminal(msg.text, msg.replace);
+                    for (const part of parts) {
+                        if (!part.startsWith('data: ')) continue;
+                        let msg = null;
+                        try { msg = JSON.parse(part.slice(6)); } catch (e) { continue; }
 
-                                    const stepMatch = msg.text.match(stepRe());
-                                    if (stepMatch) {
-                                        lastExecutedStep = parseInt(stepMatch[1]);
-                                        totalTargetSteps = parseInt(stepMatch[2]);
-                                    }
-                                } else if (msg.type === 'done') {
-                                    if (msg.code === 0) {
-                                        let successMsg = "";
-                                        let msgClass = 'term-success';
+                        if (msg.type === 'line') {
+                            consoleSince = msg.seq;
+                            appendTerminal(msg.text, msg.replace);
 
-                                        if (scriptName === 'train') {
-                                            const totalFormSteps = parseInt(document.getElementById('train_total_steps').value) || totalTargetSteps;
-                                            const isPausedEarly = userRequestedStop || (lastExecutedStep > 0 && lastExecutedStep < totalFormSteps);
-
-                                            if (isPausedEarly) {
-                                                successMsg = '\n[SYSTEM] ⏸ ' + t('Training paused successfully! Checkpoint saved.');
-                                                msgClass = 'term-warning';
-                                            } else {
-                                                successMsg = '\n[SYSTEM] ✓ ' + t('LoRA training completed successfully!');
-                                                msgClass = 'term-success';
-                                            }
-                                        } else if (scriptName === 'precache') {
-                                            if (userRequestedStop) {
-                                                successMsg = '\n[SYSTEM] ⏸ ' + t('Pre-Cache stopped by user.');
-                                                msgClass = 'term-warning';
-                                            } else {
-                                                successMsg = '\n[SYSTEM] ✓ ' + t('Pre-Cache completed successfully!');
-                                                msgClass = 'term-success';
-                                            }
-                                        } else {
-                                            successMsg = `\n[SYSTEM] ✓ ${t('Finished successfully with code')}: ${msg.code}`;
-                                        }
-
-                                        appendTerminal(successMsg, false, msgClass);
-                                    } else if (scriptName === 'train' && msg.code === 2) {
-                                        appendTerminal('\n[SYSTEM] ✗ ' + t('Training could not be run: create the Pre-Cache first.'), false, 'term-danger');
-                                    } else {
-                                        appendTerminal(`\n[SYSTEM] ⚠ ${t('Process finished with code')}: ${msg.code}`, false, 'term-danger');
-                                    }
-                                }
-                            } catch (e) {}
+                            const stepMatch = msg.text.match(stepRe());
+                            if (stepMatch) {
+                                lastExecutedStep = parseInt(stepMatch[1]);
+                                totalTargetSteps = parseInt(stepMatch[2]);
+                            }
+                        } else if (msg.type === 'done') {
+                            consoleSince = msg.seq;
+                            consoleDone(msg);
                         }
                     }
                 }
+            } catch (e) {
+                // AbortError al cerrar la pestaña: el entrenamiento sigue en el servidor.
+            }
+        }
+
+        function consoleDone(msg) {
+            if (msg.code === 0) {
+                let successMsg = "";
+                let msgClass = 'term-success';
+
+                if (msg.script === 'train') {
+                    const totalFormSteps = totalTargetSteps || parseInt(document.getElementById('train_total_steps').value);
+                    const isPausedEarly = userRequestedStop || (lastExecutedStep > 0 && lastExecutedStep < totalFormSteps);
+
+                    if (isPausedEarly) {
+                        successMsg = '\n[SYSTEM] ⏸ ' + t('Training paused successfully! Checkpoint saved.');
+                        msgClass = 'term-warning';
+                    } else {
+                        successMsg = '\n[SYSTEM] ✓ ' + t('LoRA training completed successfully!');
+                        msgClass = 'term-success';
+                    }
+                } else if (msg.script === 'precache') {
+                    if (userRequestedStop) {
+                        successMsg = '\n[SYSTEM] ⏸ ' + t('Pre-Cache stopped by user.');
+                        msgClass = 'term-warning';
+                    } else {
+                        successMsg = '\n[SYSTEM] ✓ ' + t('Pre-Cache completed successfully!');
+                        msgClass = 'term-success';
+                    }
+                } else {
+                    successMsg = `\n[SYSTEM] ✓ ${t('Finished successfully with code')}: ${msg.code}`;
+                }
+
+                appendTerminal(successMsg, false, msgClass);
+            } else if (msg.script === 'train' && msg.code === 2) {
+                appendTerminal('\n[SYSTEM] ✗ ' + t('Training could not be run: create the Pre-Cache first.'), false, 'term-danger');
+            } else {
+                appendTerminal(`\n[SYSTEM] ⚠ ${t('Process finished with code')}: ${msg.code}`, false, 'term-danger');
+            }
+
+            setRunningState(false);
+            loadPreviews();
+            checkCheckpointInfo();
+        }
+
+        async function startScript(scriptName) {
+            document.getElementById('terminal').innerHTML = '';
+            consoleSince = 0;
+            appendTerminal(`[SYSTEM] ${t('Launching {script}...', { script: scriptName })}`);
+            setRunningState(true);
+
+            userRequestedStop = false;
+            lastExecutedStep = 0;
+            totalTargetSteps = 0;
+
+            try {
+                const res = await fetch('/api/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ script: scriptName })
+                });
+                const data = await res.json();
+
+                if (data.status !== 'ok') {
+                    appendTerminal(`\n[SYSTEM] ${t('Execution error')}: ${data.error}`, false, 'term-danger');
+                    setRunningState(false);
+                    return;
+                }
+                attachConsole();
             } catch (err) {
                 appendTerminal(`\n[SYSTEM] ${t('Execution error')}: ${err}`, false, 'term-danger');
-            } finally {
                 setRunningState(false);
-                loadPreviews();
-                checkCheckpointInfo();
             }
+        }
+
+        // Si ya hay un entrenamiento en marcha al cargar la página, repinta la consola completa
+        // y el progreso, y sigue enganchado a lo que siga saliendo.
+        async function restoreConsole() {
+            try {
+                const st = await (await fetch('/api/status')).json();
+                if (st.running) {
+                    setRunningState(true);
+                    attachConsole();
+                }
+            } catch (e) {}
         }
 
         async function runPrecache() {
@@ -1189,7 +1231,7 @@
             const finalName = document.getElementById('export_final_name').value.trim();
 
             if (!targetDir) {
-                alert(t('Please select or enter the target models/lora folder.'));
+                toast(t('Please select or enter the target models/lora folder.'));
                 return;
             }
 
@@ -1203,14 +1245,14 @@
                 });
                 const data = await res.json();
                 if (data.status === 'ok') {
-                    alert(`✓ ${t('LoRA exported successfully')}:\n${data.filename}\n\n${t('Copied from')}: ${data.source}`);
+                    toast(`✓ ${t('LoRA exported successfully')}:\n${data.filename}\n\n${t('Copied from')}: ${data.source}`, 'success');
                     appendTerminal(`[SYSTEM] ✓ ${t('Export completed')}: ${data.dest}`, false, 'term-success');
                 } else {
-                    alert(`[!] ${t('Export error')}: ${data.error}`);
+                    toast(`[!] ${t('Export error')}: ${data.error}`, 'error');
                     appendTerminal(`[SYSTEM] [!] ${t('Export error')}: ${data.error}`, false, 'term-danger');
                 }
             } catch (e) {
-                alert(`[!] ${t('Network error')}: ${e}`);
+                toast(`[!] ${t('Network error')}: ${e}`, 'error');
             }
         }
 
@@ -1314,7 +1356,7 @@
         }
 
         async function deleteDatasetImage(file) {
-            if (!confirm(t('Remove "{name}" and its .txt caption from the dataset?', { name: file }) + '\n\n' + t('The files are deleted from disk.'))) return;
+            if (!await askConfirm(t('Remove "{name}" and its .txt caption from the dataset?', { name: file }) + '\n\n' + t('The files are deleted from disk.'))) return;
             try {
                 const res = await fetch('/api/delete-dataset-image', {
                     method: 'POST',
@@ -1322,15 +1364,15 @@
                     body: JSON.stringify({ file: file })
                 });
                 const data = await res.json();
-                if (data.status !== 'ok') { alert('Error: ' + (data.error || t('unknown'))); return; }
+                if (data.status !== 'ok') { toast('Error: ' + (data.error || t('unknown')), 'error'); return; }
                 loadDatasetInfo();
-            } catch (e) { alert('Error: ' + e); }
+            } catch (e) { toast('Error: ' + e, 'error'); }
         }
 
         async function clearAllCaptions() {
             const n = parseInt(document.getElementById('ds-txt-count').innerText) || 0;
             if (!n) {
-                alert(t('There are no captions to delete.'));
+                toast(t('There are no captions to delete.'));
                 return;
             }
             // Se pide escribir el número: un confirm normal se acepta por reflejo y esto no tiene deshacer.
@@ -1339,28 +1381,28 @@
             try {
                 const res = await fetch('/api/clear-captions', { method: 'POST' });
                 const data = await res.json();
-                if (data.status === 'error') { alert('Error: ' + (data.error || t('unknown'))); return; }
+                if (data.status === 'error') { toast('Error: ' + (data.error || t('unknown')), 'error'); return; }
                 appendTerminal(`[CAPTIONS] ${t('{n} .txt deleted', { n: data.removed || 0 })}`, false, 'term-warning');
                 (data.errors || []).forEach(x => appendTerminal('   ' + x, false, 'term-danger'));
                 loadDatasetInfo();
-            } catch (e) { alert('Error: ' + e); }
+            } catch (e) { toast('Error: ' + e, 'error'); }
         }
 
         async function clearDataset() {
             const n = parseInt(document.getElementById('ds-count').innerText) || 0;
             const path = document.getElementById('dataset_path').value;
-            if (!n) { alert(t('The dataset is already empty.')); return; }
+            if (!n) { toast(t('The dataset is already empty.')); return; }
             // Se pide escribir el número: un confirm normal se acepta por reflejo y esto no tiene deshacer.
             const resp = prompt(t('This DELETES the {n} files of the dataset and their .txt captions:', { n }) + `\n${path}\n` + t('There is no undo.') + '\n\n' + t('Type {n} to confirm:', { n }));
             if (String(resp || '').trim() !== String(n)) return;
             try {
                 const res = await fetch('/api/clear-dataset', { method: 'POST' });
                 const data = await res.json();
-                if (data.status === 'error') { alert('Error: ' + (data.error || t('unknown'))); return; }
+                if (data.status === 'error') { toast('Error: ' + (data.error || t('unknown')), 'error'); return; }
                 appendTerminal(`[DATASET] ${t('{n} file(s) deleted', { n: data.removed || 0 })}: ${data.path}`, false, 'term-warning');
                 (data.errors || []).forEach(x => appendTerminal('   ' + x, false, 'term-danger'));
                 loadDatasetInfo();
-            } catch (e) { alert('Error: ' + e); }
+            } catch (e) { toast('Error: ' + e, 'error'); }
         }
 
         async function deleteProjectData(target) {
@@ -1368,7 +1410,7 @@
                 precache: t('This will delete the current pre-cache.'),
                 training: t('This will delete all the current training (checkpoints, resume point and previews).')
             };
-            if (!confirm(texts[target] + '\n\n' + t('Continue?'))) return;
+            if (!await askConfirm(texts[target] + '\n\n' + t('Continue?'))) return;
             try {
                 const res = await fetch('/api/delete-project-data', {
                     method: 'POST',
@@ -1376,12 +1418,12 @@
                     body: JSON.stringify({ target: target })
                 });
                 const data = await res.json();
-                if (data.status === 'error') { alert('Error: ' + (data.error || t('unknown'))); return; }
+                if (data.status === 'error') { toast('Error: ' + (data.error || t('unknown')), 'error'); return; }
                 let out = t('{n} item(s) deleted', { n: data.removed }) + `\n${data.path}`;
                 if (data.errors && data.errors.length) out += '\n\n' + t('Could not delete:') + '\n' + data.errors.join('\n');
-                alert(out);
+                toast(out);
                 if (target === 'training') { checkCheckpointInfo(); loadPreviews(); }
-            } catch (e) { alert('Error: ' + e); }
+            } catch (e) { toast('Error: ' + e, 'error'); }
         }
 
         // Prompts por defecto del captioner; el elegido se guarda en caption_settings_ideogram4.json al ejecutar.
@@ -1422,7 +1464,7 @@
             const captioned = parseInt(document.getElementById('ds-txt-count').innerText) || 0;
             const overwrite = document.getElementById('caption_overwrite').checked;
             if (captioned > 0 && overwrite) {
-                if (!confirm(t('This will OVERWRITE the {n} caption(s) that already exist.', { n: captioned }) + '\n\n' + t('Continue?'))) return;
+                if (!await askConfirm(t('This will OVERWRITE the {n} caption(s) that already exist.', { n: captioned }) + '\n\n' + t('Continue?'))) return;
             }
             // El captioner lee la carpeta del dataset y la palabra clave de pre_cache_settings_ideogram4.json.
             await savePrecacheSettings();
@@ -1440,7 +1482,7 @@
                         overwrite: overwrite
                     })
                 });
-            } catch (e) { alert('Error: ' + e); return; }
+            } catch (e) { toast('Error: ' + e, 'error'); return; }
             startScript('caption');
         }
 
@@ -1477,7 +1519,7 @@
             const common = document.getElementById('ds-common-caption').value.trim();
             const mode = document.getElementById('ds-common-mode').value;
             if (!trigger && !common) {
-                alert(t('Enter a Trigger Word, a common text, or both.'));
+                toast(t('Enter a Trigger Word, a common text, or both.'));
                 return;
             }
 
@@ -1491,7 +1533,7 @@
             } else {
                 msg = t('APPEND this text at the end of every caption? What was already written is kept.') + `\n\n    ${common}`;
             }
-            if (!confirm(msg)) return;
+            if (!await askConfirm(msg)) return;
 
             try {
                 const res = await fetch('/api/batch-caption', {
@@ -1499,10 +1541,10 @@
                     body: JSON.stringify({ trigger_word: trigger, common: common, mode: mode })
                 });
                 const data = await res.json();
-                if (data.status !== 'ok') { alert('Error: ' + (data.error || t('unknown'))); return; }
+                if (data.status !== 'ok') { toast('Error: ' + (data.error || t('unknown')), 'error'); return; }
                 appendTerminal(`[CAPTIONS] ${t('{n} caption(s) updated', { n: data.updated_count || 0 })}`, false, 'term-success');
                 loadDatasetInfo();
-            } catch (e) { alert('Error: ' + e); }
+            } catch (e) { toast('Error: ' + e, 'error'); }
         }
 
         async function loadPreviews() {
@@ -1531,6 +1573,7 @@
             } catch (e) {}
         }
         setInterval(loadPreviews, 8000);
+        restoreConsole();
         loadPreviews();
 
         // Texto del caption tal como se abrió, para saber si se ha editado.
@@ -1558,9 +1601,9 @@
             closeModal();
         }
 
-        function closeModal(force) {
+        async function closeModal(force) {
             if (force !== true && document.getElementById('modal-txt').value !== captionAtOpen
-                    && !confirm(t('The caption has unsaved changes. Close and lose them?'))) {
+                    && !await askConfirm(t('The caption has unsaved changes. Close and lose them?'))) {
                 return;
             }
             document.getElementById('modal').classList.remove('active');
@@ -1618,7 +1661,7 @@
             });
             const data = await res.json();
             if (data.status === 'ok') {
-                alert('✓ ' + t('Caption saved!'));
+                toast('✓ ' + t('Caption saved!'), 'success');
                 closeModal(true);
                 loadDatasetInfo();
             }

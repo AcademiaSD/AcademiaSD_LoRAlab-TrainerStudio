@@ -1047,5 +1047,13 @@
   "LoKr factor: how each layer is split. Higher = smaller file and less capacity; lower = more capacity. 16 is the usual value; try 8 if the LoKr learns too little.": "Factor de LoKr: cómo se divide cada capa. Más alto = fichero más pequeño y menos capacidad; más bajo = más capacidad. 16 es el valor habitual; prueba 8 si el LoKr aprende demasiado poco.",
   "Factor": "Factor",
   "Resuming with the checkpoint's method: {m} (settings ask for {m2}; it applies to new trainings).": "Se reanuda con el método del checkpoint: {m} (los ajustes piden {m2}; se aplica a entrenamientos nuevos).",
-  "Resuming with the checkpoint's LoKr: {n} layers, rank {r}, alpha {a}, factor {f} (settings ask for {n2} layers, rank {r2}, alpha {a2}, factor {f2}; they apply to new trainings).": "Se reanuda con el LoKr del checkpoint: {n} capas, rank {r}, alpha {a}, factor {f} (los ajustes piden {n2} capas, rank {r2}, alpha {a2}, factor {f2}; se aplican a entrenamientos nuevos)."
+  "Resuming with the checkpoint's LoKr: {n} layers, rank {r}, alpha {a}, factor {f} (settings ask for {n2} layers, rank {r2}, alpha {a2}, factor {f2}; they apply to new trainings).": "Se reanuda con el LoKr del checkpoint: {n} capas, rank {r}, alpha {a}, factor {f} (los ajustes piden {n2} capas, rank {r2}, alpha {a2}, factor {f2}; se aplican a entrenamientos nuevos).",
+  "Continue": "Continuar",
+  "Delete": "Borrar",
+  "Uploaded": "Subido",
+  "Uploading {i}/{n}": "Subiendo {i}/{n}",
+  "Retry failed files": "Reintentar archivos fallidos",
+  "{ok} uploaded, {n} failed. Use Retry failed.": "{ok} subidos, {n} fallidos. Usá Reintentar archivos fallidos.",
+  "No log yet.": "Todavía no hay registro.",
+  "Download console log": "Descargar registro de consola"
 }

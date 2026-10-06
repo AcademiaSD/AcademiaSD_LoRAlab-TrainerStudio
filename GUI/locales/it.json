@@ -1047,5 +1047,13 @@
   "LoKr factor: how each layer is split. Higher = smaller file and less capacity; lower = more capacity. 16 is the usual value; try 8 if the LoKr learns too little.": "Fattore LoKr: come viene diviso ogni livello. Più alto = file più piccolo e meno capacità; più basso = più capacità. 16 è il valore abituale; prova 8 se il LoKr impara troppo poco.",
   "Factor": "Fattore",
   "Resuming with the checkpoint's method: {m} (settings ask for {m2}; it applies to new trainings).": "Riprendo con il metodo del checkpoint: {m} (le impostazioni chiedono {m2}; vale per i nuovi addestramenti).",
-  "Resuming with the checkpoint's LoKr: {n} layers, rank {r}, alpha {a}, factor {f} (settings ask for {n2} layers, rank {r2}, alpha {a2}, factor {f2}; they apply to new trainings).": "Riprendo con il LoKr del checkpoint: {n} livelli, rank {r}, alpha {a}, fattore {f} (le impostazioni chiedono {n2} livelli, rank {r2}, alpha {a2}, fattore {f2}; valgono per i nuovi addestramenti)."
+  "Resuming with the checkpoint's LoKr: {n} layers, rank {r}, alpha {a}, factor {f} (settings ask for {n2} layers, rank {r2}, alpha {a2}, factor {f2}; they apply to new trainings).": "Riprendo con il LoKr del checkpoint: {n} livelli, rank {r}, alpha {a}, fattore {f} (le impostazioni chiedono {n2} livelli, rank {r2}, alpha {a2}, fattore {f2}; valgono per i nuovi addestramenti).",
+  "Continue": "Continua",
+  "Delete": "Elimina",
+  "Uploaded": "Caricato",
+  "Uploading {i}/{n}": "Caricamento {i}/{n}",
+  "Retry failed files": "Riprova i file non riusciti",
+  "{ok} uploaded, {n} failed. Use Retry failed.": "{ok} caricati, {n} non riusciti. Usa «Riprova i file non riusciti».",
+  "No log yet.": "Nessun registro ancora.",
+  "Download console log": "Scarica il registro della console"
 }

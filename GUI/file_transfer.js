@@ -7,31 +7,119 @@ function ftUpload() {
     input.click();
 }
 
+// Subida por archivo: un fallo no cancela el resto, cada archivo muestra ✓/✗ y se puede
+// reintentar solo lo fallido. Los avisos usan los toasts de /notify.js.
+let ftFailedFiles = [];
+
 function ftSend(files) {
-    if (!files || !files.length) return;
+    const list = [...(files || [])];
+    if (!list.length) return;
+    ftStatusBox().style.display = 'block';
+    ftRunQueue(list);
+}
+
+async function ftRunQueue(files) {
     const btn = document.getElementById('btn-ds-upload');
     const label = btn.innerText;
-    const form = new FormData();
-    for (const f of files) form.append('files', f, f.name);
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/upload-dataset');
-    xhr.upload.onprogress = e => { if (e.lengthComputable) btn.innerText = `⬆ ${Math.round(e.loaded / e.total * 100)}%`; };
-    xhr.onloadend = () => {
-        btn.innerText = label;
-        btn.disabled = false;
-        let data = null;
-        try { data = JSON.parse(xhr.responseText); } catch (e) { }
-        if (!data || data.status !== 'ok') {
-            alert(t('Upload failed') + ': ' + (data && data.error || xhr.status));
-            return;
+    let ok = 0;
+    ftFailedFiles = [];
+
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        btn.disabled = true;
+        btn.innerText = `⬆ ${i + 1}/${files.length}`;
+        ftRow(file, '…', t('Uploading {i}/{n}', { i: i + 1, n: files.length }), 'pending');
+        try {
+            const data = await ftPostOne(file);
+            const bad = (data.failed || []).find(f => f.name === file.name);
+            if (bad) throw new Error(bad.error);
+            if (data.status !== 'ok' && data.status !== 'partial') throw new Error(data.error || `HTTP ${data.http}`);
+            ftRow(file, '✓', t('Uploaded'), 'ok');
+            ok++;
+        } catch (err) {
+            ftRow(file, '✗', String(err.message || err), 'fail');
+            ftFailedFiles.push(file);
         }
-        let msg = '✓ ' + t('{n} file(s) uploaded', { n: data.saved }) + ` → ${data.path}`;
-        if (data.skipped.length) msg += '\n\n' + t('Skipped (unsupported type):') + `\n${data.skipped.join('\n')}`;
-        alert(msg);
-        if (typeof loadDatasetInfo === 'function') loadDatasetInfo();
+    }
+
+    btn.disabled = false;
+    btn.innerText = label;
+    ftRetryButton();
+
+    if (typeof loadDatasetInfo === 'function') loadDatasetInfo();
+
+    if (ftFailedFiles.length) {
+        toast(t('{ok} uploaded, {n} failed. Use Retry failed.', { ok: ok, n: ftFailedFiles.length }), 'warning');
+    } else if (files.length) {
+        toast(t('{n} file(s) uploaded', { n: ok }), 'success');
+    }
+}
+
+function ftPostOne(file) {
+    return new Promise((resolve, reject) => {
+        const form = new FormData();
+        form.append('files', file, file.name);
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/upload-dataset');
+        xhr.onloadend = () => {
+            let data = null;
+            try { data = JSON.parse(xhr.responseText); } catch (e) { }
+            if (!data) { reject(new Error(`HTTP ${xhr.status}`)); return; }
+            data.http = xhr.status;
+            resolve(data);
+        };
+        xhr.send(form);
+    });
+}
+
+// --- Panel de estado por archivo -------------------------------------------------
+function ftStatusBox() {
+    let box = document.getElementById('ft-upload-status');
+    if (!box) {
+        box = document.createElement('div');
+        box.id = 'ft-upload-status';
+        box.style.cssText = 'display:none;margin-top:8px;max-height:180px;overflow:auto;font-size:0.82rem;'
+            + 'background:var(--bg-dark);border:1px solid var(--panel-border);border-radius:8px;padding:8px;';
+        const grid = document.getElementById('ds-grid');
+        grid.parentElement.insertBefore(box, grid.nextSibling);
+    }
+    return box;
+}
+
+function ftRow(file, icon, text, cls) {
+    const box = ftStatusBox();
+    let row = box.querySelector(`[data-file="${CSS.escape(file.name)}"]`);
+    if (!row) {
+        row = document.createElement('div');
+        row.dataset.file = file.name;
+        row.style.cssText = 'display:flex;gap:8px;padding:2px 0;color:var(--text-muted);';
+        row.innerHTML = '<span class="ft-icon"></span>'
+            + '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>'
+            + '<span class="ft-detail"></span>';
+        box.appendChild(row);
+    }
+    row.className = `ft-${cls}`;
+    row.querySelector('.ft-icon').innerText = icon;
+    row.querySelector('span:nth-child(2)').innerText = file.name;
+    row.querySelector('.ft-detail').innerText = text;
+}
+
+function ftRetryButton() {
+    const box = ftStatusBox();
+    let btn = document.getElementById('ft-retry');
+    if (!btn) {
+        btn = document.createElement('button');
+        btn.id = 'ft-retry';
+        btn.type = 'button';
+        btn.className = 'btn btn-warning btn-sm';
+        box.appendChild(btn);
+    }
+    btn.innerText = t('Retry failed files');
+    btn.style.display = ftFailedFiles.length ? '' : 'none';
+    btn.onclick = () => {
+        const again = ftFailedFiles.slice();
+        if (again.length) ftSend(again);
     };
-    btn.disabled = true;
-    xhr.send(form);
 }
 
 async function ftDownload() {
