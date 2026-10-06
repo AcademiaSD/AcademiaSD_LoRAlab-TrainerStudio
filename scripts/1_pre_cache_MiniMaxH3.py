@@ -1617,11 +1617,14 @@ def backfill_missing_from_hub(model, nf4_te_dir, repo_id, subfolders, max_layer)
 
     from huggingface_hub import hf_hub_download, HfFileSystem
 
+    # The index goes next to the model, never to the Hugging Face cache in the user folder.
+    # El indice se guarda junto al modelo, nunca en la cache de Hugging Face de la carpeta de usuario.
+    index_dir = os.path.join(nf4_te_dir, "hub_index")
     index_data, chosen_sub = None, None
     for sub in subfolders:
         try:
             p = hf_hub_download(repo_id=repo_id, filename="model.safetensors.index.json",
-                                subfolder=sub or None)
+                                subfolder=sub or None, local_dir=index_dir)
             with open(p, "r", encoding="utf-8") as f:
                 index_data = json.load(f)
             chosen_sub = sub
