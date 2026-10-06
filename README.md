@@ -216,7 +216,7 @@ My recommendation: **kijai's KJNodes** plus **AcademiaSD's tiny decoders (TAE)**
 | :--- | :--- | :--- |
 | Qwen-Image 2.1 | [AcademiaSD/TAE-Qwen-Image-2.1](https://huggingface.co/AcademiaSD/TAE-Qwen-Image-2.1) | `TAEQwenImage21_AcademiaSD.safetensors` |
 | Krea 2 | [AcademiaSD/TAE-Krea-2](https://huggingface.co/AcademiaSD/TAE-Krea-2) | `TAE_Krea2_AcademiaSD.safetensors` |
-| FLUX.2 and FLUX.2 Klein 9B | [AcademiaSD/TAE_Flux2_AcademiaSD](https://huggingface.co/AcademiaSD/TAE_Flux2_AcademiaSD) | `TAE_Flux2_AcademiaSD.safetensors` |
+| FLUX.2 and Ideogram4 | [AcademiaSD/TAE_Flux2_AcademiaSD](https://huggingface.co/AcademiaSD/TAE_Flux2_AcademiaSD) | `TAE_Flux2_AcademiaSD.safetensors` |
 
 1. Download the file to `ComfyUI/models/vae_approx/`.
 2. Install [ComfyUI-KJNodes](https://github.com/kijai/ComfyUI-KJNodes) by kijai.
