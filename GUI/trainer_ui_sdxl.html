@@ -1606,16 +1606,23 @@
             } catch (e) { toast('Error: ' + e, 'error'); }
         }
 
+        let previewsSignature = '';
         async function loadPreviews() {
             try {
-                const res = await fetch('/api/previews');
+                const res = await fetch('/api/previews', { cache: 'no-store' });
                 const data = await res.json();
+                const versions = data.versions || {};
+                // Solo se redibuja la galeria si cambia algo (nueva preview o preview sobrescrita).
+                const signature = data.previews.map(f => f + ':' + (versions[f] || '')).join('|');
+                if (signature === previewsSignature) return;
+                previewsSignature = signature;
                 const gallery = document.getElementById('gallery');
                 gallery.innerHTML = '';
                 data.previews.forEach(filename => {
+                    const src = `/api/preview/${filename}?v=${versions[filename] || Date.now()}`;
                     const card = document.createElement('div');
                     card.className = 'preview-card';
-                    card.onclick = () => openModal(`/api/preview/${filename}`, filename, `${t('Generated preview')}: ${filename}`);
+                    card.onclick = () => openModal(src, filename, `${t('Generated preview')}: ${filename}`);
 
                     let stepTag = filename;
                     const match = filename.match(/preview_step_(\d+)\.png/i);
@@ -1624,14 +1631,14 @@
                     }
 
                     card.innerHTML = `
-                        <img src="/api/preview/${filename}" alt="${filename}">
+                        <img src="${src}" alt="${filename}">
                         <div class="preview-filename-tag">${stepTag}</div>
                     `;
                     gallery.appendChild(card);
                 });
             } catch (e) {}
         }
-        setInterval(loadPreviews, 8000);
+        setInterval(loadPreviews, 3000);
         restoreConsole();
         loadPreviews();
 

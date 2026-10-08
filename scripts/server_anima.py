@@ -5,6 +5,7 @@ Web backend for AcademiaSD Anima Trainer
 """
 
 import json
+import time
 import os
 import subprocess
 import sys
@@ -662,9 +663,15 @@ def get_previews():
     if output_dir.is_dir():
         for file_path in output_dir.iterdir():
             if file_path.is_file() and file_path.name.startswith("preview_step_") and file_path.suffix.lower() == ".png":
-                previews.append(file_path)
-    previews.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-    return jsonify({"output_dir": str(output_dir), "previews": [p.name for p in previews[:50]]})
+                st = file_path.stat()
+                # Un PNG recien escrito puede estar a medias: se ensena en el siguiente sondeo.
+                if st.st_size > 0 and time.time() - st.st_mtime > 1.0:
+                    previews.append((file_path.name, st.st_mtime))
+    previews.sort(key=lambda p: p[1], reverse=True)
+    previews = previews[:50]
+    # versions = mtime en ms, para que el navegador no reutilice una imagen vieja con el mismo nombre.
+    return jsonify({"output_dir": str(output_dir), "previews": [n for n, _ in previews],
+                    "versions": {n: int(m * 1000) for n, m in previews}})
 
 
 @app.route("/api/preview/<path:filename>")
@@ -677,7 +684,9 @@ def serve_preview(filename):
         return "", 403
     if not requested.is_file():
         return "", 404
-    return send_from_directory(str(output_dir), requested.name)
+    response = send_from_directory(str(output_dir), requested.name)
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 def caption_path(image_path):
