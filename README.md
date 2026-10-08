@@ -51,7 +51,7 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 
 1. **Instalar:** en la carpeta donde quieras instalarlo, escribe `cmd` en la barra de direcciones del explorador y ejecuta
    `git clone https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio.git`
-   (o descarga el ZIP desde el botón verde **Code → Download ZIP** y descomprímelo). Después, doble clic en **`Install_LoRAlab-TrainerStudio.bat`**: instala Git si no lo tienes, Python 3.13.1 y un único entorno `venv` para todos los entrenadores.
+   (o descarga el ZIP desde el botón verde **Code → Download ZIP** y descomprímelo). Después, doble clic en **`Install_LoRAlab-TrainerStudio.bat`**: instala Git si no lo tienes, Python 3.13.1 y un único entorno `venv` para todos los entrenadores. Con GPU AMD usa **`Install_LoRAlab-TrainerStudio_AMD.bat`** (experimental, sin verificar).
 2. **Abrir:** doble clic en **`Start_LoRAlab-TrainerStudio.bat`** y pulsa la tarjeta del entrenador que quieras. Solo puede haber uno abierto a la vez.
 3. **Entrenar:** nombre del proyecto → carpeta del dataset → *Crear Captions* (opcional) → *Iniciar Pre-Caché* → *Iniciar / Reanudar* → *Send to Models*. El modelo se descarga solo la primera vez.
 4. **Actualizar:** doble clic en **`Update_LoRAlab-TrainerStudio.bat`**. Se conservan tus modelos, proyectos y ajustes, los nuevos entrenadores aparecen en el lanzador y se instalan las librerías nuevas que hagan falta.
@@ -122,6 +122,8 @@ Then, inside the folder:
 2. *(Optional)* Double-click **`Install_Triton&SageAtten220.bat`** for Triton and SageAttention 2.2.
 
 Pick a disk with plenty of free space: every model is downloaded into this folder.
+
+**AMD GPUs (experimental, unverified).** Use **`Install_LoRAlab-TrainerStudio_AMD.bat`** (Windows) or **`Install_LoRAlab-TrainerStudio_AMD.sh`** (Linux) instead of the normal installer. It asks for your GPU family (RX 7000, RX 9000 or Ryzen AI Max / Strix Halo) and installs PyTorch ROCm from AMD's TheRock nightly builds. We have not tested it ourselves: it is based on [a user's report](https://civitai.com/articles/36293/training-krea-2minimax-h3etc-lora-on-low-vram-low-ram-amd-gpu-windows) that trained Krea 2 and MiniMax-H3 LoRAs on an RX 7800 XT under Windows; other trainers may not work. Do not run `Install_Triton&SageAtten220`, it is NVIDIA only. On Linux you need the `amdgpu` driver and your user in the `render` and `video` groups.
 
 **Linux.** Every `.bat` has a `.sh` equivalent with the same name (`Install_LoRAlab-TrainerStudio.sh`, `Start_LoRAlab-TrainerStudio.sh`, `code/Run_LoRAlab-<Model>.sh`…) and the launcher picks the right one. Install and usage steps are in [docs/Linux.md](docs/Linux.md).
 
@@ -467,6 +469,7 @@ AcademiaSD_LoRAlab-TrainerStudio/
 ├── Start_LoRAlab-TrainerStudio.bat   # Launcher (.sh on Linux)
 ├── Update_LoRAlab-TrainerStudio.bat  # Updater (.sh on Linux)
 ├── Install_LoRAlab-TrainerStudio.bat, Install_Triton&SageAtten220.bat (and their .sh)
+├── Install_LoRAlab-TrainerStudio_AMD.bat / .sh   # AMD installer (experimental, unverified)
 ├── requirements.txt                  # Dependencies, for your own environment (LORALAB_PYTHON)
 ├── code/                             # Run_LoRAlab-<Model>.bat / .sh
 ├── scripts/                          # launcher.py, server_<model>.py, 0_caption / 1_pre_cache / 2_train_lora, remote_access.py, file_transfer.py, i18n.py, lora_options.py, refmod.py, melband/
