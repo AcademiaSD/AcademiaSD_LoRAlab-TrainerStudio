@@ -513,6 +513,7 @@ Built with PyTorch, Diffusers, Transformers, PEFT, bitsandbytes, Flask and the H
 
 - **[Jonathan Hecl (@jonathanhecl)](https://github.com/jonathanhecl)** — Linux support ([PR #1](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/pull/1)). Thank you!
 - **[Synergyart (@Synergyart)](https://github.com/Synergyart)** — Training that keeps running after closing the tab, per-file dataset uploads and non-blocking notifications ([PR #10](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/pull/10)), the Krea 2 preview fix ([PR #11](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/pull/11)), and detailed bug reports such as the missing C compiler in the RunPod image ([#15](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/issues/15)). Thank you!
+- **[Cappyadams (@Cappyadams)](https://github.com/Cappyadams)** — AMD support: the [guide for AMD GPUs on Windows](https://civitai.com/articles/36293/training-krea-2minimax-h3etc-lora-on-low-vram-low-ram-amd-gpu-windows) the AMD installer is based on, and the first confirmed AMD training on an RX 7800 XT ([#8](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/issues/8)). Thank you!
 
 ## 🧩 Third-party code and credits
 
