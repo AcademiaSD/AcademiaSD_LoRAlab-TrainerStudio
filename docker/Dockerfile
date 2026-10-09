@@ -10,8 +10,10 @@ ENV DEBIAN_FRONTEND=noninteractive \
     UV_PYTHON_INSTALL_DIR=/opt/python \
     LORALAB_PYTHON=/opt/venv/bin/python
 
+# build-essential: Triton compila un módulo C la primera vez que lanza un kernel (torch 2.14 lo usa en
+# operaciones normales, y SageAttention también); la imagen base de CUDA no trae compilador.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends git ffmpeg ca-certificates \
+ && apt-get install -y --no-install-recommends git ffmpeg ca-certificates build-essential \
  && rm -rf /var/lib/apt/lists/*
 
 # uv solo descarga Python 3.13; las librerías se instalan con pip, igual que los instaladores.
