@@ -1482,7 +1482,7 @@ def extract_refmod():
                 log_tarea("[REFMOD] " + t("loading the video VAE..."))
                 vvae = refmod.preparar_video_vae(
                     P.load_h3_video_vae(P.NF4_MODEL_ID, P.MODEL_ID, strict=False))
-                lat, usados = refmod.extraer_visual(fuentes, vvae, res, tok_v, log=log_tarea)
+                lat, usados, fotos = refmod.extraer_visual(fuentes, vvae, res, tok_v, log=log_tarea)
                 del vvae
                 if lat is None:
                     detalles.append("visual: " + t("no source was an image or a video"))
@@ -1495,7 +1495,7 @@ def extract_refmod():
                         pool="full-res {}x{}px".format(int(lat.shape[4]) * 16,
                                                        int(lat.shape[3]) * 16),
                         description=descripcion, concept_type=concepto,
-                        tags=usados[:4])))
+                        tags=usados[:4], frames=fotos)))
         finally:
             try:
                 torch.cuda.empty_cache()

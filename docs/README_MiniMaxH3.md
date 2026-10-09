@@ -777,6 +777,28 @@ does it**, no new code: `ref_videos.ref_video_N` paired by index with
 `ref_video_audios.ref_video_audio_N`. Remember those share numbering with your
 RefMods, so adding one shifts every `<Subject N>` after it.
 
+**Several characters without blending: the AcademiaSD nodes.** The main reason
+two RefMods blend, clone one subject or swap voices is not the file but how it
+is applied: the classic Apply node adds the latents *after* text encoding, so
+Qwen never sees the subjects and the prompt cannot say which `<Video N>` is
+whom. **AcademiaSD H3 RefMod Character** + **AcademiaSD H3 RefMod Encode** (in
+comfyui_AcademiaSD) present every RefMod to Qwen with its native label, in the
+same order as the DiT blocks, and write `subject_definitions` for you. They
+read any RefMod; the ones from older versions get their frames VAE-decoded for
+Qwen, which works but shows it a worse picture.
+
+That is why the encoder now **stores the source pictures inside the RefMod**:
+next to each latent frame, the exact photo that produced it, cropped to the
+canvas, as JPEG bytes (`frame_N` tensors, or `ref_I_frame_N` in a bundle) plus
+`frame_layout: "stills"` in the metadata. Other loaders read only `latent` /
+`ref_I` and ignore the rest, so the file stays a valid RefMod everywhere.
+
+The Character node also has an experimental `bind_voice` that emits the
+`video_audio` block described above. It is off by default for the reason given
+two paragraphs up: scattered stills paired with a continuous track claim a
+correspondence that is not there. Whether it helps anyway is for a same-seed
+test to decide.
+
 ### You do not need the whole model
 
 RefMod never loads the DiT, so the 41 GB NF4 repo is not a prerequisite. If the

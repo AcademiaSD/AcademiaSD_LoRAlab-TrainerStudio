@@ -53,6 +53,7 @@ weeks measuring -- and also why it cannot teach anything new. Its tokens are
 paid on every step of every generation, forever.
 """
 
+import io
 import json
 import os
 import tempfile
@@ -84,6 +85,29 @@ FORMAT_VERSION = 4
 # It does NOT bind voice to identity, whatever the name suggests.
 BUNDLE_VERSION = 5
 BUNDLE_MAX_MIEMBROS = 256
+
+# FOTOS PARA EL TEXT ENCODER, GUARDADAS DENTRO DEL MISMO FICHERO.
+#
+# Un RefMod clasico solo lleva latentes: el DiT los atiende, pero Qwen -- el text
+# encoder -- nunca ve al sujeto, asi que el prompt no puede decir "el de <Video 1>
+# es Ana" y con varios RefMods el modelo no sabe cual es cual: mezcla caras,
+# clona a uno o cambia las voces. Para ensenarselas a Qwen habria que decodificar
+# los latentes con el VAE en cada generacion, que es lento y da una imagen peor
+# que la original.
+#
+# Por eso se guarda, junto a cada fotograma latente, la foto que lo produjo, ya
+# recortada al lienzo y en JPEG. Van como tensores uint8 con nombres propios
+# ("frame_0", "frame_1"... o "ref_<i>_frame_<j>" en un bundle): los cargadores
+# antiguos solo leen "latent" / "ref_<i>" e ignoran el resto, asi que el fichero
+# sigue siendo un RefMod valido para cualquier nodo.
+#
+# PHOTOS FOR THE TEXT ENCODER, STORED IN THE SAME FILE. A classic RefMod only
+# carries latents: the DiT attends them but Qwen never sees the subject, so the
+# prompt cannot bind "<Video 1>" to a name and several RefMods blend or swap.
+# Each latent frame's source photo is stored as JPEG bytes in a uint8 tensor;
+# older loaders read only "latent"/"ref_<i>" and ignore the extra tensors.
+FRAME_LAYOUT_STILLS = "stills"
+JPEG_QUALITY = 92
 
 IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".bmp")
 VIDEO_EXTS = (".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v")
@@ -161,7 +185,7 @@ def token_count(latent, kind):
 
 def _metadatos(latent, kind, name, mode="encode", source="", source_shape="",
                pool="", description="", concept_type="generic", tags=None,
-               sample_rate=32000):
+               sample_rate=32000, n_frames=0):
     """Los metadatos de UNA referencia, validando su forma.
 
     Es la misma estructura tanto si acaba sola en un fichero como si va dentro de
@@ -197,7 +221,7 @@ def _metadatos(latent, kind, name, mode="encode", source="", source_shape="",
         if kind == "image" and latent_t != 1:
             raise ValueError("kind 'image' exige un unico fotograma latente.")
 
-    return {
+    meta = {
         "name": name,
         "kind": kind,
         "latent_h": latent_h,
@@ -214,6 +238,35 @@ def _metadatos(latent, kind, name, mode="encode", source="", source_shape="",
         "_format_version": FORMAT_VERSION,
         "sample_rate": int(sample_rate),
     }
+    if kind != "audio":
+        # Cada fotograma latente es una foto independiente, no un trozo de
+        # video causal: quien lo decodifique debe hacerlo fotograma a fotograma.
+        # Each latent frame is an independent still, not causal video.
+        meta["frame_layout"] = FRAME_LAYOUT_STILLS
+        if n_frames:
+            meta["encoder_frames"] = int(n_frames)
+            meta["encoder_frame_format"] = "jpeg"
+    return meta
+
+
+def _jpeg_tensor(img):
+    """PIL -> tensor uint8 1D con los bytes JPEG. / PIL -> uint8 JPEG bytes."""
+    buf = io.BytesIO()
+    img.convert("RGB").save(buf, format="JPEG", quality=JPEG_QUALITY)
+    return torch.frombuffer(bytearray(buf.getvalue()), dtype=torch.uint8).clone()
+
+
+def _tensores_fotos(frames, latent, prefijo):
+    """Las fotos como tensores, solo si casan 1:1 con los fotogramas latentes.
+
+    Si no casan, no se guarda ninguna: una foto desalineada le ensenaria a Qwen
+    el sujeto equivocado, que es peor que nada.
+    Photos as tensors, only when they match the latent frames 1:1; a misaligned
+    photo would show Qwen the wrong subject, which is worse than none.
+    """
+    if not frames or latent.ndim != 5 or len(frames) != int(latent.shape[2]):
+        return {}
+    return {"{}{}".format(prefijo, j): _jpeg_tensor(im) for j, im in enumerate(frames)}
 
 
 def _escribir(tensores, meta, ruta_sin_ext):
@@ -258,8 +311,11 @@ def guardar_bundle(miembros, name, ruta_sin_ext):
 
     tensores, members = {}, []
     for i, (latent, kind, kw) in enumerate(miembros):
-        members.append(_metadatos(latent, kind, **kw))
+        kw = dict(kw)
+        fotos = _tensores_fotos(kw.pop("frames", None), latent, "ref_{}_frame_".format(i))
+        members.append(_metadatos(latent, kind, n_frames=len(fotos), **kw))
         tensores["ref_{}".format(i)] = latent
+        tensores.update(fotos)
 
     meta = {
         "_format_version": BUNDLE_VERSION,
@@ -272,7 +328,7 @@ def guardar_bundle(miembros, name, ruta_sin_ext):
 
 def guardar(latent, kind, name, ruta_sin_ext, mode="encode", source="",
             source_shape="", pool="", description="", concept_type="generic",
-            tags=None, sample_rate=32000):
+            tags=None, sample_rate=32000, frames=None):
     """Escribe {ruta}.safetensors con UNA referencia, en formato 4.
 
     Es el formato que leen todas las versiones del nodo. El bundle de version 5
@@ -280,10 +336,14 @@ def guardar(latent, kind, name, ruta_sin_ext, mode="encode", source="",
     predeterminado. / Version 4 is read by every version of the node; the
     version-5 bundle needs 0.2.6 or newer, so this stays the default.
     """
+    fotos = _tensores_fotos(frames, latent, "frame_")
     meta = _metadatos(latent, kind, name, mode=mode, source=source,
                       source_shape=source_shape, pool=pool, description=description,
-                      concept_type=concept_type, tags=tags, sample_rate=sample_rate)
-    return _escribir({"latent": latent}, meta, ruta_sin_ext)
+                      concept_type=concept_type, tags=tags, sample_rate=sample_rate,
+                      n_frames=len(fotos))
+    tensores = {"latent": latent}
+    tensores.update(fotos)
+    return _escribir(tensores, meta, ruta_sin_ext)
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -475,7 +535,12 @@ def _lienzo(ruta, lado_max, P):
 
 
 def extraer_visual(fuentes, video_vae, resolution=1024, max_tokens=1024, log=print):
-    """Latente [1, 24, T, H/16, W/16] apilado en el tiempo.
+    """(latente [1, 24, T, H/16, W/16] apilado en el tiempo, usados, fotos).
+
+    `fotos` es una lista de PIL alineada 1:1 con los fotogramas latentes: la
+    imagen exacta, ya en el lienzo, que produjo cada uno. Se guarda en el RefMod
+    para que el text encoder vea al sujeto sin decodificar nada.
+    `fotos` is a PIL list aligned 1:1 with the latent frames.
 
     Todas las referencias comparten un unico lienzo espacial -- el de la
     primera -- porque el latente apilado tiene una sola H y una sola W.
@@ -487,7 +552,7 @@ def extraer_visual(fuentes, video_vae, resolution=1024, max_tokens=1024, log=pri
     visuales = [r for r in fuentes
                 if os.path.splitext(r)[1].lower() in IMAGE_EXTS + VIDEO_EXTS]
     if not visuales:
-        return None, []
+        return None, [], []
 
     ancho, alto = _lienzo(visuales[0], resolution, P)
     por_frame = (alto // 16 // 2) * (ancho // 16 // 2)
@@ -532,7 +597,7 @@ def extraer_visual(fuentes, video_vae, resolution=1024, max_tokens=1024, log=pri
             cupo_video = resto // len(videos) if resto >= 1 else 0
         log("[REFMOD] " + t("share: {0} image(s) at 1 latent + {1} video(s) at {2} latents", reservado, len(videos), cupo_video if cupo_video else 0))
 
-    trozos, usados = [], []
+    trozos, usados, fotos = [], [], []
     for ruta in visuales:
         try:
             nombre = os.path.basename(ruta)
@@ -546,6 +611,7 @@ def extraer_visual(fuentes, video_vae, resolution=1024, max_tokens=1024, log=pri
                 with Image.open(ruta) as im:
                     img = im.convert("RGB").resize((ancho, alto))
                 z = P.encode_video_latent(video_vae, img).float()      # [1,24,1,h,w]
+                fotos_fuente = [img]
             else:
                 disponible = _medidas(ruta, P)[0]
                 # Cuantos fotogramas de PIXEL corresponden a los latentes que
@@ -589,13 +655,21 @@ def extraer_visual(fuentes, video_vae, resolution=1024, max_tokens=1024, log=pri
                 frames = _frames_repartidos(P, ruta, cuantos, ancho, alto, disponible)
                 from PIL import Image
                 import numpy as _np
-                trozos_f = []
+                trozos_f, fotos_fuente = [], []
                 for i in range(int(frames.shape[0])):
                     img = Image.fromarray(frames[i].cpu().numpy().astype(_np.uint8))
                     trozos_f.append(P.encode_video_latent(video_vae, img).float())
+                    fotos_fuente.append(img)
                 z = torch.cat(trozos_f, dim=2)                          # [1,24,T,h,w]
 
             trozos.append(z)
+            # Una foto por fotograma latente; si el encoder devolviera otra
+            # cosa, se descartan todas para no desalinear.
+            # One photo per latent frame; otherwise drop them all.
+            if fotos is not None and len(fotos_fuente) == int(z.shape[2]):
+                fotos.extend(fotos_fuente)
+            else:
+                fotos = None
             usados.append("{} -> {} latentes de {}x{}".format(
                 nombre, z.shape[2], z.shape[3], z.shape[4]))
             log("[REFMOD] {} -> {}".format(nombre, tuple(z.shape)))
@@ -603,7 +677,7 @@ def extraer_visual(fuentes, video_vae, resolution=1024, max_tokens=1024, log=pri
             log("[REFMOD] {}: {}".format(os.path.basename(ruta), exc))
 
     if not trozos:
-        return None, []
+        return None, [], []
 
     latente = torch.cat(trozos, dim=2)
     if tope_t and latente.shape[2] > tope_t:
@@ -615,4 +689,6 @@ def extraer_visual(fuentes, video_vae, resolution=1024, max_tokens=1024, log=pri
         idx = torch.linspace(0, latente.shape[2] - 1, tope_t).round().long()
         log("[REFMOD] visual: " + t("{0} latent frames -> {1} to fit the {2} token budget", latente.shape[2], tope_t, max_tokens))
         latente = latente[:, :, idx].clone()
-    return latente.to(torch.float16), usados
+        if fotos is not None:
+            fotos = [fotos[int(i)] for i in idx]
+    return latente.to(torch.float16), usados, (fotos or [])
