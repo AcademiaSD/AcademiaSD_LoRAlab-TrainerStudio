@@ -512,6 +512,7 @@ Built with PyTorch, Diffusers, Transformers, PEFT, bitsandbytes, Flask and the H
 ## 🙏 Contributors
 
 - **[Jonathan Hecl (@jonathanhecl)](https://github.com/jonathanhecl)** — Linux support ([PR #1](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/pull/1)). Thank you!
+- **[Synergyart (@Synergyart)](https://github.com/Synergyart)** — Training that keeps running after closing the tab, per-file dataset uploads and non-blocking notifications ([PR #10](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/pull/10)), the Krea 2 preview fix ([PR #11](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/pull/11)), and detailed bug reports such as the missing C compiler in the RunPod image ([#15](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/issues/15)). Thank you!
 
 ## 🧩 Third-party code and credits
 
