@@ -1055,5 +1055,12 @@
   "Retry failed files": "Fehlgeschlagene Dateien erneut versuchen",
   "{ok} uploaded, {n} failed. Use Retry failed.": "{ok} hochgeladen, {n} fehlgeschlagen. Nutze „Fehlgeschlagene Dateien erneut versuchen“.",
   "No log yet.": "Noch kein Protokoll vorhanden.",
-  "Download console log": "Konsolenprotokoll herunterladen"
+  "Download console log": "Konsolenprotokoll herunterladen",
+  "{n} file(s) failed to upload": "{n} Datei(en) konnten nicht hochgeladen werden",
+  "{ok} uploaded, {n} failed. Only the failed files are left, with Retry failed.": "{ok} hochgeladen, {n} fehlgeschlagen. Nur die fehlgeschlagenen bleiben, mit „Fehlgeschlagene Dateien erneut versuchen“.",
+  "Use the Upload button: the native dialog runs on the training PC.": "Nutze den Hochladen-Button: Der native Dialog öffnet sich auf dem Trainings-PC.",
+  "Image uploaded": "Bild hochgeladen",
+  "No file received": "Keine Datei empfangen",
+  "Only images (.png, .jpg, .jpeg, .webp)": "Nur Bilder (.png, .jpg, .jpeg, .webp)",
+  "RunPod / remote access: sends the image from this device to the training PC and fills the path here. Use it when Browse cannot open.": "RunPod / Fernzugriff: Sendet das Bild von diesem Gerät an den Trainings-PC und trägt hier den Pfad ein. Nutze es, wenn Durchsuchen sich nicht öffnen lässt."
 }

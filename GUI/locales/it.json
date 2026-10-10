@@ -1055,5 +1055,12 @@
   "Retry failed files": "Riprova i file non riusciti",
   "{ok} uploaded, {n} failed. Use Retry failed.": "{ok} caricati, {n} non riusciti. Usa «Riprova i file non riusciti».",
   "No log yet.": "Nessun registro ancora.",
-  "Download console log": "Scarica il registro della console"
+  "Download console log": "Scarica il registro della console",
+  "{n} file(s) failed to upload": "Impossibile caricare {n} file",
+  "{ok} uploaded, {n} failed. Only the failed files are left, with Retry failed.": "{ok} caricati, {n} non riusciti. Restano solo quelli non riusciti, con «Riprova i file non riusciti».",
+  "Use the Upload button: the native dialog runs on the training PC.": "Usa il pulsante Carica: la finestra nativa si apre sul PC che addestra.",
+  "Image uploaded": "Immagine caricata",
+  "No file received": "Nessun file ricevuto",
+  "Only images (.png, .jpg, .jpeg, .webp)": "Solo immagini (.png, .jpg, .jpeg, .webp)",
+  "RunPod / remote access: sends the image from this device to the training PC and fills the path here. Use it when Browse cannot open.": "RunPod / accesso remoto: invia l'immagine da questo dispositivo al PC che addestra e compila qui il percorso. Usalo quando Sfoglia non si apre."
 }

@@ -1053,7 +1053,14 @@
   "Uploaded": "Subido",
   "Uploading {i}/{n}": "Subiendo {i}/{n}",
   "Retry failed files": "Reintentar archivos fallidos",
-  "{ok} uploaded, {n} failed. Use Retry failed.": "{ok} subidos, {n} fallidos. Usá Reintentar archivos fallidos.",
+  "{ok} uploaded, {n} failed. Use Retry failed.": "{ok} subidos, {n} fallidos. Usa Reintentar archivos fallidos.",
   "No log yet.": "Todavía no hay registro.",
-  "Download console log": "Descargar registro de consola"
+  "Download console log": "Descargar registro de consola",
+  "{n} file(s) failed to upload": "{n} archivo(s) no se pudieron subir",
+  "{ok} uploaded, {n} failed. Only the failed files are left, with Retry failed.": "{ok} subidos, {n} fallidos. Solo quedan los fallidos, con Reintentar archivos fallidos.",
+  "Use the Upload button: the native dialog runs on the training PC.": "Usa el botón Subir: el diálogo nativo se abre en el PC que entrena.",
+  "Image uploaded": "Imagen subida",
+  "No file received": "No se recibió ningún archivo",
+  "Only images (.png, .jpg, .jpeg, .webp)": "Solo imágenes (.png, .jpg, .jpeg, .webp)",
+  "RunPod / remote access: sends the image from this device to the training PC and fills the path here. Use it when Browse cannot open.": "RunPod / acceso remoto: envía la imagen desde este dispositivo al PC que entrena y rellena aquí la ruta. Úsalo cuando Explorar no pueda abrirse."
 }

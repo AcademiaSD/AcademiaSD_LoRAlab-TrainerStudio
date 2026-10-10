@@ -1055,5 +1055,12 @@
   "Retry failed files": "실패한 파일 다시 시도",
   "{ok} uploaded, {n} failed. Use Retry failed.": "{ok}개 업로드됨, {n}개 실패. '실패한 파일 다시 시도'를 사용하세요.",
   "No log yet.": "아직 로그가 없습니다.",
-  "Download console log": "콘솔 로그 다운로드"
+  "Download console log": "콘솔 로그 다운로드",
+  "{n} file(s) failed to upload": "파일 {n}개를 업로드하지 못했습니다",
+  "{ok} uploaded, {n} failed. Only the failed files are left, with Retry failed.": "{ok}개 업로드됨, {n}개 실패. 실패한 파일만 남으며 '실패한 파일 다시 시도'를 쓸 수 있습니다.",
+  "Use the Upload button: the native dialog runs on the training PC.": "업로드 버튼을 사용하세요: 기본 대화 상자는 학습 PC에서 열립니다.",
+  "Image uploaded": "이미지를 업로드했습니다",
+  "No file received": "받은 파일이 없습니다",
+  "Only images (.png, .jpg, .jpeg, .webp)": "이미지만 가능 (.png, .jpg, .jpeg, .webp)",
+  "RunPod / remote access: sends the image from this device to the training PC and fills the path here. Use it when Browse cannot open.": "RunPod / 원격 접속: 이 기기의 이미지를 학습 PC로 보내고 여기에 경로를 채웁니다. 찾아보기가 열리지 않을 때 사용하세요."
 }

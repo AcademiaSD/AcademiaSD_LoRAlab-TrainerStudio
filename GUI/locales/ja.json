@@ -1055,5 +1055,12 @@
   "Retry failed files": "失敗したファイルを再試行",
   "{ok} uploaded, {n} failed. Use Retry failed.": "{ok} 件アップロード、{n} 件失敗。「失敗したファイルを再試行」を使ってください。",
   "No log yet.": "ログはまだありません。",
-  "Download console log": "コンソールログをダウンロード"
+  "Download console log": "コンソールログをダウンロード",
+  "{n} file(s) failed to upload": "{n} 件のファイルをアップロードできませんでした",
+  "{ok} uploaded, {n} failed. Only the failed files are left, with Retry failed.": "{ok} 件アップロード、{n} 件失敗。失敗したファイルだけが残り、「失敗したファイルを再試行」が使えます。",
+  "Use the Upload button: the native dialog runs on the training PC.": "アップロードボタンを使ってください：ネイティブのダイアログは学習用 PC で開きます。",
+  "Image uploaded": "画像をアップロードしました",
+  "No file received": "ファイルを受信していません",
+  "Only images (.png, .jpg, .jpeg, .webp)": "画像のみ（.png, .jpg, .jpeg, .webp）",
+  "RunPod / remote access: sends the image from this device to the training PC and fills the path here. Use it when Browse cannot open.": "RunPod / リモートアクセス：このデバイスから学習用 PC に画像を送り、ここにパスを入力します。参照が開けないときに使ってください。"
 }

@@ -151,6 +151,9 @@ def register(app, get_dataset_dir, get_output_dir, dataset_exts):
         opts = lora_options_suffix(f)
         if final_name:
             stem = final_name[:-len(".safetensors")] if final_name.lower().endswith(".safetensors") else final_name
+            # El campo ya lleva el sufijo que la GUI pone según las casillas: se quita y se pone el que
+            # dicen los metadatos del LoRA, para no duplicarlo (_lokr_lokr).
+            stem = re.sub(r"(_rs)?(_plus)?(_lokr)?$", "", stem, flags=re.IGNORECASE) or stem
             steps = re.search(r"_step_(\d+)$", f.stem)
             if steps:
                 return f"{stem}_{steps.group(1)}_steps{opts}.safetensors"

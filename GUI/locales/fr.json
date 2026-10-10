@@ -1055,5 +1055,12 @@
   "Retry failed files": "Réessayer les fichiers en échec",
   "{ok} uploaded, {n} failed. Use Retry failed.": "{ok} téléversés, {n} en échec. Utilisez « Réessayer les fichiers en échec ».",
   "No log yet.": "Pas encore de journal.",
-  "Download console log": "Télécharger le journal de la console"
+  "Download console log": "Télécharger le journal de la console",
+  "{n} file(s) failed to upload": "{n} fichier(s) n'ont pas pu être téléversés",
+  "{ok} uploaded, {n} failed. Only the failed files are left, with Retry failed.": "{ok} téléversés, {n} en échec. Seuls les fichiers en échec restent, avec « Réessayer les fichiers en échec ».",
+  "Use the Upload button: the native dialog runs on the training PC.": "Utilisez le bouton Envoyer : la boîte de dialogue native s'ouvre sur le PC d'entraînement.",
+  "Image uploaded": "Image envoyée",
+  "No file received": "Aucun fichier reçu",
+  "Only images (.png, .jpg, .jpeg, .webp)": "Images uniquement (.png, .jpg, .jpeg, .webp)",
+  "RunPod / remote access: sends the image from this device to the training PC and fills the path here. Use it when Browse cannot open.": "RunPod / accès à distance : envoie l'image de cet appareil vers le PC d'entraînement et remplit le chemin ici. À utiliser quand Parcourir ne peut pas s'ouvrir."
 }

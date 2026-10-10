@@ -1055,5 +1055,12 @@
   "Retry failed files": "Tentar novamente os arquivos com falha",
   "{ok} uploaded, {n} failed. Use Retry failed.": "{ok} enviados, {n} com falha. Use Tentar novamente os arquivos com falha.",
   "No log yet.": "Ainda não há registro.",
-  "Download console log": "Baixar o registro do console"
+  "Download console log": "Baixar o registro do console",
+  "{n} file(s) failed to upload": "{n} arquivo(s) não puderam ser enviados",
+  "{ok} uploaded, {n} failed. Only the failed files are left, with Retry failed.": "{ok} enviados, {n} com falha. Só ficam os que falharam, com Tentar novamente os arquivos com falha.",
+  "Use the Upload button: the native dialog runs on the training PC.": "Use o botão Enviar: o diálogo nativo abre no PC que treina.",
+  "Image uploaded": "Imagem enviada",
+  "No file received": "Nenhum arquivo recebido",
+  "Only images (.png, .jpg, .jpeg, .webp)": "Só imagens (.png, .jpg, .jpeg, .webp)",
+  "RunPod / remote access: sends the image from this device to the training PC and fills the path here. Use it when Browse cannot open.": "RunPod / acesso remoto: envia a imagem deste dispositivo para o PC que treina e preenche o caminho aqui. Use quando Procurar não puder abrir."
 }
