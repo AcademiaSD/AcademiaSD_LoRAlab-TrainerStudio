@@ -74,6 +74,24 @@
             .sidebar { display: grid; grid-template-columns: repeat(2, clamp(370px, 21vw, 440px)); align-items: start; width: auto; }
             .side-group { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
         }
+        /* Telefono en vertical / Phone portrait: la barra lateral tiene 440 px
+           fijos y la columna de consola + Dataset Manager quedaba aplastada en
+           una franja ilegible. Debajo de 960 px todo se apila a ancho completo.
+           The sidebar is a fixed 440 px, which crushed the console + Dataset
+           Manager column into an unreadable sliver. Below 960 px everything
+           stacks at full width. */
+        @media (max-width: 960px) {
+            body { padding: 10px; }
+            header { padding: 12px 14px; }
+            .main-grid { grid-template-columns: minmax(0, 1fr); }
+            .sidebar { width: 100%; }
+            .header-content { flex-direction: column; align-items: stretch; }
+            .logo-title { justify-content: center; text-align: center; }
+            .social-links { justify-content: center; }
+            .hardware-monitor { flex-wrap: wrap; }
+            .hw-card { flex: 1 1 140px; }
+            .panel { padding: 14px; }
+        }
         .panel { background: var(--panel-bg); border-radius: 12px; border: 1px solid var(--panel-border); padding: 20px; }
         
         /* Títulos desplegables / Collapsible Panels */
@@ -553,6 +571,8 @@
                         <div style="display:flex; gap:8px;">
                             <input type="text" id="preview_edit_image" value="" placeholder="(empty = first pair)">
                             <button type="button" class="btn btn-secondary btn-sm" onclick="browseImageNative()">Browse</button>
+                            <button type="button" class="btn btn-primary btn-sm" onclick="uploadPreviewEditImage()"
+                                    title="RunPod / remote access: sends the image from this device to the training PC and fills the path here. Use it when Browse cannot open.">⬆ Upload</button>
                         </div>
                         </div>
                     </div>
@@ -1032,8 +1052,35 @@
                 });
                 const data = await res.json();
                 if (data.status === 'ok' && data.path) document.getElementById('preview_edit_image').value = data.path;
-                else if (data.status === 'error') toast(data.error);
+                else if (data.status === 'error') toast(data.error + ' ' + t('Use the Upload button: the native dialog runs on the training PC.'), 'warning');
             } catch (e) { toast('Error: ' + e, 'error'); }
+        }
+
+        // Remote / RunPod: el diálogo nativo se abriría en el PC del entrenador, que puede no tener
+        // pantalla. Con Upload la imagen viaja por HTTP y la ruta que queda es la del servidor.
+        // The native dialog would open on the training PC, which may have no screen. Upload sends
+        // the image over HTTP and the path left in the field is the server's.
+        function uploadPreviewEditImage() {
+            const picker = document.createElement('input');
+            picker.type = 'file';
+            picker.accept = 'image/png,image/jpeg,image/webp';
+            picker.onchange = async () => {
+                const file = picker.files && picker.files[0];
+                if (!file) return;
+                const form = new FormData();
+                form.append('files', file, file.name);
+                try {
+                    const res = await fetch('/api/upload-preview-image', { method: 'POST', body: form });
+                    const data = await res.json();
+                    if (data.status === 'ok' && data.path) {
+                        document.getElementById('preview_edit_image').value = data.path;
+                        toast(t('Image uploaded'), 'success');
+                    } else {
+                        toast(data.error || t('Upload failed'), 'error');
+                    }
+                } catch (e) { toast('Error: ' + e, 'error'); }
+            };
+            picker.click();
         }
 
         // El servidor lee la ruta del dataset de pre_cache_settings_klein9b.json: hay que guardarla ANTES de

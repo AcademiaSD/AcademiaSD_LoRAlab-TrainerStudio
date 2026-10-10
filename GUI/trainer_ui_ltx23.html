@@ -74,6 +74,24 @@
             .sidebar { display: grid; grid-template-columns: repeat(2, clamp(370px, 21vw, 440px)); align-items: start; width: auto; }
             .side-group { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
         }
+        /* Telefono en vertical / Phone portrait: la barra lateral tiene 440 px
+           fijos y la columna de consola + Dataset Manager quedaba aplastada en
+           una franja ilegible. Debajo de 960 px todo se apila a ancho completo.
+           The sidebar is a fixed 440 px, which crushed the console + Dataset
+           Manager column into an unreadable sliver. Below 960 px everything
+           stacks at full width. */
+        @media (max-width: 960px) {
+            body { padding: 10px; }
+            header { padding: 12px 14px; }
+            .main-grid { grid-template-columns: minmax(0, 1fr); }
+            .sidebar { width: 100%; }
+            .header-content { flex-direction: column; align-items: stretch; }
+            .logo-title { justify-content: center; text-align: center; }
+            .social-links { justify-content: center; }
+            .hardware-monitor { flex-wrap: wrap; }
+            .hw-card { flex: 1 1 140px; }
+            .panel { padding: 14px; }
+        }
         .panel { background: var(--panel-bg); border-radius: 12px; border: 1px solid var(--panel-border); padding: 20px; }
         
         /* Títulos desplegables / Collapsible Panels */
