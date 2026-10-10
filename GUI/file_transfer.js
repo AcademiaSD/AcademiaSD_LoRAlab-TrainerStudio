@@ -44,12 +44,27 @@ async function ftRunQueue(files) {
 
     btn.disabled = false;
     btn.innerText = label;
+
+    // Al acabar solo interesan los fallos: las filas ✓ estorban para ver qué hay que reintentar.
+    // When the batch ends only the failures matter: the ✓ rows just hide what needs a retry.
+    const box = ftStatusBox();
+    box.querySelectorAll('.ft-row.ft-ok, .ft-row.ft-pending, .ft-summary').forEach(el => el.remove());
+    if (!ftFailedFiles.length) {
+        box.style.display = 'none';
+        box.innerHTML = '';
+    } else {
+        const sum = document.createElement('div');
+        sum.className = 'ft-summary';
+        sum.innerText = t('{n} file(s) failed to upload', { n: ftFailedFiles.length });
+        box.insertBefore(sum, box.firstChild);
+    }
     ftRetryButton();
 
     if (typeof loadDatasetInfo === 'function') loadDatasetInfo();
 
     if (ftFailedFiles.length) {
-        toast(t('{ok} uploaded, {n} failed. Use Retry failed.', { ok: ok, n: ftFailedFiles.length }), 'warning');
+        toast(t('{ok} uploaded, {n} failed. Only the failed files are left, with Retry failed.',
+                { ok: ok, n: ftFailedFiles.length }), ok ? 'warning' : 'error');
     } else if (files.length) {
         toast(t('{n} file(s) uploaded', { n: ok }), 'success');
     }
@@ -76,9 +91,17 @@ function ftPostOne(file) {
 function ftStatusBox() {
     let box = document.getElementById('ft-upload-status');
     if (!box) {
+        const style = document.createElement('style');
+        style.textContent = '#ft-upload-status .ft-row{display:flex;gap:8px;padding:2px 0;color:var(--text-muted);}'
+            + ' #ft-upload-status .ft-row.ft-ok{color:var(--success);}'
+            + ' #ft-upload-status .ft-row.ft-pending{opacity:.85;}'
+            + ' #ft-upload-status .ft-row.ft-fail{background:rgba(239,68,68,.16);border-left:3px solid var(--danger);'
+            + 'border-radius:4px;padding:4px 6px;color:#fecaca;font-weight:600;}'
+            + ' #ft-upload-status .ft-summary{font-weight:700;color:#fca5a5;padding:2px 0 6px 0;}';
+        document.head.appendChild(style);
         box = document.createElement('div');
         box.id = 'ft-upload-status';
-        box.style.cssText = 'display:none;margin-top:8px;max-height:180px;overflow:auto;font-size:0.82rem;'
+        box.style.cssText = 'display:none;margin-top:8px;max-height:220px;overflow:auto;font-size:0.82rem;'
             + 'background:var(--bg-dark);border:1px solid var(--panel-border);border-radius:8px;padding:8px;';
         const grid = document.getElementById('ds-grid');
         grid.parentElement.insertBefore(box, grid.nextSibling);
@@ -92,13 +115,12 @@ function ftRow(file, icon, text, cls) {
     if (!row) {
         row = document.createElement('div');
         row.dataset.file = file.name;
-        row.style.cssText = 'display:flex;gap:8px;padding:2px 0;color:var(--text-muted);';
         row.innerHTML = '<span class="ft-icon"></span>'
             + '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>'
             + '<span class="ft-detail"></span>';
         box.appendChild(row);
     }
-    row.className = `ft-${cls}`;
+    row.className = `ft-row ft-${cls}`;
     row.querySelector('.ft-icon').innerText = icon;
     row.querySelector('span:nth-child(2)').innerText = file.name;
     row.querySelector('.ft-detail').innerText = text;
@@ -123,7 +145,12 @@ function ftRetryButton() {
 }
 
 async function ftDownload() {
-    const data = await (await fetch('/api/output-files')).json();
+    // 'Final LoRA Filename' (ya lleva el Project Name): el servidor lo usa para nombrar la
+    // descarga del final y de los checkpoints (_<pasos>_steps). No cambia nada en disco.
+    // 'Final LoRA Filename' (Project Name already inside): the server uses it to name the
+    // download of the final LoRA and the checkpoints (_<steps>_steps). Nothing on disk changes.
+    const finalName = (document.getElementById('export_final_name')?.value || '').trim();
+    const data = await (await fetch('/api/output-files?final_name=' + encodeURIComponent(finalName))).json();
     let box = document.getElementById('ft-modal');
     if (!box) {
         box = document.createElement('div');
@@ -133,7 +160,7 @@ async function ftDownload() {
         document.body.appendChild(box);
     }
     const rows = data.files.length
-        ? data.files.map(f => `<a href="/api/download-output/${encodeURIComponent(f.name)}" download
+        ? data.files.map(f => `<a href="/api/download-output/${encodeURIComponent(f.name)}?final_name=${encodeURIComponent(finalName)}" download
               style="display:flex;justify-content:space-between;gap:16px;padding:8px 10px;border-radius:6px;color:var(--text-main);text-decoration:none;background:var(--bg-dark);border:1px solid var(--panel-border);">
               <span>⬇ ${f.download_name || f.name}</span><span style="color:var(--text-muted);">${(f.size / 1048576).toFixed(1)} MB</span></a>`).join('')
         : `<div style="color:var(--text-muted);">${t('No LoRA yet.')}</div>`;

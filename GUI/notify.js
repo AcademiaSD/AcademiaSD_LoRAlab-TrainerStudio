@@ -2,8 +2,11 @@
 // Sustituyen a alert()/confirm() del navegador: no congelan la página y encajan con el tema.
 
 const NOTIFY_CSS = `
-#toast-stack { position: fixed; top: 16px; right: 16px; z-index: 3000; display: flex;
-    flex-direction: column; gap: 8px; max-width: min(420px, 90vw); }
+/* Centrados arriba: el aviso cae donde ya está la mirada al trabajar el panel, sin
+   recorrer la pantalla hasta la esquina. Center-top: the notice lands where the eye
+   already is while working the panel, instead of a trip to the corner. */
+#toast-stack { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 3000;
+    display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: min(420px, 90vw); }
 .toast { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 8px;
     background: var(--panel-bg, #1e293b); border: 1px solid var(--panel-border, #334155);
     color: var(--text-main, #f8fafc); font-size: 0.85rem; white-space: pre-line;
@@ -14,7 +17,7 @@ const NOTIFY_CSS = `
 .toast .toast-close { cursor: pointer; opacity: 0.6; border: 0; background: none;
     color: inherit; font-size: 1rem; line-height: 1; }
 .toast .toast-close:hover { opacity: 1; }
-@keyframes toast-in { from { transform: translateX(12px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes toast-in { from { transform: translateY(-8px); opacity: 0; } to { transform: none; opacity: 1; } }
 #ask-modal { position: fixed; inset: 0; z-index: 3100; display: none; align-items: center;
     justify-content: center; background: rgba(2,6,23,0.75); }
 #ask-modal.active { display: flex; }
