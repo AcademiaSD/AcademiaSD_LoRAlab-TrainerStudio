@@ -1299,5 +1299,11 @@
   "Click to open it": "Haz clic para abrirla",
   "Checkpoint saved": "Checkpoint guardado",
   "smoothed": "suavizado",
-  "this step": "este paso"
+  "this step": "este paso",
+  "Drag to rotate, mouse wheel zooms.": "Arrastra para girar, la rueda del ratón hace zoom.",
+  "Double click on the chart also resets it.": "El doble clic en la gráfica también la restablece.",
+  "Reset view": "Restablecer vista",
+  "height and colour: loss (low to high)": "altura y color: loss (de bajo a alto)",
+  "front edge: loss at each step · back edge: smoothed loss": "borde delantero: loss de cada paso · borde trasero: loss suavizado",
+  "each step": "cada paso"
 }

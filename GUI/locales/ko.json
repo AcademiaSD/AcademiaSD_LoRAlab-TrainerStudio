@@ -1194,5 +1194,11 @@
   "Click to open it": "클릭해서 열기",
   "Checkpoint saved": "체크포인트 저장",
   "smoothed": "스무딩",
-  "this step": "이 스텝"
+  "this step": "이 스텝",
+  "Drag to rotate, mouse wheel zooms.": "드래그해서 회전, 마우스 휠로 확대.",
+  "Double click on the chart also resets it.": "그래프를 더블 클릭해도 초기화됩니다.",
+  "Reset view": "보기 초기화",
+  "height and colour: loss (low to high)": "높이와 색: loss (낮음에서 높음)",
+  "front edge: loss at each step · back edge: smoothed loss": "앞쪽 가장자리: 각 스텝의 loss · 뒤쪽 가장자리: 스무딩한 loss",
+  "each step": "각 스텝"
 }

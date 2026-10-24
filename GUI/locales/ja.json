@@ -1194,5 +1194,11 @@
   "Click to open it": "クリックで開く",
   "Checkpoint saved": "チェックポイント保存",
   "smoothed": "平滑化",
-  "this step": "このステップ"
+  "this step": "このステップ",
+  "Drag to rotate, mouse wheel zooms.": "ドラッグで回転、マウスホイールでズーム。",
+  "Double click on the chart also resets it.": "グラフをダブルクリックしてもリセットできます。",
+  "Reset view": "表示をリセット",
+  "height and colour: loss (low to high)": "高さと色：loss（低→高）",
+  "front edge: loss at each step · back edge: smoothed loss": "手前の縁：各ステップの loss · 奥の縁：平滑化した loss",
+  "each step": "各ステップ"
 }
