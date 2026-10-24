@@ -417,20 +417,18 @@ if errorlevel 1 (
 )
 
 :: --------------------------------------------------------
-:: all-smi: VRAM real de la GPU AMD para el panel de los entrenadores (opcional)
-:: all-smi: real AMD GPU VRAM for the trainers' panel (optional)
-:: https://github.com/lablup/all-smi (Lablup, Apache-2.0)
+:: amd-adlx: VRAM real de la GPU AMD (panel y VRAM libre) con ADLX, que viene con el driver Adrenalin
+:: amd-adlx: real AMD GPU VRAM (panel and free VRAM) through ADLX, which ships with the Adrenalin driver
+:: https://gpuopen.com/adlx/
 :: --------------------------------------------------------
 echo.
-echo Descargando all-smi (monitor de VRAM para AMD)... / Downloading all-smi (AMD VRAM monitor)...
-set "ALLSMI_ZIP=%TEMP%\all-smi-windows-x86_64.zip"
-powershell -NoProfile -Command "$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri 'https://github.com/lablup/all-smi/releases/download/v0.27.1/all-smi-windows-x86_64.zip' -OutFile '%ALLSMI_ZIP%'; Expand-Archive -Force '%ALLSMI_ZIP%' '%BASE_DIR%tools\all-smi'"
+echo Instalando amd-adlx (monitor de VRAM para AMD)... / Installing amd-adlx (AMD VRAM monitor)...
+"%VENV_PYTHON%" -m pip install amd-adlx
 if errorlevel 1 (
-    echo [AVISO] No se pudo instalar all-smi: el panel mostrara una VRAM aproximada. / [WARNING] Could not install all-smi: the panel will show an approximate VRAM.
+    echo [AVISO] No se pudo instalar amd-adlx: el panel mostrara una VRAM aproximada. / [WARNING] Could not install amd-adlx: the panel will show an approximate VRAM.
 ) else (
-    echo [OK] all-smi instalado en tools\all-smi / all-smi installed in tools\all-smi
+    echo [OK] amd-adlx instalado / amd-adlx installed
 )
-del "%ALLSMI_ZIP%" >nul 2>&1
 
 :: ========================================================
 :: 8/8 - COMPROBACION FINAL / FINAL CHECK

@@ -40,6 +40,7 @@ import torchvision.transforms.functional as F_vision
 from PIL import Image
 from diffusers import DiffusionPipeline
 from i18n import t
+import gpu_stats
 from project_layout import resolve_cache_dir, resolve_model_dir
 
 
@@ -507,7 +508,7 @@ def auto_max_memory_for_cuda():
     que accelerate/transformers puedan usar offload a disco.
     """
     try:
-        free, total = torch.cuda.mem_get_info()
+        free, total = gpu_stats.mem_get_info()
         free_gb = free / (1024**3)
 
         # Dejamos margen para CUDA, VAE, activaciones y el propio Python.

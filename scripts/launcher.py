@@ -433,8 +433,8 @@ def status():
 # La configuración de red solo se cambia desde este PC: un equipo remoto no puede abrir más el acceso.
 @app.route("/api/gpu", methods=["GET", "POST"])
 def gpu():
-    """GET: tarjetas NVIDIA y la elegida. POST {"gpu": "<índice>" | ""}: la guarda ("" = la primera)."""
-    gpus = gpu_stats.list_nvidia()
+    """GET: tarjetas NVIDIA (o AMD) y la elegida. POST {"gpu": "<índice>" | ""}: la guarda ("" = la primera)."""
+    gpus = gpu_stats.list_gpus()
     if request.method == "POST":
         if not remote_access.is_local():
             return jsonify({"status": "error", "error": t("Only from the training PC.")}), 403

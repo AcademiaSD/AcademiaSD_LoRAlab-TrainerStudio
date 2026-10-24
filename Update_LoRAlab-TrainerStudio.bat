@@ -114,6 +114,8 @@ if defined LORALAB_PYTHON set "PY_EXE=%LORALAB_PYTHON%"
 if exist "!PY_EXE!" (
     "!PY_EXE!" -m pip install -r "%~dp0requirements.txt"
     if errorlevel 1 echo [AVISO] No se pudieron actualizar las librerias / [WARNING] Could not update the libraries.
+    rem AMD: amd-adlx lee la VRAM de toda la GPU / AMD: amd-adlx reads the VRAM of the whole GPU
+    "!PY_EXE!" -c "import sys, importlib.metadata as m; sys.exit(0 if 'rocm' in m.version('torch') else 1)" >nul 2>&1 && "!PY_EXE!" -m pip install -q amd-adlx
     rem pip no reinstala diffusers si solo cambia el commit de la URL: lo hace este script.
     "!PY_EXE!" "%~dp0scripts\sync_pinned.py"
     if errorlevel 1 echo [AVISO] No se pudo actualizar diffusers / [WARNING] Could not update diffusers.

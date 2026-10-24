@@ -25,6 +25,7 @@ from safetensors import safe_open
 from safetensors.torch import save_file, load
 from bitsandbytes.nn import Linear4bit
 from i18n import t
+import gpu_stats
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import lora_options
 import qwen_image2512_model as qm
@@ -648,7 +649,7 @@ def train_qwenimage2512():
         largest = max(int(np.prod(torch.load(os.path.join(CACHE_DIR, f), weights_only=True).shape[-2:]))
                       for f in os.listdir(CACHE_DIR) if f.endswith("_latent.pt") and not f.startswith("_"))
         # VRAM libre de verdad: el escritorio y otros programas también ocupan la GPU.
-        resident = qm.auto_resident_blocks(transformer, torch.cuda.mem_get_info()[0] / 1e9,
+        resident = qm.auto_resident_blocks(transformer, gpu_stats.mem_get_info()[0] / 1e9,
                                            qm.training_reserve_gb(largest, edit_cache, LORA_RANK))
     swap = qm.BlockSwap(transformer, resident)
     print(t("Blocks on GPU: {n}/60 | from RAM: {gb:.1f} GB ({pin})", n=swap.resident, gb=swap.swapped_gb,

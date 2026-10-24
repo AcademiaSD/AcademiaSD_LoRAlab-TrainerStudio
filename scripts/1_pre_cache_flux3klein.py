@@ -23,6 +23,7 @@ from transformers import AutoProcessor, Qwen3VLModel
 import logging
 import sys
 from i18n import t
+import gpu_stats
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 
 try:
@@ -214,7 +215,7 @@ def load_text_encoder(device):
     processor = AutoProcessor.from_pretrained(path)
     if device == "cpu":
         return Qwen3VLModel.from_pretrained(path, dtype=torch.bfloat16, device_map="cpu"), processor
-    free_bytes, _ = torch.cuda.mem_get_info()
+    free_bytes, _ = gpu_stats.mem_get_info()
     gpu_budget = max(free_bytes - OFFLOAD_RESERVE_BYTES, 0)
     print(f"  {t('GPU budget'):<22}: {gpu_budget / 1024**3:.1f} GB ({t('rest in RAM')})")
     te = Qwen3VLModel.from_pretrained(path, dtype=torch.bfloat16, device_map="auto",

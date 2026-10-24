@@ -89,6 +89,7 @@ ACTIVATION_OFFLOAD_ACTIVE = False
 
 import psutil
 from i18n import t
+import gpu_stats
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import lora_options
 
@@ -5297,7 +5298,7 @@ def setup_block_cpu_offload(transformer, target_vram_gb=None, reserve_gb=None):
             flush=True, essential=True)
 
     try:
-        free_now_bytes, _total_now_bytes = torch.cuda.mem_get_info()
+        free_now_bytes, _total_now_bytes = gpu_stats.mem_get_info()
     except Exception:
         free_now_bytes = None
 

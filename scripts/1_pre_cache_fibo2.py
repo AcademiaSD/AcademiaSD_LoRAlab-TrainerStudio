@@ -28,6 +28,7 @@ from diffusers.pipelines.bria_fibo2.image_processor import BriaFibo2ImageProcess
 import logging
 import sys
 from i18n import t
+import gpu_stats
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import fibo2_caption
 
@@ -301,7 +302,7 @@ def load_text_encoder():
         return Qwen3VLForConditionalGeneration.from_pretrained(path, dtype=torch.bfloat16, device_map="cuda")
 
     # Las capas que no caben en la VRAM libre se quedan en RAM y se ejecutan desde allí.
-    free_bytes, _ = torch.cuda.mem_get_info()
+    free_bytes, _ = gpu_stats.mem_get_info()
     gpu_budget = max(free_bytes - OFFLOAD_RESERVE_BYTES, 0)
     print(f"  {t('GPU budget'):<22}: {gpu_budget / 1024**3:.1f} GB ({t('rest in RAM')})")
 
