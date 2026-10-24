@@ -9,7 +9,8 @@ Entrenador:  metrics = MetricsLog(OUTPUT_DIR, start_step)
              Al reanudar se conservan los pasos anteriores a start_step; empezar de cero borra el historial.
              name: otro archivo por etapa (YuE2 entrena AR y NAR en la misma carpeta); se enseña el más reciente.
 Servidor:    register(app, get_output_dir) sirve /loss_chart.js y /api/metrics?since=<paso>, con los
-             previews (preview_step_N.*) y checkpoints (*_step_N.safetensors) de la carpeta como marcadores.
+             previews (preview_step_N.*), checkpoints (*_step_N.safetensors) y LoRA final de la carpeta
+             como marcadores, y /api/send-lora, que copia un checkpoint concreto a la carpeta de modelos.
 """
 import json
 import os
@@ -22,6 +23,7 @@ GUI_DIR = Path(__file__).resolve().parent.parent / "GUI"
 
 PREVIEW_RE = re.compile(r"^preview_step_0*(\d+).*\.(png|jpg|jpeg|webp|wav|mp3|mp4|webm)$", re.I)
 CHECKPOINT_RE = re.compile(r"_step_(\d+)\.safetensors$", re.I)
+FINAL_RE = re.compile(r"final.*\.safetensors$", re.I)
 
 
 def _num(value):
@@ -101,34 +103,47 @@ def _read_points(path):
     return run, points
 
 
-def _markers(output_dir, since_time):
-    previews, checkpoints = [], []
+def _markers(output_dir, since_time, stage=""):
+    """Previews [paso, archivo], checkpoints [paso, archivo, bytes] y el LoRA final {name, size} o None.
+    stage ('ar' / 'nar', solo YuE2) deja fuera los archivos de la otra etapa, que comparten carpeta."""
+    previews, checkpoints, final = [], {}, None
     try:
         entries = list(os.scandir(output_dir))
     except OSError:
-        return previews, checkpoints
+        return previews, [], None
     for e in entries:
         if not e.is_file():
             continue
         try:
+            st = e.stat()
             # Archivos de un entrenamiento anterior del mismo proyecto no son de esta curva.
-            if since_time and e.stat().st_mtime < since_time - 5:
+            if since_time and st.st_mtime < since_time - 5:
                 continue
         except OSError:
             continue
-        m = PREVIEW_RE.match(e.name)
+        name = e.name
+        if stage:
+            is_ar = "_ar" in name.lower()
+            if (stage == "ar") != is_ar:
+                continue
+        m = PREVIEW_RE.match(name)
         if m:
-            previews.append([int(m.group(1)), e.name])
+            previews.append([int(m.group(1)), name])
             continue
-        m = CHECKPOINT_RE.search(e.name)
+        m = CHECKPOINT_RE.search(name)
         if m:
-            checkpoints.append(int(m.group(1)))
+            checkpoints[int(m.group(1))] = [int(m.group(1)), name, st.st_size]
+        elif FINAL_RE.search(name):
+            final = {"name": name, "size": st.st_size}
     previews.sort()
-    return previews, sorted(set(checkpoints))
+    return previews, [checkpoints[s] for s in sorted(checkpoints)], final
 
 
 def register(app, get_output_dir):
+    import shutil
     from flask import jsonify, request, send_from_directory
+    import file_transfer
+    from i18n import t
 
     @app.route("/loss_chart.js")
     def loss_chart_js():
@@ -142,10 +157,33 @@ def register(app, get_output_dir):
         newest = max(logs, key=lambda p: p.stat().st_mtime, default=output_dir / METRICS_FILE)
         run, points = _read_points(newest)
         first_time = points[0].get("t") if points else None
-        previews, checkpoints = _markers(output_dir, first_time) if points else ([], [])
+        stage = re.match(r"metrics_(\w+)\.jsonl$", newest.name)
+        previews, checkpoints, final = _markers(output_dir, first_time, stage.group(1) if stage else "") if points else ([], [], None)
         return jsonify({
             "run": run,
             "points": [p for p in points if p["s"] > since],
             "previews": previews,
             "checkpoints": checkpoints,
+            "final": final,
         })
+
+    @app.route("/api/send-lora", methods=["POST"])
+    def send_lora():
+        """Copia un checkpoint concreto a la carpeta de modelos (como Send to Models, que siempre usa el
+        final o el último), con el mismo nombre que su descarga. / Copies one checkpoint to the models folder."""
+        data = request.get_json(force=True) or {}
+        target = Path(str(data.get("target_dir", "")).strip() or ".")
+        if not str(data.get("target_dir", "")).strip() or not target.is_dir():
+            return jsonify({"status": "error", "error": t("Target folder does not exist: {path}", path=target)}), 400
+        output_dir = Path(get_output_dir())
+        base = Path(str(data.get("name", "")).replace("\\", "/")).name
+        source = (output_dir / base).resolve()
+        if not base.lower().endswith(".safetensors") or source.parent != output_dir.resolve() or not source.is_file():
+            return jsonify({"status": "error", "error": t("No .safetensors files found in: {path}", path=output_dir)}), 404
+        final_name = Path(str(data.get("final_name", "")).strip()).name
+        dest = target / file_transfer.download_name(source, final_name)
+        try:
+            shutil.copyfile(source, dest)
+        except OSError as exc:
+            return jsonify({"status": "error", "error": str(exc)}), 500
+        return jsonify({"status": "ok", "dest": str(dest), "filename": dest.name})

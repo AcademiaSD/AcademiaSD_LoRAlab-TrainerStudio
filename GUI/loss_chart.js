@@ -12,6 +12,10 @@
         ckpt: '#10b981', preview: '#f472b6', best: '#fde047', grid: 'rgba(148, 163, 184, 0.10)',
         axis: '#64748b', text: '#94a3b8'
     };
+    // Cámara del 3D: giro horizontal, inclinación (desde arriba) y zoom.
+    const CAM_DEFAULT = { yaw: -0.55, pitch: 0.55, zoom: 1 };
+    // Colores de la superficie según la altura (loss bajo → alto).
+    const HEIGHT_STOPS = [[34, 211, 238], [99, 102, 241], [244, 114, 182]];
     const tr = (k, v) => (typeof t === 'function' ? t(k, v) : k.replace(/\{(\w+)\}/g, (m, n) => (v && n in v ? v[n] : m)));
 
     function store(key, value) {
@@ -44,6 +48,13 @@
     .lc-tools .lc-smooth-val { color: #e2e8f0; font-variant-numeric: tabular-nums; min-width: 2.2em; }
     .lc-tools .lc-reset { margin-left: auto; background: #1e293b; color: #cbd5e1; border: 1px solid #334155; border-radius: 6px; padding: 3px 10px; font-size: 0.72rem; cursor: pointer; }
     .lc-tools .lc-reset:hover { border-color: #38bdf8; color: #fff; }
+    .lc-mode { display: inline-flex; border: 1px solid #334155; border-radius: 7px; overflow: hidden; }
+    .lc-mode button { background: #0f172a; color: #94a3b8; border: none; padding: 3px 11px; font-size: 0.72rem; font-weight: 700; cursor: pointer; }
+    .lc-mode button.lc-on { background: linear-gradient(90deg, #0e7490, #6d28d9); color: #fff; }
+    .lc-hint3d { font-size: 0.7rem; color: #64748b; }
+    .lc-wrap:not(.lc-3d) .lc-3d-only, .lc-3d .lc-2d-only { display: none !important; }
+    .lc-3d .lc-stage { height: 400px; }
+    .lc-3d .lc-stage canvas { cursor: grab; }
     .lc-stage { position: relative; height: 300px; border-radius: 8px; overflow: hidden;
         background: radial-gradient(120% 90% at 50% 0%, #0f1b33 0%, #070d1a 70%); border: 1px solid #16213a; }
     .lc-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
@@ -69,6 +80,21 @@
     .lc-lightbox img { max-width: 92vw; max-height: 84vh; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
     .lc-lightbox audio { width: min(520px, 90vw); cursor: default; }
     .lc-lightbox .lc-cap { color: #e2e8f0; font-size: 0.85rem; }
+    .lc-lora-card { cursor: default; width: min(420px, 92vw); background: #0b1222; border: 1px solid #1f2b47; border-radius: 12px; padding: 18px;
+        display: flex; flex-direction: column; gap: 10px; color: #cbd5e1; font-size: 0.82rem; box-shadow: 0 16px 48px rgba(0,0,0,.6); }
+    .lc-lora-card img { width: 100%; max-height: 300px; object-fit: contain; border-radius: 8px; background: #020617; box-shadow: none; }
+    .lc-lora-h { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 1rem; color: #fff; }
+    .lc-lora-dia { width: 11px; height: 11px; background: #10b981; transform: rotate(45deg); box-shadow: 0 0 8px #10b981; }
+    .lc-lora-dia.lc-final { background: #fbbf24; box-shadow: 0 0 8px #fbbf24; }
+    .lc-lora-name { word-break: break-all; color: #94a3b8; font-family: Consolas, monospace; font-size: 0.76rem; }
+    .lc-lora-stats { display: flex; gap: 16px; flex-wrap: wrap; } .lc-lora-stats b { color: #e2e8f0; }
+    .lc-lora-btns { display: flex; gap: 8px; }
+    .lc-btn { flex: 1; text-align: center; padding: 8px 12px; border-radius: 7px; font-weight: 700; font-size: 0.82rem; cursor: pointer;
+        border: 1px solid #334155; background: #1e293b; color: #e2e8f0; text-decoration: none; }
+    .lc-btn:hover { border-color: #38bdf8; }
+    .lc-btn-go { background: linear-gradient(90deg, #0e7490, #6d28d9); border-color: transparent; color: #fff; }
+    .lc-btn:disabled { opacity: .45; cursor: not-allowed; }
+    .lc-lora-msg { min-height: 1.1em; font-size: 0.76rem; color: #94a3b8; word-break: break-all; } .lc-lora-msg.lc-ok { color: #34d399; }
     `;
 
     function build() {
@@ -95,13 +121,16 @@
             </div>
             <div class="lc-body">
                 <div class="lc-tools">
+                    <span class="lc-mode no-i18n"><button type="button" data-mode="2d">2D</button><button type="button" data-mode="3d">3D</button></span>
                     <label title="${tr('How much the loss curve is smoothed. The thin line underneath is the loss of each step.')}">
                         ${tr('Smoothing')} <input type="range" min="0" max="0.99" step="0.01" data-o="smooth"><span class="lc-smooth-val no-i18n"></span></label>
-                    <label><input type="checkbox" data-o="raw"> ${tr('Each step')}</label>
-                    <label><input type="checkbox" data-o="lr"> ${tr('Learning rate')}</label>
+                    <label class="lc-2d-only"><input type="checkbox" data-o="raw"> ${tr('Each step')}</label>
+                    <label class="lc-2d-only"><input type="checkbox" data-o="lr"> ${tr('Learning rate')}</label>
                     <label title="${tr('Leaves the loss spikes out of the vertical scale so the trend is easier to see.')}"><input type="checkbox" data-o="clip"> ${tr('Clip outliers')}</label>
-                    <label><input type="checkbox" data-o="log"> ${tr('Log scale')}</label>
-                    <button type="button" class="lc-reset" title="${tr('Mouse wheel zooms, dragging moves, double click resets.')}">${tr('Reset zoom')}</button>
+                    <label class="lc-2d-only"><input type="checkbox" data-o="log"> ${tr('Log scale')}</label>
+                    <span class="lc-hint3d lc-3d-only">${tr('Drag to rotate, mouse wheel zooms.')}</span>
+                    <button type="button" class="lc-reset lc-2d-only" title="${tr('Mouse wheel zooms, dragging moves, double click resets.')}">${tr('Reset zoom')}</button>
+                    <button type="button" class="lc-reset lc-3d-only" data-reset3d title="${tr('Double click on the chart also resets it.')}">${tr('Reset view')}</button>
                 </div>
                 <div class="lc-stage">
                     <canvas></canvas>
@@ -110,11 +139,14 @@
                     <div class="lc-empty">${tr('No data yet. The chart fills in while the LoRA trains.')}</div>
                 </div>
                 <div class="lc-legend">
-                    <span><i style="background:linear-gradient(90deg,${COLORS.lossA},${COLORS.lossB})"></i>${tr('smoothed loss')}</span>
-                    <span><i style="background:${COLORS.raw}"></i>${tr('loss at each step')}</span>
-                    <span><i style="background:${COLORS.lr}"></i>${tr('learning rate (right-hand scale)')}</span>
+                    <span class="lc-2d-only"><i style="background:linear-gradient(90deg,${COLORS.lossA},${COLORS.lossB})"></i>${tr('smoothed loss')}</span>
+                    <span class="lc-2d-only"><i style="background:${COLORS.raw}"></i>${tr('loss at each step')}</span>
+                    <span class="lc-2d-only"><i style="background:${COLORS.lr}"></i>${tr('learning rate (right-hand scale)')}</span>
+                    <span class="lc-3d-only"><i style="background:linear-gradient(90deg,#22d3ee,#6366f1,#f472b6)"></i>${tr('height and colour: loss (low to high)')}</span>
+                    <span class="lc-3d-only">${tr('front edge: loss at each step · back edge: smoothed loss')}</span>
                     <span><i style="background:${COLORS.preview};width:8px;height:8px;border-radius:50%"></i>${tr('preview (hover to see it)')}</span>
-                    <span><i style="background:${COLORS.ckpt};width:8px;height:8px;transform:rotate(45deg)"></i>${tr('checkpoint saved')}</span>
+                    <span><i style="background:${COLORS.ckpt};width:8px;height:8px;transform:rotate(45deg)"></i>${tr('saved LoRA (click to download or test it)')}</span>
+                    <span><i style="background:#fbbf24;width:8px;height:8px;transform:rotate(45deg)"></i>${tr('final LoRA')}</span>
                     <span><i style="background:${COLORS.best};width:8px;height:8px;border-radius:50%"></i>${tr('lowest smoothed loss')}</span>
                 </div>
             </div>`;
@@ -139,8 +171,10 @@
             this.tip = wrap.querySelector('.lc-tip');
             this.pulse = wrap.querySelector('.lc-pulse');
             this.empty = wrap.querySelector('.lc-empty');
-            this.opts = Object.assign({ smooth: 0.9, raw: true, lr: true, clip: true, log: false }, store('opts') || {});
-            this.points = []; this.previews = []; this.checkpoints = []; this.run = null;
+            this.opts = Object.assign({ smooth: 0.9, raw: true, lr: true, clip: true, log: false, mode: '2d' }, store('opts') || {});
+            this.cam = Object.assign({}, CAM_DEFAULT);
+            this.surf = null;          // superficie 3D calculada; se rehace al llegar datos o cambiar opciones
+            this.points = []; this.previews = []; this.checkpoints = []; this.final = null; this.run = null;
             this.view = null;          // [x0, x1] con zoom; null = todo
             this.hover = null;         // posición del ratón sobre el canvas
             this.timer = null; this.idle = 0; this.busy = false;
@@ -157,6 +191,9 @@
                 });
             });
             wrap.querySelector('.lc-reset').addEventListener('click', () => { this.view = null; this.draw(); });
+            wrap.querySelector('[data-reset3d]').addEventListener('click', () => { this.cam = Object.assign({}, CAM_DEFAULT); this.draw(); });
+            wrap.querySelectorAll('.lc-mode button').forEach(b => b.addEventListener('click', () => this.setMode(b.dataset.mode)));
+            this.setMode(this.opts.mode);
             this.bindPointer();
             new ResizeObserver(() => this.draw()).observe(this.canvas);
             document.addEventListener('visibilitychange', () => { if (!document.hidden && this.isOpen()) this.poll(); });
@@ -164,6 +201,17 @@
         }
 
         isOpen() { return !this.wrap.classList.contains('lc-collapsed'); }
+
+        is3d() { return this.opts.mode === '3d'; }
+
+        setMode(mode) {
+            this.opts.mode = mode === '3d' ? '3d' : '2d';
+            store('opts', this.opts);
+            this.wrap.classList.toggle('lc-3d', this.is3d());
+            this.wrap.querySelectorAll('.lc-mode button').forEach(b => b.classList.toggle('lc-on', b.dataset.mode === this.opts.mode));
+            this.hover = null; this.tip.style.display = 'none';
+            this.draw();
+        }
 
         setOpen(open) {
             this.wrap.classList.toggle('lc-collapsed', !open);
@@ -191,8 +239,9 @@
                     this.run = data.run;
                     const grew = data.points.length > 0;
                     if (grew) this.points.push(...data.points);
-                    const markersChanged = JSON.stringify([data.previews, data.checkpoints]) !== JSON.stringify([this.previews, this.checkpoints]);
-                    this.previews = data.previews; this.checkpoints = data.checkpoints;
+                    const markersChanged = JSON.stringify([data.previews, data.checkpoints, data.final])
+                        !== JSON.stringify([this.previews, this.checkpoints, this.final]);
+                    this.previews = data.previews; this.checkpoints = data.checkpoints; this.final = data.final || null;
                     this.idle = grew ? 0 : this.idle + 1;
                     if (grew || markersChanged || !this.points.length) { this.recompute(); this.draw(); }
                 } catch (e) {
@@ -204,7 +253,19 @@
             this.timer = setTimeout(() => this.poll(), this.idle > 3 ? POLL_SLOW : POLL_FAST);
         }
 
+        // LoRAs guardados: los checkpoints en su paso y el final en el último paso registrado.
+        loras() {
+            const out = this.checkpoints.map(([step, name, size]) => ({ step, name, size, final: false }));
+            if (this.final && this.points.length) {
+                const step = this.points[this.points.length - 1].s;
+                if (!out.length || out[out.length - 1].step !== step) out.push({ step, ...this.final, final: true });
+                else Object.assign(out[out.length - 1], this.final, { final: true });
+            }
+            return out;
+        }
+
         recompute() {
+            this.surf = null;
             const w = Math.min(0.99, Math.max(0, this.opts.smooth));
             let last = 0, n = 0, best = null;
             for (const p of this.points) {
@@ -296,6 +357,7 @@
             ctx.clearRect(0, 0, L.W, L.H);
             this.empty.style.display = this.points.length ? 'none' : 'flex';
             if (!this.points.length) { this.pulse.style.display = 'none'; this.tip.style.display = 'none'; return; }
+            if (this.is3d()) { this.pulse.style.display = 'none'; this.render3d(L); return; }
 
             const D = this.domain(), S = this.scales(L, D);
             this.L = L; this.D = D; this.S = S;
@@ -327,9 +389,9 @@
             ctx.save();
             ctx.beginPath(); ctx.rect(L.pad.l, L.pad.t - 2, L.pw, L.ph + 4); ctx.clip();
 
-            // Checkpoints: línea vertical tenue
+            // LoRAs guardados: línea vertical tenue
             ctx.setLineDash([3, 4]); ctx.strokeStyle = 'rgba(16, 185, 129, 0.28)';
-            for (const c of this.checkpoints) {
+            for (const { step: c } of this.loras()) {
                 if (c < D.x0 || c > D.x1) continue;
                 const x = Math.round(S.sx(c)) + 0.5;
                 ctx.beginPath(); ctx.moveTo(x, L.pad.t); ctx.lineTo(x, L.pad.t + L.ph); ctx.stroke();
@@ -383,14 +445,16 @@
             }
             ctx.restore();
 
-            // Marcadores sobre el eje y la curva
+            // Marcadores sobre la curva: el LoRA un poco por encima de su paso (no tapa el preview del mismo paso)
             this.hits = [];
-            for (const c of this.checkpoints) {
-                if (c < D.x0 || c > D.x1) continue;
-                const x = S.sx(c), y = L.pad.t + L.ph;
-                ctx.fillStyle = COLORS.ckpt;
-                ctx.beginPath(); ctx.moveTo(x, y - 5); ctx.lineTo(x + 5, y); ctx.lineTo(x, y + 5); ctx.lineTo(x - 5, y); ctx.closePath(); ctx.fill();
-                this.hits.push({ kind: 'ckpt', step: c, x, y });
+            for (const lora of this.loras()) {
+                if (lora.step < D.x0 || lora.step > D.x1) continue;
+                const p = nearest(this.points, lora.step);
+                if (!p) continue;
+                const x = S.sx(lora.step), yc = Math.min(L.pad.t + L.ph, Math.max(L.pad.t, S.sy(p.sm)));
+                const y = Math.max(L.pad.t + 6, yc - 18);
+                drawLoraMark(ctx, x, y, yc, lora.final);
+                this.hits.push({ kind: 'lora', ...lora, x, y });
             }
             for (const [step, file] of this.previews) {
                 if (step < D.x0 || step > D.x1) continue;
@@ -414,6 +478,193 @@
             this.drawHover();
         }
 
+        // ------------------------------------------------------------------- 3D
+        // Superficie: ancho = pasos, alto = loss, fondo = suavizado. La fila delantera es el loss de cada
+        // paso y cada fila hacia atrás está más suavizada, hasta el suavizado elegido en el control.
+        build3d() {
+            const pts = this.points, n = pts.length;
+            const C = Math.max(2, Math.min(100, n)), R = 20;
+            const wmax = Math.min(0.99, Math.max(0.6, this.opts.smooth));
+            const cols = Array.from({ length: C }, (_, c) => Math.round(c * (n - 1) / (C - 1)));
+            const rows = [];
+            for (let r = 0; r < R; r++) {
+                const w = r === 0 ? 0 : 1 - Math.pow(1 - wmax, r / (R - 1));
+                const vals = new Array(n);
+                let last = 0;
+                for (let i = 0; i < n; i++) {
+                    last = last * w + (1 - w) * pts[i].l;
+                    vals[i] = w > 0 ? last / (1 - Math.pow(w, i + 1)) : pts[i].l;
+                }
+                // La fila delantera es la media de cada tramo: sigue siendo el ruido de los pasos, sin pinchos sueltos.
+                rows.push(r > 0 ? cols.map(i => vals[i]) : cols.map((i, c) => {
+                    const a = c ? Math.floor((cols[c - 1] + i) / 2) + 1 : 0, b = c < C - 1 ? Math.floor((i + cols[c + 1]) / 2) : n - 1;
+                    let sum = 0; for (let k = a; k <= b; k++) sum += vals[k];
+                    return sum / (b - a + 1);
+                }));
+            }
+            const all = rows.flat().sort((a, b) => a - b);
+            let y0 = all[0], y1 = all[all.length - 1];
+            if (this.opts.clip && all.length > 50) { y0 = all[Math.floor(all.length * 0.01)]; y1 = all[Math.ceil(all.length * 0.99) - 1]; }
+            if (y1 - y0 < 1e-9) { y0 -= 0.05; y1 += 0.05; }
+            const pad = (y1 - y0) * 0.05; y0 -= pad; y1 += pad;
+            const H = 0.75, Z = 0.55;
+            const world = rows.map((row, r) => row.map((v, c) => [
+                -1 + 2 * c / (C - 1),
+                Math.min(1, Math.max(0, (v - y0) / (y1 - y0))) * H,
+                -Z + 2 * Z * r / (R - 1)
+            ]));
+            const steps = cols.map(i => pts[i].s);
+            this.surf = { R, C, rows, world, steps, y0, y1, H, Z };
+            return this.surf;
+        }
+
+        project(x, y, z, L) {
+            const { yaw, pitch, zoom } = this.cam;
+            y -= 0.32;
+            const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+            const x1 = x * cy - z * sy, z1 = x * sy + z * cy;
+            const y2 = y * cp + z1 * sp, z2 = z1 * cp - y * sp;
+            const dist = 3.4, d = dist + z2;
+            const f = Math.min(L.W * 0.36, L.H * 0.62) * zoom * dist / d;
+            return [L.W * 0.54 + x1 * f, L.H * 0.52 - y2 * f, d];
+        }
+
+        render3d(L) {
+            const ctx = this.ctx, S3 = this.surf || this.build3d(), P = (x, y, z) => this.project(x, y, z, L);
+            const { R, C, world, steps, y0, y1, H, Z } = S3;
+            this.L = L; this.D = null;
+            ctx.font = '11px Segoe UI, sans-serif';
+            ctx.lineJoin = 'round';
+
+            // Suelo y pared del fondo con la escala del loss
+            ctx.strokeStyle = COLORS.grid; ctx.lineWidth = 1; ctx.fillStyle = COLORS.text;
+            const s0 = steps[0], s1 = steps[C - 1], xOf = s => -1 + 2 * (s - s0) / ((s1 - s0) || 1);
+            const line = (a, b) => { const p = P(...a), q = P(...b); ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke(); };
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.55)';
+            const fl = [P(-1, 0, -Z), P(1, 0, -Z), P(1, 0, Z), P(-1, 0, Z)];
+            ctx.beginPath(); fl.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath(); ctx.fill();
+            ctx.fillStyle = COLORS.text;
+            const xt = niceTicks(s0, s1, 5);
+            for (const s of xt) {
+                const x = xOf(s);
+                line([x, 0, -Z], [x, 0, Z]);
+                const p = P(x, 0, -Z - 0.09);
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(Math.round(s)), p[0], p[1]);
+            }
+            for (let k = 0; k <= 4; k++) line([-1, 0, -Z + 2 * Z * k / 4], [1, 0, -Z + 2 * Z * k / 4]);
+            const yTicks3 = niceTicks(y0, y1, 4).map(v => [v, (v - y0) / (y1 - y0) * H]).filter(([, y]) => y >= 0 && y <= H);
+            for (const [, y] of yTicks3) line([-1, y, Z], [1, y, Z]);
+            line([-1, 0, Z], [-1, H, Z]); line([1, 0, Z], [1, H, Z]);
+
+            // Cuadriláteros ordenados de lejos a cerca (pintor), con color por altura y luz
+            const pr = world.map(row => row.map(w => P(w[0], w[1], w[2])));
+            const quads = [];
+            for (let r = 0; r < R - 1; r++) for (let c = 0; c < C - 1; c++) {
+                const a = pr[r][c], b = pr[r][c + 1], d = pr[r + 1][c + 1], e = pr[r + 1][c];
+                quads.push([(a[2] + b[2] + d[2] + e[2]) / 4, r, c]);
+            }
+            quads.sort((u, v) => v[0] - u[0]);
+            const light = norm3([-0.35, 0.85, -0.4]);
+            for (const [, r, c] of quads) {
+                const wa = world[r][c], wb = world[r][c + 1], we = world[r + 1][c];
+                const nrm = norm3(cross3(sub3(we, wa), sub3(wb, wa)));
+                const shade = 0.5 + 0.5 * Math.abs(dot3(nrm, light));
+                const h = (wa[1] + wb[1] + world[r + 1][c + 1][1] + we[1]) / (4 * H);
+                const col = heightColor(h, shade);
+                const a = pr[r][c], b = pr[r][c + 1], d = pr[r + 1][c + 1], e = pr[r + 1][c];
+                ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.lineTo(d[0], d[1]); ctx.lineTo(e[0], e[1]); ctx.closePath();
+                ctx.fillStyle = col; ctx.strokeStyle = col; ctx.lineWidth = 0.6;
+                ctx.fill(); ctx.stroke();
+                // Rejilla sutil y bordes: delante el loss de cada paso, detrás la tendencia con brillo
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.07)';
+                if (c % 6 === 0) { ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(e[0], e[1]); ctx.stroke(); }
+                if (r % 4 === 0) { ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
+                if (r === 0) {
+                    ctx.strokeStyle = 'rgba(165, 243, 252, 0.9)'; ctx.lineWidth = 1.2;
+                    ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+                }
+                if (r === R - 2) {
+                    ctx.strokeStyle = '#c4b5fd'; ctx.lineWidth = 2.2; ctx.shadowColor = 'rgba(167, 139, 250, 0.9)'; ctx.shadowBlur = 8;
+                    ctx.beginPath(); ctx.moveTo(e[0], e[1]); ctx.lineTo(d[0], d[1]); ctx.stroke();
+                    ctx.shadowBlur = 0;
+                }
+            }
+
+            // Paredes del bloque hasta el suelo, solo las que miran a la cámara: parece un trozo de terreno
+            const { yaw, pitch } = this.cam;
+            const camDir = [-Math.cos(pitch) * Math.sin(yaw), Math.sin(pitch), -Math.cos(pitch) * Math.cos(yaw)];
+            const walls = [
+                { n: [0, 0, -1], top: world[0], edge: 'rgba(165, 243, 252, 0.95)' },
+                { n: [0, 0, 1], top: world[R - 1], edge: '#c4b5fd' },
+                { n: [-1, 0, 0], top: world.map(row => row[0]) },
+                { n: [1, 0, 0], top: world.map(row => row[C - 1]) },
+            ];
+            for (const wall of walls) {
+                if (dot3(wall.n, camDir) <= 0) continue;
+                const top = wall.top.map(w => P(...w)), floor = wall.top.map(w => P(w[0], 0, w[2])).reverse();
+                const ys = top.map(p => p[1]).concat(floor.map(p => p[1]));
+                const g = ctx.createLinearGradient(0, Math.min(...ys), 0, Math.max(...ys));
+                g.addColorStop(0, 'rgba(79, 70, 229, 0.55)'); g.addColorStop(1, 'rgba(8, 13, 30, 0.92)');
+                ctx.beginPath();
+                top.concat(floor).forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+                ctx.closePath(); ctx.fillStyle = g; ctx.fill();
+                if (wall.edge) {
+                    ctx.strokeStyle = wall.edge; ctx.lineWidth = 1.4;
+                    ctx.beginPath(); top.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke();
+                }
+            }
+
+            // Escala del loss junto a la arista delantera izquierda, donde no tapa la superficie
+            ctx.fillStyle = COLORS.text; ctx.font = '11px Segoe UI, sans-serif';
+            for (const [v, y] of yTicks3) {
+                const p = P(-1.06, y, -Z);
+                ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(fmt(v), p[0], p[1]);
+            }
+
+            // Marcadores: previews y mejor punto sobre la tendencia, checkpoints en el suelo
+            this.hits = [];
+            const back = world[R - 1], colOf = s => { let best = 0; for (let c = 0; c < C; c++) if (Math.abs(steps[c] - s) < Math.abs(steps[best] - s)) best = c; return best; };
+            for (const lora of this.loras()) {
+                if (lora.step < s0 || lora.step > s1) continue;
+                const w = back[colOf(lora.step)], top = P(xOf(lora.step), w[1] + 0.17, Z), foot = P(xOf(lora.step), w[1], Z);
+                drawLoraMark(ctx, top[0], top[1], foot[1], lora.final, foot[0]);
+                this.hits.push({ kind: 'lora', ...lora, x: top[0], y: top[1] });
+            }
+            for (const [step, file] of this.previews) {
+                if (step < s0 || step > s1) continue;
+                const w = back[colOf(step)], top = P(xOf(step), w[1] + 0.08, Z), foot = P(xOf(step), w[1], Z);
+                ctx.strokeStyle = 'rgba(244, 114, 182, 0.6)'; ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.moveTo(foot[0], foot[1]); ctx.lineTo(top[0], top[1]); ctx.stroke();
+                ctx.fillStyle = '#0b1222'; ctx.strokeStyle = COLORS.preview; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.arc(top[0], top[1], 4.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+                this.hits.push({ kind: 'preview', step, file, x: top[0], y: top[1] });
+            }
+            if (this.best) {
+                const w = back[colOf(this.best.s)], p = P(xOf(this.best.s), w[1], Z);
+                ctx.fillStyle = COLORS.best; ctx.shadowColor = COLORS.best; ctx.shadowBlur = 10;
+                ctx.beginPath(); ctx.arc(p[0], p[1], 4.5, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+            }
+
+            // Rótulos de las dos orillas
+            ctx.font = '600 11px Segoe UI, sans-serif'; ctx.textBaseline = 'middle';
+            let p = P(-1, world[0][0][1] + 0.14, -Z); ctx.textAlign = 'center'; ctx.fillStyle = '#a5f3fc'; ctx.fillText(tr('each step'), p[0], p[1]);
+            p = P(1, back[C - 1][1] + 0.3, Z); ctx.textAlign = 'right'; ctx.fillStyle = '#c4b5fd'; ctx.fillText(tr('smoothed'), p[0], p[1]);
+
+            // El punto que late, al final de la tendencia mientras llegan pasos
+            if (this.idle <= 3) {
+                const q = P(1, back[C - 1][1], Z);
+                this.pulse.style.display = 'block'; this.pulse.style.left = q[0] + 'px'; this.pulse.style.top = q[1] + 'px';
+            }
+            this.hover3d();
+        }
+
+        hover3d() {
+            const h = this.hover;
+            const hit = h && (this.hits || []).find(m => Math.hypot(m.x - h.x, m.y - h.y) < 9);
+            if (!hit) { this.tip.style.display = 'none'; this.canvas.style.cursor = this.drag ? 'grabbing' : ''; return; }
+            this.showTip(hit, null);
+        }
+
         drawHover() {
             const h = this.hover, ctx = this.ctx, L = this.L, S = this.S, D = this.D;
             if (!h || !L || h.x < L.pad.l || h.x > L.pad.l + L.pw || h.y < 0 || h.y > L.H) { this.tip.style.display = 'none'; return; }
@@ -426,7 +677,12 @@
             if (!hit) {
                 ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, S.sy(p.sm), 3.5, 0, Math.PI * 2); ctx.fill();
             }
+            this.showTip(hit, p);
+        }
 
+        // Ventanita junto al ratón: un preview, un checkpoint o (en 2D) los valores del paso p.
+        showTip(hit, p) {
+            const h = this.hover, L = this.L;
             let html;
             if (hit && hit.kind === 'preview') {
                 const url = '/api/preview/' + encodeURIComponent(hit.file);
@@ -434,8 +690,13 @@
                 html = `<div class="lc-tip-h">${tr('Preview')} · ${tr('Step')} ${hit.step}</div>` +
                     (isImg ? `<img src="${url}" alt="">` : `<div>${escapeHtml(hit.file)}</div>`) +
                     `<div class="lc-hint">${tr('Click to open it')}</div>`;
-            } else if (hit && hit.kind === 'ckpt') {
-                html = `<div class="lc-tip-h">${tr('Checkpoint saved')} · ${tr('Step')} ${hit.step}</div>`;
+            } else if (hit && hit.kind === 'lora') {
+                const p = nearest(this.points, hit.step);
+                html = `<div class="lc-tip-h">${hit.final ? tr('Final LoRA') : 'LoRA'} · ${tr('Step')} ${hit.step}</div>` +
+                    `<div>${escapeHtml(hit.name)}</div>` +
+                    `<div class="lc-row"><span>${tr('size')}</span><b>${(hit.size / 1048576).toFixed(1)} MB</b></div>` +
+                    (p ? `<div class="lc-row"><span>${tr('smoothed loss')}</span><b>${fmt(p.sm)}</b></div>` : '') +
+                    `<div class="lc-hint">${tr('Click to download it or send it to your models folder')}</div>`;
             } else {
                 const row = (c, k, v) => `<div class="lc-row"><span><i class="lc-sw" style="background:${c}"></i>${k}</span><b>${v}</b></div>`;
                 html = `<div class="lc-tip-h">${tr('Step')} ${p.s}${p.n ? ' / ' + p.n : ''}</div>` +
@@ -452,7 +713,8 @@
             if (left + tw > L.W - 4) left = h.x - tw - 16;
             if (top + th > L.H - 4) top = Math.max(4, L.H - th - 4);
             this.tip.style.left = left + 'px'; this.tip.style.top = top + 'px';
-            this.canvas.style.cursor = hit && hit.kind === 'preview' ? 'pointer' : (this.drag ? 'grabbing' : 'crosshair');
+            this.canvas.style.cursor = hit && (hit.kind === 'preview' || hit.kind === 'lora') ? 'pointer'
+                : this.drag ? 'grabbing' : this.is3d() ? '' : 'crosshair';
         }
 
         // ---------------------------------------------------------- interacción
@@ -461,7 +723,12 @@
             const pos = e => { const r = c.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
             c.addEventListener('pointermove', e => {
                 this.hover = pos(e);
-                if (this.drag && this.D) {
+                if (this.drag && this.drag.cam) {
+                    const dx = this.hover.x - this.drag.x, dy = this.hover.y - this.drag.y;
+                    this.cam.yaw = this.drag.cam.yaw + dx * 0.008;
+                    this.cam.pitch = Math.min(1.45, Math.max(0.05, this.drag.cam.pitch + dy * 0.006));
+                    if (Math.abs(dx) + Math.abs(dy) > 3) this.drag.moved = true;
+                } else if (this.drag && this.D) {
                     const dx = this.hover.x - this.drag.x, span = this.drag.view[1] - this.drag.view[0];
                     const shift = -dx / this.L.pw * span;
                     this.view = this.clampView([this.drag.view[0] + shift, this.drag.view[1] + shift]);
@@ -471,6 +738,12 @@
             });
             c.addEventListener('pointerleave', () => { this.hover = null; this.draw(); });
             c.addEventListener('pointerdown', e => {
+                if (this.is3d()) {
+                    c.setPointerCapture(e.pointerId);
+                    const p = pos(e);
+                    this.drag = { x: p.x, y: p.y, cam: Object.assign({}, this.cam), moved: false };
+                    return;
+                }
                 if (!this.D) return;
                 c.setPointerCapture(e.pointerId);
                 this.drag = { x: pos(e).x, view: [this.D.x0, this.D.x1], moved: false };
@@ -480,8 +753,17 @@
                 if (d && !d.moved) this.click(pos(e));
                 this.draw();
             });
-            c.addEventListener('dblclick', () => { this.view = null; this.draw(); });
+            c.addEventListener('dblclick', () => {
+                if (this.is3d()) this.cam = Object.assign({}, CAM_DEFAULT); else this.view = null;
+                this.draw();
+            });
             c.addEventListener('wheel', e => {
+                if (this.is3d()) {
+                    e.preventDefault();
+                    this.cam.zoom = Math.min(2.6, Math.max(0.6, this.cam.zoom * (e.deltaY > 0 ? 1 / 1.12 : 1.12)));
+                    this.draw();
+                    return;
+                }
                 if (!this.D || !this.points.length) return;
                 e.preventDefault();
                 const at = this.S.inv(pos(e).x), f = e.deltaY > 0 ? 1.2 : 1 / 1.2;
@@ -500,13 +782,57 @@
         }
 
         click(p) {
-            const hit = (this.hits || []).find(m => m.kind === 'preview' && Math.hypot(m.x - p.x, m.y - p.y) < 9);
+            const hit = (this.hits || []).find(m => (m.kind === 'preview' || m.kind === 'lora') && Math.hypot(m.x - p.x, m.y - p.y) < 9);
             if (!hit) return;
+            if (hit.kind === 'lora') return this.openLora(hit);
             const url = '/api/preview/' + encodeURIComponent(hit.file);
             const media = /\.(png|jpe?g|webp)$/i.test(hit.file) ? `<img src="${url}" alt="">`
                 : /\.(wav|mp3)$/i.test(hit.file) ? `<audio controls autoplay src="${url}"></audio>`
                 : `<video controls autoplay src="${url}" style="max-width:92vw;max-height:84vh"></video>`;
             this.lightbox.innerHTML = media + `<div class="lc-cap">${tr('Preview')} · ${tr('Step')} ${hit.step}</div>`;
+            this.lightbox.style.display = 'flex';
+        }
+
+        // Ficha de un LoRA guardado: su loss, el preview de ese paso si lo hay, descargarlo o mandarlo
+        // a la carpeta de modelos (la de Send to Models) para probarlo en ComfyUI.
+        openLora(lora) {
+            const val = id => (document.getElementById(id)?.value || '').trim();
+            const finalName = val('export_final_name'), modelsDir = val('export_models_dir');
+            const p = nearest(this.points, lora.step);
+            const prev = this.previews.find(([s]) => s === lora.step);
+            const img = prev && /\.(png|jpe?g|webp)$/i.test(prev[1]) ? `<img src="/api/preview/${encodeURIComponent(prev[1])}" alt="">` : '';
+            const dl = `/api/download-output/${encodeURIComponent(lora.name)}?final_name=${encodeURIComponent(finalName)}`;
+            this.lightbox.innerHTML = `<div class="lc-lora-card">
+                <div class="lc-lora-h"><span class="lc-lora-dia${lora.final ? ' lc-final' : ''}"></span>${lora.final ? tr('Final LoRA') : 'LoRA'} · ${tr('Step')} ${lora.step}</div>
+                ${img}
+                <div class="lc-lora-name">${escapeHtml(lora.name)}</div>
+                <div class="lc-lora-stats"><span>${tr('size')} <b>${(lora.size / 1048576).toFixed(1)} MB</b></span>
+                    ${p ? `<span>${tr('smoothed loss')} <b>${fmt(p.sm)}</b></span><span>${tr('this step')} <b>${fmt(p.l)}</b></span>` : ''}</div>
+                <div class="lc-lora-btns">
+                    <a class="lc-btn" href="${dl}" download>⬇ ${tr('Download')}</a>
+                    <button type="button" class="lc-btn lc-btn-go" ${modelsDir ? '' : 'disabled'}
+                        title="${escapeHtml(modelsDir || tr('Choose the models folder in the Export section first.'))}">🚀 ${tr('Send to Models')}</button>
+                </div>
+                <div class="lc-lora-msg">${modelsDir ? '' : tr('Choose the models folder in the Export section first.')}</div>
+            </div>`;
+            const msg = this.lightbox.querySelector('.lc-lora-msg');
+            const go = this.lightbox.querySelector('.lc-btn-go');
+            go.addEventListener('click', async () => {
+                go.disabled = true;
+                msg.textContent = tr('Copying...');
+                try {
+                    const res = await fetch('/api/send-lora', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name: lora.name, target_dir: modelsDir, final_name: finalName })
+                    });
+                    const data = await res.json();
+                    msg.textContent = data.status === 'ok' ? '✓ ' + tr('Copied to {path}', { path: data.dest }) : '[!] ' + data.error;
+                    msg.classList.toggle('lc-ok', data.status === 'ok');
+                } catch (err) {
+                    msg.textContent = '[!] ' + err;
+                }
+                go.disabled = false;
+            });
             this.lightbox.style.display = 'flex';
         }
     }
@@ -516,6 +842,29 @@
         if (v == null || !isFinite(v)) return '–';
         const a = Math.abs(v);
         return a >= 100 ? v.toFixed(1) : a >= 1 ? v.toFixed(3) : a >= 0.001 ? v.toFixed(4) : v.toExponential(2);
+    }
+
+    // Vectores 3D mínimos para la luz de la superficie.
+    const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+    const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    const norm3 = a => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+
+    // Rombo de un LoRA guardado en (x, y), unido por un trazo a la curva en (footX, footY). El final, dorado.
+    function drawLoraMark(ctx, x, y, footY, final, footX = x) {
+        const color = final ? '#fbbf24' : COLORS.ckpt, r = final ? 7 : 5.5;
+        ctx.strokeStyle = final ? 'rgba(251, 191, 36, 0.6)' : 'rgba(16, 185, 129, 0.6)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(footX, footY); ctx.lineTo(x, y); ctx.stroke();
+        ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 8;
+        ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); ctx.fill();
+        ctx.shadowBlur = 0; ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)'; ctx.lineWidth = 1; ctx.stroke();
+    }
+
+    function heightColor(h, shade) {
+        h = Math.min(1, Math.max(0, h)) * (HEIGHT_STOPS.length - 1);
+        const i = Math.min(HEIGHT_STOPS.length - 2, Math.floor(h)), f = h - i, a = HEIGHT_STOPS[i], b = HEIGHT_STOPS[i + 1];
+        const ch = k => Math.round((a[k] + (b[k] - a[k]) * f) * shade);
+        return `rgb(${ch(0)}, ${ch(1)}, ${ch(2)})`;
     }
 
     function escapeHtml(s) {

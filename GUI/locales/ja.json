@@ -1194,5 +1194,21 @@
   "Click to open it": "クリックで開く",
   "Checkpoint saved": "チェックポイント保存",
   "smoothed": "平滑化",
-  "this step": "このステップ"
+  "this step": "このステップ",
+  "Drag to rotate, mouse wheel zooms.": "ドラッグで回転、マウスホイールでズーム。",
+  "Double click on the chart also resets it.": "グラフをダブルクリックしてもリセットできます。",
+  "Reset view": "表示をリセット",
+  "height and colour: loss (low to high)": "高さと色：loss（低→高）",
+  "front edge: loss at each step · back edge: smoothed loss": "手前の縁：各ステップの loss · 奥の縁：平滑化した loss",
+  "each step": "各ステップ",
+  "Final LoRA": "最終 LoRA",
+  "size": "サイズ",
+  "Click to download it or send it to your models folder": "クリックでダウンロード、またはモデルフォルダーへ送信",
+  "Download": "ダウンロード",
+  "Send to Models": "Modelsへ送る",
+  "Choose the models folder in the Export section first.": "先に Export セクションでモデルフォルダーを選んでください。",
+  "Copying...": "コピー中...",
+  "Copied to {path}": "{path} にコピーしました",
+  "saved LoRA (click to download or test it)": "保存された LoRA（クリックでダウンロードまたはテスト）",
+  "final LoRA": "最終 LoRA"
 }

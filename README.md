@@ -10,6 +10,8 @@ What was added, newest first. Each entry links to its commit.
 
 **2026-10-24**
 
+- **Training chart in 3D**: a terrain of the loss, from the loss of each step to the smoothed trend, that you can rotate [`f8d4f9f`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/f8d4f9f)
+- Saved LoRAs on the chart at their step: click one to download it or send it to your models folder to test it [`5bad871`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/5bad871)
 - **Training chart**: a live loss chart under the console in every trainer, with markers for previews and checkpoints. Closed by default, it costs nothing until opened [`7b665b1`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/7b665b1)
 - AMD: VRAM read through ADLX on Windows and AMD GPUs listed in the GPU selector, by [@0xDELUXA](https://github.com/0xDELUXA) [`674447e`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/674447e)
 

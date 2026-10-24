@@ -1194,5 +1194,21 @@
   "Click to open it": "Clicca per aprirla",
   "Checkpoint saved": "Checkpoint salvato",
   "smoothed": "smussata",
-  "this step": "questo passo"
+  "this step": "questo passo",
+  "Drag to rotate, mouse wheel zooms.": "Trascina per ruotare, la rotella zooma.",
+  "Double click on the chart also resets it.": "Anche il doppio clic sul grafico lo ripristina.",
+  "Reset view": "Ripristina vista",
+  "height and colour: loss (low to high)": "altezza e colore: loss (da bassa ad alta)",
+  "front edge: loss at each step · back edge: smoothed loss": "bordo anteriore: loss di ogni passo · bordo posteriore: loss smussata",
+  "each step": "ogni passo",
+  "Final LoRA": "LoRA finale",
+  "size": "dimensione",
+  "Click to download it or send it to your models folder": "Clicca per scaricarlo o inviarlo alla tua cartella dei modelli",
+  "Download": "Scarica",
+  "Send to Models": "Invia a Models",
+  "Choose the models folder in the Export section first.": "Scegli prima la cartella dei modelli nella sezione Export.",
+  "Copying...": "Copia in corso...",
+  "Copied to {path}": "Copiato in {path}",
+  "saved LoRA (click to download or test it)": "LoRA salvato (clicca per scaricarlo o provarlo)",
+  "final LoRA": "LoRA finale"
 }

@@ -117,6 +117,27 @@ def with_lora_options_suffix(name, path):
     return _strip_options_suffix(stem, opts) + opts + ".safetensors"
 
 
+def download_name(f, final_name=""):
+    """Nombre con el que se descarga un LoRA. El final usa el 'Final LoRA Filename' de la GUI
+    (que ya lleva el Project Name dentro) y los checkpoints intermedios añaden _<pasos>_steps.
+    El sufijo _rs / _plus / _lokr del LoRA se conserva. Sin final_name (campo vacío) se mantiene
+    el nombre del archivo tal cual. / Download name. The final LoRA uses the GUI's 'Final LoRA
+    Filename' (Project Name already inside) and intermediate checkpoints add _<steps>_steps.
+    The LoRA's _rs / _plus / _lokr suffix is kept. Empty final_name keeps the file name."""
+    opts = lora_options_suffix(f)
+    if final_name:
+        stem = final_name[:-len(".safetensors")] if final_name.lower().endswith(".safetensors") else final_name
+        # El campo ya lleva el sufijo que la GUI pone según las casillas: se quita y se pone el que
+        # dicen los metadatos del LoRA, para no duplicarlo (_lokr_lokr).
+        stem = _strip_options_suffix(stem, opts)
+        steps = re.search(r"_step_(\d+)$", f.stem)
+        if steps:
+            return f"{stem}_{steps.group(1)}_steps{opts}.safetensors"
+        if "final" in f.stem.lower():
+            return f"{stem}{opts}.safetensors"
+    return with_lora_options_suffix(f.name, f) if opts else f.name
+
+
 def register(app, get_dataset_dir, get_output_dir, dataset_exts):
     allowed = tuple(dataset_exts) + (".txt",)
 
@@ -202,26 +223,6 @@ def register(app, get_dataset_dir, get_output_dir, dataset_exts):
         except OSError as exc:
             return jsonify({"status": "error", "error": str(exc)}), 500
         return jsonify({"status": "ok", "path": str(dest.resolve())})
-
-    def download_name(f, final_name=""):
-        """Nombre con el que se descarga un LoRA. El final usa el 'Final LoRA Filename' de la GUI
-        (que ya lleva el Project Name dentro) y los checkpoints intermedios añaden _<pasos>_steps.
-        El sufijo _rs / _plus / _lokr del LoRA se conserva. Sin final_name (campo vacío) se mantiene
-        el nombre del archivo tal cual. / Download name. The final LoRA uses the GUI's 'Final LoRA
-        Filename' (Project Name already inside) and intermediate checkpoints add _<steps>_steps.
-        The LoRA's _rs / _plus / _lokr suffix is kept. Empty final_name keeps the file name."""
-        opts = lora_options_suffix(f)
-        if final_name:
-            stem = final_name[:-len(".safetensors")] if final_name.lower().endswith(".safetensors") else final_name
-            # El campo ya lleva el sufijo que la GUI pone según las casillas: se quita y se pone el que
-            # dicen los metadatos del LoRA, para no duplicarlo (_lokr_lokr).
-            stem = _strip_options_suffix(stem, opts)
-            steps = re.search(r"_step_(\d+)$", f.stem)
-            if steps:
-                return f"{stem}_{steps.group(1)}_steps{opts}.safetensors"
-            if "final" in f.stem.lower():
-                return f"{stem}{opts}.safetensors"
-        return with_lora_options_suffix(f.name, f) if opts else f.name
 
     @app.route("/api/output-files")
     def output_files():

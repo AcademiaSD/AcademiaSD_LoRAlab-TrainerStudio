@@ -1194,5 +1194,21 @@
   "Click to open it": "Klicken zum Öffnen",
   "Checkpoint saved": "Checkpoint gespeichert",
   "smoothed": "geglättet",
-  "this step": "dieser Schritt"
+  "this step": "dieser Schritt",
+  "Drag to rotate, mouse wheel zooms.": "Ziehen zum Drehen, Mausrad zoomt.",
+  "Double click on the chart also resets it.": "Ein Doppelklick auf das Diagramm setzt es ebenfalls zurück.",
+  "Reset view": "Ansicht zurücksetzen",
+  "height and colour: loss (low to high)": "Höhe und Farbe: Loss (niedrig bis hoch)",
+  "front edge: loss at each step · back edge: smoothed loss": "Vorderkante: Loss jedes Schritts · Hinterkante: geglätteter Loss",
+  "each step": "jeder Schritt",
+  "Final LoRA": "Finaler LoRA",
+  "size": "Größe",
+  "Click to download it or send it to your models folder": "Klicken, um ihn herunterzuladen oder an deinen Models-Ordner zu senden",
+  "Download": "Herunterladen",
+  "Send to Models": "An Models senden",
+  "Choose the models folder in the Export section first.": "Wähle zuerst den Models-Ordner im Bereich Export.",
+  "Copying...": "Wird kopiert...",
+  "Copied to {path}": "Kopiert nach {path}",
+  "saved LoRA (click to download or test it)": "gespeicherter LoRA (klicken zum Herunterladen oder Testen)",
+  "final LoRA": "finaler LoRA"
 }
