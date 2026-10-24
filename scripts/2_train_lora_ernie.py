@@ -14,6 +14,7 @@ from safetensors import safe_open
 from safetensors.torch import load, load_file, save_file
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import lora_options
+import training_metrics
 
 # La barra de progreso comparte los caracteres visuales del entrenador Klein. Fuerza UTF-8
 # también cuando Python se lanza desde una consola Windows con codepage cp1252.
@@ -200,6 +201,7 @@ def main():
     print(f"ERNIE text-to-image training: {len(ordered)} images, {len(buckets)} buckets, {STEPS} steps, LR scheduler {lora_options.lr_scheduler_label(LR_SCHEDULER,WARMUP,LR_CYCLES)}",flush=True)
     model.train()
     running_loss=t_step_avg=grad_norm=0.0; start_step=step; last_step=step; live_mtime=None
+    metrics=training_metrics.MetricsLog(OUT,start_step)
     while step<STEPS:
         # Read GUI-saved settings at each step. Structural options stay fixed until resume.
         try:
@@ -218,7 +220,7 @@ def main():
         noisy=((1-se)*z+se*noise).to(torch.bfloat16); target=noise-z; timestep=(sigma*1000).to(torch.bfloat16)
         pred=model(hidden_states=noisy,timestep=timestep,text_bth=text,text_lens=lens,return_dict=False)[0]
         loss=F.mse_loss(pred.float(),target.float())/ACCUM; loss.backward()
-        running_loss+=loss.item()*ACCUM
+        step_loss=loss.item()*ACCUM; running_loss+=step_loss
         step+=1; last_step=step
         if step%ACCUM==0 or step==STEPS:
             grad_norm=torch.nn.utils.clip_grad_norm_(trainable,MAX_GRAD_NORM).item()
@@ -236,6 +238,7 @@ def main():
             bar=PROGRESS_FILLED*full+PROGRESS_EMPTY*(20-full)
         eta=max(0,STEPS-step)*t_step_avg; eta_s=f"{int(eta//3600):02d}:{int(eta%3600//60):02d}:{int(eta%60):02d}"
         print(f"\rStep {step:4d}/{STEPS} [{bar}] {pct*100:5.1f}% | Loss {running_loss/max(1,step-start_step):.4f} | gnorm {grad_norm:.3f} | lr {lr_at(step):.2e} | {t_step_avg:.2f}s/it | ETA {eta_s}",end="",flush=True)
+        metrics.log(step,step_loss,lr_at(step),grad_norm,elapsed,STEPS)
         if SAVE_EVERY>0 and step%SAVE_EVERY==0: save()
         if PREVIEW_EVERY>0 and step%PREVIEW_EVERY==0:
             if PREVIEW_MODE=="random": name=random.choice(ordered)

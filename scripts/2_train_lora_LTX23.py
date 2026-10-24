@@ -56,6 +56,7 @@ from PIL import Image
 from i18n import t
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import lora_options
+import training_metrics
 
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
 STEP_WORD = t("Step")
@@ -2784,6 +2785,7 @@ def train_ltx23():
     #print("LoRA export prefix / Prefijo de exportación: '{}'".format(LORA_KEY_PREFIX))
 
     reload_live_settings()
+    metrics = training_metrics.MetricsLog(OUTPUT_DIR, start_step)
     step = start_step
     try:
         # while y no range(): TOTAL_STEPS puede cambiar en caliente, en ambos sentidos.
@@ -2958,7 +2960,8 @@ def train_ltx23():
             loss = loss / GRAD_ACCUM_STEPS
             loss.backward()
 
-            running_loss += loss.item() * GRAD_ACCUM_STEPS
+            step_loss = loss.item() * GRAD_ACCUM_STEPS
+            running_loss += step_loss
 
             loss = None
 
@@ -3007,6 +3010,7 @@ def train_ltx23():
             )
 
             print("\r{}".format(progress_line), end="", flush=True)
+            metrics.log(step, step_loss, current_lr, grad_norm, elapsed, TOTAL_STEPS)
 
             if SAVE_EVERY > 0 and step % SAVE_EVERY == 0:
                 save_checkpoint_now(step)

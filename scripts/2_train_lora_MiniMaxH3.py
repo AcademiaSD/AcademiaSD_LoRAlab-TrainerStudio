@@ -92,6 +92,7 @@ from i18n import t
 import gpu_stats
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import lora_options
+import training_metrics
 
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
 STEP_WORD = t("Step")
@@ -7802,6 +7803,7 @@ def train_minimaxh3():
     # gradient pending. It is the only consistent resume point.
     # ------------------------------------------------------------------
     last_completed_step = start_step
+    metrics = training_metrics.MetricsLog(OUTPUT_DIR, start_step)
 
     log_print(t("STARTING TRAINING! {n} cached entries.", n=len(entries)), flush=True)
 
@@ -8855,6 +8857,7 @@ def train_minimaxh3():
 
             print("\r{}".format(progress_line), end="", flush=True)
             _PROGRESS_LINE["open"] = True
+            metrics.log(step, current_loss, current_lr, display_grad_norm, elapsed, TOTAL_STEPS)
 
             # ----------------------------------------------------------------
             # SONDA DE PRESION DE MEMORIA.

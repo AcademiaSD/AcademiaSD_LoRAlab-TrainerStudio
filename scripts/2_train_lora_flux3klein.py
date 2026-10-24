@@ -35,6 +35,7 @@ from bitsandbytes.nn import Linear4bit, Params4bit
 from i18n import t
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import lora_options
+import training_metrics
 
 # FLUX.3 hace las normas q/k en FP32 a propósito (como BFL): torch avisa de que no usa el kernel fusionado.
 warnings.filterwarnings("ignore", message="Mismatch dtype between input and weight")
@@ -847,6 +848,7 @@ def train_flux3klein():
     print("\n" + t("STARTING TRAINING! {n} {kind} in {b} buckets.", n=len(all_preview_names), kind=kind, b=len(buckets)))
 
     reload_live_settings()
+    metrics = training_metrics.MetricsLog(OUTPUT_DIR, start_step)
     step = start_step
     try:
         # while y no range(): TOTAL_STEPS puede cambiar en caliente, en ambos sentidos.
@@ -890,7 +892,8 @@ def train_flux3klein():
 
             loss = F.mse_loss(pred.float(), target.float()) / GRAD_ACCUM_STEPS
             loss.backward()
-            running_loss += loss.item() * GRAD_ACCUM_STEPS
+            step_loss = loss.item() * GRAD_ACCUM_STEPS
+            running_loss += step_loss
 
             # La norma solo existe al aplicar el optimizador: entre medias se muestra la última.
             if step % GRAD_ACCUM_STEPS == 0:
@@ -914,6 +917,7 @@ def train_flux3klein():
                 f"lr {lr_at(step):.2e} | {t_step_avg:.2f}s/it | ETA {eta}"
             )
             print(f"\r{progress_line}", end="", flush=True)
+            metrics.log(step, step_loss, lr_at(step), grad_norm, t_step, TOTAL_STEPS)
 
             if SAVE_EVERY > 0 and step % SAVE_EVERY == 0:
                 print()

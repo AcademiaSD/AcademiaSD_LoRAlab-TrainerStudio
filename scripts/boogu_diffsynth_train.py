@@ -21,6 +21,7 @@ from torch.utils.data import DataLoader, Dataset
 from boogu_dataset import CACHE_VERSION, cache_path
 from boogu_model import NF4_DIR, quiet
 from i18n import t
+import training_metrics
 from diffsynth.core.data.operators import *  # noqa: F401,F403
 from diffsynth.diffusion import *  # noqa: F401,F403
 from diffsynth.pipelines.boogu_image import BooguImagePipeline, ModelConfig
@@ -406,6 +407,7 @@ def launch_boogu_training_task(accelerator, dataset, model, model_logger, args):
 
     model.train()
     start_step, running_loss, t_avg = global_step, 0.0, 0.0
+    metrics, logged_loss = training_metrics.MetricsLog(args.output_path, start_step), 0.0
     t0 = time.time()
     live = {}
     reload_live_settings(args, live)
@@ -444,6 +446,10 @@ def launch_boogu_training_task(accelerator, dataset, model, model_logger, args):
             print(f"\r{STEP_WORD} {global_step:4d}/{total_steps} [{bar}] {pct * 100:5.1f}% | Loss {avg:.4f} | "
                   f"lr {scheduler.get_last_lr()[0]:.2e} | {t_avg:.2f}s/it | ETA {eta // 3600:02d}:{eta % 3600 // 60:02d}:{eta % 60:02d}",
                   end="", flush=True)
+            # El loss de este paso es la media de sus micro-pasos de acumulación.
+            metrics.log(global_step, (running_loss - logged_loss) / max(1, args.gradient_accumulation_steps),
+                        scheduler.get_last_lr()[0], None, dt, total_steps)
+            logged_loss = running_loss
             if args.save_steps and global_step % args.save_steps == 0:
                 save_checkpoint(global_step)
             if args.preview_every > 0 and global_step % args.preview_every == 0:

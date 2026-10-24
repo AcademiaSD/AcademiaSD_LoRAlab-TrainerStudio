@@ -67,6 +67,7 @@ from safetensors.torch import save_file, load, safe_open
 from i18n import t
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import lora_options
+import training_metrics
 
 STEP_WORD = t("Step")
 
@@ -1151,6 +1152,7 @@ def train_stage(stage, base):
     print("\n" + t("STARTING TRAINING! {n} audio clips, stage {s}.",
                    n=len(SAMPLES), s=stage.upper()))
     reload_live_settings()
+    metrics = training_metrics.MetricsLog(OUTPUT_DIR, start_step, f"metrics_{stage}.jsonl")
     step = start_step
     try:
         while step < TOTAL_STEPS:
@@ -1181,7 +1183,8 @@ def train_stage(stage, base):
                     loss = ar_loss_step(model, info["base_ids"], info["codes"])
 
             (loss / GRAD_ACCUM_STEPS).backward()
-            running_loss += loss.item()
+            step_loss = loss.item()
+            running_loss += step_loss
 
             if step % GRAD_ACCUM_STEPS == 0:
                 grad_norm = torch.nn.utils.clip_grad_norm_(trainable, MAX_GRAD_NORM).item()
@@ -1202,6 +1205,7 @@ def train_stage(stage, base):
                   f"Loss {running_loss / seen:.4f} | gnorm {grad_norm:.3f} | "
                   f"lr {lr_at(step):.2e} | {avg_step_time:.2f}s/it | ETA {eta}",
                   end="", flush=True)
+            metrics.log(step, step_loss, lr_at(step), grad_norm, elapsed, TOTAL_STEPS)
 
             if SAVE_EVERY > 0 and step % SAVE_EVERY == 0:
                 print()
