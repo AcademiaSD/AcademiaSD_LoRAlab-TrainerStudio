@@ -32,6 +32,7 @@ from safetensors.torch import save_file, load
 from i18n import t
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import lora_options
+import training_metrics
 
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
 STEP_WORD = t("Step")
@@ -738,6 +739,7 @@ def train_ideogram4():
     print("\n" + t("STARTING TRAINING! {n} {kind} in {b} buckets.", n=len(all_preview_names), kind=t("images"), b=len(buckets)))
 
     reload_live_settings()
+    metrics = training_metrics.MetricsLog(OUTPUT_DIR, start_step)
     step = start_step
     try:
         # while y no range(): TOTAL_STEPS puede cambiar en caliente, en ambos sentidos.
@@ -784,7 +786,8 @@ def train_ideogram4():
 
             loss = F.mse_loss(pred.float(), target.float()) / GRAD_ACCUM_STEPS
             loss.backward()
-            running_loss += loss.item() * GRAD_ACCUM_STEPS
+            step_loss = loss.item() * GRAD_ACCUM_STEPS
+            running_loss += step_loss
 
             # La norma solo existe al aplicar el optimizador: entre medias se muestra la última.
             if step % GRAD_ACCUM_STEPS == 0:
@@ -808,6 +811,7 @@ def train_ideogram4():
                 f"lr {lr_at(step):.2e} | {t_step_avg:.2f}s/it | ETA {eta}"
             )
             print(f"\r{progress_line}", end="", flush=True)
+            metrics.log(step, step_loss, lr_at(step), grad_norm, t_step, TOTAL_STEPS)
 
             if SAVE_EVERY > 0 and step % SAVE_EVERY == 0:
                 print()
