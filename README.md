@@ -695,14 +695,14 @@ What was added, newest first. Each entry links to its commit.
 
 **2026-10-21**
 
-- **New trainer: YuE2-3B**, song LoRAs [`ba65373`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/ba65373), with an AR regularizer and fixed NAR conditioning [`f76b32c`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/f76b32c)
-- **New trainer: Fibo 2.0 (BRIA)**, experimental, with the NF4 model downloaded from Hugging Face [`951f22f`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/951f22f) [`a73d437`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/a73d437)
+- **New trainer: YuE2-3B, song LoRAs, with an AR regularizer and fixed NAR conditioning** [`ba65373`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/ba65373) [`f76b32c`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/f76b32c)
+- **New trainer: Fibo 2.0 (BRIA), experimental, with the NF4 model downloaded from Hugging Face** [`951f22f`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/951f22f) [`a73d437`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/a73d437)
 - Launcher cards laid out evenly and responsively [`5c94e0a`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/5c94e0a)
 - Fixes: the Browse folder dialog [`28fc9b5`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/28fc9b5), the Fibo 2.0 pre-cache on large images [`42a08e0`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/42a08e0), training options the interface does not send are kept [`152f270`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/152f270)
 
 **2026-10-20**
 
-- **New trainer: Ming-Image Design**, image and edit LoRAs for transparent designs; Save JSON lists the settings changed live [`678554b`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/678554b) [`aa3a2f0`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/aa3a2f0)
+- **New trainer: Ming-Image Design, image and edit LoRAs for transparent designs; Save JSON lists the settings changed live** [`678554b`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/678554b) [`aa3a2f0`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/aa3a2f0)
 
 **2026-10-19**
 
@@ -712,7 +712,7 @@ What was added, newest first. Each entry links to its commit.
 **2026-10-18**
 
 - **New trainer: Qwen-Image 2512 / Edit 2511** [`a24d45d`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/a24d45d)
-- **New trainer: Boogu Image Edit 0.1**, with live settings and a preview size [`5e8d055`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/5e8d055) [`7013c61`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/7013c61)
+- **New trainer: Boogu Image Edit 0.1, with live settings and a preview size** [`5e8d055`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/5e8d055) [`7013c61`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/7013c61)
 - rsLoRA and LoRA+ in LTX-2.3 and MiniMax-H3 [`2e2a653`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/2e2a653)
 - Edit previews with several ordered reference images [`69e3945`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/69e3945) [`f6d9efc`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/f6d9efc)
 
@@ -723,7 +723,7 @@ What was added, newest first. Each entry links to its commit.
 
 **2026-10-16**
 
-- **New trainer: FLUX.3 Image Klein**, with its NF4 converter and captions in BFL's own formats [`b860ae5`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/b860ae5) [`1f96b77`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/1f96b77) [`52deaa7`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/52deaa7)
+- **New trainer: FLUX.3 Image Klein, with its NF4 converter and captions in BFL's own formats** [`b860ae5`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/b860ae5) [`1f96b77`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/1f96b77) [`52deaa7`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/52deaa7)
 - Before/after datasets train as edit LoRAs even with LoRA Type normal [`a5dbf92`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/a5dbf92)
 - The updater reinstalls URL-pinned packages when their URL changes [`ea6c0b5`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/ea6c0b5)
 
@@ -766,7 +766,7 @@ What was added, newest first. Each entry links to its commit.
 
 **2026-10-04**
 
-- **New trainers: SDXL** (Pony, Illustrious, NoobAI, Juggernaut and RealVis presets) and **Ideogram 4** (JSON captions) [`12822e8`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/12822e8) [`6703a8c`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/6703a8c)
+- **New trainers: SDXL (Pony, Illustrious, NoobAI, Juggernaut and RealVis presets) and Ideogram 4 (JSON captions)** [`12822e8`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/12822e8) [`6703a8c`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/6703a8c)
 - Password-protected remote access, configured from the launcher [`b786483`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/b786483) [`f12e412`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/f12e412)
 - Dataset upload and LoRA download from the browser [`af53a9d`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/af53a9d)
 - RunPod: Docker image and Deploy button [`de5bb82`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/de5bb82) [`64f7928`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/64f7928)
@@ -774,7 +774,7 @@ What was added, newest first. Each entry links to its commit.
 
 **2026-10-03**
 
-- **New trainers: Z-Image, Anima** (BF16 or NF4) and **FLUX.2 Klein 9B** [`385871e`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/385871e) [`0c30cd1`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/0c30cd1) [`6cb669c`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/6cb669c)
+- **New trainers: Z-Image, Anima (BF16 or NF4) and FLUX.2 Klein 9B** [`385871e`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/385871e) [`0c30cd1`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/0c30cd1) [`6cb669c`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/6cb669c)
 - **Linux support**, by [@jonathanhecl](https://github.com/jonathanhecl) [`60ecb9c`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/60ecb9c)
 
 **2026-10-01**
@@ -791,7 +791,7 @@ What was added, newest first. Each entry links to its commit.
 
 **2026-09-28**
 
-- **First version**: Krea 2, LTX-2.3, MiniMax-H3 and Qwen-Image 2.1, one Python environment and a common launcher [`72189d7`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/72189d7)
+- **First version: Krea 2, LTX-2.3, MiniMax-H3 and Qwen-Image 2.1, one Python environment and a common launcher** [`72189d7`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/72189d7)
 
 ---
 
