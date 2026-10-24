@@ -45,6 +45,9 @@ What was added, newest first. Each entry links to its commit.
 - rsLoRA and LoRA+ in LTX-2.3 and MiniMax-H3 [`2e2a653`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/2e2a653)
 - Edit previews with several ordered reference images [`69e3945`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/69e3945) [`f6d9efc`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/f6d9efc)
 
+<details>
+<summary><b>Earlier changes (2026-09-28 to 2026-10-17)</b></summary>
+
 **2026-10-17**
 
 - **New trainer: MOSS-Image** [`7e485ac`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/7e485ac)
@@ -121,6 +124,8 @@ What was added, newest first. Each entry links to its commit.
 **2026-09-28**
 
 - **First version: Krea 2, LTX-2.3, MiniMax-H3 and Qwen-Image 2.1, one Python environment and a common launcher** [`72189d7`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/72189d7)
+
+</details>
 
 ---
 
