@@ -4,6 +4,131 @@
   <img src="assets/launcher_LoRAlab.jpg" alt="AcademiaSD LoRAlab Trainer Studio" width="900">
 </p>
 
+## 📅 Changelog
+
+What was added, newest first. Each entry links to its commit.
+
+**2026-10-24**
+
+- **Training chart**: a live loss chart under the console in every trainer, with markers for previews and checkpoints. Closed by default, it costs nothing until opened [`7b665b1`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/7b665b1)
+- AMD: VRAM read through ADLX on Windows and AMD GPUs listed in the GPU selector, by [@0xDELUXA](https://github.com/0xDELUXA) [`674447e`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/674447e)
+
+**2026-10-23**
+
+- Upload the trained LoRAs to Hugging Face [`e2abfa8`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/e2abfa8)
+
+**2026-10-22**
+
+- YuE2-3B marked as beta: AR is the default stage (it is the one that clones the voice) and the LoRA files carry their stage, `_AR` / `_NAR` [`77c9825`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/77c9825) [`a8c0699`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/a8c0699)
+- MOSS-Image frees the CUDA cache when training fills the VRAM [`f39a4cd`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/f39a4cd)
+
+**2026-10-21**
+
+- <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **YuE2-3B, song LoRAs, with an AR regularizer and fixed NAR conditioning** [`ba65373`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/ba65373) [`f76b32c`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/f76b32c)
+- <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **Fibo 2.0 (BRIA), experimental, with the NF4 model downloaded from Hugging Face** [`951f22f`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/951f22f) [`a73d437`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/a73d437)
+- Launcher cards laid out evenly and responsively [`5c94e0a`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/5c94e0a)
+- Fixes: the Browse folder dialog [`28fc9b5`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/28fc9b5), the Fibo 2.0 pre-cache on large images [`42a08e0`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/42a08e0), training options the interface does not send are kept [`152f270`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/152f270)
+
+**2026-10-20**
+
+- <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **Ming-Image Design, image and edit LoRAs for transparent designs; Save JSON lists the settings changed live** [`678554b`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/678554b) [`aa3a2f0`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/aa3a2f0)
+
+**2026-10-19**
+
+- Models, caches and outputs organized into `Models/`, `Cache_Data/` and `Outputs/`, with automatic migration [`078151d`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/078151d) [`14f942e`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/14f942e)
+- LoRAs exported with normal file permissions [`4834fb4`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/4834fb4)
+
+**2026-10-18**
+
+- <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **Qwen-Image 2512 / Edit 2511** [`a24d45d`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/a24d45d)
+- <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **Boogu Image Edit 0.1, with live settings and a preview size** [`5e8d055`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/5e8d055) [`7013c61`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/7013c61)
+- rsLoRA and LoRA+ in LTX-2.3 and MiniMax-H3 [`2e2a653`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/2e2a653)
+- Edit previews with several ordered reference images [`69e3945`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/69e3945) [`f6d9efc`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/f6d9efc)
+
+<details>
+<summary><b>Earlier changes (2026-09-28 to 2026-10-17)</b></summary>
+
+**2026-10-17**
+
+- <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **MOSS-Image** [`7e485ac`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/7e485ac)
+- Tour video in the README [`afdf44c`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/afdf44c)
+
+**2026-10-16**
+
+- <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **FLUX.3 Image Klein, with its NF4 converter and captions in BFL's own formats** [`b860ae5`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/b860ae5) [`1f96b77`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/1f96b77) [`52deaa7`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/52deaa7)
+- Before/after datasets train as edit LoRAs even with LoRA Type normal [`a5dbf92`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/a5dbf92)
+- The updater reinstalls URL-pinned packages when their URL changes [`ea6c0b5`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/ea6c0b5)
+
+**2026-10-15**
+
+- Launcher: a running training is never cut when switching trainers, and going back works behind a proxy [`43da9a8`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/43da9a8) [`4ea74e2`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/4ea74e2)
+
+**2026-10-14**
+
+- Trainers open in the launcher tab, with a back button, a glow on the one that is training and trainer switching [`4ed40ad`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/4ed40ad)
+- Windows 11 24H2: trainers are detected without `wmic` [`5432f33`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/5432f33)
+
+**2026-10-12**
+
+- LR scheduler selector in every trainer [`f8b2489`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/f8b2489)
+- GPU selector in the launcher [`07d2934`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/07d2934)
+
+**2026-10-09**
+
+- Mobile layout for the trainer interfaces and an Upload button for the edit preview image [`59817f3`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/59817f3)
+- Failed uploads highlighted with a retry, and LoRA downloads named after the project [`8dd6154`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/8dd6154)
+- Visual RefMods keep their source pictures [`8dc926a`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/8dc926a)
+
+**2026-10-08**
+
+- **Experimental AMD (ROCm) support**: installers for Windows and Linux [`b8742cf`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/b8742cf)
+- Fix stale or mixed training previews [`4fc1fb6`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/4fc1fb6)
+
+**2026-10-06**
+
+- <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **ERNIE-Image** [`4067e13`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/4067e13)
+- rsLoRA, LoRA+ and LoKr in the image trainers, with the option in the LoRA file name [`c46e4ee`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/c46e4ee) [`7e3a800`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/7e3a800)
+- Training keeps running when the browser is closed, per-file upload results and non-blocking notifications, by [@Synergyart](https://github.com/Synergyart) [`d350cca`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/d350cca)
+
+**2026-10-05**
+
+- **Translations**: the launcher, the trainers and their consoles in Spanish, German, French, Italian, Portuguese, Japanese and Korean [`c9676f3`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/c9676f3) [`e3b1b51`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/e3b1b51)
+- Clear Dataset button in every trainer [`0acfcf5`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/0acfcf5)
+- The updater updates the current branch and shows the new commits [`e7aef0d`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/e7aef0d) [`b82291d`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/b82291d)
+
+**2026-10-04**
+
+- <img src="https://img.shields.io/badge/NEW%20TRAINERS-ff2d55?style=for-the-badge" alt="NEW TRAINERS" height="22"> **SDXL (Pony, Illustrious, NoobAI, Juggernaut and RealVis presets) and Ideogram 4 (JSON captions)** [`12822e8`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/12822e8) [`6703a8c`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/6703a8c)
+- Password-protected remote access, configured from the launcher [`b786483`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/b786483) [`f12e412`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/f12e412)
+- Dataset upload and LoRA download from the browser [`af53a9d`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/af53a9d)
+- RunPod: Docker image and Deploy button [`de5bb82`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/de5bb82) [`64f7928`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/64f7928)
+- `requirements.txt` and `LORALAB_PYTHON` to use your own Python environment [`a7c232a`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/a7c232a)
+
+**2026-10-03**
+
+- <img src="https://img.shields.io/badge/NEW%20TRAINERS-ff2d55?style=for-the-badge" alt="NEW TRAINERS" height="22"> **Z-Image, Anima (BF16 or NF4) and FLUX.2 Klein 9B** [`385871e`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/385871e) [`0c30cd1`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/0c30cd1) [`6cb669c`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/6cb669c)
+- **Linux support**, by [@jonathanhecl](https://github.com/jonathanhecl) [`60ecb9c`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/60ecb9c)
+
+**2026-10-01**
+
+- README rewritten as a self-contained guide for the public release [`21b5ce7`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/21b5ce7)
+
+**2026-09-30**
+
+- Renamed to AcademiaSD LoRAlab Trainer Studio [`c8705f4`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/c8705f4)
+
+**2026-09-29**
+
+- LoRA export folder shared by all the trainers and settings in two columns [`89f68ad`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/89f68ad) [`db773a2`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/db773a2)
+
+**2026-09-28**
+
+- <img src="https://img.shields.io/badge/FIRST%20VERSION-6366f1?style=for-the-badge" alt="FIRST VERSION" height="22"> **Krea 2, LTX-2.3, MiniMax-H3 and Qwen-Image 2.1, one Python environment and a common launcher** [`72189d7`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/72189d7)
+
+</details>
+
+---
+
 https://github.com/user-attachments/assets/8f3b6d3f-dbd5-45a4-8ae5-028e241c449a
 
 <p align="center">
@@ -154,7 +279,7 @@ The **VRAM panel** of the trainers reads the real usage of the whole AMD GPU: on
 
 ## 🔄 Updating
 
-Double-click **`Update_LoRAlab-TrainerStudio.bat`**. It brings the latest version from GitHub — including any new trainer — and keeps your models, datasets, projects, LoRAs and settings, which are never part of the repository. Then it installs any new or updated library from `requirements.txt`, the single list the installers and the updater share. If the installation was made from the ZIP, the updater turns it into a Git installation the first time.
+Double-click **`Update_LoRAlab-TrainerStudio.bat`**. It brings the latest version from GitHub — including any new trainer — and keeps your models, datasets, projects, LoRAs and settings, which are never part of the repository. Then it installs any new or updated library from `requirements.txt`, the single list the installers and the updater share. If the installation was made from the ZIP, the updater turns it into a Git installation the first time. What each update brought is in the [Changelog](#-changelog).
 
 ---
 
