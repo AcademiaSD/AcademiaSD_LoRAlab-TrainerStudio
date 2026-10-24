@@ -1200,5 +1200,15 @@
   "Reset view": "보기 초기화",
   "height and colour: loss (low to high)": "높이와 색: loss (낮음에서 높음)",
   "front edge: loss at each step · back edge: smoothed loss": "앞쪽 가장자리: 각 스텝의 loss · 뒤쪽 가장자리: 스무딩한 loss",
-  "each step": "각 스텝"
+  "each step": "각 스텝",
+  "Final LoRA": "최종 LoRA",
+  "size": "크기",
+  "Click to download it or send it to your models folder": "클릭해서 다운로드하거나 모델 폴더로 보내기",
+  "Download": "다운로드",
+  "Send to Models": "Models로 보내기",
+  "Choose the models folder in the Export section first.": "먼저 Export 섹션에서 모델 폴더를 선택하세요.",
+  "Copying...": "복사 중...",
+  "Copied to {path}": "{path}에 복사했습니다",
+  "saved LoRA (click to download or test it)": "저장된 LoRA (클릭해서 다운로드 또는 테스트)",
+  "final LoRA": "최종 LoRA"
 }

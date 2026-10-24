@@ -1305,5 +1305,15 @@
   "Reset view": "Restablecer vista",
   "height and colour: loss (low to high)": "altura y color: loss (de bajo a alto)",
   "front edge: loss at each step · back edge: smoothed loss": "borde delantero: loss de cada paso · borde trasero: loss suavizado",
-  "each step": "cada paso"
+  "each step": "cada paso",
+  "Final LoRA": "LoRA final",
+  "size": "tamaño",
+  "Click to download it or send it to your models folder": "Haz clic para descargarlo o enviarlo a tu carpeta de modelos",
+  "Download": "Descargar",
+  "Send to Models": "Enviar a Models",
+  "Choose the models folder in the Export section first.": "Elige antes la carpeta de modelos en la sección Export.",
+  "Copying...": "Copiando...",
+  "Copied to {path}": "Copiado en {path}",
+  "saved LoRA (click to download or test it)": "LoRA guardado (clic para descargarlo o probarlo)",
+  "final LoRA": "LoRA final"
 }
