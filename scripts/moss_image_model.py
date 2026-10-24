@@ -13,6 +13,10 @@ Cambios respecto al original:
 - Gradient checkpointing por bloque (enable_gradient_checkpointing de diffusers).
 - Sin las comprobaciones de forma y de máscara del pipeline (la del contenido de la máscara
   sincroniza la GPU en cada paso): los datos vienen siempre del pre-caché.
+- Imágenes de referencia para el LoRA de edición chinoll/Moss-Image-Edit (contrato
+  "ref-prefix-only-t0"): sus latentes van delante de la secuencia con el timestep 0, la posición
+  (índice de la referencia, 0, fila, columna) y una atención que solo mira a las referencias; el
+  objetivo y el texto ven toda la secuencia. Sin referencias, el modelo es el original.
 """
 import torch
 from torch import nn
@@ -43,12 +47,24 @@ def _rotate(x, rope):
     return x * cos + torch.cat((-b, a), -1) * sin
 
 
-def _attention(q, k, v, rope, heads):
+def _attention(q, k, v, rope, heads, prefix=0):
     shape = (*q.shape[:2], heads, q.shape[-1] // heads)
-    q = _rotate(q.reshape(shape), rope).transpose(1, 2)
-    k = _rotate(k.reshape(shape), rope).transpose(1, 2)
+    q = _rotate(q.reshape(shape), rope).transpose(1, 2).to(v.dtype)
+    k = _rotate(k.reshape(shape), rope).transpose(1, 2).to(v.dtype)
     v = v.reshape(shape).transpose(1, 2)
-    return F.scaled_dot_product_attention(q.to(v.dtype), k.to(v.dtype), v).transpose(1, 2).flatten(2)
+    if not prefix:
+        return F.scaled_dot_product_attention(q, k, v).transpose(1, 2).flatten(2)
+    # Las referencias solo se miran entre sí; el objetivo y el texto miran también a las referencias.
+    refs = F.scaled_dot_product_attention(q[:, :, :prefix], k[:, :, :prefix], v[:, :, :prefix])
+    body = F.scaled_dot_product_attention(q[:, :, prefix:], k, v)
+    return torch.cat((refs, body), 2).transpose(1, 2).flatten(2)
+
+
+def _segments(x, prefix, fn):
+    # fn(trozo, fila de modulación): fila 0 para las referencias y 1 para el resto; sin referencias, solo la 0.
+    if not prefix:
+        return fn(x, 0)
+    return torch.cat((fn(x[:, :prefix], 0), fn(x[:, prefix:], 1)), 1)
 
 
 class _TextBlock(nn.Module):
@@ -96,17 +112,19 @@ class _Block(nn.Module):
         self.proj['ffn_up_gate'] = nn.Linear(dim, 2 * ffn_dim, bias=False)
         self.proj['ffn_down'] = nn.Linear(ffn_dim, dim, bias=False)
 
-    def forward(self, x, rope, modulation):
+    def forward(self, x, rope, modulation, prefix=0):
+        # modulation [1, 6, dim]; con referencias [2, 6, dim]: la fila 0 es la de los primeros prefix tokens.
         shift_a, scale_a, gate_a, shift_f, scale_f, gate_f = modulation.unbind(1)
-        y = self.norm1(x) * (1 + scale_a[:, None]) + shift_a[:, None]
+        y = _segments(self.norm1(x), prefix, lambda s, i: s * (1 + scale_a[i]) + shift_a[i])
         dtype = self.norm1.weight.dtype
         y = y.to(dtype)
         q = self.q_norm(self.proj['q'](y).unflatten(-1, (self.heads, -1))).flatten(2)
         k = self.k_norm(self.proj['k'](y).unflatten(-1, (self.heads, -1))).flatten(2)
-        x = x + self.proj['o'](_attention(q, k, self.proj['v'](y), rope, self.heads)) * gate_a[:, None]
-        y = self.norm2(x) * (1 + scale_f[:, None]) + shift_f[:, None]
+        attn = self.proj['o'](_attention(q, k, self.proj['v'](y), rope, self.heads, prefix))
+        x = x + _segments(attn, prefix, lambda s, i: s * gate_a[i])
+        y = _segments(self.norm2(x), prefix, lambda s, i: s * (1 + scale_f[i]) + shift_f[i])
         hidden, gate = self.proj['ffn_up_gate'](y.to(dtype)).chunk(2, -1)
-        return x + self.proj['ffn_down'](_situ(hidden, gate)) * gate_f[:, None]
+        return x + _segments(self.proj['ffn_down'](_situ(hidden, gate)), prefix, lambda s, i: s * gate_f[i])
 
 
 class _RoPE(nn.Module):
@@ -140,7 +158,20 @@ class _RoPE(nn.Module):
         image[:, 3] -= (width - 1) / 2
         text = torch.zeros(text_length, 4, device=device, dtype=torch.float32)
         text[:, 1] = torch.arange(text_length, device=device)
-        phase = torch.cat((image, text), 0).unsqueeze(-1) * self.bands
+        return self._encode(torch.cat((image, text), 0))
+
+    def reference(self, height, width, index, device):
+        # Referencia número index (desde 1): (index, 0, fila, columna), centradas como la imagen.
+        if self.bands.dtype != torch.float32:
+            self.bands = self._default_bands(device)
+        h, w = torch.meshgrid(torch.arange(height, device=device), torch.arange(width, device=device), indexing='ij')
+        coords = torch.stack((torch.full_like(h, index), torch.zeros_like(h), h, w), -1).flatten(0, 1).float()
+        coords[:, 2] -= (height - 1) / 2
+        coords[:, 3] -= (width - 1) / 2
+        return self._encode(coords)
+
+    def _encode(self, coords):
+        phase = coords.unsqueeze(-1) * self.bands
         return torch.cat((phase.sin(), phase.cos()), -2).flatten(-2).unsqueeze(0)
 
 
@@ -162,23 +193,30 @@ class MOSSImageTransformer(ModelMixin, ConfigMixin):
         self.video_head_modulation = nn.Linear(dim, 2 * dim)
         self.gradient_checkpointing = False
 
-    def forward(self, hidden_states, timestep, encoder_hidden_states, encoder_attention_mask, skip_layers=()):
-        """
-        hidden_states [B, 128, H, W] (latente FLUX.2 en parches 2x2), timestep [B] en escala 0-1000,
-        encoder_hidden_states [B, S, 4096] con encoder_attention_mask [B, S]: cada muestra va con su
-        longitud de texto real, así el relleno no influye. skip_layers: bloques que se saltan (la
-        rama negativa de las previews salta el 22, como el pipeline). Devuelve la velocidad [B, 128, H, W].
-        """
-        batch, _, height, width = hidden_states.shape
-        times = timestep.float().reshape(-1).expand(batch)
+    def _time(self, times):
         # El entrenamiento original calcula la sinusoide en float64 y pasa float32 al MLP.
         half = self.config.freq_dim // 2
         freq = 10000 ** (-torch.arange(half, device=times.device, dtype=torch.float64) / half)
         phase = times.double()[:, None] * freq
         embedding = torch.cat((phase.cos(), phase.sin()), -1).float()
         time = self.time_embedding(embedding.to(self.time_embedding[0].weight.dtype)).float()
-        mod = self.shared_block_modulation(time.to(self.shared_block_modulation.weight.dtype)).view(batch, 6, -1)
-        head = self.video_head_modulation(time.to(self.video_head_modulation.weight.dtype)).view(batch, 2, -1)
+        mod = self.shared_block_modulation(time.to(self.shared_block_modulation.weight.dtype)).view(len(times), 6, -1)
+        head = self.video_head_modulation(time.to(self.video_head_modulation.weight.dtype)).view(len(times), 2, -1)
+        return mod, head
+
+    def forward(self, hidden_states, timestep, encoder_hidden_states, encoder_attention_mask, skip_layers=(),
+                references=None):
+        """
+        hidden_states [B, 128, H, W] (latente FLUX.2 en parches 2x2), timestep [B] en escala 0-1000,
+        encoder_hidden_states [B, S, 4096] con encoder_attention_mask [B, S]: cada muestra va con su
+        longitud de texto real, así el relleno no influye. skip_layers: bloques que se saltan (la
+        rama negativa de las previews salta el 22, como el pipeline). references: para edición, una
+        lista por muestra de latentes [1, 128, h, w] limpios (cada uno con su tamaño). Devuelve la
+        velocidad [B, 128, H, W].
+        """
+        batch, _, height, width = hidden_states.shape
+        mod, head = self._time(timestep.float().reshape(-1).expand(batch))
+        ref_mod = self._time(torch.zeros(1, device=hidden_states.device))[0] if references else None
         lengths = encoder_attention_mask.sum(1).tolist()
         outputs = []
         for index in range(batch):
@@ -187,15 +225,21 @@ class MOSSImageTransformer(ModelMixin, ConfigMixin):
             video = self.video_embedder(video.to(self.video_embedder.weight.dtype).contiguous())
             rope = self.rope(height, width, context.shape[1], hidden_states.device).to(video.dtype)
             text = self.text_embedder(context, rope[:, height * width:])
-            x = torch.cat((video, text), 1)
+            refs = references[index] if references else ()
+            tokens = [self.video_embedder(r.flatten(2).transpose(1, 2).to(video.dtype).contiguous()) for r in refs]
+            ropes = [self.rope.reference(*r.shape[-2:], i + 1, hidden_states.device).to(video.dtype) for i, r in enumerate(refs)]
+            prefix = sum(r.shape[1] for r in tokens)
+            x = torch.cat((*tokens, video, text), 1)
+            rope = torch.cat((*ropes, rope), 1)
+            modulation = torch.cat((ref_mod, mod[index:index + 1])) if prefix else mod[index:index + 1]
             for layer_index, layer in enumerate(self.layers):
                 if layer_index in skip_layers:
                     continue
                 if torch.is_grad_enabled() and self.gradient_checkpointing:
-                    x = self._gradient_checkpointing_func(layer, x, rope, mod[index:index + 1])
+                    x = self._gradient_checkpointing_func(layer, x, rope, modulation, prefix)
                 else:
-                    x = layer(x, rope, mod[index:index + 1])
-            x = self.final_norm_video(x[:, :height * width].to(self.final_norm_video.weight.dtype))
+                    x = layer(x, rope, modulation, prefix)
+            x = self.final_norm_video(x[:, prefix:prefix + height * width].to(self.final_norm_video.weight.dtype))
             x = x * (1 + head[index:index + 1, 1, None]) + head[index:index + 1, 0, None]
             x = self.final_linear_video(x.to(self.final_linear_video.weight.dtype))
             outputs.append(x.transpose(1, 2).reshape(1, -1, height, width))

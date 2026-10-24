@@ -175,7 +175,7 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 | **ERNIE-Image** | Image LoRAs (characters, objects, styles); supports rsLoRA, LoRA+ and LoKr | **Under 8 GB** (NF4; verified during training) |
 | **FLUX.2 Klein 9B** | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) | 12 GB |
 | **FLUX.3 Image Klein** | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) | 8 GB |
-| **MOSS-Image** | Image LoRAs (characters, objects, styles) on MOSS-Image Base or SFT; supports rsLoRA, LoRA+ and LoKr | **6 GB** (512²) / 8 GB |
+| **MOSS-Image** | Image LoRAs (characters, objects, styles) on MOSS-Image Base or SFT **and edit LoRAs** (before → after, on top of Moss-Image-Edit); supports rsLoRA, LoRA+ and LoKr | **6 GB** (512²) / 8 GB |
 | **Ideogram 4** | Image LoRAs (characters, objects, styles), with JSON captions | 12 GB (16 GB for previews with CFG) |
 | **SDXL** | Image LoRAs for SDXL Base, Pony, Illustrious, NoobAI, Juggernaut, RealVis or your own SDXL checkpoint | **4 GB** (NF4) / 12 GB (BF16) |
 | **LTX-2.3** (also LTX-2.5) | Character and style LoRAs for the LTX video model, trained from images | 12 GB |
@@ -583,7 +583,7 @@ The official image-edit task works at 1024: 512 and 768 are out of its distribut
 | Previews | 1024², 28 steps with CFG: ~35 s, ~3.7 GB |
 | Text encoder (pre-cache only) | ~8.3 GB in BF16; the part that does not fit in VRAM runs from RAM |
 
-### MOSS-Image — image LoRAs for MOSS-Image Base and SFT
+### MOSS-Image — image and edit LoRAs for MOSS-Image Base and SFT
 
 - Trains on **MOSS-Image Base** (`OpenMOSS-Team/MOSS-Image-Base`, the model OpenMOSS publishes for LoRA training) or **MOSS-Image SFT** (`OpenMOSS-Team/MOSS-Image-SFT`, Base fine-tuned for quality), chosen with **Base Model**. Both share the text encoder and the VAE, so the same pre-cache works for either.
 - The 5B single-stream transformer is **NF4** (3.1 GB instead of 10.2 GB). The LoRA trains attention (q, k, v, o) and MLP of the 42 blocks and is exported with the original layer names (`diffusion_model.layers.N.proj.*`), which ComfyUI (nightly, with native MOSS-Image support) loads with the standard LoRA loader.
@@ -592,10 +592,12 @@ The official image-edit task works at 1024: 512 and 768 are out of its distribut
 - **Captioner** (Qwen3-VL-8B NF4, shared): detailed prose following OpenMOSS's own recaptioning guide, with any visible text copied exactly, in double quotes, and its layout described.
 - **Previews:** 28 steps / CFG 3 with block 22 skipped in the negative branch, like the official pipeline. **Turbo LoRA (Fast Previews)** uses [darask0's 4-step adapter](https://huggingface.co/darask0/MOSS-Image_4-step_adapter_lora) (no CFG, ~1.2 GB, downloaded on first use). It is not a regular LoRA: it is added unmerged in FP32, with its own time embedding and its own "data-space" sampler, so it does not touch the LoRA being trained. It was distilled from SFT and also works on Base.
 - Default settings: 500 steps, LR 0.0004, cosine with 100 warmup steps, rank 8 / alpha 8.
+- **Edit LoRAs:** MOSS-Image cannot edit on its own; [chinoll's Moss-Image-Edit LoRA](https://huggingface.co/chinoll/Moss-Image-Edit) (rank 64, ~300 MB, downloaded on first use) teaches it. Choose **LoRA Type → Edit** and use `name_before.png` / `name_after.png` pairs with the instruction in `name.txt` (the captioner has an **Edit** mode). Your LoRA trains on top of Moss-Image-Edit, which stays frozen: the "before" goes in as a clean reference, the way the [ComfyUI-Moss-Image-Edit](https://github.com/Chenkin-x/ComfyUI-Moss-Image-Edit) node feeds it (timestep 0, long side scaled to 512 px, attention that only looks at the references). Previews edit the "before" of a pair or up to 4 reference images of your own.
+- **Using an edit LoRA in ComfyUI** needs the *Apply MOSS Edit* node of ComfyUI-Moss-Image-Edit. **Edit LoRA Export** gives you two choices. **Separate** (default) exports your LoRA alone: load it with *LoraLoader* and add the Moss-Image-Edit patch in *Apply MOSS Edit*. **Fused** merges both into one patch (~370 MB at rank 16) for *Load Model Patch*; the merge concatenates the matrices, so it is exact, and Send to Models puts it in `models/model_patches` when the folder is `models/loras`. A LoKr can only be exported separately.
 
 | Measured on an RTX 5080 | |
 | :--- | :--- |
-| Training | 512², rank 8: ~1.0 s/step, under 6 GB |
+| Training | 512², rank 8: ~1.0 s/step, under 6 GB · edit at 512²: ~1.8 s/step |
 | Previews | 1024²: 28 steps with CFG ~43 s · Turbo, 4 steps ~4 s |
 | Text encoder (pre-cache only) | BF16 ~17 GB (the part that does not fit in VRAM runs from RAM) · INT8 ~10 GB · NF4 ~6.5 GB |
 
@@ -818,6 +820,7 @@ The code is released under the **MIT License**. The models keep their own licens
 | FLUX.2 Klein 9B (and the Klein 9B turbo preview LoRA) | FLUX Non-Commercial License — non-commercial |
 | FLUX.3 Image Klein | FLUX Kommunity License (see the model card) |
 | MOSS-Image Base and SFT (and darask0's 4-step turbo adapter) | Apache 2.0 |
+| Moss-Image-Edit LoRA (chinoll, downloaded at run time) | GPL-3.0 (the project's license; no separate license is given for the weights) |
 | Boogu-Image-0.1-Edit | Apache 2.0 |
 | Ideogram 4 | Ideogram Non-Commercial Model Agreement — non-commercial; LoRAs are model derivatives under the same license |
 | SDXL Base 1.0, RealVisXL V5.0 | CreativeML Open RAIL++-M |
@@ -855,7 +858,7 @@ Code adapted or copied from other projects, and the work it builds on:
 | [MOSS-Image](https://github.com/OpenMOSS/MOSS-Image) by the OpenMOSS Team | The MOSS-Image transformer of `pipeline_moss_image.py`, adapted in `scripts/moss_image_model.py` (NF4 layers, gradient checkpointing); prompt encoding, preview guidance, training noise schedule (technical report) and caption guide | Apache-2.0 |
 | [kohya-ss sd-scripts](https://github.com/kohya-ss/sd-scripts) | `ss_*` LoRA metadata convention, SDXL LoRA key format and 75-token caption chunking | Apache-2.0 |
 
-Models and LoRAs downloaded at run time (not part of this repository): MelBandRoFormer weights by [Kijai](https://huggingface.co/Kijai/MelBandRoFormer_comfy), the Klein 9B turbo preview LoRA by [kalle07](https://huggingface.co/kalle07/FLUX.2-klein-9B-turbo-lora-set), the Qwen-Image 2.1 turbo LoRA by [Viggle](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo), the Qwen-Image-2512 and Edit-2511 Lightning LoRAs by [lightx2v](https://huggingface.co/lightx2v/Qwen-Image-2512-Lightning), the MOSS-Image 4-step adapter by [darask0](https://huggingface.co/darask0/MOSS-Image_4-step_adapter_lora) (built on the 8-step adapter by [lodestones](https://huggingface.co/lodestones/MOSS-Image-SFT-8-steps-dmd)), Z-Image-Fun-Lora-Distill by [Alibaba PAI](https://huggingface.co/alibaba-pai/Z-Image-Fun-Lora-Distill), and the ungated Ideogram 4 NF4 mirror by [Unsloth](https://huggingface.co/unsloth/ideogram-4-nf4-diffusers). Thanks to all of them.
+Models and LoRAs downloaded at run time (not part of this repository): MelBandRoFormer weights by [Kijai](https://huggingface.co/Kijai/MelBandRoFormer_comfy), the Klein 9B turbo preview LoRA by [kalle07](https://huggingface.co/kalle07/FLUX.2-klein-9B-turbo-lora-set), the Qwen-Image 2.1 turbo LoRA by [Viggle](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo), the Qwen-Image-2512 and Edit-2511 Lightning LoRAs by [lightx2v](https://huggingface.co/lightx2v/Qwen-Image-2512-Lightning), the MOSS-Image 4-step adapter by [darask0](https://huggingface.co/darask0/MOSS-Image_4-step_adapter_lora) (built on the 8-step adapter by [lodestones](https://huggingface.co/lodestones/MOSS-Image-SFT-8-steps-dmd)), the Moss-Image-Edit LoRA by [chinoll](https://huggingface.co/chinoll/Moss-Image-Edit) (whose reference format, from [ComfyUI-Moss-Image-Edit](https://github.com/Chenkin-x/ComfyUI-Moss-Image-Edit), the trainer reimplements), Z-Image-Fun-Lora-Distill by [Alibaba PAI](https://huggingface.co/alibaba-pai/Z-Image-Fun-Lora-Distill), and the ungated Ideogram 4 NF4 mirror by [Unsloth](https://huggingface.co/unsloth/ideogram-4-nf4-diffusers). Thanks to all of them.
 
 ## 💬 Community & Support
 

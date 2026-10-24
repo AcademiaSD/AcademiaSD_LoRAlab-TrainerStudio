@@ -89,7 +89,8 @@ UI_FILE = BASE_DIR / "GUI" / "trainer_ui_mossimage.html"
 LOGO_FILE = ASSETS_DIR / "logo.png" if (ASSETS_DIR / "logo.png").exists() else BASE_DIR / "logo.png"
 
 PRECACHE_CONFIG = SETTINGS_DIR / "pre_cache_settings_mossimage.json"
-PREVIEW_KEYS = ("preview_custom_prompt",)
+PREVIEW_KEYS = ("lora_type", "preview_custom_prompt", "preview_edit_image", "preview_edit_images")
+PREVIEW_MAX = 4
 TRAIN_CONFIG = SETTINGS_DIR / "train_settings_mossimage.json"
 HF_TOKEN_CONFIG = SETTINGS_DIR / "HF_token.json"
 EXPORT_CONFIG = SETTINGS_DIR / "export_settings.json"  # compartido / shared by every trainer
@@ -148,6 +149,27 @@ def write_json_file(path, data):
         json.dump(data, f, indent=2, ensure_ascii=False)
         f.write("\n")
     os.replace(temp_path, path)
+
+
+def preview_images_from(data):
+    value = data.get("preview_edit_images")
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, (list, tuple)):
+        value = []
+    images = [str(p).strip() for p in value if str(p).strip()]
+    if not images:
+        single = data.get("preview_edit_image")
+        if isinstance(single, str) and single.strip():
+            images = [single.strip()]
+    return images[:PREVIEW_MAX]
+
+
+def normalize_preview_images(data):
+    images = preview_images_from(data)
+    data["preview_edit_images"] = images
+    data["preview_edit_image"] = images[0] if images else ""
+    return images
 
 
 def resolve_config_path(value, default):
@@ -459,8 +481,26 @@ def export_lora():
             return jsonify({"status": "error", "error": t("No .safetensors files found in: {path}", path=output_dir)}), 404
 
         custom_name = file_transfer.with_lora_options_suffix(custom_name, source_file)
-        dest_file = target_dir / custom_name
-        shutil.copyfile(source_file, dest_file)
+
+        # LoRA de edición fusionado con Moss-Image-Edit: un único parche para Load Model Patch, que
+        # ComfyUI busca en models/model_patches (al lado de models/loras si ese es el destino).
+        if data.get("edit_export") == "fused":
+            import moss_edit_lora
+            if not moss_edit_lora.is_edit_lora(source_file):
+                return jsonify({"status": "error", "error": t("This LoRA is not an edit LoRA: export it separately.")}), 400
+            patches = target_dir.parent / "model_patches"
+            if target_dir.name.lower() == "loras" and patches.is_dir():
+                target_dir = patches
+            custom_name = custom_name[:-len(".safetensors")] + "_moss_edit.safetensors"
+            dest_file = target_dir / custom_name
+            edit_file = project_layout.resolve_model_dir(None, "Models/MOSS-Image-NF4") / moss_edit_lora.EDIT_FILE
+            try:
+                moss_edit_lora.fuse(source_file, edit_file, dest_file)
+            except moss_edit_lora.FuseError as exc:
+                return jsonify({"status": "error", "error": str(exc)}), 400
+        else:
+            dest_file = target_dir / custom_name
+            shutil.copyfile(source_file, dest_file)
 
         return jsonify({
             "status": "ok",
@@ -521,6 +561,7 @@ def save_precache():
         data = request.get_json(force=True)
         if not isinstance(data, dict):
             return jsonify({"status": "error", "error": t("JSON object required.")}), 400
+        normalize_preview_images(data)
 
         proj = data.get("project_name", "").strip()
         cache_dir_name = f"cached_data_mossimage_{proj}" if proj else "cached_data_mossimage"
@@ -570,11 +611,12 @@ def encoding_stage():
     return prompt_job["stage"] if process is not None and process.poll() is None else None
 
 
-def encode_preview_prompt(cache_dir, prompt):
+def encode_preview_prompt(cache_dir, prompt, images):
     # Un solo proceso a la vez: si se guarda otro prompt mientras codifica, gana el último.
     # En GPU si está libre; con el entrenamiento en marcha, en CPU para no tocar su VRAM.
     device = "cpu" if get_status()["script"] == "train" else "cuda"
-    args = [sys.executable, "-u", str(PRECACHE_SCRIPT), "--prompt-only", str(cache_dir), prompt, device]
+    args = [sys.executable, "-u", str(PRECACHE_SCRIPT), "--prompt-only", str(cache_dir), prompt,
+            json.dumps(images, ensure_ascii=False), device]
     if encoding_stage() is not None:
         if prompt_job["args"] == args:
             return
@@ -604,6 +646,7 @@ def save_train():
         data = request.get_json(force=True)
         if not isinstance(data, dict):
             return jsonify({"status": "error", "error": t("JSON object required.")}), 400
+        preview_images = normalize_preview_images(data)
 
         proj = data.get("project_name", "").strip()
         cache_dir_name = f"cached_data_mossimage_{proj}" if proj else "cached_data_mossimage"
@@ -618,23 +661,25 @@ def save_train():
 
         write_json_file(TRAIN_CONFIG, {**read_json_file(TRAIN_CONFIG, {}), **data})
 
-        # El Pre-Cache codifica el prompt manual de las previews desde su propio json.
+        # El Pre-Cache codifica el prompt y las imágenes de las previews desde su propio json.
         precache_cfg = read_json_file(PRECACHE_CONFIG, {})
         for key in PREVIEW_KEYS:
             precache_cfg[key] = data.get(key, "")
         write_json_file(PRECACHE_CONFIG, precache_cfg)
 
-        # Si la caché no tiene el prompt de preview guardado, se codifica en CPU en paralelo
-        # (sin tocar la GPU del entrenamiento) y el trainer los relee antes de la siguiente preview.
+        # Si la caché no tiene el prompt o las imágenes de preview guardados, se codifican en CPU en
+        # paralelo (sin tocar la GPU del entrenamiento) y el trainer los relee antes de la siguiente preview.
         prompt = data.get("preview_custom_prompt", "").strip()
         trigger = data.get("trigger_word", "").strip()
         if trigger and prompt and trigger.lower() not in prompt.lower():
             prompt = f"{trigger}, {prompt}"
         cache_dir = resolve_config_path(data["cache_dir"], cache_dir_name)
-        encoded_file = cache_dir / "_custom_prompt.txt"
-        encoded = encoded_file.read_text(encoding="utf-8") if encoded_file.exists() else None
-        if prompt and prompt != encoded and (cache_dir / "_neg_embed.pt").exists() and get_status()["script"] != "precache":
-            encode_preview_prompt(cache_dir, prompt)
+        edit = data.get("lora_type") == "edit"
+        wanted = [prompt, "\n".join(preview_images) if edit else ""]
+        encoded = [(cache_dir / f).read_text(encoding="utf-8") if (cache_dir / f).exists() else None
+                   for f in ("_custom_prompt.txt", "_custom_image.txt")]
+        if prompt and wanted != encoded and (cache_dir / "_neg_embed.pt").exists() and get_status()["script"] != "precache":
+            encode_preview_prompt(cache_dir, wanted[0], preview_images if edit else [])
         saved_files = [TRAIN_CONFIG.name]
 
         # 2. Guardar copia dentro de la carpeta del proyecto
@@ -734,14 +779,22 @@ def serve_preview(filename):
     return response
 
 
+EDIT_SUFFIXES = ("_before", "_after")
+
+
 def caption_path(image_path):
-    # Solo texto a imagen: cada imagen es una muestra con su propio .txt.
+    # En un par de edición (nombre_before / nombre_after) el caption es uno solo: nombre.txt.
+    stem = image_path.stem
+    for suffix in EDIT_SUFFIXES:
+        if stem.endswith(suffix):
+            return image_path.with_name(stem[:-len(suffix)] + ".txt")
     return image_path.with_suffix(".txt")
 
 
 def dataset_caption_paths(dataset_dir):
-    return [caption_path(f) for f in sorted(dataset_dir.iterdir())
-            if f.is_file() and f.suffix.lower() in DATASET_EXTS]
+    # Un .txt por muestra: los dos lados de un par comparten el suyo y solo cuentan una vez.
+    return list(dict.fromkeys(caption_path(f) for f in sorted(dataset_dir.iterdir())
+                              if f.is_file() and f.suffix.lower() in DATASET_EXTS))
 
 
 @app.route("/api/dataset-info", methods=["GET"])
@@ -906,7 +959,7 @@ def clear_captions():
 
 @app.route("/api/delete-dataset-image", methods=["POST"])
 def delete_dataset_image():
-    """Delete one independent image and its matching caption."""
+    """Borra una imagen del dataset y su .txt. En un par de edición borra las dos mitades: una sola no sirve."""
     try:
         filename = str(request.get_json(force=True).get("file", "")).strip()
         dataset_dir = get_dataset_dir()
@@ -918,7 +971,13 @@ def delete_dataset_image():
         if not target.is_file() or target.suffix.lower() not in DATASET_EXTS:
             return jsonify({"status": "error", "error": t("Not found: {name}", name=filename)}), 404
 
-        files = [target, caption_path(target)]
+        files = [target]
+        for suffix in EDIT_SUFFIXES:
+            if target.stem.endswith(suffix):
+                base = target.stem[:-len(suffix)]
+                files = [f for f in dataset_dir.iterdir() if f.is_file() and f.suffix.lower() in DATASET_EXTS
+                         and f.stem in (base + "_before", base + "_after")]
+        files.append(caption_path(target))
 
         removed = []
         for f in files:

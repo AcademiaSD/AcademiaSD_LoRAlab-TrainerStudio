@@ -1210,5 +1210,19 @@
   "Copying...": "Copiando...",
   "Copied to {path}": "Copiado em {path}",
   "saved LoRA (click to download or test it)": "LoRA salvo (clique para baixá-lo ou testá-lo)",
-  "final LoRA": "LoRA final"
+  "final LoRA": "LoRA final",
+  "Normal: one image + caption per sample. Edit: name_before / name_after pairs + instruction in name.txt, trained on top of the chinoll/Moss-Image-Edit LoRA (~300 MB, downloaded on first use).": "Normal: uma imagem + legenda por amostra. Edição: pares nome_before / nome_after + instrução em nome.txt, treinado por cima do LoRA chinoll/Moss-Image-Edit (~300 MB, baixado no primeiro uso).",
+  "Edit LoRA Export:": "Exportar LoRA de edição:",
+  "An edit LoRA is trained on top of Moss-Image-Edit. Separate: your LoRA alone (small), loaded with LoraLoader next to the Moss-Image-Edit patch in Apply MOSS Edit. Fused: both merged exactly into one patch (~300 MB) for Load Model Patch + Apply MOSS Edit; it goes to models/model_patches when the folder is models/loras.": "Um LoRA de edição é treinado por cima do Moss-Image-Edit. Separado: só o seu LoRA (pequeno), carregado com LoraLoader junto ao patch Moss-Image-Edit no Apply MOSS Edit. Fundido: os dois unidos de forma exata num único patch (~300 MB) para Load Model Patch + Apply MOSS Edit; vai para models/model_patches se a pasta for models/loras.",
+  "Separate (needs the Moss-Image-Edit patch)": "Separado (precisa do patch Moss-Image-Edit)",
+  "Fused with Moss-Image-Edit (one file)": "Fundido com Moss-Image-Edit (um arquivo)",
+  "Edit datasets (name_before / name_after) only. Use images that are NOT in the dataset: it is the only way to see whether the effect generalizes. Up to 4 references; with several, say in the prompt what each image is for. Empty = the 'before' of the first pair. Encoded by Pre-Cache.": "Apenas datasets de edição (nome_before / nome_after). Use imagens que NÃO estejam no dataset: é a única forma de ver se o efeito generaliza. Até 4 referências; com várias, diga no prompt para que serve cada imagem. Vazio = o 'before' do primeiro par. Codificadas pelo Pre-Cache.",
+  "Image 1 = the image to edit. Up to 4 references, each scaled to 512 px on its long side as in Apply MOSS Edit; with several, say in the prompt what each image is for. The output keeps the proportions of image 1. Empty = the 'before' of the first pair. Encoded by Pre-Cache.": "Imagem 1 = a imagem a editar. Até 4 referências, cada uma reduzida a 512 px no lado maior como no Apply MOSS Edit; com várias, diga no prompt para que serve cada imagem. A saída mantém as proporções da imagem 1. Vazio = o 'before' do primeiro par. Codificadas pelo Pre-Cache.",
+  "Normal: one description per image, with any visible text copied exactly. Edit: one imperative instruction per name_before / name_after pair, saved as name.txt. Each mode keeps its own prompt.": "Normal: uma descrição por imagem, com o texto visível copiado exatamente. Edição: uma instrução no imperativo por par nome_before / nome_after, salva como nome.txt. Cada modo mantém o seu próprio prompt.",
+  "Reference Max Edge": "Lado máx. referência",
+  "on top of": "por cima de",
+  "Note: Moss-Image-Edit was trained on SFT; it also works on Base.": "Nota: o Moss-Image-Edit foi treinado sobre SFT; também funciona sobre Base.",
+  "Downloading the Moss-Image-Edit LoRA (~{mb} MB): {repo}": "Baixando o LoRA Moss-Image-Edit (~{mb} MB): {repo}",
+  "Moss-Image-Edit LoRA loaded: {n} layers, rank {r}, strength {s}": "LoRA Moss-Image-Edit carregado: {n} camadas, rank {r}, força {s}",
+  "This LoRA is not an edit LoRA: export it separately.": "Este LoRA não é de edição: exporte-o separadamente."
 }
