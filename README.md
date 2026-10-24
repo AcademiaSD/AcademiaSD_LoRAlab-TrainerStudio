@@ -47,9 +47,6 @@ What was added, newest first. Each entry links to its commit.
 - rsLoRA and LoRA+ in LTX-2.3 and MiniMax-H3 [`2e2a653`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/2e2a653)
 - Edit previews with several ordered reference images [`69e3945`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/69e3945) [`f6d9efc`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/f6d9efc)
 
-<details>
-<summary><b>Earlier changes (2026-09-28 to 2026-10-17)</b></summary>
-
 **2026-10-17**
 
 - <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **MOSS-Image** [`7e485ac`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/7e485ac)
@@ -74,6 +71,9 @@ What was added, newest first. Each entry links to its commit.
 
 - LR scheduler selector in every trainer [`f8b2489`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/f8b2489)
 - GPU selector in the launcher [`07d2934`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/07d2934)
+
+<details>
+<summary><b>Earlier changes (2026-09-28 to 2026-10-09)</b></summary>
 
 **2026-10-09**
 
