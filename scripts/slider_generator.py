@@ -425,7 +425,9 @@ def plan(cfg):
                                            "seed": cfg["seed"] + 1000 + gi * 10 + POSITIONS.index(p)}))
     for j in range(int(cfg["anchors"])):
         if f"anc{j:02d}_anc" not in existing:
-            prompt = f"{STYLES[j % len(STYLES)]} of {SCENES[j % len(SCENES)]}, with no people."
+            # Cada vuelta a las escenas desplaza el estilo: 16 x 8 combinaciones distintas, no 16.
+            style = STYLES[(j + j // len(SCENES)) % len(STYLES)]
+            prompt = f"{style} of {SCENES[j % len(SCENES)]}, with no people."
             jobs.append(("anchor", os.path.join(ds, f"anc{j:02d}_anc.png"), {"prompt": prompt, "seed": cfg["seed"] + 5000 + j}))
     total = len(groups) * (len(positions) + (1 if cfg["base"] != "mine" else 0)) + int(cfg["anchors"])
     return groups, positions, jobs, total
