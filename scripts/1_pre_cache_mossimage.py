@@ -13,9 +13,16 @@ Base y SFT comparten text encoder y VAE: la misma caché sirve para entrenar sob
 El text encoder se elige con "text_encoder", con los mismos modos que Qwen-Image 2.1.
 
 LoRA de edición (lora_type "edit"): pares nombre_before / nombre_after con la instrucción en
-nombre.txt. El después es el objetivo; el antes se guarda como referencia (<nombre>_ctrl.pt) con el
-lado largo limitado a reference_max_edge (512, como el nodo Apply MOSS Edit de ComfyUI). La
-instrucción se codifica como un prompt normal: el LoRA chinoll/Moss-Image-Edit no cambia el texto.
+nombre.txt. El después es el objetivo; el antes se guarda como referencia (<nombre>_ctrl.pt). Cómo
+depende de la base de edición (edit_base), igual que el edit_format del nodo Text Encode MOSS-Image
+Edit de ComfyUI:
+  - "armV4" (akhaliq/MOSS-Image-Edit-HQ, formato ai-toolkit): la referencia hasta 0,5 MP y el text
+    encoder también la ve, reducida a 384x384 y tras "Picture N:".
+  - "chinoll" (chinoll/Moss-Image-Edit): el lado largo de la referencia limitado a reference_max_edge
+    (512) y la instrucción codificada como un prompt normal.
+La base queda escrita en la caché (_edit_base.txt): el trainer la lee de ahí. Con armV4, cada
+muestra guarda además su prompt negativo vacío con la referencia (<nombre>_uncond.pt), para la rama
+negativa de las previews.
 """
 import os
 import gc
@@ -60,6 +67,12 @@ TEXT_ENCODER_MODES = {
 }
 # Límite de la condición de texto en el entrenamiento original (plantilla incluida).
 MAX_TEXT_TOKENS = 4096
+# Bases de edición. armV4: referencias hasta control_image_max_pixels de su ai-toolkit (0,5 MP) y,
+# para el text encoder, reducidas a 384x384 como hace ComfyUI con el edit_format ai-toolkit.
+EDIT_BASES = ("armV4", "chinoll")
+REFERENCE_MAX_PIXELS = 524288
+VISION_MAX_PIXELS = 384 * 384
+EDIT_BASE_FILE = "_edit_base.txt"
 
 # ── DEFAULTS / VALORES POR DEFECTO ──────────────────────────────────────────
 DEFAULTS = {
@@ -77,6 +90,7 @@ DEFAULTS = {
     "preview_edit_image": "",
     "preview_edit_images": [],
     "reference_max_edge": 512,
+    "edit_base": "armV4",
 }
 
 # Imágenes de referencia de la preview de edición (el nodo de ComfyUI admite hasta 4).
@@ -124,6 +138,10 @@ LORA_TYPE = cfg.get("lora_type", DEFAULTS["lora_type"])
 # Solo edición: imágenes de referencia (fuera del dataset) para ver en las previews cómo aplica el efecto.
 PREVIEW_EDIT_IMAGES = config_preview_images(cfg) if LORA_TYPE == "edit" else []
 REFERENCE_MAX_EDGE = int(cfg.get("reference_max_edge", DEFAULTS["reference_max_edge"]))
+EDIT_BASE = cfg.get("edit_base", DEFAULTS["edit_base"])
+if EDIT_BASE not in EDIT_BASES:
+    print("⚠ " + t("Invalid Edit Base {name}. Using armV4.", name=EDIT_BASE))
+    EDIT_BASE = "armV4"
 
 CACHE_DIR = str(resolve_cache_dir(f"./cached_data_mossimage_{PROJECT_NAME}" if PROJECT_NAME else cfg.get("cache_dir"), DEFAULTS["cache_dir"]))
 
@@ -143,7 +161,9 @@ print(f"  {t('Target Area'):<22}: {TARGET_AREA} px²")
 print(f"  {t('Max Side'):<22}: {MAX_SIDE}")
 print(f"  {t('Multiple'):<22}: {MULTIPLE}")
 if LORA_TYPE == "edit":
-    print(f"  {t('Reference Max Edge'):<22}: {REFERENCE_MAX_EDGE}")
+    print(f"  {t('Edit Base'):<22}: {EDIT_BASE}")
+    if EDIT_BASE == "chinoll":
+        print(f"  {t('Reference Max Edge'):<22}: {REFERENCE_MAX_EDGE}")
 
 os.makedirs(DATASET_PATH, exist_ok=True)
 os.makedirs(CACHE_DIR, exist_ok=True)
@@ -210,10 +230,14 @@ def bucket_size(w: int, h: int):
     return bw, bh
 
 
-def reference_size(w: int, h: int):
-    # Como Apply MOSS Edit: solo se reduce, hasta que el lado largo quepa en REFERENCE_MAX_EDGE, y
-    # los lados se redondean a múltiplos de 16.
-    s = min(1.0, REFERENCE_MAX_EDGE / max(w, h))
+def reference_size(w: int, h: int, base=None):
+    # Solo se reduce y los lados se redondean a múltiplos de 16. armV4: hasta 0,5 MP, como su
+    # entrenamiento en ai-toolkit; chinoll: hasta que el lado largo quepa en REFERENCE_MAX_EDGE, como
+    # Apply MOSS Edit.
+    if (base or EDIT_BASE) == "armV4":
+        s = min(1.0, math.sqrt(REFERENCE_MAX_PIXELS / (w * h)))
+    else:
+        s = min(1.0, REFERENCE_MAX_EDGE / max(w, h))
     return max(16, round(w * s / 16) * 16), max(16, round(h * s / 16) * 16)
 
 
@@ -281,19 +305,75 @@ def load_text_encoder(device):
     return te.eval(), tokenizer
 
 
-def encode_text(te, tokenizer, prompt, device):
+def vision_patches(img):
+    """
+    Una imagen PIL como la ve Qwen3.5 en el nodo Text Encode MOSS-Image Edit de ComfyUI: reducida
+    (interpolación "area") hasta 384x384 px de área, llevada con bilineal a múltiplos de 32,
+    normalizada a [-1, 1] y en parches de 16 px repetidos en los 2 fotogramas del parche temporal.
+    Devuelve (parches [n, 1536], rejilla [1, 3]).
+    """
+    x = F_vision.pil_to_tensor(img.convert("RGB")).float().unsqueeze(0) / 255.0
+    h, w = x.shape[-2:]
+    s = min(1.0, math.sqrt(VISION_MAX_PIXELS / (h * w)))
+    if s < 1.0:
+        x = torch.nn.functional.interpolate(x, size=(round(h * s), round(w * s)), mode="area")
+    h, w = x.shape[-2:]
+    patch, merge = 16, 2
+    factor = patch * merge
+    hb, wb = max(factor, round(h / factor) * factor), max(factor, round(w / factor) * factor)
+    x = torch.nn.functional.interpolate(x, size=(hb, wb), mode="bilinear", align_corners=False)[0]
+    x = (x - 0.5) / 0.5
+    gh, gw = hb // patch, wb // patch
+    x = x.unsqueeze(0).repeat(2, 1, 1, 1).reshape(1, 2, 3, gh // merge, merge, patch, gw // merge, merge, patch)
+    x = x.permute(0, 3, 6, 4, 7, 2, 1, 5, 8).reshape(gh * gw, 3 * 2 * patch * patch)
+    return x, torch.tensor([[1, gh, gw]])
+
+
+def encode_text(te, tokenizer, prompt, device, images=()):
     # [longitud, 4096]: la última capa con la plantilla de chat; cada prompt con su longitud real
     # (el trainer rellena y pasa la máscara). Un prompt vacío también lleva la plantilla.
-    formatted = tokenizer.apply_chat_template([{"role": "user", "content": prompt}], tokenize=False,
-                                              add_generation_prompt=True, enable_thinking=True)
-    inputs = tokenizer(formatted, return_tensors="pt", truncation=True, max_length=MAX_TEXT_TOKENS).to(device)
+    if not images:
+        formatted = tokenizer.apply_chat_template([{"role": "user", "content": prompt}], tokenize=False,
+                                                  add_generation_prompt=True, enable_thinking=True)
+        inputs = tokenizer(formatted, return_tensors="pt", truncation=True, max_length=MAX_TEXT_TOKENS).to(device)
+        with torch.inference_mode():
+            hidden = te(**inputs, use_cache=False, return_dict=True).last_hidden_state[0]
+        return hidden.to(torch.bfloat16).cpu()
+
+    # Con imágenes (armV4), como el edit_format ai-toolkit de ComfyUI: "Picture N:" y el bloque de
+    # visión de cada una delante de la instrucción, con la misma plantilla de chat.
+    # La torre de visión en FP32, como ComfyUI: en BF16 algunos tokens de imagen se alejan mucho
+    # (medido: similitud mínima 0,42 frente a 0,96). No está cuantizada en INT8 ni en NF4.
+    if next(te.visual.parameters()).dtype != torch.float32:
+        te.visual.float()
+    vision = [vision_patches(img) for img in images]
+    text = "".join(f"Picture {i + 1}: <|vision_start|><|image_pad|><|vision_end|>" for i in range(len(vision))) + prompt
+    formatted = f"<|im_start|>user\n{text.strip()}<|im_end|>\n<|im_start|>assistant\n<think>\n"
+    ids = tokenizer(formatted, return_tensors="pt").input_ids[0]
+    # Cada <|image_pad|> pasa a ser un token por cada 2x2 parches de su imagen.
+    pad = te.config.image_token_id
+    pieces, start, counts = [], 0, iter(int(grid.prod()) // 4 for _, grid in vision)
+    for pos in (ids == pad).nonzero().flatten().tolist():
+        pieces += [ids[start:pos], torch.full((next(counts),), pad, dtype=ids.dtype)]
+        start = pos + 1
+    ids = torch.cat(pieces + [ids[start:]])[:MAX_TEXT_TOKENS].unsqueeze(0).to(device)
     with torch.inference_mode():
-        hidden = te(**inputs, use_cache=False, return_dict=True).last_hidden_state[0]
+        hidden = te(input_ids=ids, attention_mask=torch.ones_like(ids),
+                    mm_token_type_ids=(ids == pad).int(),
+                    pixel_values=torch.cat([p for p, _ in vision]).to(device),
+                    image_grid_thw=torch.cat([g for _, g in vision]).to(device),
+                    use_cache=False, return_dict=True).last_hidden_state[0]
     return hidden.to(torch.bfloat16).cpu()
 
 
-def encode_and_save(te, tokenizer, prompt, name):
-    torch.save(encode_text(te, tokenizer, prompt, "cuda"), os.path.join(CACHE_DIR, f"{name}_embed.pt"))
+def encode_and_save(te, tokenizer, prompt, name, images=(), suffix="embed"):
+    torch.save(encode_text(te, tokenizer, prompt, "cuda", images), os.path.join(CACHE_DIR, f"{name}_{suffix}.pt"))
+
+
+def reference_image(path, size):
+    # La referencia tal como se cachea (_ctrl): recortada a la proporción y reducida a su tamaño.
+    with Image.open(path) as im:
+        return fit(im.convert("RGB"), *size)
 
 
 def fit(img, bw, bh):
@@ -417,7 +497,8 @@ def preprocess_mossimage():
 
     # El trainer carga todo lo que haya en la caché: se quitan las muestras que ya no están en el
     # dataset y, al pasar de edición a normal, los antes (_ctrl).
-    suffixes = ("latent", "embed") + (("ctrl",) if edit else ())
+    vision = edit and EDIT_BASE == "armV4"
+    suffixes = ("latent", "embed") + (("ctrl",) if edit else ()) + (("uncond",) if vision else ())
     expected = {f"{name}_{suffix}.pt" for name, _, _ in samples for suffix in suffixes}
     stale = [f for f in os.listdir(CACHE_DIR) if f.endswith(".pt") and not f.startswith("_") and f not in expected]
     for f in stale:
@@ -444,14 +525,26 @@ def preprocess_mossimage():
     te, tokenizer = load_text_encoder("cuda")
 
     encode_and_save(te, tokenizer, "", "_neg")
+    # El trainer lee de aquí la base con la que se codificó la caché de edición.
+    base_file = os.path.join(CACHE_DIR, EDIT_BASE_FILE)
+    if edit:
+        with open(base_file, "w", encoding="utf-8") as f:
+            f.write(EDIT_BASE)
+    elif os.path.exists(base_file):
+        os.remove(base_file)
 
     # Prompt manual de las previews. En edición va con las imágenes de referencia de la preview;
     # sin prompt manual se usa la instrucción del primer par.
     custom_prompt = PREVIEW_CUSTOM_PROMPT or (read_caption(samples[0][0]) if edit else "")
+    if os.path.exists(os.path.join(CACHE_DIR, "_custom_uncond.pt")) and not (custom_prompt and vision):
+        os.remove(os.path.join(CACHE_DIR, "_custom_uncond.pt"))
     if custom_prompt:
         c_prompt = with_trigger(custom_prompt)
         print("[Custom Prompt Cache] " + t("Encoding: '{prompt}'", prompt=c_prompt) + (f" + {', '.join(os.path.basename(p) for p in preview_sources)}" if edit else ""))
-        encode_and_save(te, tokenizer, c_prompt, "_custom")
+        images = [reference_image(src, size) for src, size in zip(preview_sources, preview_sizes)] if vision else ()
+        encode_and_save(te, tokenizer, c_prompt, "_custom", images)
+        if vision:
+            encode_and_save(te, tokenizer, "", "_custom", images, "uncond")
         # El trainer y el servidor comparan con estos textos para saber si la caché está al día.
         with open(os.path.join(CACHE_DIR, "_custom_prompt.txt"), "w", encoding="utf-8") as f:
             f.write(c_prompt)
@@ -463,8 +556,12 @@ def preprocess_mossimage():
                 os.remove(os.path.join(CACHE_DIR, f))
     expected_custom_ctrls = custom_ctrl_names(len(preview_sources)) if custom_prompt and edit else set()
 
-    for idx, (name, _, _) in enumerate(samples, 1):
-        encode_and_save(te, tokenizer, with_trigger(read_caption(name)), name)
+    for idx, (name, _, control) in enumerate(samples, 1):
+        # armV4: con su referencia, y también el negativo vacío con ella (rama negativa de las previews).
+        images = [reference_image(control, reference_size(*buckets[name]))] if vision else ()
+        encode_and_save(te, tokenizer, with_trigger(read_caption(name)), name, images)
+        if vision:
+            encode_and_save(te, tokenizer, "", name, images, "uncond")
         print(f"[{idx}/{len(samples)}] {t('Text')}: {name}")
 
     del te, tokenizer
@@ -521,21 +618,25 @@ def encode_preview_prompt(cache_dir, prompt, images_arg, device):
     entrenamiento en marcha va en CPU para no tocar su VRAM, y el trainer relee el embedding antes
     de la siguiente preview.
     """
-    global CACHE_DIR
+    global CACHE_DIR, EDIT_BASE
     CACHE_DIR = cache_dir
     where = device.upper().replace("CUDA", "GPU")
     requested = parse_preview_images_arg(images_arg)
     has_image = any(f.endswith("_ctrl.pt") and not f.startswith("_") for f in os.listdir(cache_dir))
     sources = preview_edit_sources(find_samples(), requested) if has_image else []
+    # La base con la que se codificó la caché (una caché anterior a armV4 es de chinoll).
+    base_file = os.path.join(cache_dir, EDIT_BASE_FILE)
+    EDIT_BASE = open(base_file, "r", encoding="utf-8").read().strip() if os.path.exists(base_file) else "chinoll"
+    vision = bool(sources) and EDIT_BASE == "armV4"
 
+    jobs = []
+    for i, src in enumerate(sources):
+        with Image.open(src) as im:
+            jobs.append((src, custom_ctrl_name(i) + ".new", reference_size(*im.size)))
     if sources:
         # Se escriben aparte y se colocan al final junto al texto.
         # El servidor lee las líneas "[Custom Prompt] Image/Prompt" para mostrar la fase en la GUI.
         print("[Custom Prompt] Image: " + t("Encoding the reference image on {device}: {path}", device=where, path=", ".join(os.path.basename(p) for p in sources)), flush=True)
-        jobs = []
-        for i, src in enumerate(sources):
-            with Image.open(src) as im:
-                jobs.append((src, custom_ctrl_name(i) + ".new", reference_size(*im.size)))
         vae = AutoencoderKLFlux2.from_pretrained(
             MODEL_ID, subfolder="vae", torch_dtype=torch.bfloat16 if device == "cuda" else torch.float32).to(device)
         encode_latents(vae, jobs, device)
@@ -544,7 +645,9 @@ def encode_preview_prompt(cache_dir, prompt, images_arg, device):
 
     print("[Custom Prompt] Prompt: " + t("Encoding the prompt on {device}: '{prompt}'", device=where, prompt=prompt), flush=True)
     te, tokenizer = load_text_encoder(device)
-    embeds = encode_text(te, tokenizer, prompt, device)
+    images = [reference_image(src, size) for src, _, size in jobs] if vision else ()
+    embeds = encode_text(te, tokenizer, prompt, device, images)
+    uncond = encode_text(te, tokenizer, "", device, images) if vision else None
     del te, tokenizer
     free_vram()
 
@@ -560,6 +663,10 @@ def encode_preview_prompt(cache_dir, prompt, images_arg, device):
     remove_stale_custom_ctrls(custom_ctrl_names(len(sources)))
     replace("_custom_prompt.txt", lambda f: open(f, "w", encoding="utf-8").write(prompt))
     replace("_custom_image.txt", lambda f: open(f, "w", encoding="utf-8").write("\n".join(requested)))
+    if uncond is not None:
+        replace("_custom_uncond.pt", lambda f: torch.save(uncond, f))
+    elif os.path.exists(os.path.join(cache_dir, "_custom_uncond.pt")):
+        os.remove(os.path.join(cache_dir, "_custom_uncond.pt"))
     replace("_custom_embed.pt", lambda f: torch.save(embeds, f))
     print("[Custom Prompt] " + t("Ready."), flush=True)
 

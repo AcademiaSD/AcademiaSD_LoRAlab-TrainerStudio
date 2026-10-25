@@ -482,20 +482,18 @@ def export_lora():
 
         custom_name = file_transfer.with_lora_options_suffix(custom_name, source_file)
 
-        # LoRA de edición fusionado con Moss-Image-Edit: un único parche para Load Model Patch, que
-        # ComfyUI busca en models/model_patches (al lado de models/loras si ese es el destino).
+        # LoRA de edición fusionado con su LoRA de edición base: un único LoRA estándar para el
+        # cargador de LoRA de ComfyUI, que se usa con Text Encode MOSS-Image Edit.
         if data.get("edit_export") == "fused":
             import moss_edit_lora
-            if not moss_edit_lora.is_edit_lora(source_file):
+            base = moss_edit_lora.edit_base_of(source_file)
+            if base is None:
                 return jsonify({"status": "error", "error": t("This LoRA is not an edit LoRA: export it separately.")}), 400
-            patches = target_dir.parent / "model_patches"
-            if target_dir.name.lower() == "loras" and patches.is_dir():
-                target_dir = patches
-            custom_name = custom_name[:-len(".safetensors")] + "_moss_edit.safetensors"
+            custom_name = custom_name[:-len(".safetensors")] + "_FUSED.safetensors"
             dest_file = target_dir / custom_name
-            edit_file = project_layout.resolve_model_dir(None, "Models/MOSS-Image-NF4") / moss_edit_lora.EDIT_FILE
+            model_dir = project_layout.resolve_model_dir(None, "Models/MOSS-Image-NF4")
             try:
-                moss_edit_lora.fuse(source_file, edit_file, dest_file)
+                moss_edit_lora.fuse(source_file, model_dir, dest_file)
             except moss_edit_lora.FuseError as exc:
                 return jsonify({"status": "error", "error": str(exc)}), 400
         else:

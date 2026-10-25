@@ -13,10 +13,11 @@ Cambios respecto al original:
 - Gradient checkpointing por bloque (enable_gradient_checkpointing de diffusers).
 - Sin las comprobaciones de forma y de máscara del pipeline (la del contenido de la máscara
   sincroniza la GPU en cada paso): los datos vienen siempre del pre-caché.
-- Imágenes de referencia para el LoRA de edición chinoll/Moss-Image-Edit (contrato
+- Imágenes de referencia para los LoRAs de edición (armV4 y chinoll/Moss-Image-Edit, contrato
   "ref-prefix-only-t0"): sus latentes van delante de la secuencia con el timestep 0, la posición
   (índice de la referencia, 0, fila, columna) y una atención que solo mira a las referencias; el
-  objetivo y el texto ven toda la secuencia. Sin referencias, el modelo es el original.
+  objetivo y el texto ven toda la secuencia. reference_layout elige dónde quedan la imagen y el
+  texto respecto a ellas (los edit_format de ComfyUI). Sin referencias, el modelo es el original.
 """
 import torch
 from torch import nn
@@ -148,16 +149,17 @@ class _RoPE(nn.Module):
         super()._load_from_state_dict(*args, **kwargs)
         self.bands = self._default_bands(self.bands.device)
 
-    def forward(self, height, width, text_length, device):
+    def forward(self, height, width, text_length, device, offset=0):
         if self.bands.dtype != torch.float32:
             self.bands = self._default_bands(device)
-        # Coordenadas (r, f, h, w); la secuencia es la imagen seguida del texto.
+        # Coordenadas (r, f, h, w); la secuencia es la imagen seguida del texto. offset desplaza f de
+        # los dos (el formato ai-toolkit lo pone a -text_length: la imagen en f = 0, con sus referencias).
         h, w = torch.meshgrid(torch.arange(height, device=device), torch.arange(width, device=device), indexing='ij')
-        image = torch.stack((torch.zeros_like(h), torch.full_like(h, text_length), h, w), -1).flatten(0, 1).float()
+        image = torch.stack((torch.zeros_like(h), torch.full_like(h, text_length + offset), h, w), -1).flatten(0, 1).float()
         image[:, 2] -= (height - 1) / 2
         image[:, 3] -= (width - 1) / 2
         text = torch.zeros(text_length, 4, device=device, dtype=torch.float32)
-        text[:, 1] = torch.arange(text_length, device=device)
+        text[:, 1] = torch.arange(text_length, device=device) + offset
         return self._encode(torch.cat((image, text), 0))
 
     def reference(self, height, width, index, device):
@@ -177,6 +179,10 @@ class _RoPE(nn.Module):
 
 class MOSSImageTransformer(ModelMixin, ConfigMixin):
     _supports_gradient_checkpointing = True
+    # Posición de las referencias de edición, como los edit_format del nodo de ComfyUI:
+    # "moss-image-edit" (chinoll: la imagen sigue detrás del texto) o "ai-toolkit" (la imagen y sus
+    # referencias en f = 0, el texto antes).
+    reference_layout = "moss-image-edit"
 
     @register_to_config
     def __init__(self, dim=3072, ffn_dim=8192, num_heads=24, num_layers=42,
@@ -223,9 +229,10 @@ class MOSSImageTransformer(ModelMixin, ConfigMixin):
             context = encoder_hidden_states[index:index + 1, :lengths[index]]
             video = hidden_states[index:index + 1].flatten(2).transpose(1, 2)
             video = self.video_embedder(video.to(self.video_embedder.weight.dtype).contiguous())
-            rope = self.rope(height, width, context.shape[1], hidden_states.device).to(video.dtype)
-            text = self.text_embedder(context, rope[:, height * width:])
             refs = references[index] if references else ()
+            offset = -context.shape[1] if refs and self.reference_layout == "ai-toolkit" else 0
+            rope = self.rope(height, width, context.shape[1], hidden_states.device, offset).to(video.dtype)
+            text = self.text_embedder(context, rope[:, height * width:])
             tokens = [self.video_embedder(r.flatten(2).transpose(1, 2).to(video.dtype).contiguous()) for r in refs]
             ropes = [self.rope.reference(*r.shape[-2:], i + 1, hidden_states.device).to(video.dtype) for i, r in enumerate(refs)]
             prefix = sum(r.shape[1] for r in tokens)

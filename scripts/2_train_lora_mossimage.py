@@ -13,9 +13,11 @@ CFG con el bloque 22 saltado en la rama negativa. El LoRA se exporta con los nom
 (diffusion_model.layers.N.proj.*), los del nodo de MOSS-Image para ComfyUI.
 
 LoRA de edición (caché con <nombre>_ctrl.pt): el antes entra como referencia (ver
-moss_image_model.py) y se entrena encima del LoRA chinoll/Moss-Image-Edit, que se suma congelado a
-la salida de cada capa. El LoRA exportado es solo lo aprendido encima: en ComfyUI se usa con el
-parche Moss-Image-Edit (nodo Apply MOSS Edit), o fusionado con él al exportar.
+moss_image_model.py) y se entrena encima de un LoRA de edición base, que se suma congelado a la
+salida de cada capa. La base la fija el pre-caché (_edit_base.txt): armV4 (akhaliq/MOSS-Image-Edit-HQ,
+formato ai-toolkit) o chinoll/Moss-Image-Edit. El LoRA exportado es solo lo aprendido encima: en
+ComfyUI se carga junto al LoRA base (Text Encode MOSS-Image Edit con su edit_format), o fusionado
+con él al exportar.
 """
 import os
 import gc
@@ -43,6 +45,7 @@ from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_
 import lora_options
 import training_metrics
 from moss_image_model import MOSSImageTransformer
+from moss_edit_lora import EDIT_BASES, base_file, base_layers
 
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
 STEP_WORD = t("Step")
@@ -75,12 +78,9 @@ TURBO_REPO = "darask0/MOSS-Image_4-step_adapter_lora"
 TURBO_REVISION = "1ec327b9fac5a0aa47426aaba6565892616ce30e"
 TURBO_FILES = ("lora.safetensors", "time_embedding.safetensors", "dataspace.safetensors")
 
-# LoRA de edición sobre el que se entrenan los LoRAs de edición: chinoll/Moss-Image-Edit (rank 64,
-# formato "moss-edit-lora" del nodo ComfyUI-Moss-Image-Edit). Se fija la revisión que se ha probado.
-EDIT_REPO = "chinoll/Moss-Image-Edit"
-EDIT_REVISION = "3be9c40037e1b89b17aa85ff6f8ee805872aa558"
-EDIT_FILES = ("adapter_config.json", "adapter_model.safetensors")
-EDIT_FOLDER = os.path.join("LoRAs", "Moss-Image-Edit")
+# Los LoRAs de edición base (armV4, chinoll) están en moss_edit_lora.EDIT_BASES; la base de la caché,
+# en este fichero.
+EDIT_BASE_FILE = "_edit_base.txt"
 
 DEFAULTS = {
     "model_id": "Models/MOSS-Image-NF4",
@@ -167,7 +167,7 @@ PREVIEW_CAPTION_MODE  = cfg.get("preview_caption_mode",  DEFAULTS["preview_capti
 PREVIEW_CUSTOM_PROMPT = cfg.get("preview_custom_prompt", DEFAULTS["preview_custom_prompt"]).strip()
 USE_TURBO         = cfg.get("use_turbo",         DEFAULTS["use_turbo"])
 TURBO_LORA_STRENGTH = cfg.get("turbo_lora_strength", DEFAULTS["turbo_lora_strength"])
-# Fuerza del LoRA Moss-Image-Edit base. Se fija al arrancar: lo aprendido encima depende de ella.
+# Fuerza del LoRA de edición base. Se fija al arrancar: lo aprendido encima depende de ella.
 EDIT_LORA_STRENGTH = float(cfg.get("edit_lora_strength", DEFAULTS["edit_lora_strength"]))
 
 TRIGGER_WORD     = cfg.get("trigger_word", "")
@@ -204,8 +204,14 @@ if SEED > 0:
 
 
 VRAM_TOTAL = 0
-# True cuando la caché es de pares antes/después (lo decide train_mossimage al leerla).
+# True cuando la caché es de pares antes/después (lo decide train_mossimage al leerla), y la base de
+# edición con la que se codificó (de _edit_base.txt; una caché anterior a armV4 es de chinoll).
 EDIT_MODE = False
+EDIT_BASE = "chinoll"
+
+
+def edit_base():
+    return EDIT_BASES[EDIT_BASE]
 
 
 def free_vram():
@@ -408,10 +414,15 @@ def build_lora_metadata(step):
     meta["ss_output_name"] = PROJECT_NAME or trigger or "mossimage_lora"
     # La GUI lee edit_base_lora para ofrecer la exportación fusionada con el LoRA de edición.
     if EDIT_MODE:
-        meta["edit_base_lora"] = EDIT_REPO
-        meta["edit_base_lora_revision"] = EDIT_REVISION
+        base = edit_base()
+        meta["edit_base"] = EDIT_BASE
+        meta["edit_base_lora"] = base["repo"]
+        meta["edit_base_lora_revision"] = base["revision"]
+        meta["edit_base_lora_file"] = base["files"][-1]
         meta["edit_base_lora_strength"] = EDIT_LORA_STRENGTH
-        meta["usage"] = "Edit LoRA: load it together with the Moss-Image-Edit patch (Apply MOSS Edit node)."
+        meta["edit_format"] = base["edit_format"]
+        meta["usage"] = (f"Edit LoRA: load it together with {base['repo']} ({base['files'][-1]}) and encode with "
+                         f"Text Encode MOSS-Image Edit, edit_format {base['edit_format']}.")
 
     # La resolución la fija el pre-caché del proyecto.
     pc_json = os.path.join(CACHE_DIR, f"pre_cache_settings_{PROJECT_NAME}.json")
@@ -459,34 +470,37 @@ class VaeHolder:
         return cls.vae
 
 
+def edit_base_path():
+    """Ruta local del LoRA de edición base; lo descarga la primera vez."""
+    base = edit_base()
+    folder = os.path.join(MODEL_ID, base["folder"])
+    if not all(os.path.exists(os.path.join(folder, f)) for f in base["files"]):
+        from huggingface_hub import hf_hub_download
+        print("  " + t("Downloading the edit base LoRA (~{mb} MB): {repo}", mb=base["mb"], repo=base["repo"]))
+        for f in base["files"]:
+            hf_hub_download(base["repo"], f, revision=base["revision"], local_dir=folder, token=get_hf_token())
+    return base_file(MODEL_ID, EDIT_BASE)
+
+
 def load_edit_lora(transformer):
     """
-    Suma el LoRA chinoll/Moss-Image-Edit, congelado y en BF16, a la salida de cada capa que toca
-    (q, k, v, o y MLP de los 42 bloques). Se engancha a la capa NF4 antes de envolverla con el LoRA
-    que se entrena: PEFT y LoKr la conservan como capa base, así que los dos se suman.
+    Suma el LoRA de edición base, congelado y en BF16, a la salida de cada capa que toca (q, k, v, o
+    y MLP de los 42 bloques). Se engancha a la capa NF4 antes de envolverla con el LoRA que se
+    entrena: PEFT y LoKr la conservan como capa base, así que los dos se suman.
     """
-    folder = os.path.join(MODEL_ID, EDIT_FOLDER)
-    if not all(os.path.exists(os.path.join(folder, f)) for f in EDIT_FILES):
-        from huggingface_hub import hf_hub_download
-        print("  " + t("Downloading the Moss-Image-Edit LoRA (~{mb} MB): {repo}", mb=300, repo=EDIT_REPO))
-        for f in EDIT_FILES:
-            hf_hub_download(EDIT_REPO, f, revision=EDIT_REVISION, local_dir=folder, token=get_hf_token())
-    path = os.path.join(folder, "adapter_model.safetensors")
-    with safe_open(path, framework="pt", device="cpu") as f:
-        config = json.loads(f.metadata()["adapter_config"])
-    weights = load_file(path, device="cuda")
+    layers = base_layers(edit_base_path(), device="cuda")
 
     def make_hook(down, up, scale):
         def hook(module, args, output):
             return output + (args[0].to(down.dtype) @ down.t()) @ up.t() * scale
         return hook
 
-    for name, spec in config["modules"].items():
-        down, up = weights[name + ".lora_A"], weights[name + ".lora_B"]
-        scale = spec["alpha"] / spec["rank"] * EDIT_LORA_STRENGTH
-        transformer.get_submodule(name).register_forward_hook(make_hook(down, up, scale))
-    print("[OK] " + t("Moss-Image-Edit LoRA loaded: {n} layers, rank {r}, strength {s}",
-                      n=len(config["modules"]), r=next(iter(config["modules"].values()))["rank"], s=EDIT_LORA_STRENGTH))
+    for name, (down, up, scale) in layers.items():
+        transformer.get_submodule(name).register_forward_hook(make_hook(down, up, scale * EDIT_LORA_STRENGTH))
+    transformer.reference_layout = edit_base()["layout"]
+    ranks = sorted({down.shape[0] for down, _, _ in layers.values()})
+    print("[OK] " + t("Edit base LoRA {name} loaded: {n} layers, rank {r}, strength {s}",
+                      name=EDIT_BASE, n=len(layers), r="/".join(map(str, ranks)), s=EDIT_LORA_STRENGTH))
 
 
 def denoise(model, scheduler, emb, H, W, generator, neg=None, refs=None):
@@ -733,7 +747,7 @@ def reload_live_settings():
 
 def train_mossimage():
     global LORA_RANK, LORA_ALPHA, USE_RSLORA, USE_LORAPLUS, LORAPLUS_RATIO, USE_LOKR, LOKR_FACTOR, VRAM_TOTAL  # al reanudar se toman del checkpoint (el alpha se exporta con el LoRA)
-    global EDIT_MODE
+    global EDIT_MODE, EDIT_BASE
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.benchmark = True
 
@@ -744,9 +758,15 @@ def train_mossimage():
     # El pre-caché solo deja referencias (<nombre>_ctrl.pt) en un LoRA de edición.
     EDIT_MODE = any(f.endswith("_ctrl.pt") and not f.startswith("_") for f in os.listdir(CACHE_DIR))
     if EDIT_MODE:
-        print(f"  {t('LoRA Type'):<22}: {t('edit (before/after pairs)')} | {t('on top of')} {EDIT_REPO}")
+        base_file = os.path.join(CACHE_DIR, EDIT_BASE_FILE)
+        if os.path.exists(base_file):
+            EDIT_BASE = open(base_file, "r", encoding="utf-8").read().strip()
+        if EDIT_BASE not in EDIT_BASES:
+            print("[!] " + t("Unknown edit base in the cache: {name}. Run Pre-Cache again.", name=EDIT_BASE))
+            sys.exit(1)
+        print(f"  {t('LoRA Type'):<22}: {t('edit (before/after pairs)')} | {t('on top of')} {edit_base()['repo']} ({EDIT_BASE})")
         if BASE_MODEL != "sft":
-            print("  " + t("Note: Moss-Image-Edit was trained on SFT; it also works on Base."))
+            print("  " + t("Note: the edit base LoRA was trained on SFT; on Base it is untested."))
 
     ensure_model_downloaded(local_path=MODEL_ID, repo_id=HF_REPO_ID)
 
@@ -917,9 +937,10 @@ def train_mossimage():
 
     def load_sample(nombre):
         # lat: objetivo (en _custom no existe); emb: [longitud, 4096]. En edición, ctrls: los
-        # latentes de referencia (el antes; en _custom, las imágenes de referencia de la preview).
+        # latentes de referencia (el antes; en _custom, las imágenes de referencia de la preview), y
+        # con armV4 uncond: el negativo vacío codificado con esas referencias.
         sample = {}
-        for key, suffix in (("lat", "latent"), ("emb", "embed")):
+        for key, suffix in (("lat", "latent"), ("emb", "embed"), ("uncond", "uncond")):
             path = f"{CACHE_DIR}/{nombre}_{suffix}.pt"
             if os.path.exists(path):
                 t = torch.load(path, weights_only=True).to(torch.bfloat16)
@@ -1071,7 +1092,7 @@ def train_mossimage():
                     # Cada token es un parche de 16x16 px.
                     s = PREVIEW_SIZE / 16 / math.sqrt(H * W)
                     H, W = max(1, round(H * s)), max(1, round(W * s))
-                run_preview(model, scheduler, sample["emb"], neg, (H, W), step, refs)
+                run_preview(model, scheduler, sample["emb"], sample.get("uncond", neg), (H, W), step, refs)
 
     except (KeyboardInterrupt, SystemExit):
         save_checkpoint_now(last_step_executed)
