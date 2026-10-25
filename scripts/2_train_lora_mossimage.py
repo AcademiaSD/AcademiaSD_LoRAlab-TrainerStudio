@@ -11,6 +11,13 @@ que la caché sirve para ambos. El muestreo del ruido es el de la última etapa 
 de OpenMOSS (informe técnico de MOSS-Image, tabla 6) y las previews siguen MOSSImagePipeline:
 CFG con el bloque 22 saltado en la rama negativa. El LoRA se exporta con los nombres originales
 (diffusion_model.layers.N.proj.*), los del nodo de MOSS-Image para ComfyUI.
+
+LoRA de edición (caché con <nombre>_ctrl.pt): el antes entra como referencia (ver
+moss_image_model.py) y se entrena encima de un LoRA de edición base, que se suma congelado a la
+salida de cada capa. La base la fija el pre-caché (_edit_base.txt): armV4 (akhaliq/MOSS-Image-Edit-HQ,
+formato ai-toolkit) o chinoll/Moss-Image-Edit. El LoRA exportado es solo lo aprendido encima: en
+ComfyUI se carga junto al LoRA base (Text Encode MOSS-Image Edit con su edit_format), o fusionado
+con él al exportar.
 """
 import os
 import gc
@@ -38,6 +45,7 @@ from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_
 import lora_options
 import training_metrics
 from moss_image_model import MOSSImageTransformer
+from moss_edit_lora import EDIT_BASES, base_file, base_layers
 
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
 STEP_WORD = t("Step")
@@ -70,6 +78,10 @@ TURBO_REPO = "darask0/MOSS-Image_4-step_adapter_lora"
 TURBO_REVISION = "1ec327b9fac5a0aa47426aaba6565892616ce30e"
 TURBO_FILES = ("lora.safetensors", "time_embedding.safetensors", "dataspace.safetensors")
 
+# Los LoRAs de edición base (armV4, chinoll) están en moss_edit_lora.EDIT_BASES; la base de la caché,
+# en este fichero.
+EDIT_BASE_FILE = "_edit_base.txt"
+
 DEFAULTS = {
     "model_id": "Models/MOSS-Image-NF4",
     "base_model": "base",
@@ -97,6 +109,7 @@ DEFAULTS = {
     "timestep_sampling": "moss",
     "use_turbo": False,
     "turbo_lora_strength": 1.0,
+    "edit_lora_strength": 1.0,
     "preview_every": 0,
     "preview_steps": 28,
     "preview_cfg": 3.0,
@@ -154,6 +167,8 @@ PREVIEW_CAPTION_MODE  = cfg.get("preview_caption_mode",  DEFAULTS["preview_capti
 PREVIEW_CUSTOM_PROMPT = cfg.get("preview_custom_prompt", DEFAULTS["preview_custom_prompt"]).strip()
 USE_TURBO         = cfg.get("use_turbo",         DEFAULTS["use_turbo"])
 TURBO_LORA_STRENGTH = cfg.get("turbo_lora_strength", DEFAULTS["turbo_lora_strength"])
+# Fuerza del LoRA de edición base. Se fija al arrancar: lo aprendido encima depende de ella.
+EDIT_LORA_STRENGTH = float(cfg.get("edit_lora_strength", DEFAULTS["edit_lora_strength"]))
 
 TRIGGER_WORD     = cfg.get("trigger_word", "")
 PROJECT_NAME      = cfg.get("project_name", "").strip()
@@ -189,6 +204,14 @@ if SEED > 0:
 
 
 VRAM_TOTAL = 0
+# True cuando la caché es de pares antes/después (lo decide train_mossimage al leerla), y la base de
+# edición con la que se codificó (de _edit_base.txt; una caché anterior a armV4 es de chinoll).
+EDIT_MODE = False
+EDIT_BASE = "chinoll"
+
+
+def edit_base():
+    return EDIT_BASES[EDIT_BASE]
 
 
 def free_vram():
@@ -389,6 +412,18 @@ def build_lora_metadata(step):
     if PROJECT_NAME:
         meta["project_name"] = PROJECT_NAME
     meta["ss_output_name"] = PROJECT_NAME or trigger or "mossimage_lora"
+    # La GUI lee edit_base_lora para ofrecer la exportación fusionada con el LoRA de edición.
+    if EDIT_MODE:
+        base = edit_base()
+        meta["edit_base"] = EDIT_BASE
+        meta["edit_base_lora"] = base["repo"]
+        meta["edit_base_lora_revision"] = base["revision"]
+        meta["edit_base_lora_file"] = base["files"][-1]
+        meta["edit_base_lora_strength"] = EDIT_LORA_STRENGTH
+        meta["edit_format"] = base["edit_format"]
+        meta["usage"] = (f"Edit LoRA: load it together with {base['repo']} ({base['files'][-1]}) and encode with "
+                         f"Text Encode MOSS-Image Edit, edit_format {base['edit_format']}. Recommended strength 0.5-1.0 "
+                         f"(the edit base LoRA at 1.0).")
 
     # La resolución la fija el pre-caché del proyecto.
     pc_json = os.path.join(CACHE_DIR, f"pre_cache_settings_{PROJECT_NAME}.json")
@@ -436,9 +471,44 @@ class VaeHolder:
         return cls.vae
 
 
-def denoise(model, scheduler, emb, H, W, generator, neg=None):
+def edit_base_path():
+    """Ruta local del LoRA de edición base; lo descarga la primera vez."""
+    base = edit_base()
+    folder = os.path.join(MODEL_ID, base["folder"])
+    if not all(os.path.exists(os.path.join(folder, f)) for f in base["files"]):
+        from huggingface_hub import hf_hub_download
+        print("  " + t("Downloading the edit base LoRA (~{mb} MB): {repo}", mb=base["mb"], repo=base["repo"]))
+        for f in base["files"]:
+            hf_hub_download(base["repo"], f, revision=base["revision"], local_dir=folder, token=get_hf_token())
+    return base_file(MODEL_ID, EDIT_BASE)
+
+
+def load_edit_lora(transformer):
+    """
+    Suma el LoRA de edición base, congelado y en BF16, a la salida de cada capa que toca (q, k, v, o
+    y MLP de los 42 bloques). Se engancha a la capa NF4 antes de envolverla con el LoRA que se
+    entrena: PEFT y LoKr la conservan como capa base, así que los dos se suman.
+    """
+    layers = base_layers(edit_base_path(), device="cuda")
+
+    def make_hook(down, up, scale):
+        def hook(module, args, output):
+            return output + (args[0].to(down.dtype) @ down.t()) @ up.t() * scale
+        return hook
+
+    for name, (down, up, scale) in layers.items():
+        transformer.get_submodule(name).register_forward_hook(make_hook(down, up, scale * EDIT_LORA_STRENGTH))
+    transformer.reference_layout = edit_base()["layout"]
+    ranks = sorted({down.shape[0] for down, _, _ in layers.values()})
+    print("[OK] " + t("Edit base LoRA {name} loaded: {n} layers, rank {r}, strength {s}",
+                      name=EDIT_BASE, n=len(layers), r="/".join(map(str, ranks)), s=EDIT_LORA_STRENGTH))
+
+
+def denoise(model, scheduler, emb, H, W, generator, neg=None, refs=None):
     device = "cuda"
     latents = torch.randn((1, 128, H, W), generator=generator, device=device, dtype=torch.float32)
+    # Como Apply MOSS Edit: las referencias van en las dos ramas del CFG.
+    references = [refs] if refs else None
 
     sigmas = np.linspace(1.0, 1.0 / PREVIEW_STEPS, PREVIEW_STEPS)
     scheduler.set_timesteps(sigmas=sigmas, device=device)
@@ -453,7 +523,8 @@ def denoise(model, scheduler, emb, H, W, generator, neg=None):
         timestep = t.expand(1)
         preds = []
         for (text, mask), skip in conds:
-            preds.append(model(latents.to(torch.bfloat16), timestep, text, mask, skip_layers=skip).float())
+            preds.append(model(latents.to(torch.bfloat16), timestep, text, mask, skip_layers=skip,
+                               references=references).float())
         pred = preds[0] if not use_cfg else preds[1] + PREVIEW_CFG * (preds[0] - preds[1])
         latents = scheduler.step(pred, t, latents, return_dict=False)[0]
 
@@ -528,20 +599,24 @@ def apply_turbo_lora(model):
     return undo
 
 
-def denoise_turbo(model, emb, H, W, generator):
+def denoise_turbo(model, emb, H, W, generator, refs=None):
     """Sampler data-space del adaptador: una sola z; x = z + Q·x0, x0 = z - v, sin CFG ni schedule."""
     Q = TurboHolder.dataspace["latent_mix.Q"].to("cuda", torch.float32)
     codes = TurboHolder.dataspace["step_codes"].tolist()
     z = torch.randn((1, 128, H, W), generator=generator, device="cuda", dtype=torch.float32)
     x0 = torch.zeros_like(z)
     text, mask = stack_embeds([emb], "cuda")
+    references = [refs] if refs else None
     for code in codes[:max(1, PREVIEW_STEPS)]:
         x = z + torch.einsum("oc,bchw->bohw", Q, x0)
-        x0 = z - model(x.to(torch.bfloat16), torch.tensor([code], device="cuda"), text, mask).float()
+        x0 = z - model(x.to(torch.bfloat16), torch.tensor([code], device="cuda"), text, mask,
+                       references=references).float()
     return x0
 
 
-def run_preview(model, scheduler, emb, neg, size, step):
+def run_preview(model, scheduler, emb, neg, size, step, refs=None):
+    # refs: en edición, los latentes de referencia de la preview (el antes, o las imágenes elegidas).
+    refs = [r.to("cuda") for r in refs] if refs else None
     H, W = size
     was_training = model.training
     model.eval()
@@ -554,11 +629,11 @@ def run_preview(model, scheduler, emb, neg, size, step):
         with torch.no_grad():
             g = torch.Generator(device="cuda").manual_seed(actual_seed)
             if undo_turbo:
-                latents = denoise_turbo(model, emb, H, W, g)
+                latents = denoise_turbo(model, emb, H, W, g, refs)
                 # Los pesos del adaptador en la GPU ya no hacen falta: se liberan antes del VAE.
                 undo_turbo()
             else:
-                latents = denoise(model, scheduler, emb, H, W, g, neg)
+                latents = denoise(model, scheduler, emb, H, W, g, neg, refs)
 
             vae = VaeHolder.get().to("cuda")
             bn_mean = vae.bn.running_mean.view(1, -1, 1, 1).float()
@@ -673,6 +748,7 @@ def reload_live_settings():
 
 def train_mossimage():
     global LORA_RANK, LORA_ALPHA, USE_RSLORA, USE_LORAPLUS, LORAPLUS_RATIO, USE_LOKR, LOKR_FACTOR, VRAM_TOTAL  # al reanudar se toman del checkpoint (el alpha se exporta con el LoRA)
+    global EDIT_MODE, EDIT_BASE
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.benchmark = True
 
@@ -680,6 +756,18 @@ def train_mossimage():
         print("\n[!] ERROR: " + t("Cache directory '{path}' is empty or does not exist.", path=CACHE_DIR))
         print("[!] " + t("Please run Pre-Cache first!"))
         sys.exit(2)  # la GUI muestra este código como "falta la pre-caché"
+    # El pre-caché solo deja referencias (<nombre>_ctrl.pt) en un LoRA de edición.
+    EDIT_MODE = any(f.endswith("_ctrl.pt") and not f.startswith("_") for f in os.listdir(CACHE_DIR))
+    if EDIT_MODE:
+        base_file = os.path.join(CACHE_DIR, EDIT_BASE_FILE)
+        if os.path.exists(base_file):
+            EDIT_BASE = open(base_file, "r", encoding="utf-8").read().strip()
+        if EDIT_BASE not in EDIT_BASES:
+            print("[!] " + t("Unknown edit base in the cache: {name}. Run Pre-Cache again.", name=EDIT_BASE))
+            sys.exit(1)
+        print(f"  {t('LoRA Type'):<22}: {t('edit (before/after pairs)')} | {t('on top of')} {edit_base()['repo']} ({EDIT_BASE})")
+        if BASE_MODEL != "sft":
+            print("  " + t("Note: the edit base LoRA was trained on SFT; on Base it is untested."))
 
     ensure_model_downloaded(local_path=MODEL_ID, repo_id=HF_REPO_ID)
 
@@ -690,6 +778,8 @@ def train_mossimage():
     VRAM_TOTAL = torch.cuda.get_device_properties(0).total_memory
     free_vram()
     print(t("Transformer loaded in {s:.1f}s.", s=time.time() - t0) + f" VRAM: {torch.cuda.memory_allocated()/1e9:.1f} GB", flush=True)
+    if EDIT_MODE:
+        load_edit_lora(transformer)
 
     # Las previews integran con Euler sobre sigmas desplazadas por 5, como MOSSImageScheduler
     # (sin su ajuste a la rejilla de entrenamiento, que apenas cambia nada).
@@ -847,13 +937,24 @@ def train_mossimage():
     cache_data, buckets = {}, defaultdict(list)
 
     def load_sample(nombre):
-        # lat: objetivo (en _custom no existe); emb: [longitud, 4096].
+        # lat: objetivo (en _custom no existe); emb: [longitud, 4096]. En edición, ctrls: los
+        # latentes de referencia (el antes; en _custom, las imágenes de referencia de la preview), y
+        # con armV4 uncond: el negativo vacío codificado con esas referencias.
         sample = {}
-        for key, suffix in (("lat", "latent"), ("emb", "embed")):
+        for key, suffix in (("lat", "latent"), ("emb", "embed"), ("uncond", "uncond")):
             path = f"{CACHE_DIR}/{nombre}_{suffix}.pt"
             if os.path.exists(path):
                 t = torch.load(path, weights_only=True).to(torch.bfloat16)
                 sample[key] = t.pin_memory() if pin else t
+        ctrls, index = [], 1
+        path = f"{CACHE_DIR}/{nombre}_ctrl.pt"
+        while os.path.exists(path):
+            t = torch.load(path, weights_only=True).to(torch.bfloat16)
+            ctrls.append(t.pin_memory() if pin else t)
+            index += 1
+            path = f"{CACHE_DIR}/{nombre}_ctrl_{index}.pt"
+        if ctrls:
+            sample["ctrls"] = ctrls
         return sample
 
     for f in os.listdir(CACHE_DIR):
@@ -886,7 +987,8 @@ def train_mossimage():
             return all_preview_names[0]
 
     running_loss, t_step_avg, grad_norm = 0.0, 0.0, 0.0
-    print("\n" + t("STARTING TRAINING! {n} {kind} in {b} buckets.", n=len(all_preview_names), kind=t("images"), b=len(buckets)))
+    kind = t("before/after pairs") if EDIT_MODE else t("images")
+    print("\n" + t("STARTING TRAINING! {n} {kind} in {b} buckets.", n=len(all_preview_names), kind=kind, b=len(buckets)))
 
     reload_live_settings()
     metrics = training_metrics.MetricsLog(OUTPUT_DIR, start_step)
@@ -922,7 +1024,10 @@ def train_mossimage():
             # El transformer predice la velocidad (ruido - x0); el timestep va en escala 0-1000.
             target = noise - latents
 
-            pred = model(noisy, sigma * 1000, text, mask)
+            # En edición, cada muestra lleva su antes como referencia (limpia, con timestep 0).
+            references = ([[c.to("cuda", non_blocking=True) for c in cache_data[n]["ctrls"]] for n in names]
+                          if EDIT_MODE else None)
+            pred = model(noisy, sigma * 1000, text, mask, references=references)
 
             loss = F.mse_loss(pred.float(), target) / GRAD_ACCUM_STEPS
             loss.backward()
@@ -939,7 +1044,7 @@ def train_mossimage():
 
             # Con 8 GB, los distintos tamaños de imagen fragmentan la caché de CUDA hasta llenarla; en
             # Windows el driver pasa entonces a la RAM del sistema y cada paso tarda varias veces más.
-            del pred, loss, noisy, latents, noise, target, text, mask
+            del pred, loss, noisy, latents, noise, target, text, mask, references
             if torch.cuda.memory_reserved() > 0.85 * VRAM_TOTAL:
                 torch.cuda.empty_cache()
 
@@ -973,14 +1078,22 @@ def train_mossimage():
                 p_name = get_preview_sample(step)
                 sample = cache_data[p_name]
                 # Tamaño de la preview: el de la imagen; el prompt manual usa el de la primera del dataset.
-                ref = sample.get("lat", cache_data[all_preview_names[0]]["lat"])
+                # En edición con el prompt manual, la proporción de la primera referencia (como en
+                # ComfyUI, donde la salida sigue a la imagen que se edita) con el área de entrenamiento.
+                first = cache_data[all_preview_names[0]]["lat"]
+                ref = sample.get("lat", first)
                 print(f"\n  [Preview] {t('Mode')}: {PREVIEW_CAPTION_MODE} | {t('Sample')}: {p_name}")
                 H, W = ref.shape[2], ref.shape[3]
+                refs = sample.get("ctrls") if EDIT_MODE else None
+                if refs and "lat" not in sample:
+                    h, w = refs[0].shape[2], refs[0].shape[3]
+                    s = math.sqrt(first.shape[2] * first.shape[3] / (h * w))
+                    H, W = max(1, round(h * s)), max(1, round(w * s))
                 if PREVIEW_SIZE > 0:
                     # Cada token es un parche de 16x16 px.
                     s = PREVIEW_SIZE / 16 / math.sqrt(H * W)
                     H, W = max(1, round(H * s)), max(1, round(W * s))
-                run_preview(model, scheduler, sample["emb"], neg, (H, W), step)
+                run_preview(model, scheduler, sample["emb"], sample.get("uncond", neg), (H, W), step, refs)
 
     except (KeyboardInterrupt, SystemExit):
         save_checkpoint_now(last_step_executed)

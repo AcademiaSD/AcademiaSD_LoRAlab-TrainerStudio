@@ -13,8 +13,6 @@
     <link rel="shortcut icon" type="image/png" href="/assets/logo_128.png">
 
     <style>
-        #edit_image_container, #preview_edit_image { display:none !important; }
-        div.form-group:has(#lora_type) { display:none !important; }
         :root {
             --bg-dark: #0f172a;
             --panel-bg: #1e293b;
@@ -336,7 +334,22 @@
                             <button type="button" class="btn btn-secondary btn-sm" onclick="browseFolderNative('dataset')">Browse</button>
                         </div>
                     </div>
-                    <div style="display:none"><select id="lora_type"><option value="normal" selected>Normal</option></select></div>
+
+                    <div class="form-group">
+                        <label title="Normal: one image + caption per sample. Edit: name_before / name_after pairs + instruction in name.txt, trained on top of an edit base LoRA (downloaded on first use).">LoRA Type:</label>
+                        <select id="lora_type" onchange="applyLoraType()">
+                            <option value="normal">Normal LoRA (image + caption)</option>
+                            <option value="edit">Edit LoRA (before / after pairs)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" id="edit_base_container" style="display:none;">
+                        <label title="The edit LoRA your LoRA is trained on top of. armV4 (akhaliq/MOSS-Image-Edit-HQ, ~495 MB): keeps the unedited parts of the image; in ComfyUI use edit_format ai-toolkit. chinoll (chinoll/Moss-Image-Edit, ~300 MB): the first edit LoRA; edit_format Moss-Image-Edit. Changing it needs Pre-Cache again.">Edit Base:</label>
+                        <select id="edit_base">
+                            <option value="armV4" selected>armV4 — MOSS-Image-Edit-HQ (recommended)</option>
+                            <option value="chinoll">chinoll — Moss-Image-Edit</option>
+                        </select>
+                    </div>
 
                     <div class="form-group">
                         <label>Cache Folder (Auto):</label>
@@ -414,6 +427,14 @@
                     <div class="form-group">
                         <label>Final LoRA Filename (.safetensors):</label>
                         <input type="text" id="export_final_name" value="mossimage_lora.safetensors" placeholder="mi_lora_mossimage.safetensors">
+                    </div>
+
+                    <div class="form-group" id="edit_export_container" style="display:none;">
+                        <label title="An edit LoRA is trained on top of an edit base LoRA (armV4 or chinoll). Separate: your LoRA alone (small), loaded with a LoRA loader next to the edit base LoRA. Fused: both merged exactly into one LoRA (~500 MB, name ending in _FUSED), loaded alone. Either way, encode with Text Encode MOSS-Image Edit and the edit_format of the base.">Edit LoRA Export:</label>
+                        <select id="export_edit_mode">
+                            <option value="separate" selected>Separate (needs the edit base LoRA)</option>
+                            <option value="fused">Fused with the edit base LoRA (one file)</option>
+                        </select>
                     </div>
 
                     <div class="form-group">
@@ -599,7 +620,6 @@
                 </div>
 
                 <div class="panel-body">
-                    <div style="display:none"><div id="edit_image_container"></div><input id="preview_edit_image" value=""></div>
                     <!-- TURBO: adaptadores data-space destilados de MOSS-Image SFT, sin CFG -->
                     <div class="form-group" style="background: #0f172a; padding: 10px; border-radius: 8px; border: 1px solid var(--panel-border); margin-top: 6px;">
                         <div style="display: flex; align-items: center; justify-content: space-between;">
@@ -636,6 +656,17 @@
                     <div class="form-group" id="custom_prompt_container" style="display:none; margin-top: 4px;">
                         <label style="color:#38bdf8; font-weight:600;">Custom Preview Prompt:</label>
                         <textarea id="train_preview_custom_prompt" rows="2" placeholder="Write your custom prompt for the preview here..."></textarea>
+                        <div id="edit_image_container" style="display:none;">
+                        <label style="color:#38bdf8; font-weight:600; margin-top:6px;"
+                               title="Edit datasets (name_before / name_after) only. Use images that are NOT in the dataset: it is the only way to see whether the effect generalizes. Up to 4 references; with several, say in the prompt what each image is for. Empty = the 'before' of the first pair. Encoded by Pre-Cache.">
+                            Edit Preview Reference Images:</label>
+                        <div id="preview_edit_image_list"></div>
+                        <button type="button" id="preview_edit_add_btn" class="btn btn-secondary btn-sm" onclick="addPreviewEditImage()"
+                                style="margin-top:6px;">+ Add image</button>
+                        <div style="font-size:0.72rem; color:var(--text-muted); margin-top:4px; line-height:1.35;">
+                            Image 1 = the image to edit. Up to 4 references, each scaled to 512 px on its long side as in Apply MOSS Edit; with several, say in the prompt what each image is for. The output keeps the proportions of image 1. Empty = the 'before' of the first pair. Encoded by Pre-Cache.
+                        </div>
+                        </div>
                     </div>
 
                     <div class="form-row">
@@ -715,9 +746,10 @@
                             title="Writes one .txt per image with Qwen3-VL-8B (NF4, ~5.5 GB VRAM), with the trigger word first. Shared with LTX-2.3, Z-Image and Anima: the first time it downloads ~5 GB.">
                         <span id="btn-caption-label">Create Captions</span>
                     </button>
-                    <select class="ds-mode-select" id="caption_mode" onchange="switchCaptionMode()"
-                            title="MOSS-Image is a text-to-image model: one description per image, with any visible text copied exactly.">
+                    <select class="ds-mode-select" id="caption_mode" onchange="switchCaptionMode(); syncLoraType()"
+                            title="Normal: one description per image, with any visible text copied exactly. Edit: one imperative instruction per name_before / name_after pair, saved as name.txt. Each mode keeps its own prompt.">
                         <option value="normal">Normal (character / object / style)</option>
+                        <option value="edit">Edit (before → after)</option>
                     </select>
                     <span class="ds-step-hint">Qwen3-VL-8B · before Pre-Cache</span>
                     <label class="ds-inline-label" title="Off = only images with no caption are processed.">
@@ -784,6 +816,7 @@
         }
         let allDatasetImages = [];
         let currentEditingFilename = '';
+        const PREVIEW_EDIT_MAX = 4;
         let browserPath = '';
         let currentBrowserTarget = 'dataset';
         let currentLoadTarget = 'precache';
@@ -815,9 +848,18 @@
             }
         }
 
+        // Un modo de caption de edición implica un LoRA de edición, y al revés: así el pre-caché recibe los pares.
+        function syncLoraType() {
+            const edit = document.getElementById('caption_mode').value.startsWith('edit');
+            document.getElementById('lora_type').value = edit ? 'edit' : 'normal';
+            applyLoraType();
+        }
+
         function applyLoraType() {
             const edit = document.getElementById('lora_type').value === 'edit';
             document.getElementById('edit_image_container').style.display = edit ? 'block' : 'none';
+            document.getElementById('edit_base_container').style.display = edit ? 'block' : 'none';
+            document.getElementById('edit_export_container').style.display = edit ? 'block' : 'none';
         }
 
         function toggleCaptionMode(mode) {
@@ -940,7 +982,8 @@
                     if (p.project_name) document.getElementById('project_name').value = p.project_name;
                     if (p.trigger_word) document.getElementById('trigger_word').value = p.trigger_word;
                     if (p.dataset_path) document.getElementById('dataset_path').value = p.dataset_path;
-                    document.getElementById('lora_type').value = 'normal';
+                    document.getElementById('lora_type').value = p.lora_type || 'normal';
+                    document.getElementById('edit_base').value = p.edit_base || 'armV4';
                     applyLoraType();
                     if (p.target_area) {
                         document.getElementById('precache_target_area').value = p.target_area;
@@ -982,7 +1025,10 @@
                         toggleCaptionMode(t.preview_caption_mode);
                     }
                     if (t.preview_custom_prompt !== undefined) document.getElementById('train_preview_custom_prompt').value = t.preview_custom_prompt;
-                    if (t.preview_edit_image !== undefined) document.getElementById('preview_edit_image').value = t.preview_edit_image;
+                    if (t.preview_edit_images !== undefined || t.preview_edit_image !== undefined) {
+                        renderPreviewEditImages(t.preview_edit_images !== undefined
+                            ? t.preview_edit_images : (t.preview_edit_image ? [t.preview_edit_image] : []));
+                    }
                     if (t.preview_steps !== undefined) document.getElementById('train_preview_steps').value = t.preview_steps;
                     if (t.preview_cfg !== undefined) document.getElementById('train_preview_cfg').value = t.preview_cfg;
                     if (t.preview_size !== undefined) document.getElementById('train_preview_size').value = String(t.preview_size);
@@ -995,6 +1041,7 @@
                 loadDatasetInfo();
             } catch (e) {}
         }
+        renderPreviewEditImages([]);
         loadSettings();
 
         function triggerLoadJson(target) {
@@ -1015,9 +1062,10 @@
                     if (data.trigger_word !== undefined) document.getElementById('trigger_word').value = data.trigger_word;
                     if (data.dataset_path !== undefined) document.getElementById('dataset_path').value = data.dataset_path;
                     if (data.lora_type !== undefined) {
-                        document.getElementById('lora_type').value = 'normal';
+                        document.getElementById('lora_type').value = data.lora_type;
                         applyLoraType();
                     }
+                    if (data.edit_base !== undefined) document.getElementById('edit_base').value = data.edit_base;
 
                     if (data.target_area !== undefined) {
                         document.getElementById('precache_target_area').value = data.target_area;
@@ -1057,7 +1105,10 @@
                         toggleCaptionMode(data.preview_caption_mode);
                     }
                     if (data.preview_custom_prompt !== undefined) document.getElementById('train_preview_custom_prompt').value = data.preview_custom_prompt;
-                    if (data.preview_edit_image !== undefined) document.getElementById('preview_edit_image').value = data.preview_edit_image;
+                    if (data.preview_edit_images !== undefined || data.preview_edit_image !== undefined) {
+                        renderPreviewEditImages(data.preview_edit_images !== undefined
+                            ? data.preview_edit_images : (data.preview_edit_image ? [data.preview_edit_image] : []));
+                    }
                     if (data.preview_steps !== undefined) document.getElementById('train_preview_steps').value = data.preview_steps;
                     if (data.preview_cfg !== undefined) document.getElementById('train_preview_cfg').value = data.preview_cfg;
                     if (data.preview_size !== undefined) document.getElementById('train_preview_size').value = String(data.preview_size);
@@ -1115,8 +1166,9 @@
             }
         }
 
-        async function browseImageNative() {
-            const current = document.getElementById('preview_edit_image').value;
+        async function browseImageNative(btn) {
+            const input = previewEditInput(btn);
+            const current = input.value;
             try {
                 const res = await fetch('/api/select-file', {
                     method: 'POST',
@@ -1124,9 +1176,109 @@
                     body: JSON.stringify({ initial_path: current })
                 });
                 const data = await res.json();
-                if (data.status === 'ok' && data.path) document.getElementById('preview_edit_image').value = data.path;
-                else if (data.status === 'error') toast(data.error);
+                if (data.status === 'ok' && data.path) input.value = data.path;
+                else if (data.status === 'error') toast(data.error + ' ' + t('Use the Upload button: the native dialog runs on the training PC.'), 'warning');
+                updatePreviewEditTags();
             } catch (e) { toast('Error: ' + e, 'error'); }
+        }
+
+        function previewEditRows() {
+            return [...document.querySelectorAll('#preview_edit_image_list .preview-edit-row')];
+        }
+
+        function previewEditImages() {
+            return previewEditRows()
+                .map(row => row.querySelector('.preview-edit-path').value.trim())
+                .filter(Boolean);
+        }
+
+        function previewEditInput(el) {
+            const row = el && el.closest ? el.closest('.preview-edit-row') : null;
+            return (row || document.querySelector('#preview_edit_image_list .preview-edit-row'))
+                .querySelector('.preview-edit-path');
+        }
+
+        function updatePreviewEditTags() {
+            const inputs = previewEditRows().map(row => row.querySelector('.preview-edit-path'));
+            const filled = inputs.filter(input => input.value.trim()).length;
+            let number = 0;
+            inputs.forEach((input, i) => {
+                const tag = input.closest('.preview-edit-row').querySelector('.preview-edit-tag');
+                if (input.value.trim()) {
+                    number += 1;
+                    tag.textContent = `image ${number}`;
+                    tag.style.opacity = '1';
+                } else if (filled === 0 && i === 0) {
+                    tag.textContent = 'image 1';
+                    tag.style.opacity = '1';
+                } else {
+                    tag.textContent = '—';
+                    tag.style.opacity = '.45';
+                }
+            });
+            const add = document.getElementById('preview_edit_add_btn');
+            if (add) add.disabled = previewEditRows().length >= PREVIEW_EDIT_MAX;
+        }
+
+        function addPreviewEditImage(value = '') {
+            if (previewEditRows().length >= PREVIEW_EDIT_MAX) {
+                toast(t('Maximum reference images reached.'), 'warning');
+                return;
+            }
+            const row = document.createElement('div');
+            row.className = 'preview-edit-row';
+            row.style.cssText = 'display:flex; gap:6px; align-items:center; margin-top:6px;';
+            row.innerHTML = '<span class="preview-edit-tag no-i18n" style="font-family:monospace; color:#f59e0b; min-width:54px;"></span>'
+                + '<input type="text" class="preview-edit-path" style="flex:1; min-width:60px;" placeholder="(empty = first pair)" oninput="updatePreviewEditTags()">'
+                + '<button type="button" class="btn btn-secondary btn-sm" onclick="browseImageNative(this)">Browse</button>'
+                + '<button type="button" class="btn btn-primary btn-sm" onclick="uploadPreviewEditImage(this)" title="Upload image">⬆</button>'
+                + '<button type="button" class="btn btn-secondary btn-sm" onclick="removePreviewEditImage(this)" title="Remove image">✕</button>';
+            row.querySelector('.preview-edit-path').value = value;
+            document.getElementById('preview_edit_image_list').appendChild(row);
+            updatePreviewEditTags();
+            if (window.I18N) I18N.apply(row);
+        }
+
+        function renderPreviewEditImages(images) {
+            const values = Array.isArray(images) ? images : (images ? [images] : []);
+            document.getElementById('preview_edit_image_list').innerHTML = '';
+            (values.length ? values.slice(0, PREVIEW_EDIT_MAX) : ['']).forEach(value => addPreviewEditImage(value));
+        }
+
+        function removePreviewEditImage(btn) {
+            const row = btn.closest('.preview-edit-row');
+            if (previewEditRows().length <= 1) row.querySelector('.preview-edit-path').value = '';
+            else row.remove();
+            updatePreviewEditTags();
+        }
+
+        // Remote / RunPod: el diálogo nativo se abriría en el PC del entrenador, que puede no tener
+        // pantalla. Con Upload la imagen viaja por HTTP y la ruta que queda es la del servidor.
+        // The native dialog would open on the training PC, which may have no screen. Upload sends
+        // the image over HTTP and the path left in the field is the server's.
+        function uploadPreviewEditImage(btn) {
+            const input = previewEditInput(btn);
+            const picker = document.createElement('input');
+            picker.type = 'file';
+            picker.accept = 'image/png,image/jpeg,image/webp';
+            picker.onchange = async () => {
+                const file = picker.files && picker.files[0];
+                if (!file) return;
+                const form = new FormData();
+                form.append('files', file, file.name);
+                try {
+                    const res = await fetch('/api/upload-preview-image', { method: 'POST', body: form });
+                    const data = await res.json();
+                    if (data.status === 'ok' && data.path) {
+                        input.value = data.path;
+                        updatePreviewEditTags();
+                        toast(t('Image uploaded'), 'success');
+                    } else {
+                        toast(data.error || t('Upload failed'), 'error');
+                    }
+                } catch (e) { toast('Error: ' + e, 'error'); }
+            };
+            picker.click();
         }
 
         // El servidor lee la ruta del dataset de pre_cache_settings_mossimage.json: hay que guardarla ANTES de
@@ -1146,9 +1298,11 @@
                 max_side: parseInt(document.getElementById('precache_max_side').value),
                 text_encoder: document.getElementById('precache_text_encoder').value,
                 cache_dir: document.getElementById('precache_cache_dir').value,
-                lora_type: 'normal',
+                lora_type: document.getElementById('lora_type').value,
+                edit_base: document.getElementById('edit_base').value,
                 preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim(),
-                preview_edit_image: document.getElementById('preview_edit_image').value.trim()
+                preview_edit_image: previewEditImages()[0] || '',
+                preview_edit_images: previewEditImages()
             };
             const res = await fetch('/api/save-precache', { method: 'POST', body: JSON.stringify(precacheData) });
             const data = await res.json();
@@ -1246,8 +1400,9 @@
                 preview_every: parseInt(document.getElementById('train_preview_every').value),
                 preview_caption_mode: document.getElementById('train_preview_caption_mode').value,
                 preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim(),
-                preview_edit_image: document.getElementById('preview_edit_image').value.trim(),
-                lora_type: 'normal',
+                preview_edit_image: previewEditImages()[0] || '',
+                preview_edit_images: previewEditImages(),
+                lora_type: document.getElementById('lora_type').value,
                 preview_steps: parseInt(document.getElementById('train_preview_steps').value),
                 preview_cfg: parseFloat(document.getElementById('train_preview_cfg').value),
                 preview_size: parseInt(document.getElementById('train_preview_size').value),
@@ -1482,7 +1637,11 @@
                 const res = await fetch('/api/export-lora', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ target_dir: targetDir, final_name: finalName })
+                    body: JSON.stringify({
+                        target_dir: targetDir, final_name: finalName,
+                        edit_export: document.getElementById('lora_type').value === 'edit'
+                            ? document.getElementById('export_edit_mode').value : 'separate'
+                    })
                 });
                 const data = await res.json();
                 if (data.status === 'ok') {
@@ -1598,7 +1757,11 @@
         }
 
         async function deleteDatasetImage(file) {
-            const what = t('Remove "{name}" and its .txt caption from the dataset?', { name: file });
+            // En un par de edición se borran las dos mitades y el caption compartido: una sola no sirve.
+            const pair = file.match(/^(.*)_(before|after)\.[^.]+$/);
+            const what = pair
+                ? t('Remove the whole pair "{name}" (before + after) and its caption {name}.txt from the dataset?', { name: pair[1] })
+                : t('Remove "{name}" and its .txt caption from the dataset?', { name: file });
             if (!await askConfirm(what + '\n\n' + t('The files are deleted from disk.'))) return;
             try {
                 const res = await fetch('/api/delete-dataset-image', {
@@ -1677,18 +1840,23 @@
                 + 'the framing and camera angle, the setting and background, the lighting, the colors and '
                 + 'the artistic style. Copy any visible text exactly, inside double quotes, without '
                 + 'translating it, and say where it is and how it looks (lines, size, font, color). '
-                + 'Ignore watermarks. Do not invent a name and do not mention that this is an image or a photo.'
+                + 'Ignore watermarks. Do not invent a name and do not mention that this is an image or a photo.',
+            edit: 'The first image is the original and the second image is the edited result. Write ONE '
+                + 'imperative instruction, in at most 40 words, that turns the first image into the second. '
+                + 'Start with a verb such as Colorize, Remove, Replace, Change, Add or Make. Say what changes '
+                + 'and, briefly, what must stay the same. Do not describe content that does not change, do '
+                + "not mention 'first image' or 'second image', and write no preamble."
         };
-        const CAPTION_PROMPT_KEYS = { normal: 'caption_prompt' };
-        // MOSS-Image is text-to-image: the caption prompt has one mode.
+        const CAPTION_PROMPT_KEYS = { normal: 'caption_prompt', edit: 'caption_edit_prompt' };
+        // Los dos prompts viven en memoria; el textarea muestra el del modo elegido.
         const captionPrompts = { ...DEFAULT_CAPTION_PROMPTS };
         let captionModeShown = 'normal';
 
         function switchCaptionMode() {
             // Primero se guarda lo escrito en el cuadro; si no, se perdía al pulsar Create Captions.
-            captionPrompts.normal = document.getElementById('caption_prompt_text').value;
-            captionModeShown = 'normal';
-            document.getElementById('caption_mode').value = 'normal';
+            captionPrompts[captionModeShown] = document.getElementById('caption_prompt_text').value;
+            captionModeShown = document.getElementById('caption_mode').value;
+            document.getElementById('caption_prompt_text').value = captionPrompts[captionModeShown];
         }
 
         async function loadCaptionSettings() {
@@ -1699,7 +1867,7 @@
             for (const mode in CAPTION_PROMPT_KEYS) {
                 if (data[CAPTION_PROMPT_KEYS[mode]]) captionPrompts[mode] = data[CAPTION_PROMPT_KEYS[mode]];
             }
-            captionModeShown = 'normal';
+            captionModeShown = data.caption_mode === 'edit' ? 'edit' : 'normal';
             document.getElementById('caption_mode').value = captionModeShown;
             document.getElementById('caption_prompt_text').value = captionPrompts[captionModeShown];
             if (data.overwrite !== undefined) document.getElementById('caption_overwrite').checked = !!data.overwrite;
@@ -1722,6 +1890,7 @@
                     body: JSON.stringify({
                         caption_mode: captionModeShown,
                         caption_prompt: captionPrompts.normal.trim(),
+                        caption_edit_prompt: captionPrompts.edit.trim(),
                         overwrite: overwrite
                     })
                 });

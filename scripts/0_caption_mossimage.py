@@ -5,6 +5,10 @@ Uses the shared Qwen3-VL-8B NF4 captioner with MOSS-Image settings: the default 
 "long" caption of OpenMOSS's own recaptioning guide (USERGUIDE.md of OpenMOSS/MOSS-Image):
 detailed prose, visible text copied exactly and its layout described.
 The optional trigger word is placed first in each caption.
+
+Modo edit (LoRA de edición): pares nombre_before.ext + nombre_after.ext, un nombre.txt con la
+INSTRUCCIÓN imperativa que convierte el antes en el después, como el prompt del LoRA Moss-Image-Edit.
+Edit mode: before/after pairs, one name.txt with the imperative instruction.
 """
 import os
 import sys
@@ -32,6 +36,7 @@ DEFAULTS = {
     "captioner_dir": "Models/Captioner-Qwen3-VL-8B",
     "dataset_path": "./dataset",
     "trigger_word": "",
+    "caption_mode": "normal",
     "caption_prompt": (
         "Describe this image for training a text-to-image model, in at most 200 words. "
         "One single paragraph of plain prose, no lists and no preamble. Cover the composition, "
@@ -40,6 +45,13 @@ DEFAULTS = {
         "the artistic style. Copy any visible text exactly, inside double quotes, without "
         "translating it, and say where it is and how it looks (lines, size, font, color). "
         "Ignore watermarks. Do not invent a name and do not mention that this is an image or a photo."
+    ),
+    "caption_edit_prompt": (
+        "The first image is the original and the second image is the edited result. Write ONE "
+        "imperative instruction, in at most 40 words, that turns the first image into the second. "
+        "Start with a verb such as Colorize, Remove, Replace, Change, Add or Make. Say what changes "
+        "and, briefly, what must stay the same. Do not describe content that does not change, do "
+        "not mention 'first image' or 'second image', and write no preamble."
     ),
     # 200 palabras son ~270 tokens; el margen evita captions cortados a media frase.
     "max_new_tokens": 400,
@@ -52,6 +64,7 @@ DEFAULTS = {
 }
 
 IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp")
+EDIT_SUFFIXES = ("_before", "_after")
 
 PRECACHE_CONFIG = "settings/pre_cache_settings_mossimage.json"
 CONFIG_PATH = "settings/caption_settings_mossimage.json"
@@ -76,10 +89,23 @@ def load_config():
     return cfg
 
 
-def find_samples(dataset):
-    """Return one independent text-to-image sample per image."""
+def find_samples(dataset, mode):
+    """
+    Devuelve [(nombre, [rutas de imagen])]. En modo edit, el antes va primero.
+    En modo normal se ignoran las imágenes _before/_after.
+    """
     images = sorted(f for f in os.listdir(dataset) if f.lower().endswith(IMAGE_EXTS))
-    return [(os.path.splitext(name)[0], [os.path.join(dataset, name)]) for name in images]
+    stems = {os.path.splitext(f)[0]: f for f in images}
+
+    if mode == "edit":
+        samples = []
+        for stem, name in stems.items():
+            if stem.endswith("_before") and stem[:-len("_before")] + "_after" in stems:
+                base = stem[:-len("_before")]
+                samples.append((base, [os.path.join(dataset, name), os.path.join(dataset, stems[base + "_after"])]))
+        return samples
+
+    return [(stem, [os.path.join(dataset, name)]) for stem, name in stems.items() if not stem.endswith(EDIT_SUFFIXES)]
 
 
 def load_captioner(captioner_dir):
@@ -145,13 +171,14 @@ def with_trigger(trigger, caption):
 def main():
     cfg = load_config()
     dataset = cfg["dataset_path"]
-    prompt = cfg["caption_prompt"]
+    mode = "edit" if cfg["caption_mode"] == "edit" else "normal"
+    prompt = cfg["caption_edit_prompt"] if mode == "edit" else cfg["caption_prompt"]
 
     if not os.path.isdir(dataset):
         print("[!] " + t("Dataset folder does not exist: {path}", path=dataset))
         return 1
 
-    samples = find_samples(dataset)
+    samples = find_samples(dataset, mode)
     pending = []
     for name, paths in samples:
         txt = os.path.join(dataset, name + ".txt")
@@ -159,12 +186,16 @@ def main():
             continue
         pending.append((name, paths))
 
-    kind = t("images")
+    kind = t("before/after pairs") if mode == "edit" else t("images")
+    print(f"  {t('Mode'):<22}: {mode}")
     print(f"  {t('Dataset'):<22}: {os.path.abspath(dataset)}")
     print(f"  {t('Samples'):<22}: {len(samples)} {kind}, {t('{n} to caption', n=len(pending))}")
     print(f"  {t('Trigger Word'):<22}: {cfg['trigger_word'] or t('(none)')}")
     print(f"  {t('Overwrite'):<22}: {t('yes') if cfg['overwrite'] else t('only missing')}")
 
+    if not samples and mode == "edit":
+        print("[!] " + t("No pairs found. Name them name_before.ext and name_after.ext."))
+        return 1
     if not pending:
         print(t("Nothing to do: every sample already has a caption."))
         return 0
