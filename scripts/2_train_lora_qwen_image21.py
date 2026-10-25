@@ -36,6 +36,10 @@ import training_metrics
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
 STEP_WORD = t("Step")
 
+# slider_core vive junto a este script (también cuando otro script lo importa desde otra carpeta).
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import slider_core
+
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
@@ -123,6 +127,12 @@ PREVIEW_CFG       = cfg.get("preview_cfg",       DEFAULTS["preview_cfg"])
 PREVIEW_CAPTION_MODE  = cfg.get("preview_caption_mode",  DEFAULTS["preview_caption_mode"])
 PREVIEW_CUSTOM_PROMPT = cfg.get("preview_custom_prompt", DEFAULTS["preview_custom_prompt"]).strip()
 
+# Slider (docs/SLIDERS.md): fuerza al 100 % y push interno. El modo (edición o texto a imagen) lo fija
+# el pre-caché en su manifiesto. Se activa si la caché es de un slider. Qwen-Image 2.1 aún no tiene
+# Ultra: falta una prueba en GPU que elija sus bloques.
+SLIDER = slider_core.read_settings(cfg)
+SLIDER_RUN = None  # {"factor", "mode"} durante un entrenamiento slider: lo usa la exportación
+
 # Previews rápidas: 4 pasos, sin CFG.
 USE_TURBO           = cfg.get("use_turbo",           DEFAULTS["use_turbo"])
 TURBO_LORA_STRENGTH = cfg.get("turbo_lora_strength", DEFAULTS["turbo_lora_strength"])
@@ -151,6 +161,9 @@ print(f"  {t('Preview'):<22}: {t('Mode')}={PREVIEW_CAPTION_MODE} | Prompt='{PREV
 print(f"  {t('Preview Every'):<22}: {PREVIEW_EVERY} | {t('Preview Steps')} {PREVIEW_STEPS} | CFG {PREVIEW_CFG}")
 print(f"  {t('Seed'):<22}: {SEED} ({t('random') if SEED <= 0 else t('fixed')})")
 print(f"  {'Turbo LoRA':<22}: {t('ON (strength {s})', s=TURBO_LORA_STRENGTH) if USE_TURBO else t('OFF')}")
+if cfg.get("lora_type") == "slider":
+    print(f"  {'Slider':<22}: strength at 100% / fuerza al 100 % {SLIDER['slider_strength_100']:g} | "
+          f"push {SLIDER['slider_push']:g}")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 RESUME_DIR = os.path.join(OUTPUT_DIR, "resume_checkpoint")
@@ -380,6 +393,10 @@ def build_lora_metadata(step):
         "ss_mixed_precision": "bf16",
     }
 
+    if SLIDER_RUN:
+        meta["slider"] = "true"
+        meta["slider_mode"] = SLIDER_RUN["mode"]
+        meta["slider_strength_100"] = SLIDER["slider_strength_100"]
     # La GUI lee estas claves al exportar o descargar para poner el sufijo _rs / _plus / _lokr al nombre.
     if USE_RSLORA:
         meta["rslora"] = "true"
@@ -425,9 +442,12 @@ def _export_lora(model, path, step):
         save_file(lora_options.lokr_export(model, lambda name: "transformer." + name, export_alpha()),
                   path, metadata=build_lora_metadata(step))
         return
+    # En un slider, lora_B se escala para que la fuerza al 100 % (5) dé la posición 100 del dataset.
     clean = {}
     for k, v in get_peft_model_state_dict(model).items():
         k = "transformer." + k.replace("base_model.model.", "")
+        if SLIDER_RUN and k.endswith(".lora_B.weight"):
+            v = v * SLIDER_RUN["factor"]
         clean[k] = v.to(torch.bfloat16).cpu().contiguous()
         if k.endswith(".lora_A.weight"):
             clean[k[:-len(".lora_A.weight")] + ".alpha"] = torch.tensor(float(export_alpha()))
@@ -532,7 +552,11 @@ def apply_turbo_lora(model):
     return hooks
 
 
-def run_preview(model, scheduler, sample, neg, size, step):
+def run_preview(model, scheduler, sample, neg, size, step, slider=None):
+    """
+    slider: (capas LoRA, [(etiqueta, multiplicador)]). Genera la misma imagen con el LoRA a cada
+    multiplicador y guarda una tira con el dial (misma semilla en todas).
+    """
     H, W = size
     was_training = model.training
     model.eval()
@@ -547,36 +571,62 @@ def run_preview(model, scheduler, sample, neg, size, step):
         scheduler = FlowMatchEulerDiscreteScheduler.from_config(scheduler.config, shift_terminal=None)
 
     try:
+        dial = slider[1] if slider else [(None, None)]
         with torch.no_grad():
-            g = torch.Generator(device="cuda").manual_seed(actual_seed)
-            latents = denoise(model, scheduler, sample, H, W, g, neg)
+            all_latents = []
+            for _, mult in dial:
+                if mult is not None:
+                    slider_core.set_multiplier(slider[0], mult)
+                g = torch.Generator(device="cuda").manual_seed(actual_seed)
+                all_latents.append(denoise(model, scheduler, sample, H, W, g, neg))
             # Los pesos del Turbo LoRA en la GPU ya no hacen falta: se liberan antes del VAE.
             for h in hooks:
                 h.remove()
             hooks = []
 
             vae = VaeHolder.get().to("cuda")
-            lat = unpack_latents(latents, H, W).to(vae.dtype).unsqueeze(2)
-            mean = torch.tensor(vae.config.latents_mean, device="cuda", dtype=lat.dtype).view(1, -1, 1, 1, 1)
-            std  = torch.tensor(vae.config.latents_std,  device="cuda", dtype=lat.dtype).view(1, -1, 1, 1, 1)
-            # El VAE devuelve RGBA; en las previews solo interesa el color.
-            try:
-                img = vae.decode(lat * std + mean, return_dict=False)[0][:, :3, 0]
-            except torch.OutOfMemoryError:
-                # Con 8 GB y el entrenamiento cargado (768² o más) no cabe entera: por mosaicos usa ~1 GB
-                # en vez de ~4.4 GB, a cambio de alguna marca leve en las uniones. Sigue así el resto del run.
-                print("  ↳ " + t("Low VRAM: tiled VAE decode for previews"))
-                torch.cuda.empty_cache()
-                vae.enable_tiling()
-                img = vae.decode(lat * std + mean, return_dict=False)[0][:, :3, 0]
-            img = ((img.float() / 2 + 0.5).clamp(0, 1)[0].cpu().permute(1, 2, 0).numpy() * 255).astype("uint8")
+            images = []
+            for latents in all_latents:
+                lat = unpack_latents(latents, H, W).to(vae.dtype).unsqueeze(2)
+                mean = torch.tensor(vae.config.latents_mean, device="cuda", dtype=lat.dtype).view(1, -1, 1, 1, 1)
+                std  = torch.tensor(vae.config.latents_std,  device="cuda", dtype=lat.dtype).view(1, -1, 1, 1, 1)
+                # El VAE devuelve RGBA; en las previews solo interesa el color.
+                try:
+                    img = vae.decode(lat * std + mean, return_dict=False)[0][:, :3, 0]
+                except torch.OutOfMemoryError:
+                    # Con 8 GB y el entrenamiento cargado (768² o más) no cabe entera: por mosaicos usa ~1 GB
+                    # en vez de ~4.4 GB, a cambio de alguna marca leve en las uniones. Sigue así el resto del run.
+                    print("  ↳ " + t("Low VRAM: tiled VAE decode for previews"))
+                    torch.cuda.empty_cache()
+                    vae.enable_tiling()
+                    img = vae.decode(lat * std + mean, return_dict=False)[0][:, :3, 0]
+                images.append(((img.float() / 2 + 0.5).clamp(0, 1)[0].cpu().permute(1, 2, 0).numpy() * 255).astype("uint8"))
             vae.to("cpu")
 
-        from PIL import Image
+        from PIL import Image, ImageDraw, ImageFont
+        pil = [Image.fromarray(img) for img in images]
+        result = pil[0]
+        if slider:
+            # Etiqueta grande y con fondo: la fuerza se tiene que leer aunque la tira se vea reducida.
+            size = max(16, pil[0].width // 10)
+            try:
+                font = ImageFont.load_default(size=size)
+            except TypeError:  # Pillow < 10.1: solo la fuente pequeña
+                font = ImageFont.load_default()
+            pad = size // 4
+            result = Image.new("RGB", (sum(im.width for im in pil), pil[0].height))
+            for i, (im, (label, _)) in enumerate(zip(pil, dial)):
+                draw = ImageDraw.Draw(im)
+                box = draw.textbbox((pad, pad), label, font=font)
+                draw.rectangle((0, 0, box[2] + pad, box[3] + pad), fill=(0, 0, 0))
+                draw.text((pad, pad), label, fill=(255, 255, 0), font=font)
+                result.paste(im, (i * pil[0].width, 0))
         out = os.path.join(OUTPUT_DIR, f"preview_step_{step}.png")
-        Image.fromarray(img).save(out)
+        result.save(out)
         print("  ↳ " + t("Preview saved to: {path}", path=out))
     finally:
+        if slider:
+            slider_core.set_multiplier(slider[0], 1.0)
         for h in hooks:
             h.remove()
         if was_training:
@@ -677,6 +727,7 @@ def collate_text(embeds, masks):
 
 def train_qwen_image21():
     global LORA_RANK, LORA_ALPHA, USE_RSLORA, USE_LORAPLUS, LORAPLUS_RATIO, USE_LOKR, LOKR_FACTOR  # al reanudar se toman del checkpoint (el alpha se exporta con el LoRA)
+    global BATCH_SIZE, SLIDER_RUN
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.benchmark = True
 
@@ -684,6 +735,28 @@ def train_qwen_image21():
         print("\n[!] ERROR: " + t("Cache directory '{path}' is empty or does not exist.", path=CACHE_DIR))
         print("[!] " + t("Please run Pre-Cache first!"))
         sys.exit(2)  # la GUI muestra este código como "falta la pre-caché"
+
+    # Slider: lo decide la caché (su manifiesto), que es lo que de verdad se va a entrenar.
+    manifest = slider_core.read_manifest(CACHE_DIR)
+    if cfg.get("lora_type") == "slider" and not manifest:
+        print("\n[!] Slider LoRA but the cache is not a slider one: run Pre-Cache again.")
+        print("[!] LoRA Slider pero la caché no es de un slider: vuelve a lanzar el Pre-Caché.")
+        sys.exit(2)
+    if manifest:
+        groups, anchors, slider_mode = manifest
+        SLIDER_RUN = {"factor": slider_core.export_factor(SLIDER), "mode": slider_mode}
+        print(f"\nSlider ({'edit' if slider_mode == 'edit' else 'text-to-image'}): {slider_core.describe(groups, anchors)}")
+        if SLIDER["slider_mode"] != slider_mode:
+            print("[!] The slider mode changed after the Pre-Cache: training with the cached one. Run Pre-Cache to switch.")
+            print("[!] El modo del slider cambió después del Pre-Caché: se entrena con el de la caché. Lanza el Pre-Caché para cambiarlo.")
+        if BATCH_SIZE != 1:
+            # El multiplicador del LoRA es uno por capa: un batch no puede mezclar pares de signos distintos.
+            print(f"[i] Slider: batch {BATCH_SIZE} -> 1 (use Grad Accum to average more steps / usa Grad Accum para promediar más pasos)")
+            BATCH_SIZE = 1
+        if USE_LOKR:
+            # El dial cambia la escala de las capas LoRA de PEFT; LoKr no las usa.
+            print("[i] Slider: LoKr -> LoRA (the dial needs LoRA layers / el dial necesita capas LoRA)")
+            USE_LOKR = False
 
     ensure_model_downloaded(local_path=MODEL_ID, repo_id=HF_REPO_ID)
 
@@ -779,6 +852,7 @@ def train_qwen_image21():
         if p.requires_grad:
             p.data = p.data.float()
     model.print_trainable_parameters()
+    slider_layers = slider_core.lora_layers(model) if manifest else None
 
     trainable = [p for p in model.parameters() if p.requires_grad]
     # LoRA+: lora_B en su propio grupo, con el LR multiplicado (lr_mult se aplica en cada paso).
@@ -879,12 +953,24 @@ def train_qwen_image21():
                 sample["ctrls"] = ctrls
         return sample
 
-    for f in os.listdir(CACHE_DIR):
-        if not f.endswith("_latent.pt"):
-            continue
-        nombre = f.replace("_latent.pt", "")
-        cache_data[nombre] = load_sample(nombre)
-        buckets[tuple(cache_data[nombre]["lat"].shape[2:])].append(nombre)
+    if manifest:
+        # Slider: un latente por imagen; los pares los forma el Sampler. El texto es uno por imagen de
+        # entrada en edición (Qwen3-VL la ve con el caption) y uno por grupo en texto a imagen.
+        stems = [s for pos in groups.values() for s in pos.values()] + anchors
+        slider_lat = {s: load_sample(s)["lat"] for s in stems}
+        texts = stems if slider_mode == "edit" else {slider_core.caption_stem(s) for s in stems}
+        slider_text = {}
+        for name in texts:
+            sample = load_sample(name)
+            slider_text[name] = {k: sample[k] for k in ("emb", "msk", "imgmask") if k in sample}
+        sampler = slider_core.Sampler(groups, anchors, slider_mode, SLIDER["slider_push"])
+    else:
+        for f in os.listdir(CACHE_DIR):
+            if not f.endswith("_latent.pt"):
+                continue
+            nombre = f.replace("_latent.pt", "")
+            cache_data[nombre] = load_sample(nombre)
+            buckets[tuple(cache_data[nombre]["lat"].shape[2:])].append(nombre)
 
     edit_mode = any("ctrl" in v for v in cache_data.values())
 
@@ -911,9 +997,52 @@ def train_qwen_image21():
         else:
             return all_preview_names[0]
 
+    def slider_step():
+        """
+        Un paso del slider: el par (o el anchor) que elige el Sampler, cada imagen con su multiplicador
+        del LoRA. En texto a imagen las dos imágenes del par comparten ruido y timestep: el paso solo
+        ve su diferencia. Devuelve la loss ya dividida entre Grad Accum.
+        """
+        items = sampler.next()
+        first = slider_lat[items[0]["lat"]]
+        H, W = first.shape[2], first.shape[3]
+        sigma = sample_sigma(1, H * W, "cuda", shift_cfg)
+        t_exp = sigma.view(-1, 1, 1)
+        noise = torch.randn_like(pack_latents(first.to("cuda", non_blocking=True)))
+        total = 0.0
+        for item in items:
+            slider_core.set_multiplier(slider_layers, item["mult"])
+            latent_packed = pack_latents(slider_lat[item["lat"]].to("cuda", non_blocking=True))
+            noisy = ((1 - t_exp) * latent_packed + t_exp * noise).to(torch.bfloat16)
+            target = noise - latent_packed
+            batch = dict(slider_text[item["ctrl"] or item["emb"]])
+            if item["ctrl"]:
+                batch["ctrl"] = slider_lat[item["ctrl"]]
+            msk = batch["msk"].to("cuda", non_blocking=True)
+            hidden, shapes, img_mask = model_inputs(batch, noisy, H, W, "cuda")
+            pred = model(
+                hidden_states=hidden,
+                encoder_hidden_states=batch["emb"].to("cuda", non_blocking=True),
+                encoder_hidden_states_mask=None if msk.all() else msk,
+                timestep=sigma,
+                img_shapes=shapes,
+                img_mask=img_mask,
+                return_dict=False,
+            )[0][:, -H * W:]
+            # El backward antes de cambiar de multiplicador: el gradient checkpointing recalcula con el actual.
+            loss = F.mse_loss(pred.float(), target.float()) / (GRAD_ACCUM_STEPS * len(items))
+            loss.backward()
+            total += loss.item()
+        slider_core.set_multiplier(slider_layers, 1.0)
+        return total
+
     running_loss, t_step_avg, grad_norm = 0.0, 0.0, 0.0
-    kind = t("before/after pairs") if edit_mode else t("images")
-    print("\n" + t("STARTING TRAINING! {n} {kind} in {b} buckets.", n=len(all_preview_names), kind=kind, b=len(buckets)))
+    if manifest:
+        print(f"\nSTARTING SLIDER TRAINING / ¡ARRANCANDO ENTRENAMIENTO SLIDER! {slider_core.describe(groups, anchors)} "
+              f"(anchors in {sampler.p_anchor():.0%} of the steps / en el {sampler.p_anchor():.0%} de los pasos).")
+    else:
+        kind = t("before/after pairs") if edit_mode else t("images")
+        print("\n" + t("STARTING TRAINING! {n} {kind} in {b} buckets.", n=len(all_preview_names), kind=kind, b=len(buckets)))
 
     reload_live_settings()
     metrics = training_metrics.MetricsLog(OUTPUT_DIR, start_step)
@@ -936,46 +1065,50 @@ def train_qwen_image21():
 
             t0 = time.time()
 
-            size = random.choice(list(buckets))
-            names = [random.choice(buckets[size]) for _ in range(BATCH_SIZE)]
-            latents = torch.cat([cache_data[n]["lat"] for n in names]).to("cuda", non_blocking=True)
-            embeds, masks = collate_text([cache_data[n]["emb"] for n in names], [cache_data[n]["msk"] for n in names])
-            embeds = embeds.to("cuda", non_blocking=True)
-            masks = None if masks is None else masks.to("cuda", non_blocking=True)
+            if manifest:
+                step_loss = slider_step() * GRAD_ACCUM_STEPS
+                running_loss += step_loss
+            else:
+                size = random.choice(list(buckets))
+                names = [random.choice(buckets[size]) for _ in range(BATCH_SIZE)]
+                latents = torch.cat([cache_data[n]["lat"] for n in names]).to("cuda", non_blocking=True)
+                embeds, masks = collate_text([cache_data[n]["emb"] for n in names], [cache_data[n]["msk"] for n in names])
+                embeds = embeds.to("cuda", non_blocking=True)
+                masks = None if masks is None else masks.to("cuda", non_blocking=True)
 
-            H, W = size
-            latent_packed = pack_latents(latents)
-            B = latent_packed.shape[0]
+                H, W = size
+                latent_packed = pack_latents(latents)
+                B = latent_packed.shape[0]
 
-            sigma  = sample_sigma(B, H * W, "cuda", shift_cfg)
-            noise  = torch.randn_like(latent_packed)
-            t_exp  = sigma.view(-1, 1, 1)
+                sigma  = sample_sigma(B, H * W, "cuda", shift_cfg)
+                noise  = torch.randn_like(latent_packed)
+                t_exp  = sigma.view(-1, 1, 1)
 
-            noisy = ((1 - t_exp) * latent_packed + t_exp * noise).to(torch.bfloat16)
-            target = noise - latent_packed
+                noisy = ((1 - t_exp) * latent_packed + t_exp * noise).to(torch.bfloat16)
+                target = noise - latent_packed
 
-            # En edición el antes de cada muestra va delante, limpio. El modelo usa una sola fila de
-            # img_mask para todo el batch: vale porque la imagen va antes de la instrucción, así que en
-            # un mismo bucket las ranuras del antes caen en las mismas posiciones en todos los pares.
-            batch = {**cache_data[names[0]], "emb": embeds}
-            batch.pop("ctrls", None)
-            if edit_mode:
-                batch["ctrl"] = torch.cat([cache_data[n]["ctrl"] for n in names])
-            hidden, shapes, img_mask = model_inputs(batch, noisy, H, W, "cuda")
-            pred = model(
-                hidden_states=hidden,
-                encoder_hidden_states=embeds,
-                encoder_hidden_states_mask=masks,
-                timestep=sigma,
-                img_shapes=shapes,
-                img_mask=img_mask,
-                return_dict=False,
-            )[0][:, -H * W:]
+                # En edición el antes de cada muestra va delante, limpio. El modelo usa una sola fila de
+                # img_mask para todo el batch: vale porque la imagen va antes de la instrucción, así que en
+                # un mismo bucket las ranuras del antes caen en las mismas posiciones en todos los pares.
+                batch = {**cache_data[names[0]], "emb": embeds}
+                batch.pop("ctrls", None)
+                if edit_mode:
+                    batch["ctrl"] = torch.cat([cache_data[n]["ctrl"] for n in names])
+                hidden, shapes, img_mask = model_inputs(batch, noisy, H, W, "cuda")
+                pred = model(
+                    hidden_states=hidden,
+                    encoder_hidden_states=embeds,
+                    encoder_hidden_states_mask=masks,
+                    timestep=sigma,
+                    img_shapes=shapes,
+                    img_mask=img_mask,
+                    return_dict=False,
+                )[0][:, -H * W:]
 
-            loss = F.mse_loss(pred.float(), target.float()) / GRAD_ACCUM_STEPS
-            loss.backward()
-            step_loss = loss.item() * GRAD_ACCUM_STEPS
-            running_loss += step_loss
+                loss = F.mse_loss(pred.float(), target.float()) / GRAD_ACCUM_STEPS
+                loss.backward()
+                step_loss = loss.item() * GRAD_ACCUM_STEPS
+                running_loss += step_loss
 
             # La norma solo existe al aplicar el optimizador: entre medias se muestra la última.
             if step % GRAD_ACCUM_STEPS == 0:
@@ -1012,13 +1145,21 @@ def train_qwen_image21():
                     custom_mtime[0] = os.path.getmtime(custom_path)
                     cache_data["_custom"] = load_sample("_custom")
                     check_custom_prompt(True)
-                p_name = get_preview_sample(step)
-                sample = cache_data[p_name]
-                # Tamaño de la preview: el del objetivo; en edición, el de la imagen de antes
-                # (como en ComfyUI, la salida hereda el tamaño de la referencia).
-                ref = sample.get("ctrl", sample.get("lat", next(iter(cache_data.values()))["lat"]))
+                dial = None
+                if manifest:
+                    # Slider: el prompt de la preview (y en edición su imagen) con el dial a -100 %, -50 %, 0, 50 % y 100 %.
+                    p_name, sample = "_custom", cache_data["_custom"]
+                    ref = sample.get("ctrl", next(iter(slider_lat.values())))
+                    dial = (slider_layers, [(f"{s:+g}" if s else "0", slider_core.strength_to_multiplier(s, SLIDER))
+                                            for s in slider_core.preview_strengths(SLIDER)])
+                else:
+                    p_name = get_preview_sample(step)
+                    sample = cache_data[p_name]
+                    # Tamaño de la preview: el del objetivo; en edición, el de la imagen de antes
+                    # (como en ComfyUI, la salida hereda el tamaño de la referencia).
+                    ref = sample.get("ctrl", sample.get("lat", next(iter(cache_data.values()))["lat"]))
                 print(f"\n  [Preview] {t('Mode')}: {PREVIEW_CAPTION_MODE} | {t('Sample')}: {p_name}")
-                run_preview(model, scheduler, sample, neg, (ref.shape[2], ref.shape[3]), step)
+                run_preview(model, scheduler, sample, neg, (ref.shape[2], ref.shape[3]), step, dial)
 
     except (KeyboardInterrupt, SystemExit):
         save_checkpoint_now(last_step_executed)

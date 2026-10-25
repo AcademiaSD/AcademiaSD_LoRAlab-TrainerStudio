@@ -22,6 +22,8 @@ from i18n import t
 import gpu_stats
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 
+import slider_core
+
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
@@ -99,10 +101,13 @@ TEXT_ENCODER = cfg.get("text_encoder", DEFAULTS["text_encoder"])
 TRIGGER_WORD = cfg.get("trigger_word", "")
 PROJECT_NAME = cfg.get("project_name", "").strip()
 PREVIEW_CUSTOM_PROMPT = cfg.get("preview_custom_prompt", "").strip()
-# "normal" (imagen + caption) o "edit" (pares nombre_before / nombre_after + instrucción).
+# "normal" (imagen + caption), "edit" (pares nombre_before / nombre_after + instrucción) o
+# "slider" (imágenes grupo_posición y grupo_anc, ver docs/SLIDERS.md).
 LORA_TYPE = cfg.get("lora_type", DEFAULTS["lora_type"])
+SLIDER = slider_core.read_settings(cfg)
+SLIDER_EDIT = LORA_TYPE == "slider" and SLIDER["slider_mode"] == "edit"
 # Solo edición: imágenes de referencia (fuera del dataset) para ver en las previews cómo aplica el efecto.
-PREVIEW_EDIT_IMAGES = config_preview_images(cfg) if LORA_TYPE == "edit" else []
+PREVIEW_EDIT_IMAGES = config_preview_images(cfg) if LORA_TYPE == "edit" or SLIDER_EDIT else []
 
 # Formato automático de carpeta de caché según nombre del proyecto
 CACHE_DIR = str(resolve_cache_dir(f"./cached_data_qwen_image21_{PROJECT_NAME}" if PROJECT_NAME else cfg.get("cache_dir"), DEFAULTS["cache_dir"]))
@@ -315,6 +320,23 @@ def preview_edit_sources(samples, image_paths=None):
     return [samples[0][2]] if samples and samples[0][2] else []
 
 
+def dataset_stems():
+    files = sorted(f for f in os.listdir(DATASET_PATH) if f.lower().endswith((".png", ".jpg", ".jpeg", ".webp")))
+    return {os.path.splitext(f)[0]: os.path.join(DATASET_PATH, f) for f in files}
+
+
+def slider_preview_source(groups, image_paths=None):
+    # Imagen de entrada de la preview del slider (edición): la primera del usuario que exista o la
+    # del primer grupo más cercana a la posición 0, para que el dial se vea en los dos sentidos (la -100
+    # ya está en un extremo). El slider edita una sola foto: las demás imágenes no se usan.
+    paths = PREVIEW_EDIT_IMAGES if image_paths is None else as_image_list(image_paths)
+    for path in paths:
+        if os.path.exists(path):
+            return path
+    first = groups[sorted(groups)[0]]
+    return dataset_stems()[first[min(first, key=abs)]]
+
+
 def preview_image_area(count):
     return max(MULTIPLE * MULTIPLE, int(TARGET_AREA * 2 / max(1, count + 1)))
 
@@ -367,6 +389,11 @@ def preprocess_qwen_image21():
     # Pares nombre_before / nombre_after con el tipo en "normal": se entrenarían como imágenes sueltas,
     # sin la referencia y sin su caption (nombre.txt). Si solo hay pares, es un LoRA de edición.
     global LORA_TYPE, PREVIEW_EDIT_IMAGES
+    if os.path.exists(os.path.join(CACHE_DIR, slider_core.MANIFEST)):
+        os.remove(os.path.join(CACHE_DIR, slider_core.MANIFEST))
+    if LORA_TYPE == "slider":
+        return preprocess_slider()
+
     pairs, loose = dataset_pairs()
     if LORA_TYPE != "edit" and pairs and not loose:
         print("⚠ " + t("The dataset only has name_before / name_after pairs: training an EDIT LoRA. Set LoRA Type to Edit to use the preview reference image."))
@@ -473,13 +500,7 @@ def preprocess_qwen_image21():
         jobs += [(src, custom_ctrl_name(i), bucket)
                  for i, (src, bucket) in enumerate(zip(preview_sources, preview_buckets))]
 
-    pending = []
-    for src, out, (bw, bh) in jobs:
-        lat_path = os.path.join(CACHE_DIR, out)
-        if (not out.startswith("_custom_ctrl") and os.path.exists(lat_path) and os.path.getmtime(lat_path) > os.path.getmtime(src)
-                and tuple(torch.load(lat_path, weights_only=True).shape[-2:]) == (bh // 16, bw // 16)):
-            continue
-        pending.append((src, out, (bw, bh)))
+    pending = pending_jobs(jobs)
 
     if len(pending) < len(jobs):
         print("\n" + t("{n} latents already cached, skipped.", n=len(jobs) - len(pending)))
@@ -494,6 +515,115 @@ def preprocess_qwen_image21():
     remove_stale_custom_ctrls(expected_custom_ctrls)
     del vae
     free_vram()
+    print("\n✓ " + t("Pre-caching finished! VRAM freed."))
+
+
+def pending_jobs(jobs):
+    # Un latente ya cacheado con el tamaño de bucket actual y más nuevo que su imagen no se vuelve a
+    # codificar. Las imágenes de la preview de edición se codifican siempre: pueden ser otros ficheros.
+    pending = []
+    for src, out, (bw, bh) in jobs:
+        lat_path = os.path.join(CACHE_DIR, out)
+        if (not out.startswith("_custom_ctrl") and os.path.exists(lat_path) and os.path.getmtime(lat_path) > os.path.getmtime(src)
+                and tuple(torch.load(lat_path, weights_only=True).shape[-2:]) == (bh // 16, bw // 16)):
+            continue
+        pending.append((src, out, (bw, bh)))
+    return pending
+
+
+def preprocess_slider():
+    """
+    Slider (docs/SLIDERS.md): un latente por imagen (<grupo_posición>_latent.pt, <grupo_anc>_latent.pt).
+    Los pares se forman al entrenar, así que no hay _ctrl: la imagen de entrada de un par es el latente
+    de otra posición del mismo grupo. Todas las imágenes de un grupo comparten bucket (el de su primera
+    posición), para que cualquier par encaje.
+    En edición Qwen3-VL ve la imagen de entrada junto al texto, así que el embedding depende de ella: uno
+    por imagen (<grupo_posición>_embed.pt, con su _imgmask), el caption del grupo con esa imagen. En texto
+    a imagen, uno por grupo (<grupo>_embed.pt).
+    """
+    mode = SLIDER["slider_mode"]
+    edit = mode == "edit"
+    paths = dataset_stems()
+    groups, anchors, problems = slider_core.scan(paths)
+    for en, es in problems:
+        print(f"  [!] {en} / {es}")
+    if not groups:
+        print(f"[!] Slider LoRA but no group has 2 positions in '{DATASET_PATH}' (name the images group_position: "
+              f"boca1_0, boca1_100...) / LoRA Slider pero ningún grupo tiene 2 posiciones (llama a las imágenes "
+              f"grupo_posición: boca1_0, boca1_100...).")
+        sys.exit(1)
+    print(f"  LoRA type / Tipo de LoRA    : slider ({'edit' if edit else 'text-to-image'}) | "
+          f"{slider_core.describe(groups, anchors)}")
+
+    stems = [s for pos in groups.values() for s in pos.values()] + anchors
+    texts = stems if edit else sorted({slider_core.caption_stem(s) for s in stems})
+    suffixes = ("embed", "mask", "imgmask") if edit else ("embed", "mask")
+    expected = {f"{s}_latent.pt" for s in stems} | {f"{n}_{suffix}.pt" for n in texts for suffix in suffixes}
+    stale = [f for f in os.listdir(CACHE_DIR) if f.endswith(".pt") and not f.startswith("_") and f not in expected]
+    for f in stale:
+        os.remove(os.path.join(CACHE_DIR, f))
+    if stale:
+        print("  " + t("Removed {n} stale cache files", n=len(stale)))
+
+    ensure_model_downloaded(local_path=MODEL_ID, repo_id=HF_REPO_ID, text_encoder_dir=TEXT_ENCODER_DIR)
+
+    buckets = {}
+    for pos in groups.values():
+        with Image.open(paths[pos[min(pos)]]) as im:
+            size = bucket_size(*im.size)
+        buckets.update({s: size for s in pos.values()})
+    for s in anchors:
+        with Image.open(paths[s]) as im:
+            buckets[s] = bucket_size(*im.size)
+    preview_src = slider_preview_source(groups) if edit else None
+    if preview_src:
+        with Image.open(preview_src) as im:
+            buckets["_custom"] = bucket_size(*im.size)
+
+    def caption(name):
+        return with_trigger(read_caption(slider_core.caption_stem(name)) or slider_core.default_caption(mode))
+
+    def image(path, bucket):
+        with Image.open(path) as im:
+            return [fit(im.convert("RGBA"), *bucket)]
+
+    print("\n" + t("Loading {name}...", name=f"Text Encoder (Qwen3-VL-8B {TEXT_ENCODER})"))
+    pipe = DiffusionPipeline.from_pretrained(MODEL_ID, transformer=None, vae=None, text_encoder=load_text_encoder(), dtype=torch.bfloat16)
+    # Las previews del slider siempre tienen prompt: el manual o el caption del primer grupo.
+    default_prompt = caption(sorted(groups)[0])
+    c_prompt = with_trigger(PREVIEW_CUSTOM_PROMPT) if PREVIEW_CUSTOM_PROMPT else default_prompt
+    with torch.inference_mode():
+        encode_and_save(pipe, "", "_neg")
+        print("[Custom Prompt Cache] " + t("Encoding: '{prompt}'", prompt=c_prompt) + (f" + {os.path.basename(preview_src)}" if preview_src else ""))
+        encode_and_save(pipe, c_prompt, "_custom", images=image(preview_src, buckets["_custom"]) if preview_src else None)
+        for idx, name in enumerate(texts, 1):
+            tokens = encode_and_save(pipe, caption(name), name, images=image(paths[name], buckets[name]) if edit else None)
+            print(f"[{idx}/{len(texts)}] {t('Text')}: {name} | {tokens} tokens")
+    if not preview_src and os.path.exists(os.path.join(CACHE_DIR, "_custom_imgmask.pt")):
+        os.remove(os.path.join(CACHE_DIR, "_custom_imgmask.pt"))
+    with open(os.path.join(CACHE_DIR, "_custom_prompt.txt"), "w", encoding="utf-8") as f:
+        f.write(c_prompt)
+    with open(os.path.join(CACHE_DIR, "_custom_image.txt"), "w", encoding="utf-8") as f:
+        f.write("\n".join(PREVIEW_EDIT_IMAGES))
+    del pipe
+    free_vram()
+
+    jobs = [(paths[s], f"{s}_latent.pt", buckets[s]) for s in stems]
+    if preview_src:
+        jobs.append((preview_src, "_custom_ctrl.pt", buckets["_custom"]))
+    pending = pending_jobs(jobs)
+    if len(pending) < len(jobs):
+        print("\n" + t("{n} latents already cached, skipped.", n=len(jobs) - len(pending)))
+    if pending:
+        print("\n" + t("Loading {name}...", name="VAE (Qwen-Image 2.1)"))
+        vae = AutoencoderKLQwenImage21.from_pretrained(MODEL_ID, subfolder="vae", dtype=torch.bfloat16).to("cuda")
+        encode_latents(vae, pending, "cuda")
+        del vae
+        free_vram()
+    remove_stale_custom_ctrls({"_custom_ctrl.pt"} if preview_src else set())
+
+    # El manifiesto, el último: el trainer lo usa para saber que la caché es de un slider.
+    slider_core.write_manifest(CACHE_DIR, groups, anchors, mode, default_prompt)
     print("\n✓ " + t("Pre-caching finished! VRAM freed."))
 
 
@@ -519,12 +649,18 @@ def encode_preview_prompt(cache_dir, prompt, images_arg, device):
     CACHE_DIR = cache_dir
     where = device.upper().replace("CUDA", "GPU")
     requested = parse_preview_images_arg(images_arg)
+    manifest = slider_core.read_manifest(cache_dir)
     sources = []
-    if any(f.endswith("_ctrl.pt") and not f.startswith("_") for f in os.listdir(cache_dir)):
-        sources = preview_edit_sources(find_samples(), requested)
+    if manifest:
+        # Slider: una sola imagen de entrada, al área de entrenamiento.
+        sources = [slider_preview_source(manifest[0], requested)] if manifest[2] == "edit" else []
+        preview_area = TARGET_AREA
+    else:
+        if any(f.endswith("_ctrl.pt") and not f.startswith("_") for f in os.listdir(cache_dir)):
+            sources = preview_edit_sources(find_samples(), requested)
+        preview_area = preview_image_area(len(sources))
 
     preview_images, preview_buckets = [], []
-    preview_area = preview_image_area(len(sources))
     for src in sources:
         with Image.open(src) as im:
             bucket = bucket_size(*im.size, area=preview_area)

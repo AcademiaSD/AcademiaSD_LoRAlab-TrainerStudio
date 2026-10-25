@@ -282,13 +282,14 @@ def dataset_stems():
 
 def slider_preview_source(groups, image_paths=None):
     # Imagen de entrada de la preview del slider (edición): la primera del usuario que exista o la
-    # primera del primer grupo. El slider edita una sola foto: las demás imágenes no se usan.
+    # del primer grupo más cercana a la posición 0, para que el dial se vea en los dos sentidos (la -100
+    # ya está en un extremo). El slider edita una sola foto: las demás imágenes no se usan.
     paths = PREVIEW_EDIT_IMAGES if image_paths is None else as_image_list(image_paths)
     for path in paths:
         if os.path.exists(path):
             return path
     first = groups[sorted(groups)[0]]
-    return dataset_stems()[first[min(first)]]
+    return dataset_stems()[first[min(first, key=abs)]]
 
 
 def preview_image_area(count):

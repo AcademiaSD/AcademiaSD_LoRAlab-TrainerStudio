@@ -26,6 +26,7 @@ import remote_access
 import file_transfer
 import training_metrics
 import gpu_stats
+import slider_core
 from pathlib import Path
 from i18n import t
 
@@ -89,7 +90,7 @@ UI_FILE = BASE_DIR / "GUI" / "trainer_ui_qwenimage21.html"
 LOGO_FILE = ASSETS_DIR / "logo.png" if (ASSETS_DIR / "logo.png").exists() else BASE_DIR / "logo.png"
 
 PRECACHE_CONFIG = SETTINGS_DIR / "pre_cache_settings_qwenimage21.json"
-PREVIEW_KEYS = ("lora_type", "preview_custom_prompt", "preview_edit_image", "preview_edit_images")
+PREVIEW_KEYS = ("lora_type", "slider_mode", "preview_custom_prompt", "preview_edit_image", "preview_edit_images")
 PREVIEW_MAX = 10
 TRAIN_CONFIG = SETTINGS_DIR / "train_settings_qwenimage21.json"
 HF_TOKEN_CONFIG = SETTINGS_DIR / "HF_token.json"
@@ -101,6 +102,12 @@ DATASET_EXTS = (".png", ".jpg", ".jpeg", ".webp")
 CAPTION_SCRIPT = SCRIPTS_DIR / "0_caption_qwen_image21.py"
 PRECACHE_SCRIPT = SCRIPTS_DIR / "1_pre_cache_qwen_image21.py"
 TRAIN_SCRIPT = SCRIPTS_DIR / "2_train_lora_qwen_image21.py"
+SLIDER_GEN_SCRIPT = SCRIPTS_DIR / "slider_generator.py"
+SLIDER_PROMPTS_SCRIPT = SCRIPTS_DIR / "slider_prompts.py"
+CAPTIONER_MODEL = BASE_DIR / "Captioner-Qwen3-VL-8B" / "text_encoder_NF4" / "config.json"  # compartido con el auto-caption
+SLIDER_GEN_CONFIG = SETTINGS_DIR / "slider_gen_settings.json"  # compartido / shared by every trainer
+# Motores del generador de sliders: carpeta del modelo y GB a descargar si falta (Qwen: sin text encoder si ya hay uno).
+SLIDER_ENGINES = {"klein9b": ("FLUX.2-Klein-9B_NF4", 8.8), "qwenimage21": ("Qwen-Image21-NF4", 11.0)}
 
 app = Flask(__name__)
 
@@ -206,6 +213,10 @@ def get_script_for_name(script_name):
         return PRECACHE_SCRIPT
     if script_name == "train":
         return TRAIN_SCRIPT
+    if script_name == "slidergen":
+        return SLIDER_GEN_SCRIPT
+    if script_name == "sliderprompts":
+        return SLIDER_PROMPTS_SCRIPT
     return None
 
 
@@ -646,12 +657,17 @@ def save_train():
         trigger = data.get("trigger_word", "").strip()
         if trigger and prompt and trigger.lower() not in prompt.lower():
             prompt = f"{trigger}, {prompt}"
-        wanted = [prompt, "\n".join(preview_images) if data.get("lora_type") == "edit" else ""]
         cache_dir = resolve_config_path(data["cache_dir"], cache_dir_name)
         encoded = [(cache_dir / f).read_text(encoding="utf-8") if (cache_dir / f).exists() else None
                    for f in ("_custom_prompt.txt", "_custom_image.txt")]
+        if not prompt and data.get("lora_type") == "slider":
+            # Slider sin prompt manual: el de por defecto del pre-caché, para poder cambiar en caliente solo
+            # la imagen (en cachés anteriores a ese dato, el prompt ya codificado).
+            prompt = slider_core.default_prompt(cache_dir) or encoded[0] or ""
+        edit_image = data.get("lora_type") == "edit" or (data.get("lora_type") == "slider" and data.get("slider_mode", "edit") == "edit")
+        wanted = [prompt, "\n".join(preview_images) if edit_image else ""]
         if prompt and wanted != encoded and (cache_dir / "_neg_embed.pt").exists() and get_status()["script"] != "precache":
-            encode_preview_prompt(cache_dir, wanted[0], preview_images if data.get("lora_type") == "edit" else [])
+            encode_preview_prompt(cache_dir, wanted[0], preview_images if edit_image else [])
         saved_files = [TRAIN_CONFIG.name]
 
         # 2. Guardar copia dentro de la carpeta del proyecto
@@ -754,9 +770,16 @@ def serve_preview(filename):
 EDIT_SUFFIXES = ("_before", "_after")
 
 
-def caption_path(image_path):
+def slider_dataset():
+    return read_json_file(PRECACHE_CONFIG, {}).get("lora_type") == "slider"
+
+
+def caption_path(image_path, slider=None):
     # En un par de edición (nombre_before / nombre_after) el caption es uno solo: nombre.txt.
+    # En un slider, uno por grupo: boca1_0, boca1_50... -> boca1.txt.
     stem = image_path.stem
+    if slider if slider is not None else slider_dataset():
+        return image_path.with_name(slider_core.caption_stem(stem) + ".txt")
     for suffix in EDIT_SUFFIXES:
         if stem.endswith(suffix):
             return image_path.with_name(stem[:-len(suffix)] + ".txt")
@@ -764,8 +787,9 @@ def caption_path(image_path):
 
 
 def dataset_caption_paths(dataset_dir):
-    # Un .txt por muestra: los dos lados de un par comparten el suyo y solo cuentan una vez.
-    return list(dict.fromkeys(caption_path(f) for f in sorted(dataset_dir.iterdir())
+    # Un .txt por muestra: los dos lados de un par (o las imágenes de un grupo) comparten el suyo y solo cuentan una vez.
+    slider = slider_dataset()
+    return list(dict.fromkeys(caption_path(f, slider) for f in sorted(dataset_dir.iterdir())
                               if f.is_file() and f.suffix.lower() in DATASET_EXTS))
 
 
@@ -773,10 +797,11 @@ def dataset_caption_paths(dataset_dir):
 def dataset_info():
     dataset_dir = get_dataset_dir()
     images = []
+    slider = slider_dataset()
     if dataset_dir.is_dir():
         for file_path in sorted(dataset_dir.iterdir()):
             if file_path.is_file() and file_path.suffix.lower() in DATASET_EXTS:
-                txt_path = caption_path(file_path)
+                txt_path = caption_path(file_path, slider)
                 caption = ""
                 if txt_path.exists():
                     try:
@@ -944,12 +969,19 @@ def delete_dataset_image():
             return jsonify({"status": "error", "error": t("Not found: {name}", name=filename)}), 404
 
         files = [target]
-        for suffix in EDIT_SUFFIXES:
-            if target.stem.endswith(suffix):
-                base = target.stem[:-len(suffix)]
-                files = [f for f in dataset_dir.iterdir() if f.is_file() and f.suffix.lower() in DATASET_EXTS
-                         and f.stem in (base + "_before", base + "_after")]
-        files.append(caption_path(target))
+        if slider_dataset():
+            # Slider: solo esa imagen; el caption del grupo se va con la última.
+            caption = caption_path(target, True)
+            if not any(f != target and f.suffix.lower() in DATASET_EXTS and caption_path(f, True) == caption
+                       for f in dataset_dir.iterdir() if f.is_file()):
+                files.append(caption)
+        else:
+            for suffix in EDIT_SUFFIXES:
+                if target.stem.endswith(suffix):
+                    base = target.stem[:-len(suffix)]
+                    files = [f for f in dataset_dir.iterdir() if f.is_file() and f.suffix.lower() in DATASET_EXTS
+                             and f.stem in (base + "_before", base + "_after")]
+            files.append(caption_path(target))
 
         removed = []
         for f in files:
@@ -1007,6 +1039,35 @@ def save_caption_settings():
         merged.update(request.get_json(force=True) or {})
         write_json_file(CAPTION_CONFIG, merged)
         return jsonify({"status": "ok"})
+    except Exception as exc:
+        return jsonify({"status": "error", "error": str(exc)}), 500
+
+
+@app.route("/api/slider-gen-settings", methods=["GET"])
+def get_slider_gen_settings():
+    engines = {}
+    for key, (folder, gb) in SLIDER_ENGINES.items():
+        model = BASE_DIR / folder
+        if key == "qwenimage21":
+            # Vale cualquier variante de su text encoder, o la NF4 del captioner.
+            has_te = CAPTIONER_MODEL.exists() or any((model / f"text_encoder_{v}" / "config.json").exists() for v in ("NF4", "INT8", "BF16"))
+            gb = gb if not has_te else 5.5
+        else:
+            has_te = (model / "text_encoder" / "config.json").exists()
+        engines[key] = {"ready": (model / "transformer" / "index.json").exists() and has_te, "download_gb": gb}
+    writer = {"ready": CAPTIONER_MODEL.exists(), "download_gb": 5}
+    return jsonify({"settings": read_json_file(SLIDER_GEN_CONFIG, {}), "engines": engines, "writer": writer})
+
+
+@app.route("/api/save-slider-gen-settings", methods=["POST"])
+def save_slider_gen_settings():
+    """Ajustes del generador de sliders. El dataset es siempre el del proyecto abierto."""
+    try:
+        merged = read_json_file(SLIDER_GEN_CONFIG, {})
+        merged.update(request.get_json(force=True) or {})
+        merged["dataset_path"] = str(get_dataset_dir())
+        write_json_file(SLIDER_GEN_CONFIG, merged)
+        return jsonify({"status": "ok", "dataset_path": merged["dataset_path"]})
     except Exception as exc:
         return jsonify({"status": "error", "error": str(exc)}), 500
 

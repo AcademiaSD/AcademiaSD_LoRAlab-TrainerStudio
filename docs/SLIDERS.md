@@ -1,6 +1,6 @@
 # Slider LoRAs — design
 
-> 🧪 Design document of the **Slider** LoRA type that every image trainer will share. **Implemented in FLUX.2 Klein 9B** (`scripts/slider_core.py` + the Klein pre-cache, trainer and GUI) and tested on a GPU (sad ↔ happy, see section 9). Synthetic mode: `scripts/slider_generator.py` with the Klein 9B engine; Qwen-Image 2.1 and the other trainers come next. The prototype it comes from (sad ↔ happy) is in [`experiments/slider`](../experiments/slider/README.md).
+> 🧪 Design document of the **Slider** LoRA type that every image trainer will share. **Implemented in FLUX.2 Klein 9B and Qwen-Image 2.1** (`scripts/slider_core.py` + each trainer's pre-cache, trainer and GUI) and tested on a GPU (sad ↔ happy, see section 9; Qwen-Image 2.1 end to end on a small AgeSynth set). Synthetic mode: `scripts/slider_generator.py` with the Klein 9B or Qwen-Image 2.1 engine; the other trainers come next. The prototype it comes from (sad ↔ happy) is in [`experiments/slider`](../experiments/slider/README.md).
 
 A slider is a LoRA whose **strength is a dial along one concept**: hair length, age, eye size, body shape, an expression, the amount of tartar on a set of teeth... In ComfyUI the same LoRA goes from one end to the other just by changing its strength, usually between **−5 and +5**.
 
@@ -99,7 +99,8 @@ There is no input image, so each step takes **two images of the same group**, `p
 - **Sampling:** every group weighs the same, whatever its number of images. An anchor is picked with probability `A / (A + 2G)` (A anchors, G groups), the share of the prototype. Inside a group, pairs that span more than 100 positions are only used when the group has no shorter ones.
 - **Low rank:** rank 4 / alpha 4 by default. One direction needs little capacity, and a low rank leaves no room for side effects.
 - **"Ultra" (optional, per model):** LoRA only on the blocks that decide composition and text–image fusion, leaving fine detail alone. The dial then holds much higher strengths. Klein 9B is measured (8 double + first 8 single blocks). The other models start without Ultra until a GPU test picks their blocks.
-- **Previews:** a strip with the preview image (edit) or prompt + seed (text-to-image) at −S100, −S100/2, 0, +S100/2, +S100, so the user watches the dial form while training.
+- **Previews:** a strip with the preview image (edit) or prompt + seed (text-to-image) at −S100, −S100/2, 0, +S100/2, +S100, so the user watches the dial form while training. Without a preview image of the user's, edit sliders use the first group's image closest to position 0: an image at an end (−100) cannot show that end of the dial.
+- **Qwen-Image 2.1, edit:** its text encoder sees the input image with the caption, so the text is encoded once per image (each image can be the input of a pair), not once per group.
 - **Not live:** "Strength at 100%", Ultra and the slider mode cannot change mid-training, and Resume keeps the checkpoint's values.
 
 ## 5. Synthetic mode (pair generator)
