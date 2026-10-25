@@ -344,9 +344,10 @@
                     </div>
 
                     <div class="form-group" id="edit_base_container" style="display:none;">
-                        <label title="The edit LoRA your LoRA is trained on top of. armV4 (akhaliq/MOSS-Image-Edit-HQ, ~495 MB): keeps the unedited parts of the image; in ComfyUI use edit_format ai-toolkit. chinoll (chinoll/Moss-Image-Edit, ~300 MB): the first edit LoRA; edit_format Moss-Image-Edit. Changing it needs Pre-Cache again.">Edit Base:</label>
+                        <label title="The edit LoRA your LoRA is trained on top of. armV5 (akhaliq/MOSS-Image-Edit-HQ, ~495 MB): the latest one, keeps the unedited parts of the image and was trained with full scene captions; in ComfyUI use edit_format ai-toolkit. armV4: the previous version, same use. chinoll (chinoll/Moss-Image-Edit, ~300 MB): the first edit LoRA; edit_format Moss-Image-Edit. Changing it needs Pre-Cache again.">Edit Base:</label>
                         <select id="edit_base">
-                            <option value="armV4" selected>armV4 — MOSS-Image-Edit-HQ (recommended)</option>
+                            <option value="armV5" selected>armV5 — MOSS-Image-Edit-HQ (recommended)</option>
+                            <option value="armV4">armV4 — MOSS-Image-Edit-HQ</option>
                             <option value="chinoll">chinoll — Moss-Image-Edit</option>
                         </select>
                     </div>
@@ -430,7 +431,7 @@
                     </div>
 
                     <div class="form-group" id="edit_export_container" style="display:none;">
-                        <label title="An edit LoRA is trained on top of an edit base LoRA (armV4 or chinoll). Separate: your LoRA alone (small), loaded with a LoRA loader next to the edit base LoRA. Fused: both merged exactly into one LoRA (~500 MB, name ending in _FUSED), loaded alone. Either way, encode with Text Encode MOSS-Image Edit and the edit_format of the base.">Edit LoRA Export:</label>
+                        <label title="An edit LoRA is trained on top of an edit base LoRA (armV5, armV4 or chinoll). Separate: your LoRA alone (small), loaded with a LoRA loader next to the edit base LoRA. Fused: both merged exactly into one LoRA (~500 MB, name ending in _FUSED), loaded alone. Either way, encode with Text Encode MOSS-Image Edit and the edit_format of the base.">Edit LoRA Export:</label>
                         <select id="export_edit_mode">
                             <option value="separate" selected>Separate (needs the edit base LoRA)</option>
                             <option value="fused">Fused with the edit base LoRA (one file)</option>
@@ -983,7 +984,7 @@
                     if (p.trigger_word) document.getElementById('trigger_word').value = p.trigger_word;
                     if (p.dataset_path) document.getElementById('dataset_path').value = p.dataset_path;
                     document.getElementById('lora_type').value = p.lora_type || 'normal';
-                    document.getElementById('edit_base').value = p.edit_base || 'armV4';
+                    document.getElementById('edit_base').value = p.edit_base || 'armV5';
                     applyLoraType();
                     if (p.target_area) {
                         document.getElementById('precache_target_area').value = p.target_area;

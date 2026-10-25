@@ -10,6 +10,7 @@ What was added, newest first. Each entry links to its commit.
 
 **2026-10-25**
 
+- **MOSS-Image edit LoRAs on armV5**: the latest [MOSS-Image-Edit-HQ](https://huggingface.co/akhaliq/MOSS-Image-Edit-HQ) is the default edit base now, with armV4 and chinoll's as options [`ab231b1`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/ab231b1)
 - **MOSS-Image edit LoRAs on armV4**: [akhaliq's MOSS-Image-Edit-HQ](https://huggingface.co/akhaliq/MOSS-Image-Edit-HQ) is the new default edit base (it keeps the unedited parts of the image), with chinoll's as an option; the fused export is a normal LoRA ending in `_FUSED`, for ComfyUI's own edit nodes [`4709970`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/4709970)
 
 **2026-10-24**
@@ -180,7 +181,7 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 | **ERNIE-Image** | Image LoRAs (characters, objects, styles); supports rsLoRA, LoRA+ and LoKr | **Under 8 GB** (NF4; verified during training) |
 | **FLUX.2 Klein 9B** | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) | 12 GB |
 | **FLUX.3 Image Klein** | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) | 8 GB |
-| **MOSS-Image** | Image LoRAs (characters, objects, styles) on MOSS-Image Base or SFT **and edit LoRAs** (before → after, on top of armV4 or Moss-Image-Edit); supports rsLoRA, LoRA+ and LoKr | **6 GB** (512²) / 8 GB |
+| **MOSS-Image** | Image LoRAs (characters, objects, styles) on MOSS-Image Base or SFT **and edit LoRAs** (before → after, on top of armV5, armV4 or Moss-Image-Edit); supports rsLoRA, LoRA+ and LoKr | **6 GB** (512²) / 8 GB |
 | **Ideogram 4** | Image LoRAs (characters, objects, styles), with JSON captions | 12 GB (16 GB for previews with CFG) |
 | **SDXL** | Image LoRAs for SDXL Base, Pony, Illustrious, NoobAI, Juggernaut, RealVis or your own SDXL checkpoint | **4 GB** (NF4) / 12 GB (BF16) |
 | **LTX-2.3** (also LTX-2.5) | Character and style LoRAs for the LTX video model, trained from images | 12 GB |
@@ -599,11 +600,12 @@ The official image-edit task works at 1024: 512 and 768 are out of its distribut
 - **Previews:** 28 steps / CFG 3 with block 22 skipped in the negative branch, like the official pipeline. **Turbo LoRA (Fast Previews)** uses [darask0's 4-step adapter](https://huggingface.co/darask0/MOSS-Image_4-step_adapter_lora) (no CFG, ~1.2 GB, downloaded on first use). It is not a regular LoRA: it is added unmerged in FP32, with its own time embedding and its own "data-space" sampler, so it does not touch the LoRA being trained. It was distilled from SFT and also works on Base.
 - Default settings: 500 steps, LR 0.0004, cosine with 100 warmup steps, rank 8 / alpha 8.
 - **Edit LoRAs:** MOSS-Image cannot edit on its own; an edit LoRA teaches it, and yours trains on top of it, frozen. Choose **LoRA Type → Edit** and use `name_before.png` / `name_after.png` pairs with the instruction in `name.txt` (the captioner has an **Edit** mode). **Edit Base** picks the edit LoRA, downloaded on first use:
-  - **armV4** (default): [akhaliq's MOSS-Image-Edit-HQ](https://huggingface.co/akhaliq/MOSS-Image-Edit-HQ) (~495 MB), trained on SFT with masks that keep the unedited parts of the image. It follows ai-toolkit's layout: the "before" goes in as a clean reference up to 0.5 MP, and the text encoder also sees it (at 384×384, after "Picture 1:").
+  - **armV5** (default): [akhaliq's MOSS-Image-Edit-HQ](https://huggingface.co/akhaliq/MOSS-Image-Edit-HQ) (~495 MB), trained on SFT with masks that keep the unedited parts of the image and with full scene captions. It follows ai-toolkit's layout: the "before" goes in as a clean reference up to 0.5 MP, and the text encoder also sees it (at 384×384, after "Picture 1:", as ComfyUI feeds it).
+  - **armV4**: the previous version of MOSS-Image-Edit-HQ, used the same way.
   - **chinoll**: [chinoll's Moss-Image-Edit](https://huggingface.co/chinoll/Moss-Image-Edit) (~300 MB), the first one; the reference long side is scaled to 512 px and the instruction is encoded as plain text.
 
   Either way the reference goes in at timestep 0 with attention that only looks at the references. Changing the base needs Pre-Cache again. Previews edit the "before" of a pair or up to 4 reference images of your own. Train on **SFT**: both bases were trained on it.
-- **Using an edit LoRA in ComfyUI** needs ComfyUI's own MOSS-Image edit support (recent ComfyUI): a LoRA loader and **Text Encode MOSS-Image Edit** (positive and negative, with the VAE and the image), with `edit_format` **ai-toolkit** for armV4 or **Moss-Image-Edit** for chinoll. **Edit LoRA Export** gives you two choices. **Separate** (default) exports your LoRA alone: load it next to the edit base LoRA (at 1.0). **Fused** merges both into one LoRA (name ending in `_FUSED`) that you load alone; the merge concatenates the matrices, so it is exact. A LoKr can only be exported separately. **Recommended strength for your LoRA: 0.5 to 1.0**; lower it if the effect is too strong (in the fused file it also lowers the edit base).
+- **Using an edit LoRA in ComfyUI** needs ComfyUI's own MOSS-Image edit support (recent ComfyUI): a LoRA loader and **Text Encode MOSS-Image Edit** (positive and negative, with the VAE and the image), with `edit_format` **ai-toolkit** for armV5 and armV4 or **Moss-Image-Edit** for chinoll. **Edit LoRA Export** gives you two choices. **Separate** (default) exports your LoRA alone: load it next to the edit base LoRA (at 1.0). **Fused** merges both into one LoRA (name ending in `_FUSED`) that you load alone; the merge concatenates the matrices, so it is exact. A LoKr can only be exported separately. **Recommended strength for your LoRA: 0.5 to 1.0**; lower it if the effect is too strong (in the fused file it also lowers the edit base).
 
 | Measured on an RTX 5080 | |
 | :--- | :--- |
@@ -830,7 +832,7 @@ The code is released under the **MIT License**. The models keep their own licens
 | FLUX.2 Klein 9B (and the Klein 9B turbo preview LoRA) | FLUX Non-Commercial License — non-commercial |
 | FLUX.3 Image Klein | FLUX Kommunity License (see the model card) |
 | MOSS-Image Base and SFT (and darask0's 4-step turbo adapter) | Apache 2.0 |
-| MOSS-Image-Edit-HQ armV4 LoRA (akhaliq, downloaded at run time) | Apache-2.0 |
+| MOSS-Image-Edit-HQ armV5 / armV4 LoRAs (akhaliq, downloaded at run time) | Apache-2.0 |
 | Moss-Image-Edit LoRA (chinoll, downloaded at run time) | GPL-3.0 (the project's license; no separate license is given for the weights) |
 | Boogu-Image-0.1-Edit | Apache 2.0 |
 | Ideogram 4 | Ideogram Non-Commercial Model Agreement — non-commercial; LoRAs are model derivatives under the same license |
@@ -870,7 +872,7 @@ Code adapted or copied from other projects, and the work it builds on:
 | [MOSS-Image](https://github.com/OpenMOSS/MOSS-Image) by the OpenMOSS Team | The MOSS-Image transformer of `pipeline_moss_image.py`, adapted in `scripts/moss_image_model.py` (NF4 layers, gradient checkpointing); prompt encoding, preview guidance, training noise schedule (technical report) and caption guide | Apache-2.0 |
 | [kohya-ss sd-scripts](https://github.com/kohya-ss/sd-scripts) | `ss_*` LoRA metadata convention, SDXL LoRA key format and 75-token caption chunking | Apache-2.0 |
 
-Models and LoRAs downloaded at run time (not part of this repository): MelBandRoFormer weights by [Kijai](https://huggingface.co/Kijai/MelBandRoFormer_comfy), the Klein 9B turbo preview LoRA by [kalle07](https://huggingface.co/kalle07/FLUX.2-klein-9B-turbo-lora-set), the Qwen-Image 2.1 turbo LoRA by [Viggle](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo), the Qwen-Image-2512 and Edit-2511 Lightning LoRAs by [lightx2v](https://huggingface.co/lightx2v/Qwen-Image-2512-Lightning), the MOSS-Image 4-step adapter by [darask0](https://huggingface.co/darask0/MOSS-Image_4-step_adapter_lora) (built on the 8-step adapter by [lodestones](https://huggingface.co/lodestones/MOSS-Image-SFT-8-steps-dmd)), the MOSS-Image-Edit-HQ armV4 LoRA by [akhaliq](https://huggingface.co/akhaliq/MOSS-Image-Edit-HQ), the Moss-Image-Edit LoRA by [chinoll](https://huggingface.co/chinoll/Moss-Image-Edit) (whose reference format, from [ComfyUI-Moss-Image-Edit](https://github.com/Chenkin-x/ComfyUI-Moss-Image-Edit), the trainer reimplements), Z-Image-Fun-Lora-Distill by [Alibaba PAI](https://huggingface.co/alibaba-pai/Z-Image-Fun-Lora-Distill), and the ungated Ideogram 4 NF4 mirror by [Unsloth](https://huggingface.co/unsloth/ideogram-4-nf4-diffusers). Thanks to all of them.
+Models and LoRAs downloaded at run time (not part of this repository): MelBandRoFormer weights by [Kijai](https://huggingface.co/Kijai/MelBandRoFormer_comfy), the Klein 9B turbo preview LoRA by [kalle07](https://huggingface.co/kalle07/FLUX.2-klein-9B-turbo-lora-set), the Qwen-Image 2.1 turbo LoRA by [Viggle](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo), the Qwen-Image-2512 and Edit-2511 Lightning LoRAs by [lightx2v](https://huggingface.co/lightx2v/Qwen-Image-2512-Lightning), the MOSS-Image 4-step adapter by [darask0](https://huggingface.co/darask0/MOSS-Image_4-step_adapter_lora) (built on the 8-step adapter by [lodestones](https://huggingface.co/lodestones/MOSS-Image-SFT-8-steps-dmd)), the MOSS-Image-Edit-HQ armV5 and armV4 LoRAs by [akhaliq](https://huggingface.co/akhaliq/MOSS-Image-Edit-HQ), the Moss-Image-Edit LoRA by [chinoll](https://huggingface.co/chinoll/Moss-Image-Edit) (whose reference format, from [ComfyUI-Moss-Image-Edit](https://github.com/Chenkin-x/ComfyUI-Moss-Image-Edit), the trainer reimplements), Z-Image-Fun-Lora-Distill by [Alibaba PAI](https://huggingface.co/alibaba-pai/Z-Image-Fun-Lora-Distill), and the ungated Ideogram 4 NF4 mirror by [Unsloth](https://huggingface.co/unsloth/ideogram-4-nf4-diffusers). Thanks to all of them.
 
 ## 💬 Community & Support
 

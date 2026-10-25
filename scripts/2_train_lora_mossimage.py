@@ -14,7 +14,7 @@ CFG con el bloque 22 saltado en la rama negativa. El LoRA se exporta con los nom
 
 LoRA de edición (caché con <nombre>_ctrl.pt): el antes entra como referencia (ver
 moss_image_model.py) y se entrena encima de un LoRA de edición base, que se suma congelado a la
-salida de cada capa. La base la fija el pre-caché (_edit_base.txt): armV4 (akhaliq/MOSS-Image-Edit-HQ,
+salida de cada capa. La base la fija el pre-caché (_edit_base.txt): armV5 o armV4 (akhaliq/MOSS-Image-Edit-HQ,
 formato ai-toolkit) o chinoll/Moss-Image-Edit. El LoRA exportado es solo lo aprendido encima: en
 ComfyUI se carga junto al LoRA base (Text Encode MOSS-Image Edit con su edit_format), o fusionado
 con él al exportar.
@@ -78,7 +78,7 @@ TURBO_REPO = "darask0/MOSS-Image_4-step_adapter_lora"
 TURBO_REVISION = "1ec327b9fac5a0aa47426aaba6565892616ce30e"
 TURBO_FILES = ("lora.safetensors", "time_embedding.safetensors", "dataspace.safetensors")
 
-# Los LoRAs de edición base (armV4, chinoll) están en moss_edit_lora.EDIT_BASES; la base de la caché,
+# Los LoRAs de edición base (armV5, armV4, chinoll) están en moss_edit_lora.EDIT_BASES; la base de la caché,
 # en este fichero.
 EDIT_BASE_FILE = "_edit_base.txt"
 
@@ -939,7 +939,7 @@ def train_mossimage():
     def load_sample(nombre):
         # lat: objetivo (en _custom no existe); emb: [longitud, 4096]. En edición, ctrls: los
         # latentes de referencia (el antes; en _custom, las imágenes de referencia de la preview), y
-        # con armV4 uncond: el negativo vacío codificado con esas referencias.
+        # con armV5 / armV4 uncond: el negativo vacío codificado con esas referencias.
         sample = {}
         for key, suffix in (("lat", "latent"), ("emb", "embed"), ("uncond", "uncond")):
             path = f"{CACHE_DIR}/{nombre}_{suffix}.pt"

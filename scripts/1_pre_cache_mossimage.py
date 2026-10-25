@@ -16,11 +16,11 @@ LoRA de edición (lora_type "edit"): pares nombre_before / nombre_after con la i
 nombre.txt. El después es el objetivo; el antes se guarda como referencia (<nombre>_ctrl.pt). Cómo
 depende de la base de edición (edit_base), igual que el edit_format del nodo Text Encode MOSS-Image
 Edit de ComfyUI:
-  - "armV4" (akhaliq/MOSS-Image-Edit-HQ, formato ai-toolkit): la referencia hasta 0,5 MP y el text
-    encoder también la ve, reducida a 384x384 y tras "Picture N:".
+  - "armV5" / "armV4" (akhaliq/MOSS-Image-Edit-HQ, formato ai-toolkit): la referencia hasta 0,5 MP
+    y el text encoder también la ve, reducida a 384x384 y tras "Picture N:".
   - "chinoll" (chinoll/Moss-Image-Edit): el lado largo de la referencia limitado a reference_max_edge
     (512) y la instrucción codificada como un prompt normal.
-La base queda escrita en la caché (_edit_base.txt): el trainer la lee de ahí. Con armV4, cada
+La base queda escrita en la caché (_edit_base.txt): el trainer la lee de ahí. Con armV5 y armV4, cada
 muestra guarda además su prompt negativo vacío con la referencia (<nombre>_uncond.pt), para la rama
 negativa de las previews.
 """
@@ -67,9 +67,12 @@ TEXT_ENCODER_MODES = {
 }
 # Límite de la condición de texto en el entrenamiento original (plantilla incluida).
 MAX_TEXT_TOKENS = 4096
-# Bases de edición. armV4: referencias hasta control_image_max_pixels de su ai-toolkit (0,5 MP) y,
-# para el text encoder, reducidas a 384x384 como hace ComfyUI con el edit_format ai-toolkit.
-EDIT_BASES = ("armV4", "chinoll")
+# Bases de edición. Las de ai-toolkit (armV5, armV4): referencias hasta control_image_max_pixels de su
+# ai-toolkit (0,5 MP) y, para el text encoder, reducidas a 384x384 como hace ComfyUI con el
+# edit_format ai-toolkit. armV5 se entrenó con esa vista a 512x512 (vlm_max_pixels), pero en ComfyUI
+# siempre llega a 384x384: el LoRA se entrena como se va a usar.
+EDIT_BASES = ("armV5", "armV4", "chinoll")
+AI_TOOLKIT_BASES = ("armV5", "armV4")
 REFERENCE_MAX_PIXELS = 524288
 VISION_MAX_PIXELS = 384 * 384
 EDIT_BASE_FILE = "_edit_base.txt"
@@ -90,7 +93,7 @@ DEFAULTS = {
     "preview_edit_image": "",
     "preview_edit_images": [],
     "reference_max_edge": 512,
-    "edit_base": "armV4",
+    "edit_base": "armV5",
 }
 
 # Imágenes de referencia de la preview de edición (el nodo de ComfyUI admite hasta 4).
@@ -140,8 +143,8 @@ PREVIEW_EDIT_IMAGES = config_preview_images(cfg) if LORA_TYPE == "edit" else []
 REFERENCE_MAX_EDGE = int(cfg.get("reference_max_edge", DEFAULTS["reference_max_edge"]))
 EDIT_BASE = cfg.get("edit_base", DEFAULTS["edit_base"])
 if EDIT_BASE not in EDIT_BASES:
-    print("⚠ " + t("Invalid Edit Base {name}. Using armV4.", name=EDIT_BASE))
-    EDIT_BASE = "armV4"
+    print("⚠ " + t("Invalid Edit Base {name}. Using armV5.", name=EDIT_BASE))
+    EDIT_BASE = "armV5"
 
 CACHE_DIR = str(resolve_cache_dir(f"./cached_data_mossimage_{PROJECT_NAME}" if PROJECT_NAME else cfg.get("cache_dir"), DEFAULTS["cache_dir"]))
 
@@ -231,10 +234,10 @@ def bucket_size(w: int, h: int):
 
 
 def reference_size(w: int, h: int, base=None):
-    # Solo se reduce y los lados se redondean a múltiplos de 16. armV4: hasta 0,5 MP, como su
+    # Solo se reduce y los lados se redondean a múltiplos de 16. armV5 / armV4: hasta 0,5 MP, como su
     # entrenamiento en ai-toolkit; chinoll: hasta que el lado largo quepa en REFERENCE_MAX_EDGE, como
     # Apply MOSS Edit.
-    if (base or EDIT_BASE) == "armV4":
+    if (base or EDIT_BASE) in AI_TOOLKIT_BASES:
         s = min(1.0, math.sqrt(REFERENCE_MAX_PIXELS / (w * h)))
     else:
         s = min(1.0, REFERENCE_MAX_EDGE / max(w, h))
@@ -340,7 +343,7 @@ def encode_text(te, tokenizer, prompt, device, images=()):
             hidden = te(**inputs, use_cache=False, return_dict=True).last_hidden_state[0]
         return hidden.to(torch.bfloat16).cpu()
 
-    # Con imágenes (armV4), como el edit_format ai-toolkit de ComfyUI: "Picture N:" y el bloque de
+    # Con imágenes (armV5, armV4), como el edit_format ai-toolkit de ComfyUI: "Picture N:" y el bloque de
     # visión de cada una delante de la instrucción, con la misma plantilla de chat.
     # La torre de visión en FP32, como ComfyUI: en BF16 algunos tokens de imagen se alejan mucho
     # (medido: similitud mínima 0,42 frente a 0,96). No está cuantizada en INT8 ni en NF4.
@@ -497,7 +500,7 @@ def preprocess_mossimage():
 
     # El trainer carga todo lo que haya en la caché: se quitan las muestras que ya no están en el
     # dataset y, al pasar de edición a normal, los antes (_ctrl).
-    vision = edit and EDIT_BASE == "armV4"
+    vision = edit and EDIT_BASE in AI_TOOLKIT_BASES
     suffixes = ("latent", "embed") + (("ctrl",) if edit else ()) + (("uncond",) if vision else ())
     expected = {f"{name}_{suffix}.pt" for name, _, _ in samples for suffix in suffixes}
     stale = [f for f in os.listdir(CACHE_DIR) if f.endswith(".pt") and not f.startswith("_") and f not in expected]
@@ -557,7 +560,7 @@ def preprocess_mossimage():
     expected_custom_ctrls = custom_ctrl_names(len(preview_sources)) if custom_prompt and edit else set()
 
     for idx, (name, _, control) in enumerate(samples, 1):
-        # armV4: con su referencia, y también el negativo vacío con ella (rama negativa de las previews).
+        # armV5 / armV4: con su referencia, y también el negativo vacío con ella (rama negativa de las previews).
         images = [reference_image(control, reference_size(*buckets[name]))] if vision else ()
         encode_and_save(te, tokenizer, with_trigger(read_caption(name)), name, images)
         if vision:
@@ -627,7 +630,7 @@ def encode_preview_prompt(cache_dir, prompt, images_arg, device):
     # La base con la que se codificó la caché (una caché anterior a armV4 es de chinoll).
     base_file = os.path.join(cache_dir, EDIT_BASE_FILE)
     EDIT_BASE = open(base_file, "r", encoding="utf-8").read().strip() if os.path.exists(base_file) else "chinoll"
-    vision = bool(sources) and EDIT_BASE == "armV4"
+    vision = bool(sources) and EDIT_BASE in AI_TOOLKIT_BASES
 
     jobs = []
     for i, src in enumerate(sources):
