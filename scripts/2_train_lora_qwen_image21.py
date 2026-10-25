@@ -76,6 +76,7 @@ DEFAULTS = {
     "preview_every": 0,
     "preview_steps": 30,
     "preview_cfg": 3.0,
+    "preview_size": 0,
     "use_turbo": False,
     "turbo_lora_strength": 1.0,
     "preview_caption_mode": "first",
@@ -124,6 +125,7 @@ TIMESTEP_SAMPLING = cfg.get("timestep_sampling", DEFAULTS["timestep_sampling"])
 PREVIEW_EVERY     = cfg.get("preview_every",     DEFAULTS["preview_every"])
 PREVIEW_STEPS     = cfg.get("preview_steps",     DEFAULTS["preview_steps"])
 PREVIEW_CFG       = cfg.get("preview_cfg",       DEFAULTS["preview_cfg"])
+PREVIEW_SIZE      = cfg.get("preview_size",      DEFAULTS["preview_size"])
 PREVIEW_CAPTION_MODE  = cfg.get("preview_caption_mode",  DEFAULTS["preview_caption_mode"])
 PREVIEW_CUSTOM_PROMPT = cfg.get("preview_custom_prompt", DEFAULTS["preview_custom_prompt"]).strip()
 
@@ -158,7 +160,7 @@ print(f"  {'LoKr':<22}: {f'factor {LOKR_FACTOR}' if USE_LOKR else 'off'}")
 print(f"  {t('LoRA Targets'):<22}: {LORA_TARGETS}")
 print(f"  {'Batch / Grad Accum':<22}: {BATCH_SIZE}/{GRAD_ACCUM_STEPS}")
 print(f"  {t('Preview'):<22}: {t('Mode')}={PREVIEW_CAPTION_MODE} | Prompt='{PREVIEW_CUSTOM_PROMPT}'")
-print(f"  {t('Preview Every'):<22}: {PREVIEW_EVERY} | {t('Preview Steps')} {PREVIEW_STEPS} | CFG {PREVIEW_CFG}")
+print(f"  {t('Preview Every'):<22}: {PREVIEW_EVERY} | {t('Preview Steps')} {PREVIEW_STEPS} | CFG {PREVIEW_CFG} | {t('Preview Size')} {PREVIEW_SIZE or t('Training')}")
 print(f"  {t('Seed'):<22}: {SEED} ({t('random') if SEED <= 0 else t('fixed')})")
 print(f"  {'Turbo LoRA':<22}: {t('ON (strength {s})', s=TURBO_LORA_STRENGTH) if USE_TURBO else t('OFF')}")
 if cfg.get("lora_type") == "slider":
@@ -668,7 +670,7 @@ def reload_live_settings():
     carpetas se fijan al arrancar y siguen necesitando Stop -> Resume.
     """
     global _live_mtime, TOTAL_STEPS, SAVE_EVERY, LR, MAX_GRAD_NORM
-    global PREVIEW_EVERY, PREVIEW_STEPS, PREVIEW_CFG, PREVIEW_CAPTION_MODE, PREVIEW_CUSTOM_PROMPT
+    global PREVIEW_EVERY, PREVIEW_STEPS, PREVIEW_CFG, PREVIEW_SIZE, PREVIEW_CAPTION_MODE, PREVIEW_CUSTOM_PROMPT
     global USE_TURBO, TURBO_LORA_STRENGTH, SEED
 
     try:
@@ -707,6 +709,7 @@ def reload_live_settings():
     PREVIEW_EVERY         = fresh("preview_every",         int,   PREVIEW_EVERY)
     PREVIEW_STEPS         = fresh("preview_steps",         int,   PREVIEW_STEPS)
     PREVIEW_CFG           = fresh("preview_cfg",           float, PREVIEW_CFG)
+    PREVIEW_SIZE          = fresh("preview_size",          int,   PREVIEW_SIZE)
     PREVIEW_CAPTION_MODE  = fresh("preview_caption_mode",  str,   PREVIEW_CAPTION_MODE)
     PREVIEW_CUSTOM_PROMPT = fresh("preview_custom_prompt", lambda v: str(v).strip(), PREVIEW_CUSTOM_PROMPT)
     USE_TURBO             = fresh("use_turbo",             bool,  USE_TURBO)
@@ -1159,7 +1162,13 @@ def train_qwen_image21():
                     # (como en ComfyUI, la salida hereda el tamaño de la referencia).
                     ref = sample.get("ctrl", sample.get("lat", next(iter(cache_data.values()))["lat"]))
                 print(f"\n  [Preview] {t('Mode')}: {PREVIEW_CAPTION_MODE} | {t('Sample')}: {p_name}")
-                run_preview(model, scheduler, sample, neg, (ref.shape[2], ref.shape[3]), step, dial)
+                H, W = ref.shape[2], ref.shape[3]
+                if PREVIEW_SIZE > 0:
+                    # Cada token es un parche de 16x16 px; lados pares (32 px) porque cada ranura de
+                    # imagen de img_mask agrupa 2x2 tokens, como los buckets del pre-caché.
+                    s = PREVIEW_SIZE / 32 / math.sqrt(H * W)
+                    H, W = max(2, round(H * s) * 2), max(2, round(W * s) * 2)
+                run_preview(model, scheduler, sample, neg, (H, W), step, dial)
 
     except (KeyboardInterrupt, SystemExit):
         save_checkpoint_now(last_step_executed)
