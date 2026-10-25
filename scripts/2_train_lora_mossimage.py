@@ -422,7 +422,8 @@ def build_lora_metadata(step):
         meta["edit_base_lora_strength"] = EDIT_LORA_STRENGTH
         meta["edit_format"] = base["edit_format"]
         meta["usage"] = (f"Edit LoRA: load it together with {base['repo']} ({base['files'][-1]}) and encode with "
-                         f"Text Encode MOSS-Image Edit, edit_format {base['edit_format']}.")
+                         f"Text Encode MOSS-Image Edit, edit_format {base['edit_format']}. Recommended strength 0.5-1.0 "
+                         f"(the edit base LoRA at 1.0).")
 
     # La resolución la fija el pre-caché del proyecto.
     pc_json = os.path.join(CACHE_DIR, f"pre_cache_settings_{PROJECT_NAME}.json")

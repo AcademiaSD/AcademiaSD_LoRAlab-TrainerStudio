@@ -127,7 +127,7 @@ def fuse(lora_path, model_dir, out_path):
     header["fused_edit_base_lora"] = f"{EDIT_BASES[name]['repo']}@{EDIT_BASES[name]['revision']}"
     header["edit_format"] = EDIT_BASES[name]["edit_format"]
     header["usage"] = (f"Edit LoRA merged with {EDIT_BASES[name]['repo']}: load it alone with a LoRA loader and encode "
-                       f"with Text Encode MOSS-Image Edit, edit_format {EDIT_BASES[name]['edit_format']}.")
+                       f"with Text Encode MOSS-Image Edit, edit_format {EDIT_BASES[name]['edit_format']}. Recommended strength 0.5-1.0.")
     header["trained_with"] = meta.get("trained_with", "AcademiaSD LoRAlab MOSS-Image")
     tmp = str(out_path) + ".tmp"
     save_file(out, tmp, metadata=header)
