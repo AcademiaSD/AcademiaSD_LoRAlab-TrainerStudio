@@ -10,6 +10,7 @@ What was added, newest first. Each entry links to its commit.
 
 **2026-10-25**
 
+- **MOSS-Image edit LoRAs on armV5**: the latest [MOSS-Image-Edit-HQ](https://huggingface.co/akhaliq/MOSS-Image-Edit-HQ) is the default edit base now, with armV4 and chinoll's as options [`ab231b1`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/ab231b1)
 - **MOSS-Image edit LoRAs on armV4**: [akhaliq's MOSS-Image-Edit-HQ](https://huggingface.co/akhaliq/MOSS-Image-Edit-HQ) is the new default edit base (it keeps the unedited parts of the image), with chinoll's as an option; the fused export is a normal LoRA ending in `_FUSED`, for ComfyUI's own edit nodes [`4709970`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/4709970)
 
 **2026-10-24**
