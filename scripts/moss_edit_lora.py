@@ -3,7 +3,7 @@
 moss_edit_lora.py — LoRAs de edición base de MOSS-Image y fusión con ellos.
 Base edit LoRAs for MOSS-Image and merging with them.
 
-Un LoRA de edición se entrena encima de un LoRA de edición base (armV4 o chinoll), así que en
+Un LoRA de edición se entrena encima de un LoRA de edición base (armV5, armV4 o chinoll), así que en
 ComfyUI hacen falta los dos. fuse() los junta en un único LoRA estándar (claves diffusion_model.*,
 las del cargador de LoRA de ComfyUI), que se usa solo con Text Encode MOSS-Image Edit y el
 edit_format de su base.
@@ -20,10 +20,13 @@ from safetensors.torch import load_file, save_file
 
 # LoRAs de edición base; se fija la revisión probada. layout es la posición de las referencias en el
 # modelo (MOSSImageTransformer.reference_layout) y edit_format, la opción del nodo de ComfyUI.
-#   armV4: akhaliq/MOSS-Image-Edit-HQ (Apache-2.0), formato ai-toolkit: rank 192 en q/k/v y 64 en el
-#          resto, sin alpha (escala 1).
+#   armV5 / armV4: akhaliq/MOSS-Image-Edit-HQ (Apache-2.0), formato ai-toolkit: rank 192 en q/k/v y
+#          64 en el resto, sin alpha (escala 1). armV5 continúa armV4 con captions de escena completos.
 #   chinoll: chinoll/Moss-Image-Edit, rank 64, formato "moss-edit-lora" (alpha en adapter_config).
 EDIT_BASES = {
+    "armV5": {"repo": "akhaliq/MOSS-Image-Edit-HQ", "revision": "1580ad35a6d6fce71b3ccb07b12b5e4d0331ce6f",
+              "files": ("weights/armV5/armV5.safetensors",), "folder": os.path.join("LoRAs", "MOSS-Image-Edit-HQ"),
+              "mb": 495, "layout": "ai-toolkit", "edit_format": "ai-toolkit"},
     "armV4": {"repo": "akhaliq/MOSS-Image-Edit-HQ", "revision": "e67d778c32f20756dd9bd1fc2c1d0f06c3c34b42",
               "files": ("weights/armV4/armV4.safetensors",), "folder": os.path.join("LoRAs", "MOSS-Image-Edit-HQ"),
               "mb": 495, "layout": "ai-toolkit", "edit_format": "ai-toolkit"},
@@ -53,7 +56,7 @@ def base_layers(path, device="cpu"):
         config = json.loads(meta["adapter_config"])
         return {name: (weights[name + ".lora_A"], weights[name + ".lora_B"], spec["alpha"] / spec["rank"])
                 for name, spec in config["modules"].items()}
-    # ai-toolkit (armV4): diffusion_model.<capa>.lora_A.weight / .lora_B.weight; sin .alpha, escala 1.
+    # ai-toolkit (armV5, armV4): diffusion_model.<capa>.lora_A.weight / .lora_B.weight; sin .alpha, escala 1.
     layers = {}
     for k in weights:
         if k.endswith(".lora_A.weight"):
