@@ -1,9 +1,12 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AcademiaSD FLUX.2 Klein 9B LoRAlab</title>
+    <script src="/i18n.js"></script>
+    <script src="/notify.js"></script>
+    <script src="/loss_chart.js"></script>
 
     <!-- Favicon de la pestaña del navegador -->
     <link rel="icon" type="image/png" href="/assets/logo_128.png">
@@ -31,6 +34,17 @@
         /* Banner Superior Panorámico */
         .banner-container { width: 100%; max-height: 140px; overflow: hidden; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: #020617; border: 1px solid var(--panel-border); }
         .banner-img { width: 100%; height: 100%; max-height: 140px; object-fit: contain; display: block; }
+
+        /* Botón de vuelta al lanzador, bajo el título / back-to-launcher button, under the title */
+        .back-to-launcher {
+            display: inline-flex; align-items: center; gap: 6px; margin-top: 8px;
+            padding: 4px 12px; border-radius: 6px;
+            font-size: 0.78rem; font-weight: 600; line-height: 1; text-decoration: none;
+            color: var(--text-muted); background: #0f172a; border: 1px solid var(--panel-border);
+            transition: color 0.2s, border-color 0.2s;
+        }
+        .back-to-launcher svg { display: block; flex: 0 0 auto; }
+        .back-to-launcher:hover { color: #fff; border-color: var(--accent); }
 
         .header-content { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; width: 100%; }
         .logo-title { display: flex; align-items: center; gap: 15px; }
@@ -72,6 +86,24 @@
             .sidebar { display: grid; grid-template-columns: repeat(2, clamp(370px, 21vw, 440px)); align-items: start; width: auto; }
             .side-group { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
         }
+        /* Telefono en vertical / Phone portrait: la barra lateral tiene 440 px
+           fijos y la columna de consola + Dataset Manager quedaba aplastada en
+           una franja ilegible. Debajo de 960 px todo se apila a ancho completo.
+           The sidebar is a fixed 440 px, which crushed the console + Dataset
+           Manager column into an unreadable sliver. Below 960 px everything
+           stacks at full width. */
+        @media (max-width: 960px) {
+            body { padding: 10px; }
+            header { padding: 12px 14px; }
+            .main-grid { grid-template-columns: minmax(0, 1fr); }
+            .sidebar { width: 100%; }
+            .header-content { flex-direction: column; align-items: stretch; }
+            .logo-title { justify-content: center; text-align: center; }
+            .social-links { justify-content: center; }
+            .hardware-monitor { flex-wrap: wrap; }
+            .hw-card { flex: 1 1 140px; }
+            .panel { padding: 14px; }
+        }
         .panel { background: var(--panel-bg); border-radius: 12px; border: 1px solid var(--panel-border); padding: 20px; }
         
         /* Títulos desplegables / Collapsible Panels */
@@ -83,7 +115,7 @@
 
         .form-group { margin-bottom: 12px; }
         .form-group label { display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px; font-weight: 500; }
-        .form-group input, .form-group select, .form-group textarea { width: 100%; background: #0f172a; border: 1px solid var(--panel-border); color: #fff; padding: 8px 12px; border-radius: 6px; font-size: 0.9rem; outline: none; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; background: #0f172a; border: 1px solid var(--panel-border); color: #fff; padding: 8px 12px; border-radius: 6px; font-size: 0.9rem; outline: none; resize: vertical; }
         .form-group input[readonly] { background: #1a2332; color: #94a3b8; cursor: not-allowed; border-style: dashed; }
         .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--accent); }
         .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -194,7 +226,8 @@
             <div class="logo-title">
                 <div>
                     <h1>AcademiaSD FLUX.2 Klein 9B LoRAlab</h1>
-                    <span>Web GUI & Automation / Interfaz Web y Automatización</span>
+                    <span>Web GUI & Automation</span>
+                    <a id="back-to-launcher" class="back-to-launcher" href="#" title="Back to the launcher"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Back</a>
                 </div>
             </div>
 
@@ -209,23 +242,55 @@
             <!-- Hardware Monitor (RAM, VRAM, GPU Temp) -->
             <div class="hardware-monitor">
                 <div class="hw-card">
-                    <div class="label">RAM Usage / Uso RAM</div>
+                    <div class="label">RAM Usage</div>
                     <div class="value" id="ram-text">-- GB</div>
                     <div class="progress-bar-bg"><div class="progress-bar-fill" id="ram-bar"></div></div>
                 </div>
                 <div class="hw-card">
-                    <div class="label">VRAM Usage / Uso VRAM</div>
+                    <div class="label">VRAM Usage</div>
                     <div class="value" id="vram-text">-- GB</div>
                     <div class="progress-bar-bg"><div class="progress-bar-fill" id="vram-bar" style="background:#38bdf8;"></div></div>
                 </div>
                 <div class="hw-card">
-                    <div class="label">GPU Temp / Temp. GPU</div>
+                    <div class="label">GPU Temp</div>
                     <div class="value" id="gpu-temp-text">-- °C</div>
                     <div class="progress-bar-bg"><div class="progress-bar-fill" id="gpu-temp-bar" style="background:var(--success);"></div></div>
                 </div>
             </div>
         </div>
     </header>
+
+    <script>
+        // El botón «Back» vuelve al lanzador: si hay referrer (se llegó desde él, en la misma
+        // pestaña o a través de un proxy), history.back() deja la pestaña como estaba; sin
+        // referrer (arranque directo del .bat/.sh) se navega a la URL de /api/launcher-url, la
+        // única que se puede construir sin saber si hay un proxy delante.
+        // The "Back" button returns to the launcher: with a referrer (reached from it, same tab
+        // or through a proxy) history.back() leaves the tab as it was; without one (direct
+        // .bat/.sh run) it navigates to the URL from /api/launcher-url, the only one that can
+        // be built without knowing whether a proxy is in front.
+        (function () {
+            const b = document.getElementById('back-to-launcher');
+            if (!b) return;
+            let launcherUrl = '';
+            b.addEventListener('click', function (e) {
+                if (document.referrer && history.length > 1) {
+                    e.preventDefault();
+                    history.back();
+                } else if (document.referrer) {
+                    e.preventDefault();
+                    window.location.href = document.referrer;
+                } else if (launcherUrl) {
+                    e.preventDefault();
+                    window.location.href = launcherUrl;
+                }
+            });
+            fetch('/api/launcher-url')
+                .then(r => r.json())
+                .then(d => { if (d.url) { launcherUrl = d.url; b.href = d.url; } else b.remove(); })
+                .catch(() => b.remove());
+        })();
+    </script>
 
     <div class="main-grid">
         <!-- Sidebar: Settings -->
@@ -236,16 +301,16 @@
             <!-- 0. Hugging Face Token Panel (CERRADO POR DEFECTO) -->
             <div class="panel collapsed">
                 <div class="panel-title" onclick="togglePanel(this)">
-                    <span>Hugging Face Token (Optional / Opcional)</span>
+                    <span>Hugging Face Token (Optional)</span>
                     <span class="toggle-icon">▼</span>
                 </div>
                 <div class="panel-body">
                     <div class="form-group" style="margin-bottom: 8px;">
-                        <label>HF Token / Token de HF:</label>
+                        <label>HF Token:</label>
                         <input type="password" id="hf_token" value="" placeholder="hf_..." autocomplete="off">
                     </div>
                     <button type="button" class="btn btn-secondary btn-full" onclick="saveHfToken()">
-                        Save HF Token / Guardar HF Token
+                        Save HF Token
                     </button>
                 </div>
             </div>
@@ -253,70 +318,69 @@
             <!-- 1. Pre-Cache Settings Panel (ABIERTO POR DEFECTO) -->
             <div class="panel">
                 <div class="panel-title" onclick="togglePanel(this)">
-                    <span>1. Pre-Cache Settings / Config. Pre-Caché</span>
+                    <span>1. Pre-Cache Settings</span>
                     <span class="toggle-icon">▲</span>
                 </div>
                 <div class="panel-body">
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Project Name / Proyecto:</label>
-                            <input type="text" id="project_name" value="" placeholder="Ej: cherry2" oninput="updateProjectPaths()">
+                            <label>Project Name:</label>
+                            <input type="text" id="project_name" value="" placeholder="e.g. cherry2" oninput="updateProjectPaths()">
                         </div>
                         <div class="form-group">
-                            <label>Trigger Word / Palabra Clave:</label>
+                            <label>Trigger Word:</label>
                             <input type="text" id="trigger_word" value="">
                         </div>
                     </div>
 
                     <div class="form-group">
-                        <label>Dataset Path / Ruta del Dataset:</label>
+                        <label>Dataset Path:</label>
                         <div style="display:flex; gap:8px;">
                             <input type="text" id="dataset_path" value="./dataset" onchange="datasetPathChanged()">
-                            <button type="button" class="btn btn-secondary btn-sm" onclick="browseFolderNative('dataset')">Browse / Explorar</button>
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="browseFolderNative('dataset')">Browse</button>
                         </div>
                     </div>
 
                     <div class="form-group">
-                        <label title="Normal: one image + caption per sample. Edit: name_before / name_after pairs + instruction in name.txt. / Normal: una imagen + caption por muestra. Edición: pares nombre_before / nombre_after + instrucción en nombre.txt.">LoRA Type / Tipo de LoRA:</label>
+                        <label title="Normal: one image + caption per sample. Edit: name_before / name_after pairs + instruction in name.txt.">LoRA Type:</label>
                         <select id="lora_type" onchange="applyLoraType(true)">
-                            <option value="normal">Normal LoRA (image + caption / imagen + caption)</option>
-                            <option value="edit">Edit LoRA (before / after pairs / pares antes / después)</option>
-                            <option value="slider">Slider LoRA (dial: group_position images / imágenes grupo_posición)</option>
+                            <option value="normal">Normal LoRA (image + caption)</option>
+                            <option value="edit">Edit LoRA (before / after pairs)</option>
+                            <option value="slider">Slider LoRA (dial: group_position images)</option>
                         </select>
                     </div>
 
                     <!-- SLIDER (docs/SLIDERS.md): solo con LoRA Type = Slider -->
                     <div class="form-group" id="slider_precache_container" style="display:none; background:#0f172a; padding:10px; border-radius:8px; border:1px solid var(--panel-border);">
-                        <label title="Edit: the dial modifies a photo you give it (strength 0 = the photo as it is). Text-to-image: the dial modifies what the model generates (same prompt and seed, more or less of the concept). Changing it needs a new Pre-Cache (only the texts are encoded again). / Edición: el dial modifica una foto que le das (fuerza 0 = la foto tal cual). Texto a imagen: el dial modifica lo que genera el modelo (mismo prompt y semilla, más o menos del concepto). Cambiarlo pide un Pre-Caché nuevo (solo se vuelven a codificar los textos).">Slider Mode / Modo del Slider:</label>
+                        <label title="Edit: the dial modifies a photo you give it (strength 0 = the photo as it is). Text-to-image: the dial modifies what the model generates (same prompt and seed, more or less of the concept). Changing it needs a new Pre-Cache (only the texts are encoded again).">Slider Mode:</label>
                         <select id="slider_mode" onchange="applyLoraType()">
-                            <option value="edit">Edit: modifies a photo / Edición: modifica una foto</option>
-                            <option value="t2i">Text-to-image: modifies the generation / Texto a imagen: modifica la generación</option>
+                            <option value="edit">Edit: modifies a photo</option>
+                            <option value="t2i">Text-to-image: modifies the generation</option>
                         </select>
                         <span style="font-size:0.7rem; color:var(--text-muted); display:block; margin-top:6px;">
-                            Name the images <b>group_position</b>, position -100…100 (boca1_0, boca1_50, boca1_100; cara1_-100, cara1_0, cara1_100). Each group needs 2+ positions; missing ones are extrapolated. <b>group_anc</b> = anchor, an image that must not change. Optional <b>group.txt</b> caption that does not mention the concept.<br>
-                            Llama a las imágenes <b>grupo_posición</b>, posición -100…100 (boca1_0, boca1_50, boca1_100; cara1_-100, cara1_0, cara1_100). Cada grupo necesita 2 o más posiciones; las que falten se extrapolan. <b>grupo_anc</b> = anchor, una imagen que no debe cambiar. Caption opcional <b>grupo.txt</b> que no mencione el concepto.
+                            Name the images <b>group_position</b>, with the position as a percentage from -100 to 100 (belly1_0, belly1_50, belly1_90; face1_-100, face1_0, face1_100). Each group needs 2 or more positions; missing ones are extrapolated. <b>group_anc</b> = anchor, an image that must not change. Optional <b>group.txt</b> caption that does not mention the concept.
                         </span>
                     </div>
 
                     <div class="form-group">
-                        <label>Cache Folder / Carpeta Caché (Auto):</label>
-                        <input type="text" id="precache_cache_dir" value="./cached_data_klein9b" readonly title="Ruta informativa generada automáticamente">
+                        <label>Cache Folder (Auto):</label>
+                        <input type="text" id="precache_cache_dir" value="./Cache_Data/cached_data_klein9b" readonly title="Path generated automatically, for information">
                     </div>
 
                     <div class="form-group">
-                        <label>Resolution / Resolución (px²):</label>
+                        <label>Resolution (px²):</label>
                         <select id="target_area_select" onchange="syncResolution(this.value)">
                             <option value="262144">512 x 512 (262,144 px²)</option>
                             <option value="589824" selected>768 x 768 (589,824 px²)</option>
                             <option value="1048576">1024 x 1024 (1,048,576 px²)</option>
-                            <option value="custom">Custom / Personalizada</option>
+                            <option value="custom">Custom</option>
                         </select>
                         <input type="number" id="precache_target_area" value="589824" style="margin-top:6px; display:none;">
                     </div>
 
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Multiple / Múltiplo:</label>
+                            <label>Multiple:</label>
                             <select id="precache_multiple">
                                 <option value="16" selected>16</option>
                                 <option value="32">32</option>
@@ -324,7 +388,7 @@
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>Max Side / Lado Máx:</label>
+                            <label>Max Side:</label>
                             <input type="number" id="precache_max_side" value="1536">
                         </div>
                     </div>
@@ -333,21 +397,18 @@
                     <div class="btn-row" style="margin-top:12px;">
                         <button type="button" class="btn btn-secondary btn-tall" onclick="triggerLoadJson('precache')">
                             <span class="main-text">Load JSON</span>
-                            <span class="sub-text">Cargar JSON</span>
                         </button>
                         <button type="button" class="btn btn-secondary btn-tall" onclick="savePrecacheSettings()">
                             <span class="main-text">Save JSON</span>
-                            <span class="sub-text">Guardar JSON</span>
                         </button>
                     </div>
 
                     <button type="button" class="btn btn-primary btn-tall btn-full" id="btn-precache" onclick="runPrecache()" style="margin-top:8px;">
                         <span class="main-text">Start Pre-Cache</span>
-                        <span class="sub-text">Iniciar Pre-Caché</span>
                     </button>
                     <button type="button" class="btn btn-danger btn-sm btn-full" onclick="deleteProjectData('precache')" style="margin-top:6px;"
-                            title="Empties this project's pre-cache folder (latents and embeddings). The dataset is NOT touched. / Vacía la carpeta de pre-caché de este proyecto (latentes y embeddings). El dataset NO se toca.">
-                        Delete Pre-Cache / Borrar Pre-Caché
+                            title="Empties this project's pre-cache folder (latents and embeddings). The dataset is NOT touched.">
+                        Delete Pre-Cache
                     </button>
                 </div>
             </div>
@@ -358,35 +419,34 @@
             <!-- 3. Export to WebUI Models Panel (ABIERTO POR DEFECTO) -->
             <div class="panel">
                 <div class="panel-title" onclick="togglePanel(this)">
-                    <span>3. Export to WebUI / Enviar a Models</span>
+                    <span>3. Export to WebUI</span>
                     <span class="toggle-icon">▲</span>
                 </div>
                 
                 <div class="panel-body">
                     <div class="form-group">
-                        <label>Final LoRA Filename / Nombre Final (.safetensors):</label>
+                        <label>Final LoRA Filename (.safetensors):</label>
                         <input type="text" id="export_final_name" value="klein9b_lora.safetensors" placeholder="mi_lora_klein9b.safetensors">
                     </div>
 
                     <div class="form-group">
-                        <label>UI LoRA Folder / Carpeta models/lora (ComfyUI / Forge / A1111):</label>
+                        <label>UI LoRA Folder (ComfyUI / Forge / A1111):</label>
                         <div style="display:flex; gap:8px;">
                             <input type="text" id="export_models_dir" value="" placeholder="C:/ComfyUI/models/loras">
-                            <button type="button" class="btn btn-secondary btn-sm" onclick="browseFolderNative('export')">Browse / Explorar</button>
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="browseFolderNative('export')">Browse</button>
                         </div>
                         <button type="button" class="btn btn-secondary btn-sm btn-full" onclick="saveExportPath()" style="margin-top:6px;"
-                                title="Saves this folder for all the LoRAlab trainers: they all open with it filled in. / Guarda esta carpeta para todos los entrenadores del LoRAlab: todos se abren con ella rellenada.">
-                            Save Path / Guardar Ruta
+                                title="Saves this folder for all the LoRAlab trainers: they all open with it filled in.">
+                            Save Path
                         </button>
                     </div>
 
                     <button type="button" class="btn btn-warning btn-tall btn-full" onclick="sendToModels()" style="margin-top:5px;">
                         <span class="main-text">🚀 Send to Models</span>
-                        <span class="sub-text">Enviar a Models</span>
                     </button>
                     <button type="button" class="btn btn-secondary btn-sm btn-full" onclick="ftDownload()" style="margin-top:6px;"
-                            title="Downloads the LoRA to the device you are browsing from (another PC, RunPod...). / Descarga el LoRA al equipo desde el que navegas (otro PC, RunPod...).">
-                        ⬇ Download LoRA / Descargar LoRA
+                            title="Downloads the LoRA to the device you are browsing from (another PC, RunPod...).">
+                        ⬇ Download LoRA
                     </button>
                 </div>
             </div>
@@ -399,7 +459,7 @@
             <div class="panel">
                 <div class="panel-title" onclick="togglePanel(this)">
                     <div style="display:flex; align-items:center; gap:8px;">
-                        <span>2. Training Settings / Config. Entrenamiento</span>
+                        <span>2. Training Settings</span>
                         <span id="checkpoint-badge" style="font-size:0.75rem; color:#38bdf8;"></span>
                     </div>
                     <span class="toggle-icon">▲</span>
@@ -407,18 +467,39 @@
                 
                 <div class="panel-body">
                     <div class="form-group">
-                        <label>Output Dir / Carpeta Salida (Auto):</label>
-                        <input type="text" id="train_output_dir" value="./klein9b_lora_output" readonly title="Ruta informativa generada automáticamente">
+                        <label>Output Dir (Auto):</label>
+                        <input type="text" id="train_output_dir" value="./Outputs/klein9b_lora_output" readonly title="Path generated automatically, for information">
                     </div>
 
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Total Steps / Pasos Totales:</label>
+                            <label>Total Steps:</label>
                             <input type="number" id="train_total_steps" value="1000">
                         </div>
                         <div class="form-group">
-                            <label>Learning Rate / LR:</label>
+                            <label>Learning Rate:</label>
                             <input type="text" id="train_lr" value="0.0003">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group" title="How the learning rate changes during training. cosine: rises during the warmup, then eases down to 10% of the LR. constant: the same LR from the first step to the last. constant_with_warmup: rises during the warmup, then stays. linear: rises during the warmup, then goes down in a straight line to 10%. cosine_with_restarts: like cosine, but it climbs back up and repeats the curve as many times as Cycles.">
+                            <label>LR Scheduler:</label>
+                            <select id="train_lr_scheduler" class="no-i18n" onchange="updateLrSchedulerFields()">
+                                <option value="cosine" selected>cosine</option>
+                                <option value="constant">constant</option>
+                                <option value="constant_with_warmup">constant_with_warmup</option>
+                                <option value="linear">linear</option>
+                                <option value="cosine_with_restarts">cosine_with_restarts</option>
+                            </select>
+                        </div>
+                        <div class="form-group" title="Steps in which the LR rises from 0 to its value at the start of the training. Ignored with constant.">
+                            <label>Warmup Steps:</label>
+                            <input type="number" id="train_warmup_steps" value="100" min="0">
+                        </div>
+                        <div class="form-group" id="train_lr_cycles_group" title="How many times cosine_with_restarts repeats the cosine curve." style="display: none;">
+                            <label>Cycles:</label>
+                            <input type="number" id="train_lr_cycles" value="3" min="1">
                         </div>
                     </div>
 
@@ -433,23 +514,53 @@
                         </div>
                     </div>
 
+                    <div class="form-row">
+                        <div class="form-group" title="Rank-stabilized LoRA: scales the LoRA by alpha/√rank instead of alpha/rank, so higher ranks keep learning instead of fading out. Ticking it lowers alpha to keep the same strength; raise it for a stronger effect. The exported LoRA is a standard one (its alpha is converted) and Send to Models adds _rs to its name. Fixed for the whole training: to change it, start a new one.">
+                            <label style="display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer;" for="train_use_rslora">
+                                <input type="checkbox" id="train_use_rslora" onchange="toggleRsLora(this.checked)" style="width: 18px; height: 18px; cursor: pointer;">
+                                rsLoRA
+                            </label>
+                        </div>
+                        <div class="form-group" title="LoRA+: the B matrix of every layer learns 16 times faster than A. It usually reaches the same quality in fewer steps; if the training looks unstable or burns early, lower the learning rate. The exported file is a normal LoRA and Send to Models adds _plus to its name. Fixed for the whole training: to change it, start a new one.">
+                            <label style="display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer;" for="train_use_loraplus">
+                                <input type="checkbox" id="train_use_loraplus" onchange="updateFinalNameSuffix()" style="width: 18px; height: 18px; cursor: pointer;">
+                                LoRA+
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group" title="LoKr (LyCORIS): each layer learns a Kronecker product w1 ⊗ w2 instead of B·A. The file is far smaller (about 3 MB instead of 40 MB at rank 8) and it often works well for characters with small datasets, but it is more sensitive to the learning rate. Rank and alpha apply to w2. ComfyUI and Forge load it like any LoRA, and Send to Models adds _lokr to its name. rsLoRA and LoRA+ are for LoRA only and turn off. Fixed for the whole training: to change it, start a new one.">
+                            <label style="display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer;" for="train_use_lokr">
+                                <input type="checkbox" id="train_use_lokr" onchange="toggleLokr(this.checked)" style="width: 18px; height: 18px; cursor: pointer;">
+                                LoKr
+                            </label>
+                        </div>
+                        <div class="form-group" title="LoKr factor: how each layer is split. Higher = smaller file and less capacity; lower = more capacity. 16 is the usual value; try 8 if the LoKr learns too little.">
+                            <label style="display: flex; align-items: center; gap: 8px; margin: 0;">
+                                <span>Factor:</span>
+                                <input type="number" id="train_lokr_factor" value="16" min="2" step="1" disabled style="padding: 3px 8px; width: 80px;">
+                            </label>
+                        </div>
+                    </div>
+
                     <div class="form-group">
-                        <label>LoRA Targets / Capas LoRA:</label>
+                        <label>LoRA Targets:</label>
                         <select id="train_lora_targets"
-                                title="Blocks trains attention and MLP of the 8 double and 24 single blocks: enough for characters, objects and styles, and it combines well with other LoRAs such as the Turbo LoRA. All also trains the shared modulation, timestep and input/output layers; it can clash with distilled LoRAs. / Blocks entrena la atención y el MLP de los 8 bloques dobles y los 24 simples: suficiente para personajes, objetos y estilos, y combina bien con otros LoRAs como el Turbo. All entrena además la modulación compartida, el timestep y las capas de entrada/salida; puede chocar con LoRAs destilados.">
-                            <option value="blocks" selected>Blocks: attention + MLP (recommended / recomendado)</option>
-                            <option value="all">All linear layers / Todas las capas</option>
+                                title="Blocks trains attention and MLP of the 8 double and 24 single blocks: enough for characters, objects and styles, and it combines well with other LoRAs such as the Turbo LoRA. All also trains the shared modulation, timestep and input/output layers; it can clash with distilled LoRAs.">
+                            <option value="blocks" selected>Blocks: attention + MLP (recommended)</option>
+                            <option value="all">All linear layers</option>
                         </select>
                     </div>
 
                     <!-- SLIDER: solo con LoRA Type = Slider -->
                     <div class="form-row" id="slider_train_container" style="display:none;">
                         <div class="form-group">
-                            <label title="ComfyUI strength that gives position 100 of the dataset: 5 means 100 = 5, 50 = 2.5, -100 = -5. A strength change of 5 always moves 100 positions. / Fuerza en ComfyUI que da la posición 100 del dataset: con 5, 100 = 5, 50 = 2,5, -100 = -5. Un cambio de fuerza de 5 siempre recorre 100 posiciones.">Strength at 100% / Fuerza al 100%:</label>
+                            <label title="ComfyUI strength that gives position 100 of the dataset: with 5, 100 = 5, 50 = 2.5, -100 = -5. A strength change of 5 always moves 100 positions.">Strength at 100%:</label>
                             <input type="number" step="0.5" min="0.5" id="train_slider_strength_100" value="5">
                         </div>
                         <div class="form-group">
-                            <label for="train_slider_ultra" title="LoRA only on the 8 double blocks (text-image fusion) and the first 8 single blocks (composition), leaving fine detail alone: the dial holds much higher strengths. Best result of the prototype. / LoRA solo en los 8 bloques dobles (fusión texto-imagen) y los 8 primeros simples (composición), sin tocar el detalle fino: el dial aguanta fuerzas mucho más altas. El mejor resultado del prototipo.">Ultra (composition blocks / bloques de composición):</label>
+                            <label for="train_slider_ultra" title="LoRA only on the 8 double blocks (text-image fusion) and the first 8 single blocks (composition), leaving fine detail alone: the dial holds much higher strengths. Best result of the prototype.">Ultra (composition blocks):</label>
                             <input type="checkbox" id="train_slider_ultra" checked style="width:18px; height:18px; cursor:pointer;">
                         </div>
                     </div>
@@ -467,11 +578,11 @@
 
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Save Every / Guardar Cada:</label>
+                            <label>Save Every:</label>
                             <input type="number" id="train_save_every" value="100">
                         </div>
                         <div class="form-group">
-                            <label>Seed (-1 o 0 = Random):</label>
+                            <label>Seed (-1 or 0 = Random):</label>
                             <input type="number" id="train_seed" value="42">
                         </div>
                     </div>
@@ -480,11 +591,9 @@
                     <div class="btn-row" style="margin-top:12px;">
                         <button type="button" class="btn btn-secondary btn-tall" onclick="triggerLoadJson('train')">
                             <span class="main-text">Load JSON</span>
-                            <span class="sub-text">Cargar JSON</span>
                         </button>
                         <button type="button" class="btn btn-secondary btn-tall" onclick="saveTrainSettings()">
                             <span class="main-text">Save JSON</span>
-                            <span class="sub-text">Guardar JSON</span>
                         </button>
                     </div>
 
@@ -492,17 +601,15 @@
                     <div class="btn-row" style="margin-top:8px;">
                         <button type="button" class="btn btn-success btn-tall" id="btn-train" onclick="runTrain()">
                             <span class="main-text">Start / Resume</span>
-                            <span class="sub-text">Iniciar / Reanudar</span>
                         </button>
                         <button type="button" class="btn btn-danger btn-tall" id="btn-stop" onclick="stopScript()" disabled>
                             <span class="main-text">Stop Training</span>
-                            <span class="sub-text">Detener</span>
                         </button>
                     </div>
                     <div id="encode-status" style="display:none; margin-top:8px; padding:8px 10px; border:1px solid var(--warning); border-radius:6px; color:var(--warning); font-size:0.85rem;"></div>
                     <button type="button" class="btn btn-danger btn-sm btn-full" onclick="deleteProjectData('training')" style="margin-top:6px;"
-                            title="Empties this project's output folder: LoRA checkpoints, resume point and previews. The pre-cache and the dataset are NOT touched. / Vacía la carpeta de salida de este proyecto: checkpoints del LoRA, punto de reanudación y previews. La pre-caché y el dataset NO se tocan.">
-                        Delete Training / Borrar Entrenamiento
+                            title="Empties this project's output folder: LoRA checkpoints, resume point and previews. The pre-cache and the dataset are NOT touched.">
+                        Delete Training
                     </button>
                 </div>
             </div>
@@ -512,7 +619,7 @@
             <!-- 2b. Previews del entrenamiento (CERRADO POR DEFECTO): se guardan en el mismo train_settings.json -->
             <div class="panel collapsed">
                 <div class="panel-title" onclick="togglePanel(this)">
-                    <span>2b. Training Previews / Previews</span>
+                    <span>2b. Training Previews</span>
                     <span class="toggle-icon">▼</span>
                 </div>
 
@@ -526,70 +633,71 @@
                             <input type="checkbox" id="train_use_turbo" onchange="toggleTurboMode(this.checked)" style="width: 18px; height: 18px; cursor: pointer;">
                         </div>
                         <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
-                            <label style="font-size:0.75rem; color:var(--text-muted); margin:0; white-space:nowrap;">Strength / Potencia:</label>
+                            <label style="font-size:0.75rem; color:var(--text-muted); margin:0; white-space:nowrap;">Strength:</label>
                             <input type="number" step="0.05" id="train_turbo_strength" value="1.0" style="padding:3px 8px; font-size:0.8rem; width:80px;">
                         </div>
                         <span style="font-size: 0.7rem; color: var(--text-muted); display: block; margin-top: 4px;">
-                            kalle07/FLUX.2-klein-9B-turbo-lora-set (rank 64, ~350 MB, downloaded on first use / se descarga la primera vez)
+                            kalle07/FLUX.2-klein-9B-turbo-lora-set (rank 64, ~350 MB, downloaded on first use)
                         </span>
                     </div>
 
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Preview Every / Preview Cada:</label>
+                            <label>Preview Every:</label>
                             <input type="number" id="train_preview_every" value="0">
                         </div>
                         <div class="form-group">
-                            <label>Caption Mode / Modo Sample:</label>
+                            <label>Caption Mode:</label>
                             <select id="train_preview_caption_mode" onchange="toggleCaptionMode(this.value)">
-                                <option value="first">First / Primero</option>
-                                <option value="random">Random / Aleatorio</option>
-                                <option value="rotate4">Rotate 4 / Rotar 4</option>
-                                <option value="custom">Custom / Prompt Manual</option>
+                                <option value="first">First</option>
+                                <option value="random">Random</option>
+                                <option value="rotate4">Rotate 4</option>
+                                <option value="custom">Custom prompt</option>
                             </select>
                         </div>
                     </div>
 
                     <!-- CAMPO PROMPT MANUAL (SE MUESTRA SOLO EN MODO CUSTOM) -->
                     <div class="form-group" id="custom_prompt_container" style="display:none; margin-top: 4px;">
-                        <label style="color:#38bdf8; font-weight:600;">Custom Preview Prompt / Prompt Manual:</label>
-                        <textarea id="train_preview_custom_prompt" rows="2" placeholder="Escribe aquí tu prompt personalizado para la previsualización..."></textarea>
+                        <label style="color:#38bdf8; font-weight:600;">Custom Preview Prompt:</label>
+                        <textarea id="train_preview_custom_prompt" rows="2" placeholder="Write your custom prompt for the preview here..."></textarea>
                         <div id="edit_image_container" style="display:none;">
                         <label style="color:#38bdf8; font-weight:600; margin-top:6px;"
-                               title="Edit datasets (name_before / name_after) only. The preview applies the instruction above to this image. Use one that is NOT in the dataset: it is the only way to see whether the effect generalizes. Empty = the 'before' of the first pair. Edit sliders: the dial strip applies to this image (empty = the first image of the first group). Encoded by Pre-Cache. / Solo datasets de edición (nombre_before / nombre_after) y sliders de edición. La preview aplica la instrucción de arriba a esta imagen. Usa una que NO esté en el dataset: es la única forma de ver si el efecto generaliza. Vacío = el 'antes' del primer par. Sliders de edición: la tira del dial se aplica a esta imagen (vacío = la primera imagen del primer grupo). Lo codifica el Pre-Caché.">
-                            Edit Preview Image (before) / Imagen de antes (edición):</label>
-                        <div style="display:flex; gap:8px;">
-                            <input type="text" id="preview_edit_image" value="" placeholder="(empty = first pair / vacío = primer par)">
-                            <button type="button" class="btn btn-secondary btn-sm" onclick="browseImageNative()">Browse / Explorar</button>
+                               title="Edit datasets (name_before / name_after) only. Each row maps to &quot;image N&quot; in the prompt, in order (FLUX addresses references by position). Use images that are NOT in the dataset: it is the only way to see whether the effect generalizes. Up to 4 references. Empty = the 'before' of the first pair. Edit sliders: the dial strip edits image 1 (empty = the first image of the first group). Encoded by Pre-Cache.">
+                            Edit Preview Reference Images:</label>
+                        <div id="preview_edit_image_list"></div>
+                        <button type="button" id="preview_edit_add_btn" class="btn btn-secondary btn-sm" onclick="addPreviewEditImage()"
+                                style="margin-top:6px;">+ Add image</button>
+                        <div style="font-size:0.72rem; color:var(--text-muted); margin-top:4px; line-height:1.35;">
+                            Image 1 = the 'before'. Refer to references as "image 1", "image 2"... in the prompt. Up to 4 references on FLUX.2 [klein]. The output size follows image 1, scaled down when you add more references to keep the preview within VRAM. Empty = the 'before' of the first pair. Encoded by Pre-Cache.
                         </div>
                         </div>
                     </div>
 
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Preview Steps / Pasos Preview:</label>
+                            <label>Preview Steps:</label>
                             <input type="number" id="train_preview_steps" value="28">
                         </div>
                         <div class="form-group">
-                            <label>Preview CFG / CFG Preview:</label>
+                            <label>Preview CFG:</label>
                             <input type="number" step="0.1" id="train_preview_cfg" value="4">
                         </div>
                     </div>
 
                     <div class="form-group">
-                        <label title="Training = the size of the sample image in the pre-cache (in edit LoRAs, the size of the before image). 768 / 1024 keep its proportions and show what you will get in ComfyUI, even when training at 512. 1024 takes about 4 times longer than 512. / Training = el tamaño de la imagen de muestra en la pre-caché (en LoRAs de edición, el de la imagen de antes). 768 / 1024 mantienen su proporción y muestran lo que obtendrás en ComfyUI, aunque entrenes a 512. 1024 tarda unas 4 veces más que 512.">Preview Size / Tamaño Preview:</label>
+                        <label title="Training = the size of the sample image in the pre-cache (in edit LoRAs, the size of the before image). 768 / 1024 keep its proportions and show what you will get in ComfyUI, even when training at 512. 1024 takes about 4 times longer than 512.">Preview Size:</label>
                         <select id="train_preview_size">
-                            <option value="0" selected>Training / Entrenamiento</option>
-                            <option value="768">768 x 768 (area / área)</option>
-                            <option value="1024">1024 x 1024 (area / área)</option>
+                            <option value="0" selected>Training</option>
+                            <option value="768">768 x 768 (area)</option>
+                            <option value="1024">1024 x 1024 (area)</option>
                         </select>
                     </div>
 
                     <!-- Mismo guardado que Training: durante el entrenamiento se aplica en el siguiente paso -->
                     <button type="button" class="btn btn-secondary btn-tall btn-full" onclick="saveTrainSettings()" style="margin-top:12px;"
-                            title="Saves the training settings, previews included. While training, they apply on the next step. / Guarda los ajustes de entrenamiento, previews incluidas. Durante el entrenamiento se aplican en el siguiente paso.">
+                            title="Saves the training settings, previews included. While training, they apply on the next step.">
                         <span class="main-text">Save JSON</span>
-                        <span class="sub-text">Guardar JSON</span>
                     </button>
                 </div>
             </div>
@@ -600,130 +708,130 @@
         <!-- Right Column: Terminal, Dataset Inspector & Previews -->
         <div class="panel console-container">
             <div class="panel-title" style="cursor:default;">
-                <span>Console Output / Terminal de Consola</span>
-                <span class="status-badge badge-idle" id="status-badge">IDLE / INACTIVO</span>
+                <span>Console Output</span>
+                <span class="status-badge badge-idle" id="status-badge">IDLE</span>
             </div>
             
-            <div class="terminal" id="terminal"></div>
+            <div class="terminal no-i18n" id="terminal"></div>
 
             <!-- Dataset Manager -->
             <div>
                 <div class="panel-title ds-title" style="cursor:default;">
-                    <span>Dataset Manager / Gestor (<span id="ds-count">0</span> img, <span id="ds-txt-count">0</span> txt)</span>
+                    <span><span>Dataset Manager</span> (<span id="ds-count" class="no-i18n">0</span> img, <span id="ds-txt-count" class="no-i18n">0</span> txt)</span>
                     <div class="ds-toolbar">
-                        <input type="text" class="ds-search" id="ds-search" placeholder="Search / Buscar..." oninput="filterDatasetGrid()">
+                        <input type="text" class="ds-search" id="ds-search" placeholder="Search..." oninput="filterDatasetGrid()">
                         <input type="file" id="ds-upload" multiple hidden>
                         <button type="button" class="btn btn-primary btn-sm" id="btn-ds-upload" onclick="ftUpload()"
-                                title="Uploads files or a .zip into the dataset folder (you can also drag them here). Useful from another device or RunPod. / Sube archivos o un .zip a la carpeta del dataset (también puedes arrastrarlos aquí). Útil desde otro equipo o RunPod.">⬆ Upload / Subir</button>
-                        <button type="button" class="btn btn-secondary btn-sm" onclick="setGridMode('compact')">Compact / Pequeño</button>
+                                title="Uploads files or a .zip into the dataset folder (you can also drag them here). Useful from another device or RunPod.">⬆ Upload</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="setGridMode('compact')">Compact</button>
                         <button type="button" class="btn btn-secondary btn-sm" onclick="setGridMode('normal')">Normal</button>
-                        <button type="button" class="btn btn-secondary btn-sm" onclick="setGridMode('large')">Expand / Grande</button>
-                        <button type="button" class="btn btn-secondary btn-sm" id="btn-toggle-ds" onclick="toggleDatasetGrid()">Hide / Ocultar</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="setGridMode('large')">Expand</button>
+                        <button type="button" class="btn btn-secondary btn-sm" id="btn-toggle-ds" onclick="toggleDatasetGrid()">Hide</button>
                         <select class="ds-mode-select" id="ds-common-mode"
-                                title="What to do with the common text. Append adds it at the end of every caption (twice does not duplicate it), Replace writes only this text, Remove takes it out of every caption (undoes a wrong trigger). / Qué hacer con el texto común. Añadir lo pone al final de cada caption (dos veces no lo duplica), Reemplazar escribe solo este texto, Quitar lo elimina de todos los captions (deshace un trigger equivocado).">
-                            <option value="append">Append / Añadir</option>
-                            <option value="replace">Replace / Reemplazar</option>
-                            <option value="remove">Remove / Quitar</option>
+                                title="What to do with the common text. Append adds it at the end of every caption (twice does not duplicate it), Replace writes only this text, Remove takes it out of every caption (undoes a wrong trigger).">
+                            <option value="append">Append</option>
+                            <option value="replace">Replace</option>
+                            <option value="remove">Remove</option>
                         </select>
                         <input type="text" class="ds-search" id="ds-common-caption" style="min-width:220px;"
-                               placeholder="Common text / Texto común (optional / opcional)"
-                               title="Leave it empty and Apply to All only puts the trigger word first where it is missing. / Déjalo vacío y Aplicar a todos solo pone la palabra clave al principio donde falte.">
-                        <button type="button" class="btn btn-warning btn-sm" onclick="addTriggerToAllCaptions()">Apply to All / Aplicar a todos</button>
+                               placeholder="Common text (optional)"
+                               title="Leave it empty and Apply to All only puts the trigger word first where it is missing.">
+                        <button type="button" class="btn btn-warning btn-sm" onclick="addTriggerToAllCaptions()">Apply to All</button>
                         <button type="button" class="btn btn-danger btn-sm" onclick="clearAllCaptions()"
-                                title="Deletes the .txt of every image. There is no undo. / Borra el .txt de todas las imágenes. No hay deshacer.">Clear Captions / Borrar</button>
+                                title="Deletes the .txt of every image. There is no undo.">Clear Captions</button>
                         <button type="button" class="btn btn-danger btn-sm" onclick="clearDataset()"
-                                title="Deletes every image and .txt of the dataset folder (subfolders are kept). There is no undo. / Borra todas las imágenes y .txt de la carpeta del dataset (las subcarpetas se conservan). No hay deshacer.">Clear Dataset / Vaciar Dataset</button>
-                        <button type="button" class="btn btn-secondary btn-sm" onclick="loadDatasetInfo()">Refresh / Actualizar</button>
+                                title="Deletes every file of the dataset folder and its .txt captions (subfolders are kept). There is no undo.">Clear Dataset</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="loadDatasetInfo()">Refresh</button>
                     </div>
                 </div>
 
                 <!-- Auto-caption con Qwen3-VL-8B NF4: el captioner compartido con LTX-2.3, Z-Image y Anima. -->
                 <div class="ds-caption-bar" id="caption-bar">
                     <button type="button" class="btn btn-primary btn-sm" id="btn-caption" onclick="runCaption()"
-                            title="Writes one .txt per image with Qwen3-VL-8B (NF4, ~5.5 GB VRAM), with the trigger word first. Shared with LTX-2.3, Z-Image and Anima: the first time it downloads ~5 GB. / Escribe un .txt por imagen con Qwen3-VL-8B (NF4, ~5.5 GB de VRAM), con la palabra clave delante. Compartido con LTX-2.3, Z-Image y Anima: la primera vez descarga ~5 GB.">
-                        <span id="btn-caption-label">Create Captions / Crear Captions</span>
+                            title="Writes one .txt per image with Qwen3-VL-8B (NF4, ~5.5 GB VRAM), with the trigger word first. Shared with LTX-2.3, Z-Image and Anima: the first time it downloads ~5 GB.">
+                        <span id="btn-caption-label">Create Captions</span>
                     </button>
-                    <select class="ds-mode-select" id="caption_mode" onchange="switchCaptionMode()"
-                            title="Normal: one description per image, for characters, objects and styles. Edit: one imperative instruction per name_before / name_after pair, saved as name.txt. Each mode keeps its own prompt. / Normal: una descripción por imagen, para personajes, objetos y estilos. Edit: una instrucción en imperativo por cada par nombre_before / nombre_after, guardada como nombre.txt. Cada modo guarda su propio prompt.">
+                    <select class="ds-mode-select" id="caption_mode" onchange="switchCaptionMode(); syncLoraType()"
+                            title="Normal: one description per image, for characters, objects and styles. Edit: one imperative instruction per name_before / name_after pair, saved as name.txt. Each mode keeps its own prompt.">
                         <option value="normal">Normal (character / object / style)</option>
                         <option value="edit">Edit (before → after)</option>
                     </select>
-                    <span class="ds-step-hint">Qwen3-VL-8B · before Pre-Cache / antes del Pre-Caché</span>
-                    <label class="ds-inline-label" title="Off = only images with no caption are processed. / Desactivado = solo se procesan las imágenes sin caption.">
+                    <span class="ds-step-hint">Qwen3-VL-8B · before Pre-Cache</span>
+                    <label class="ds-inline-label" title="Off = only images with no caption are processed.">
                         <input type="checkbox" id="caption_overwrite" checked>
-                        Overwrite / Rehacer
+                        Overwrite
                     </label>
                     <textarea class="ds-search ds-caption-prompt" id="caption_prompt_text" rows="4"
-                              placeholder="Prompt for the captioner / Prompt para el generador"></textarea>
+                              placeholder="Prompt for the captioner"></textarea>
                 </div>
 
                 <!-- Generador de datasets sintéticos para sliders (docs/SLIDERS.md): sustituye al auto-caption con LoRA Type = Slider. -->
                 <div class="ds-caption-bar" id="slidergen-bar" style="display:none;">
                     <!-- Paso 1: describir el slider en cualquier idioma; Qwen3-VL-8B escribe los prompts detallados en inglés. -->
-                    <input type="text" class="ds-search sg-wide" id="sg_effect" placeholder="Effect / Efecto: Control de la longitud del pelo">
-                    <input type="text" class="ds-search sg-half" id="sg_max_text" placeholder="Maximum / Máximo (+5): El individuo tiene una larga cabellera">
-                    <input type="text" class="ds-search sg-half" id="sg_min_text" placeholder="Minimum / Mínimo (-5), optional / opcional: El individuo está totalmente calvo">
+                    <input type="text" class="ds-search sg-wide" id="sg_effect" placeholder="Effect: Hair length control">
+                    <input type="text" class="ds-search sg-half" id="sg_max_text" placeholder="Maximum (+5): The person has very long hair">
+                    <input type="text" class="ds-search sg-half" id="sg_min_text" placeholder="Minimum (-5), optional: The person is completely bald">
                     <button type="button" class="btn btn-warning btn-sm" id="btn-sgprompts" onclick="runSliderPrompts()"
-                            title="Qwen3-VL-8B (the auto-caption model, ~5.5 GB VRAM) turns these three fields, in any language, into the detailed English prompts below. Review and edit them before generating. Leave the minimum empty for a one-sided slider (0 = the normal state). / Qwen3-VL-8B (el modelo del auto-caption, ~5,5 GB de VRAM) convierte estos tres campos, en cualquier idioma, en los prompts detallados en inglés de abajo. Revísalos y edítalos antes de generar. Deja el mínimo vacío para un slider de un solo lado (0 = el estado normal).">
-                        ✍ Write prompts / Escribir prompts
+                            title="Qwen3-VL-8B (the auto-caption model, ~5.5 GB VRAM) turns these three fields, in any language, into the detailed English prompts below. Review and edit them before generating. Leave the minimum empty for a one-sided slider (0 = the normal state).">
+                        ✍ Write prompts
                     </button>
-                    <span class="ds-step-hint">Detailed prompts (editable) / Prompts detallados (editables):</span>
+                    <span class="ds-step-hint">Detailed prompts (editable):</span>
                     <span style="flex:1 1 100%; height:0;"></span>
                     <button type="button" class="btn btn-primary btn-sm" id="btn-slidergen" onclick="runSliderGen()"
-                            title="Writes a slider dataset (group_position) into the dataset folder with an edit model: one base image per group and one edit towards each position you fill in, plus anchors. If stopped, running it again continues where it left off. / Escribe un dataset de slider (grupo_posición) en la carpeta del dataset con un modelo de edición: una imagen base por grupo y una edición hacia cada posición que rellenes, más anchors. Si se detiene, al relanzarlo sigue donde lo dejó.">
-                        Generate Pairs / Generar Pares
+                            title="Writes a slider dataset (group_position) into the dataset folder with an edit model: one base image per group and one edit towards each position you fill in, plus anchors. If stopped, running it again continues where it left off.">
+                        Generate Pairs
                     </button>
-                    <select class="ds-mode-select" id="sg_engine" title="Model that generates the dataset. The dataset works for any trainer. / Modelo que genera el dataset. El dataset sirve para cualquier entrenador.">
-                        <option value="klein9b">FLUX.2 Klein 9B (Turbo, 4 steps / pasos)</option>
-                        <option value="qwenimage21">Qwen-Image 2.1 (Turbo, 4 steps / pasos)</option>
+                    <select class="ds-mode-select" id="sg_engine" title="Model that generates the dataset. The dataset works for any trainer.">
+                        <option value="klein9b">FLUX.2 Klein 9B (Turbo, 4 steps)</option>
+                        <option value="qwenimage21">Qwen-Image 2.1 (Turbo, 4 steps)</option>
                     </select>
                     <select class="ds-mode-select" id="sg_base"
-                            title="Generate: the model creates the base images (position 0) with varied people, places and light. Mine: your images named group_0 are the bases, and only the other positions are generated. / Generar: el modelo crea las imágenes base (posición 0) con personas, lugares y luces variados. Mías: tus imágenes grupo_0 son las bases y solo se generan las demás posiciones.">
-                        <option value="generate">Base: generate / Base: generar</option>
-                        <option value="mine">Base: my group_0 images / Base: mis imágenes grupo_0</option>
+                            title="Generate: the model creates the base images (position 0) with varied people, places and light. Mine: your images named group_0 are the bases, and only the other positions are generated.">
+                        <option value="generate">Base: generate</option>
+                        <option value="mine">Base: my group_0 images</option>
                     </select>
-                    <label class="ds-inline-label">Groups / Grupos <input type="number" class="sg-num" id="sg_people" value="24" min="1" max="200"></label>
-                    <label class="ds-inline-label" title="Adds a different person (age, sex, origin) to each base prompt. Turn it off when the subject is not a person. / Añade una persona distinta (edad, sexo, origen) a cada prompt base. Desactívalo si el sujeto no es una persona.">
-                        <input type="checkbox" id="sg_vary_people" checked> Vary people / Variar personas</label>
-                    <label class="ds-inline-label" title="Adds a different hairstyle to each base prompt. Turn it off for hair sliders, so the hair of the bases is the one written in Position 0. / Añade un peinado distinto a cada prompt base. Desactívalo en sliders de pelo, para que el pelo de las bases sea el que escribas en Posición 0.">
-                        <input type="checkbox" id="sg_vary_hair" checked> Vary hair / Variar pelo</label>
-                    <label class="ds-inline-label" title="Scenes without the subject in varied styles (photo, black and white, vintage, illustration...), trained to stay unchanged. / Escenas sin el sujeto en estilos variados (foto, blanco y negro, antigua, ilustración...), que se entrenan para no cambiar.">Anchors <input type="number" class="sg-num" id="sg_anchors" value="12" min="0" max="100"></label>
+                    <label class="ds-inline-label">Groups <input type="number" class="sg-num" id="sg_people" value="24" min="1" max="200"></label>
+                    <label class="ds-inline-label" title="Adds a different person (age, sex, origin) to each base prompt. Turn it off when the subject is not a person.">
+                        <input type="checkbox" id="sg_vary_people" checked> Vary people</label>
+                    <label class="ds-inline-label" title="Adds a different hairstyle to each base prompt. Turn it off for hair sliders, so the hair of the bases is the one written in Position 0.">
+                        <input type="checkbox" id="sg_vary_hair" checked> Vary hair</label>
+                    <label class="ds-inline-label" title="Scenes without the subject in varied styles (photo, black and white, vintage, illustration...), trained to stay unchanged.">Anchors <input type="number" class="sg-num" id="sg_anchors" value="12" min="0" max="100"></label>
                     <select class="ds-mode-select" id="sg_size">
                         <option value="512">512 px</option>
                         <option value="768" selected>768 px</option>
                         <option value="1024">1024 px</option>
                     </select>
-                    <span class="ds-step-hint">before Pre-Cache / antes del Pre-Caché</span>
-                    <input type="text" class="ds-search sg-wide" id="sg_subject" placeholder="Subject / Tema: Head and shoulders photo portrait">
+                    <span class="ds-step-hint">before Pre-Cache</span>
+                    <input type="text" class="ds-search sg-wide" id="sg_subject" placeholder="Subject: Head and shoulders photo portrait">
                     <textarea class="ds-search sg-wide" id="sg_variations" rows="3"
-                              title="Poses, angles or framings of the subject, one per line: each base image takes one, so the dataset is varied. / Posturas, ángulos o encuadres del sujeto, uno por línea: cada imagen base toma uno, para que el dataset sea variado."
-                              placeholder="Variations, one per line (optional) / Variaciones, una por línea (opcional):&#10;resting flat on a wooden table&#10;holding a coffee cup"></textarea>
-                    <label class="ds-inline-label" title="+100 is edited from the +50 image (and -100 from -50) instead of from the base: the change builds up in two smaller edits. Edit models resist changes of shape; chaining helps to stretch, grow or deform. / +100 se edita desde la imagen +50 (y -100 desde -50) en lugar de desde la base: el cambio se acumula en dos ediciones más pequeñas. Los modelos de edición se resisten a cambiar formas; encadenar ayuda a estirar, hacer crecer o deformar.">
-                        <input type="checkbox" id="sg_chain"> Chain edits (±100 from ±50) / Encadenar ediciones</label>
-                    <input type="text" class="ds-search sg-wide" id="sg_neutral" placeholder="Position 0 (optional) / Posición 0 (opcional): neutral relaxed expression, mouth closed, looking at the camera">
+                              title="Poses, angles or framings of the subject, one per line: each base image takes one, so the dataset is varied."
+                              placeholder="Variations, one per line (optional):&#10;resting flat on a wooden table&#10;holding a coffee cup"></textarea>
+                    <label class="ds-inline-label" title="+100 is edited from the +50 image (and -100 from -50) instead of from the base: the change builds up in two smaller edits. Edit models resist changes of shape; chaining helps to stretch, grow or deform.">
+                        <input type="checkbox" id="sg_chain"> Chain edits (±100 from ±50)</label>
+                    <input type="text" class="ds-search sg-wide" id="sg_neutral" placeholder="Position 0 (optional): neutral relaxed expression, mouth closed, looking at the camera">
                     <input type="text" class="ds-search sg-half" id="sg_edit_-100" placeholder="-100: Make the person look very sad...">
                     <input type="text" class="ds-search sg-half" id="sg_edit_100" placeholder="+100: Make the person laugh...">
-                    <input type="text" class="ds-search sg-half" id="sg_edit_-50" placeholder="-50 (optional / opcional): Make the person look slightly sad...">
-                    <input type="text" class="ds-search sg-half" id="sg_edit_50" placeholder="+50 (optional / opcional): Make the person smile slightly...">
+                    <input type="text" class="ds-search sg-half" id="sg_edit_-50" placeholder="-50 (optional): Make the person look slightly sad...">
+                    <input type="text" class="ds-search sg-half" id="sg_edit_50" placeholder="+50 (optional): Make the person smile slightly...">
                     <div id="sg-progress" style="display:none; flex:1 1 100%;">
                         <div style="display:flex; align-items:center; gap:8px;">
                             <div class="progress-bar-bg" style="flex:1; height:10px;"><div class="progress-bar-fill" id="sg-bar"></div></div>
-                            <button type="button" class="btn btn-danger btn-sm" id="btn-sg-stop" onclick="stopScript()">Stop / Detener</button>
+                            <button type="button" class="btn btn-danger btn-sm" id="btn-sg-stop" onclick="stopScript()">Stop</button>
                         </div>
-                        <div id="sg-text" style="font-size:0.8rem; margin-top:4px; color:var(--text-muted);"></div>
-                        <div id="sg-last" style="display:flex; gap:6px; margin-top:6px; overflow-x:auto;"></div>
+                        <div id="sg-text" class="no-i18n" style="font-size:0.8rem; margin-top:4px; color:var(--text-muted);"></div>
+                        <div id="sg-last" class="no-i18n" style="display:flex; gap:6px; margin-top:6px; overflow-x:auto;"></div>
                     </div>
                 </div>
 
-                <div class="ds-grid" id="ds-grid"></div>
+                <div class="ds-grid no-i18n" id="ds-grid"></div>
                 <div class="ds-resizer" id="ds-resizer"
-                     title="Drag to make the grid taller or shorter. Double-click to reset. / Arrastra para hacer la rejilla más alta o más baja. Doble clic para restablecer."></div>
+                     title="Drag to make the grid taller or shorter. Double-click to reset."></div>
             </div>
 
             <!-- Previews -->
             <div>
-                <div class="panel-title" style="cursor:default;">Generated Step Previews / Previsualizaciones Generadas</div>
-                <div class="gallery" id="gallery"></div>
+                <div class="panel-title" style="cursor:default;">Generated Step Previews</div>
+                <div class="gallery no-i18n" id="gallery"></div>
             </div>
         </div>
     </div>
@@ -732,7 +840,7 @@
     <div class="modal" id="modal" onmousedown="modalOverlayDown(event)" onclick="modalOverlayClick(event)">
         <div class="modal-content" onclick="event.stopPropagation()">
             <div style="display:flex; justify-content:space-between; align-items:center;">
-                <h3 id="modal-filename" style="font-size:1rem;">Filename</h3>
+                <h3 id="modal-filename" class="no-i18n" style="font-size:1rem;">Filename</h3>
                 <span style="font-size:0.8rem; color:var(--text-muted);">Click outside or button to close</span>
             </div>
             <img id="modal-img" src="" alt="Dataset Image">
@@ -741,8 +849,8 @@
                 <textarea id="modal-txt"></textarea>
             </div>
             <div style="display:flex; gap:10px;">
-                <button type="button" class="btn btn-success btn-full" onclick="saveCurrentCaption()">Save Caption / Guardar Caption</button>
-                <button type="button" class="btn btn-secondary btn-full" onclick="closeModal()">Close / Cerrar</button>
+                <button type="button" class="btn btn-success btn-full" onclick="saveCurrentCaption()">Save Caption</button>
+                <button type="button" class="btn btn-secondary btn-full" onclick="closeModal()">Close</button>
             </div>
         </div>
     </div>
@@ -750,20 +858,25 @@
     <!-- Modal: Folder Browser Backup -->
     <div class="modal" id="folder-modal" onclick="closeFolderModal(event)">
         <div class="modal-content" onclick="event.stopPropagation()" style="max-width:600px;">
-            <h3>Select Directory / Seleccionar Carpeta</h3>
-            <div style="font-size:0.85rem; color:var(--text-muted);" id="browser-current-path">/</div>
+            <h3>Select Directory</h3>
+            <div style="font-size:0.85rem; color:var(--text-muted);" id="browser-current-path" class="no-i18n">/</div>
             
-            <div class="drive-selector" id="drive-selector"></div>
-            <div class="dir-list" id="dir-list"></div>
+            <div class="drive-selector no-i18n" id="drive-selector"></div>
+            <div class="dir-list no-i18n" id="dir-list"></div>
 
             <div style="display:flex; gap:10px; margin-top:10px;">
-                <button type="button" class="btn btn-primary btn-full" onclick="confirmFolderSelection()">Use Selected Folder / Usar Carpeta</button>
-                <button type="button" class="btn btn-secondary btn-full" onclick="closeFolderModal()">Cancel / Cancelar</button>
+                <button type="button" class="btn btn-primary btn-full" onclick="confirmFolderSelection()">Use Selected Folder</button>
+                <button type="button" class="btn btn-secondary btn-full" onclick="closeFolderModal()">Cancel</button>
             </div>
         </div>
     </div>
 
     <script>
+        // Paso actual en la consola: "Step 12/1000" en inglés o en el idioma elegido.
+        function stepRe() {
+            const word = t('Step').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            return new RegExp(`(?:Step|${word})\\s+(\\d+)/(\\d+)`, 'i');
+        }
         let allDatasetImages = [];
         let currentEditingFilename = '';
         let browserPath = '';
@@ -773,6 +886,7 @@
         let userRequestedStop = false;
         let lastExecutedStep = 0;
         let totalTargetSteps = 0;
+        const PREVIEW_EDIT_MAX = 4;
 
         function togglePanel(headerEl) {
             const panel = headerEl.closest('.panel');
@@ -795,6 +909,15 @@
                 stepsInput.value = 28;
                 cfgInput.value = 4;
             }
+        }
+
+        // Un modo de caption de edición implica un LoRA de edición, y al revés: así el pre-caché recibe los pares.
+        function syncLoraType() {
+            // Un slider no usa el auto-caption: el modo de caption no cambia su tipo.
+            if (document.getElementById('lora_type').value === 'slider') return;
+            const edit = document.getElementById('caption_mode').value.startsWith('edit');
+            document.getElementById('lora_type').value = edit ? 'edit' : 'normal';
+            applyLoraType();
         }
 
         // fromUser: el usuario acaba de elegir el tipo (no al cargar ajustes guardados).
@@ -874,12 +997,12 @@
                 });
                 const data = await res.json();
                 if (data.status === 'ok') {
-                    alert('✓ LoRA folder saved for every trainer / Carpeta de LoRAs guardada para todos los entrenadores!');
+                    toast('✓ ' + t('LoRA folder saved for every trainer!'), 'success');
                 } else {
-                    alert(`[!] Error: ${data.error}`);
+                    toast(`[!] Error: ${data.error}`, 'error');
                 }
             } catch (e) {
-                alert(`[!] Network Error / Error de red: ${e}`);
+                toast(`[!] ${t('Network error')}: ${e}`, 'error');
             }
         }
 
@@ -893,25 +1016,26 @@
                 });
                 const data = await res.json();
                 if (data.status === 'ok') {
-                    alert('✓ HF Token saved / Token de HF guardado!');
+                    toast('✓ ' + t('HF Token saved!'), 'success');
                 } else {
-                    alert(`[!] Error: ${data.error}`);
+                    toast(`[!] Error: ${data.error}`, 'error');
                 }
             } catch (e) {
-                alert(`[!] Network Error / Error de red: ${e}`);
+                toast(`[!] ${t('Network error')}: ${e}`, 'error');
             }
         }
 
         function updateProjectPaths() {
             const proj = document.getElementById('project_name').value.trim();
-            const cacheDir = proj ? `./cached_data_klein9b_${proj}` : './cached_data_klein9b';
-            const outputDir = proj ? `./klein9b_lora_output_${proj}` : './klein9b_lora_output';
+            const cacheDir = proj ? `./Cache_Data/cached_data_klein9b_${proj}` : './Cache_Data/cached_data_klein9b';
+            const outputDir = proj ? `./Outputs/klein9b_lora_output_${proj}` : './Outputs/klein9b_lora_output';
             
             document.getElementById('precache_cache_dir').value = cacheDir;
             document.getElementById('train_output_dir').value = outputDir;
             
             if (proj) {
                 document.getElementById('export_final_name').value = `klein9b_lora_${proj}.safetensors`;
+                updateFinalNameSuffix();
             }
             checkCheckpointInfo();
         }
@@ -955,10 +1079,19 @@
                 }
                 if (data.train) {
                     const t = data.train;
+                    lastTrainSaved = { ...t };
                     if (t.total_steps) document.getElementById('train_total_steps').value = t.total_steps;
                     if (t.lr) document.getElementById('train_lr').value = t.lr;
+                    if (t.lr_scheduler) document.getElementById('train_lr_scheduler').value = t.lr_scheduler;
+                    if (t.warmup_steps !== undefined) document.getElementById('train_warmup_steps').value = t.warmup_steps;
+                    if (t.lr_cycles) document.getElementById('train_lr_cycles').value = t.lr_cycles;
+                    updateLrSchedulerFields();
                     if (t.lora_rank) document.getElementById('train_lora_rank').value = t.lora_rank;
                     if (t.lora_alpha) document.getElementById('train_lora_alpha').value = t.lora_alpha;
+                    if (t.use_rslora !== undefined) document.getElementById('train_use_rslora').checked = t.use_rslora;
+                    if (t.use_loraplus !== undefined) document.getElementById('train_use_loraplus').checked = t.use_loraplus;
+                    if (t.lokr_factor !== undefined) document.getElementById('train_lokr_factor').value = t.lokr_factor;
+                    if (t.use_lokr !== undefined) { document.getElementById('train_use_lokr').checked = t.use_lokr; setLokrState(t.use_lokr); }
                     if (t.lora_targets) document.getElementById('train_lora_targets').value = t.lora_targets;
                     if (t.batch_size) document.getElementById('train_batch_size').value = t.batch_size;
                     if (t.grad_accum_steps) document.getElementById('train_grad_accum').value = t.grad_accum_steps;
@@ -970,7 +1103,10 @@
                         toggleCaptionMode(t.preview_caption_mode);
                     }
                     if (t.preview_custom_prompt !== undefined) document.getElementById('train_preview_custom_prompt').value = t.preview_custom_prompt;
-                    if (t.preview_edit_image !== undefined) document.getElementById('preview_edit_image').value = t.preview_edit_image;
+                    if (t.preview_edit_images !== undefined || t.preview_edit_image !== undefined) {
+                        renderPreviewEditImages(t.preview_edit_images !== undefined
+                            ? t.preview_edit_images : (t.preview_edit_image ? [t.preview_edit_image] : []));
+                    }
                     if (t.preview_steps !== undefined) document.getElementById('train_preview_steps').value = t.preview_steps;
                     if (t.preview_cfg !== undefined) document.getElementById('train_preview_cfg').value = t.preview_cfg;
                     if (t.preview_size !== undefined) document.getElementById('train_preview_size').value = String(t.preview_size);
@@ -978,13 +1114,15 @@
                     if (t.turbo_lora_strength !== undefined) document.getElementById('train_turbo_strength').value = t.turbo_lora_strength;
                     if (t.slider_strength_100 !== undefined) document.getElementById('train_slider_strength_100').value = t.slider_strength_100;
                     if (t.slider_ultra !== undefined) document.getElementById('train_slider_ultra').checked = t.slider_ultra;
-                    if (t.export_final_name) document.getElementById('export_final_name').value = t.export_final_name;
                     applyLoraType();
+                    if (t.export_final_name) document.getElementById('export_final_name').value = t.export_final_name;
+                    updateFinalNameSuffix();
                 }
                 updateProjectPaths();
                 loadDatasetInfo();
             } catch (e) {}
         }
+        renderPreviewEditImages([]);
         loadSettings();
 
         function triggerLoadJson(target) {
@@ -1004,10 +1142,10 @@
                     if (data.project_name !== undefined) document.getElementById('project_name').value = data.project_name;
                     if (data.trigger_word !== undefined) document.getElementById('trigger_word').value = data.trigger_word;
                     if (data.dataset_path !== undefined) document.getElementById('dataset_path').value = data.dataset_path;
-                    if (data.lora_type !== undefined) document.getElementById('lora_type').value = data.lora_type;
-                    if (data.slider_mode !== undefined) document.getElementById('slider_mode').value = data.slider_mode;
-                    if (data.slider_strength_100 !== undefined) document.getElementById('train_slider_strength_100').value = data.slider_strength_100;
-                    if (data.slider_ultra !== undefined) document.getElementById('train_slider_ultra').checked = data.slider_ultra;
+                    if (data.lora_type !== undefined) {
+                        document.getElementById('lora_type').value = data.lora_type;
+                        applyLoraType();
+                    }
                     
                     if (data.target_area !== undefined) {
                         document.getElementById('precache_target_area').value = data.target_area;
@@ -1025,8 +1163,16 @@
                     
                     if (data.total_steps !== undefined) document.getElementById('train_total_steps').value = data.total_steps;
                     if (data.lr !== undefined) document.getElementById('train_lr').value = data.lr;
+                    if (data.lr_scheduler) document.getElementById('train_lr_scheduler').value = data.lr_scheduler;
+                    if (data.warmup_steps !== undefined) document.getElementById('train_warmup_steps').value = data.warmup_steps;
+                    if (data.lr_cycles) document.getElementById('train_lr_cycles').value = data.lr_cycles;
+                    updateLrSchedulerFields();
                     if (data.lora_rank !== undefined) document.getElementById('train_lora_rank').value = data.lora_rank;
                     if (data.lora_alpha !== undefined) document.getElementById('train_lora_alpha').value = data.lora_alpha;
+                    if (data.use_rslora !== undefined) document.getElementById('train_use_rslora').checked = data.use_rslora;
+                    if (data.use_loraplus !== undefined) document.getElementById('train_use_loraplus').checked = data.use_loraplus;
+                    if (data.lokr_factor !== undefined) document.getElementById('train_lokr_factor').value = data.lokr_factor;
+                    if (data.use_lokr !== undefined) { document.getElementById('train_use_lokr').checked = data.use_lokr; setLokrState(data.use_lokr); }
                     if (data.lora_targets !== undefined) document.getElementById('train_lora_targets').value = data.lora_targets;
                     if (data.batch_size !== undefined) document.getElementById('train_batch_size').value = data.batch_size;
                     if (data.grad_accum_steps !== undefined) document.getElementById('train_grad_accum').value = data.grad_accum_steps;
@@ -1038,15 +1184,22 @@
                         toggleCaptionMode(data.preview_caption_mode);
                     }
                     if (data.preview_custom_prompt !== undefined) document.getElementById('train_preview_custom_prompt').value = data.preview_custom_prompt;
-                    if (data.preview_edit_image !== undefined) document.getElementById('preview_edit_image').value = data.preview_edit_image;
+                    if (data.preview_edit_images !== undefined || data.preview_edit_image !== undefined) {
+                        renderPreviewEditImages(data.preview_edit_images !== undefined
+                            ? data.preview_edit_images : (data.preview_edit_image ? [data.preview_edit_image] : []));
+                    }
                     if (data.preview_steps !== undefined) document.getElementById('train_preview_steps').value = data.preview_steps;
                     if (data.preview_cfg !== undefined) document.getElementById('train_preview_cfg').value = data.preview_cfg;
                     if (data.preview_size !== undefined) document.getElementById('train_preview_size').value = String(data.preview_size);
                     if (data.use_turbo !== undefined) document.getElementById('train_use_turbo').checked = data.use_turbo;
                     if (data.turbo_lora_strength !== undefined) document.getElementById('train_turbo_strength').value = data.turbo_lora_strength;
-                    if (data.export_final_name !== undefined) document.getElementById('export_final_name').value = data.export_final_name;
-
+                    if (data.slider_mode !== undefined) document.getElementById('slider_mode').value = data.slider_mode;
+                    if (data.slider_strength_100 !== undefined) document.getElementById('train_slider_strength_100').value = data.slider_strength_100;
+                    if (data.slider_ultra !== undefined) document.getElementById('train_slider_ultra').checked = data.slider_ultra;
                     applyLoraType();
+                    if (data.export_final_name !== undefined) document.getElementById('export_final_name').value = data.export_final_name;
+                    updateFinalNameSuffix();
+
                     updateProjectPaths();
                     
                     if (currentLoadTarget === 'precache') {
@@ -1055,10 +1208,10 @@
                         await saveTrainSettings();
                     }
 
-                    alert(`✓ Configuration loaded / Configuración cargada desde:\n${file.name}`);
+                    toast('✓ ' + t('Configuration loaded from:') + `\n${file.name}`, 'success');
                     loadDatasetInfo();
                 } catch (err) {
-                    alert(`[!] JSON Error / Error al leer JSON: ${err}`);
+                    toast(`[!] ${t('Error reading JSON')}: ${err}`, 'error');
                 }
             };
             reader.readAsText(file);
@@ -1086,7 +1239,9 @@
                     } else if (target === 'export') {
                         document.getElementById('export_models_dir').value = data.path;
                     }
-                } else if (data.status === 'error') {
+                } else {
+                    // 'cancelled' (se cerro el dialogo nativo) o 'error' (no hay dialogo
+                    // nativo): se abre el explorador web, que siempre funciona.
                     openFolderBrowserWeb(target, currentPath);
                 }
             } catch (e) {
@@ -1094,8 +1249,9 @@
             }
         }
 
-        async function browseImageNative() {
-            const current = document.getElementById('preview_edit_image').value;
+        async function browseImageNative(btn) {
+            const input = previewEditInput(btn);
+            const current = input.value;
             try {
                 const res = await fetch('/api/select-file', {
                     method: 'POST',
@@ -1103,9 +1259,108 @@
                     body: JSON.stringify({ initial_path: current })
                 });
                 const data = await res.json();
-                if (data.status === 'ok' && data.path) document.getElementById('preview_edit_image').value = data.path;
-                else if (data.status === 'error') alert(data.error);
-            } catch (e) { alert('Error: ' + e); }
+                if (data.status === 'ok' && data.path) input.value = data.path;
+                else if (data.status === 'error') toast(data.error + ' ' + t('Use the Upload button: the native dialog runs on the training PC.'), 'warning');
+            } catch (e) { toast('Error: ' + e, 'error'); }
+        }
+
+        function previewEditRows() {
+            return [...document.querySelectorAll('#preview_edit_image_list .preview-edit-row')];
+        }
+
+        function previewEditImages() {
+            return previewEditRows()
+                .map(row => row.querySelector('.preview-edit-path').value.trim())
+                .filter(Boolean);
+        }
+
+        function previewEditInput(el) {
+            const row = el && el.closest ? el.closest('.preview-edit-row') : null;
+            return (row || document.querySelector('#preview_edit_image_list .preview-edit-row'))
+                .querySelector('.preview-edit-path');
+        }
+
+        function updatePreviewEditTags() {
+            const inputs = previewEditRows().map(row => row.querySelector('.preview-edit-path'));
+            const filled = inputs.filter(input => input.value.trim()).length;
+            let number = 0;
+            inputs.forEach((input, i) => {
+                const tag = input.closest('.preview-edit-row').querySelector('.preview-edit-tag');
+                if (input.value.trim()) {
+                    number += 1;
+                    tag.textContent = `image ${number}`;
+                    tag.style.opacity = '1';
+                } else if (filled === 0 && i === 0) {
+                    tag.textContent = 'image 1';
+                    tag.style.opacity = '1';
+                } else {
+                    tag.textContent = '—';
+                    tag.style.opacity = '.45';
+                }
+            });
+            const add = document.getElementById('preview_edit_add_btn');
+            if (add) add.disabled = previewEditRows().length >= PREVIEW_EDIT_MAX;
+        }
+
+        function addPreviewEditImage(value = '') {
+            if (previewEditRows().length >= PREVIEW_EDIT_MAX) {
+                toast(t('Maximum reference images reached.'), 'warning');
+                return;
+            }
+            const row = document.createElement('div');
+            row.className = 'preview-edit-row';
+            row.style.cssText = 'display:flex; gap:6px; align-items:center; margin-top:6px;';
+            row.innerHTML = '<span class="preview-edit-tag no-i18n" style="font-family:monospace; color:#f59e0b; min-width:54px;"></span>'
+                + '<input type="text" class="preview-edit-path" style="flex:1; min-width:60px;" placeholder="(empty = first pair)" oninput="updatePreviewEditTags()">'
+                + '<button type="button" class="btn btn-secondary btn-sm" onclick="browseImageNative(this)">Browse</button>'
+                + '<button type="button" class="btn btn-primary btn-sm" onclick="uploadPreviewEditImage(this)" title="Upload image">⬆</button>'
+                + '<button type="button" class="btn btn-secondary btn-sm" onclick="removePreviewEditImage(this)" title="Remove image">✕</button>';
+            row.querySelector('.preview-edit-path').value = value;
+            document.getElementById('preview_edit_image_list').appendChild(row);
+            updatePreviewEditTags();
+            if (window.I18N) I18N.apply(row);
+        }
+
+        function renderPreviewEditImages(images) {
+            const values = Array.isArray(images) ? images : (images ? [images] : []);
+            document.getElementById('preview_edit_image_list').innerHTML = '';
+            (values.length ? values.slice(0, PREVIEW_EDIT_MAX) : ['']).forEach(value => addPreviewEditImage(value));
+        }
+
+        function removePreviewEditImage(btn) {
+            const row = btn.closest('.preview-edit-row');
+            if (previewEditRows().length <= 1) row.querySelector('.preview-edit-path').value = '';
+            else row.remove();
+            updatePreviewEditTags();
+        }
+
+        // Remote / RunPod: el diálogo nativo se abriría en el PC del entrenador, que puede no tener
+        // pantalla. Con Upload la imagen viaja por HTTP y la ruta que queda es la del servidor.
+        // The native dialog would open on the training PC, which may have no screen. Upload sends
+        // the image over HTTP and the path left in the field is the server's.
+        function uploadPreviewEditImage(btn) {
+            const input = previewEditInput(btn);
+            const picker = document.createElement('input');
+            picker.type = 'file';
+            picker.accept = 'image/png,image/jpeg,image/webp';
+            picker.onchange = async () => {
+                const file = picker.files && picker.files[0];
+                if (!file) return;
+                const form = new FormData();
+                form.append('files', file, file.name);
+                try {
+                    const res = await fetch('/api/upload-preview-image', { method: 'POST', body: form });
+                    const data = await res.json();
+                    if (data.status === 'ok' && data.path) {
+                        input.value = data.path;
+                        updatePreviewEditTags();
+                        toast(t('Image uploaded'), 'success');
+                    } else {
+                        toast(data.error || t('Upload failed'), 'error');
+                    }
+                } catch (e) { toast('Error: ' + e, 'error'); }
+            };
+            picker.click();
         }
 
         // El servidor lee la ruta del dataset de pre_cache_settings_klein9b.json: hay que guardarla ANTES de
@@ -1127,16 +1382,79 @@
                 lora_type: document.getElementById('lora_type').value,
                 slider_mode: document.getElementById('slider_mode').value,
                 preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim(),
-                preview_edit_image: document.getElementById('preview_edit_image').value.trim()
+                preview_edit_image: previewEditImages()[0] || '',
+                preview_edit_images: previewEditImages()
             };
             const res = await fetch('/api/save-precache', { method: 'POST', body: JSON.stringify(precacheData) });
             const data = await res.json();
             if (data.status === 'ok') {
                 const listStr = data.all_saved ? data.all_saved.join('\n • ') : data.file;
-                if (!silent) alert(`✓ Pre-Cache Settings saved / Configuración Pre-Caché guardada en:\n • ${listStr}`);
+                if (!silent) toast('✓ ' + t('Pre-Cache settings saved to:') + `\n • ${listStr}`, 'success');
                 loadDatasetInfo();
             }
         }
+
+        // rsLoRA escala por alpha/√rank en vez de alpha/rank: al marcarlo se reajusta el alpha para que
+        // el LoRA conserve la misma fuerza (alpha/√rank), y al desmarcarlo se deshace.
+        function toggleRsLora(on) {
+            const rank = parseInt(document.getElementById('train_lora_rank').value) || 1;
+            const el = document.getElementById('train_lora_alpha');
+            const alpha = parseInt(el.value) || rank;
+            el.value = Math.max(1, Math.round(on ? alpha / Math.sqrt(rank) : alpha * Math.sqrt(rank)));
+            updateFinalNameSuffix();
+        }
+
+        // El nombre final lleva _rs / _plus / _lokr según las casillas; al exportar o descargar, el
+        // servidor lo corrige con lo que dicen los metadatos del LoRA entrenado.
+        function updateFinalNameSuffix() {
+            const el = document.getElementById('export_final_name');
+            const base = el.value.trim().replace(/(_rs)?(_plus)?(_lokr)?(\.safetensors)?$/i, '');
+            if (!base) return;
+            const lk = document.getElementById('train_use_lokr');
+            const sfx = lk && lk.checked ? '_lokr'
+                : (document.getElementById('train_use_rslora').checked ? '_rs' : '')
+                + (document.getElementById('train_use_loraplus').checked ? '_plus' : '');
+            el.value = base + sfx + '.safetensors';
+        }
+
+        // LoKr sustituye a LoRA: rsLoRA y LoRA+ (propias de LoRA) se apagan y el factor se activa.
+        function setLokrState(on) {
+            document.getElementById('train_use_rslora').disabled = on;
+            document.getElementById('train_use_loraplus').disabled = on;
+            document.getElementById('train_lokr_factor').disabled = !on;
+        }
+
+        function toggleLokr(on) {
+            const rs = document.getElementById('train_use_rslora');
+            if (on && rs.checked) { rs.checked = false; toggleRsLora(false); }
+            if (on) document.getElementById('train_use_loraplus').checked = false;
+            setLokrState(on);
+            updateFinalNameSuffix();
+        }
+
+        function updateLrSchedulerFields() {
+            const sched = document.getElementById('train_lr_scheduler').value;
+            document.getElementById('train_warmup_steps').disabled = sched === 'constant';
+            document.getElementById('train_lr_cycles_group').style.display = sched === 'cosine_with_restarts' ? '' : 'none';
+        }
+
+        // Save JSON con el entrenamiento en marcha: cuándo aplica el trainer cada clave (-> id del campo).
+        // Sacado de su código: live: relee en el paso siguiente; resume: se leen al arrancar; new: al reanudar se sigue con el LoRA del checkpoint.
+        const LIVE_APPLY = {
+            live: { total_steps: 'train_total_steps', lr: 'train_lr', save_every: 'train_save_every',
+                    seed: 'train_seed', preview_every: 'train_preview_every',
+                    preview_caption_mode: 'train_preview_caption_mode',
+                    preview_custom_prompt: 'train_preview_custom_prompt', preview_edit_image: 'preview_edit_image',
+                    preview_steps: 'train_preview_steps', preview_cfg: 'train_preview_cfg',
+                    preview_size: 'train_preview_size', use_turbo: 'train_use_turbo',
+                    turbo_lora_strength: 'train_turbo_strength' },
+            resume: { trigger_word: 'trigger_word', lr_scheduler: 'train_lr_scheduler',
+                      warmup_steps: 'train_warmup_steps', lr_cycles: 'train_lr_cycles', batch_size: 'train_batch_size',
+                      grad_accum_steps: 'train_grad_accum' },
+            new: { lora_rank: 'train_lora_rank', lora_alpha: 'train_lora_alpha', use_rslora: 'train_use_rslora',
+                   use_loraplus: 'train_use_loraplus', use_lokr: 'train_use_lokr', lokr_factor: 'train_lokr_factor',
+                   lora_targets: 'train_lora_targets' },
+        };
 
         async function saveTrainSettings() {
             const proj = document.getElementById('project_name').value.trim();
@@ -1148,8 +1466,15 @@
                 output_dir: document.getElementById('train_output_dir').value,
                 total_steps: parseInt(document.getElementById('train_total_steps').value),
                 lr: parseFloat(document.getElementById('train_lr').value),
+                lr_scheduler: document.getElementById('train_lr_scheduler').value,
+                warmup_steps: parseInt(document.getElementById('train_warmup_steps').value) || 0,
+                lr_cycles: parseInt(document.getElementById('train_lr_cycles').value) || 3,
                 lora_rank: parseInt(document.getElementById('train_lora_rank').value),
                 lora_alpha: parseInt(document.getElementById('train_lora_alpha').value),
+                use_rslora: document.getElementById('train_use_rslora').checked,
+                use_loraplus: document.getElementById('train_use_loraplus').checked,
+                use_lokr: document.getElementById('train_use_lokr').checked,
+                lokr_factor: parseInt(document.getElementById('train_lokr_factor').value) || 16,
                 lora_targets: document.getElementById('train_lora_targets').value,
                 batch_size: parseInt(document.getElementById('train_batch_size').value),
                 grad_accum_steps: parseInt(document.getElementById('train_grad_accum').value),
@@ -1158,7 +1483,8 @@
                 preview_every: parseInt(document.getElementById('train_preview_every').value),
                 preview_caption_mode: document.getElementById('train_preview_caption_mode').value,
                 preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim(),
-                preview_edit_image: document.getElementById('preview_edit_image').value.trim(),
+                preview_edit_image: previewEditImages()[0] || '',
+                preview_edit_images: previewEditImages(),
                 lora_type: document.getElementById('lora_type').value,
                 slider_mode: document.getElementById('slider_mode').value,
                 slider_strength_100: parseFloat(document.getElementById('train_slider_strength_100').value),
@@ -1177,14 +1503,14 @@
             setEncodingState(data.encoding, data.encoding_device);
             if (data.status === 'ok') {
                 const listStr = data.all_saved ? data.all_saved.join('\n • ') : data.file;
-                // Con el entrenamiento en marcha, el trainer aplica los ajustes en caliente en el paso siguiente.
-                const live = document.getElementById('status-badge').classList.contains('badge-running')
-                    ? '\n\nTraining is running: steps, save/preview every, preview settings (size included), caption mode, prompt, turbo and LR apply on the next step. Rank, alpha, batch and resolution need Stop -> Resume.\nEl entrenamiento está en marcha: pasos, guardar/preview cada, ajustes de preview (tamaño incluido), modo, prompt, turbo y LR se aplican en el paso siguiente. Rank, alpha, batch y resolución necesitan Detener -> Reanudar.'
-                    : '';
+                // Con el entrenamiento en marcha se dice qué ha cambiado y cuándo lo aplica el trainer.
+                const running = document.getElementById('status-badge').classList.contains('badge-running');
+                const live = running ? '\n\n' + liveChangesText(data.previous || lastTrainSaved, trainData, LIVE_APPLY) : '';
+                lastTrainSaved = { ...trainData };
                 const encoding = data.encoding
-                    ? `\n\nThe preview prompt/image is being encoded on ${data.encoding_device}. Start/Resume and Stop are disabled until it finishes.\nSe está codificando en ${data.encoding_device} el prompt/imagen de la preview. Iniciar/Reanudar y Detener quedan desactivados hasta que termine.`
+                    ? '\n\n' + t('The preview prompt/image is being encoded on {device}. Start/Resume and Stop are disabled until it finishes.', { device: data.encoding_device })
                     : '';
-                alert(`✓ Train Settings saved / Configuración de Entrenamiento guardada en:\n • ${listStr}${live}${encoding}`);
+                toast('✓ ' + t('Train settings saved to:') + `\n • ${listStr}${live}${encoding}`, 'success', running ? 12000 : 5000);
             }
             return data;
         }
@@ -1195,9 +1521,9 @@
                 const data = await res.json();
                 const badge = document.getElementById('checkpoint-badge');
                 if (data.has_checkpoint) {
-                    badge.innerText = `[Resume Step / Paso ${data.current_step}]`;
+                    badge.innerText = `[${t('Resume step {step}', { step: data.current_step })}]`;
                 } else {
-                    badge.innerText = '[New / Nuevo]';
+                    badge.innerText = `[${t('New')}]`;
                 }
             } catch (e) {}
         }
@@ -1231,22 +1557,16 @@
             term.scrollTop = term.scrollHeight;
         }
 
-        async function startScript(scriptName) {
-            document.getElementById('terminal').innerHTML = '';
-            appendTerminal(`[SYSTEM] Launching / Iniciando ${scriptName}...`);
-            setRunningState(true);
+        let consoleSince = 0;
+        let consoleController = null;
 
-            userRequestedStop = false;
-            lastExecutedStep = 0;
-            totalTargetSteps = 0;
-
+        // La consola vive en el servidor: al reabrir la página (o abrirla desde otro navegador)
+        // se vuelve a enganchar y se repinta lo ya emitido, incluido el paso actual.
+        async function attachConsole() {
+            if (consoleController) consoleController.abort();
+            consoleController = new AbortController();
             try {
-                const response = await fetch('/api/run', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ script: scriptName })
-                });
-
+                const response = await fetch(`/api/console/stream?since=${consoleSince}`, { signal: consoleController.signal });
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder('utf-8');
                 let buffer = '';
@@ -1256,77 +1576,129 @@
                     if (done) break;
                     buffer += decoder.decode(value, { stream: true });
 
-                    const lines = buffer.split('\n\n');
-                    buffer = lines.pop();
+                    const parts = buffer.split('\n\n');
+                    buffer = parts.pop();
 
-                    for (const line of lines) {
-                        if (line.startsWith('data: ')) {
-                            try {
-                                const msg = JSON.parse(line.slice(6));
-                                if (msg.type === 'output') {
-                                    appendTerminal(msg.text, msg.replace);
-                                    if (scriptName === 'slidergen') onSliderGenLine(msg.text);
+                    for (const part of parts) {
+                        if (!part.startsWith('data: ')) continue;
+                        let msg = null;
+                        try { msg = JSON.parse(part.slice(6)); } catch (e) { continue; }
 
-                                    const stepMatch = msg.text.match(/Step\/Paso\s+(\d+)\/(\d+)/i);
-                                    if (stepMatch) {
-                                        lastExecutedStep = parseInt(stepMatch[1]);
-                                        totalTargetSteps = parseInt(stepMatch[2]);
-                                    }
-                                } else if (msg.type === 'done') {
-                                    if (msg.code === 0) {
-                                        let successMsg = "";
-                                        let msgClass = 'term-success';
+                        if (msg.type === 'line') {
+                            consoleSince = msg.seq;
+                            appendTerminal(msg.text, msg.replace);
+                            if (runningScript === 'slidergen') onSliderGenLine(msg.text);
 
-                                        if (scriptName === 'train') {
-                                            const totalFormSteps = parseInt(document.getElementById('train_total_steps').value) || totalTargetSteps;
-                                            const isPausedEarly = userRequestedStop || (lastExecutedStep > 0 && lastExecutedStep < totalFormSteps);
-
-                                            if (isPausedEarly) {
-                                                successMsg = "\n[SYSTEM] ⏸ Training paused successfully! Checkpoint saved. / ¡Entrenamiento pausado con éxito! Checkpoint guardado.";
-                                                msgClass = 'term-warning';
-                                            } else {
-                                                successMsg = "\n[SYSTEM] ✓ LoRA Training completed successfully! / ¡Entrenamiento del LoRA finalizado con éxito!";
-                                                msgClass = 'term-success';
-                                            }
-                                        } else if (scriptName === 'slidergen' && userRequestedStop) {
-                                            successMsg = "\n[SYSTEM] ⏸ Generation stopped: Generate Pairs continues where it left off. / Generación detenida: Generar Pares sigue donde lo dejó.";
-                                            msgClass = 'term-warning';
-                                        } else if (scriptName === 'precache') {
-                                            if (userRequestedStop) {
-                                                successMsg = "\n[SYSTEM] ⏸ Pre-Cache stopped by user. / Pre-Caché detenida por el usuario.";
-                                                msgClass = 'term-warning';
-                                            } else {
-                                                successMsg = "\n[SYSTEM] ✓ Pre-Cache completed successfully! / ¡Pre-Caché finalizada con éxito!";
-                                                msgClass = 'term-success';
-                                            }
-                                        } else {
-                                            successMsg = `\n[SYSTEM] ✓ Finished successfully with code / Finalizado con éxito con código: ${msg.code}`;
-                                        }
-
-                                        appendTerminal(successMsg, false, msgClass);
-                                    } else if (scriptName === 'train' && msg.code === 2) {
-                                        appendTerminal("\n[SYSTEM] ✗ Training could not be run: create the Pre-Cache first. / No se ha podido realizar el entrenamiento: primero crea la Pre-Caché.", false, 'term-danger');
-                                    } else {
-                                        appendTerminal(`\n[SYSTEM] ⚠ Process finished with code / Proceso finalizado con código: ${msg.code}`, false, 'term-danger');
-                                    }
-                                }
-                            } catch (e) {}
+                            const stepMatch = msg.text.match(stepRe());
+                            if (stepMatch) {
+                                lastExecutedStep = parseInt(stepMatch[1]);
+                                totalTargetSteps = parseInt(stepMatch[2]);
+                            }
+                        } else if (msg.type === 'done') {
+                            consoleSince = msg.seq;
+                            consoleDone(msg);
                         }
                     }
                 }
-            } catch (err) {
-                appendTerminal(`\n[SYSTEM] Execution error / Error de ejecución: ${err}`, false, 'term-danger');
-            } finally {
-                setRunningState(false);
-                loadPreviews();
-                checkCheckpointInfo();
-                if (scriptName === 'slidergen') {
-                    document.getElementById('btn-sg-stop').style.display = 'none';
-                    loadDatasetInfo();
-                }
-                // Los prompts que ha escrito Qwen3-VL aparecen en los campos detallados.
-                if (scriptName === 'sliderprompts') loadSliderGenSettings();
+            } catch (e) {
+                // AbortError al cerrar la pestaña: el entrenamiento sigue en el servidor.
             }
+        }
+
+        function consoleDone(msg) {
+            if (msg.code === 0) {
+                let successMsg = "";
+                let msgClass = 'term-success';
+
+                if (msg.script === 'train') {
+                    const totalFormSteps = totalTargetSteps || parseInt(document.getElementById('train_total_steps').value);
+                    const isPausedEarly = userRequestedStop || (lastExecutedStep > 0 && lastExecutedStep < totalFormSteps);
+
+                    if (isPausedEarly) {
+                        successMsg = '\n[SYSTEM] ⏸ ' + t('Training paused successfully! Checkpoint saved.');
+                        msgClass = 'term-warning';
+                    } else {
+                        successMsg = '\n[SYSTEM] ✓ ' + t('LoRA training completed successfully!');
+                        msgClass = 'term-success';
+                    }
+                } else if (msg.script === 'slidergen' && userRequestedStop) {
+                    successMsg = '\n[SYSTEM] ⏸ ' + t('Generation stopped: Generate Pairs continues where it left off.');
+                    msgClass = 'term-warning';
+                } else if (msg.script === 'precache') {
+                    if (userRequestedStop) {
+                        successMsg = '\n[SYSTEM] ⏸ ' + t('Pre-Cache stopped by user.');
+                        msgClass = 'term-warning';
+                    } else {
+                        successMsg = '\n[SYSTEM] ✓ ' + t('Pre-Cache completed successfully!');
+                        msgClass = 'term-success';
+                    }
+                } else {
+                    successMsg = `\n[SYSTEM] ✓ ${t('Finished successfully with code')}: ${msg.code}`;
+                }
+
+                appendTerminal(successMsg, false, msgClass);
+            } else if (msg.script === 'train' && msg.code === 2) {
+                appendTerminal('\n[SYSTEM] ✗ ' + t('Training could not be run: create the Pre-Cache first.'), false, 'term-danger');
+            } else {
+                appendTerminal(`\n[SYSTEM] ⚠ ${t('Process finished with code')}: ${msg.code}`, false, 'term-danger');
+            }
+
+            setRunningState(false);
+            loadPreviews();
+            checkCheckpointInfo();
+            if (msg.script === 'slidergen') {
+                document.getElementById('btn-sg-stop').style.display = 'none';
+                loadDatasetInfo();
+            }
+            // Los prompts que ha escrito Qwen3-VL aparecen en los campos detallados.
+            if (msg.script === 'sliderprompts') loadSliderGenSettings();
+            runningScript = null;
+        }
+
+        let runningScript = null;
+
+        async function startScript(scriptName) {
+            runningScript = scriptName;
+            document.getElementById('terminal').innerHTML = '';
+            consoleSince = 0;
+            appendTerminal(`[SYSTEM] ${t('Launching {script}...', { script: scriptName })}`);
+            setRunningState(true);
+
+            userRequestedStop = false;
+            lastExecutedStep = 0;
+            totalTargetSteps = 0;
+
+            try {
+                const res = await fetch('/api/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ script: scriptName })
+                });
+                const data = await res.json();
+
+                if (data.status !== 'ok') {
+                    appendTerminal(`\n[SYSTEM] ${t('Execution error')}: ${data.error}`, false, 'term-danger');
+                    setRunningState(false);
+                    return;
+                }
+                attachConsole();
+            } catch (err) {
+                appendTerminal(`\n[SYSTEM] ${t('Execution error')}: ${err}`, false, 'term-danger');
+                setRunningState(false);
+            }
+        }
+
+        // Si ya hay un entrenamiento en marcha al cargar la página, repinta la consola completa
+        // y el progreso, y sigue enganchado a lo que siga saliendo.
+        async function restoreConsole() {
+            try {
+                const st = await (await fetch('/api/status')).json();
+                if (st.running) {
+                    runningScript = st.script || null;
+                    setRunningState(true);
+                    attachConsole();
+                }
+            } catch (e) {}
         }
 
         async function runPrecache() {
@@ -1339,7 +1711,7 @@
             if (data && data.encoding) {
                 // El trainer arrancaría con el prompt anterior: se lanza solo al terminar la codificación.
                 startAfterEncoding = true;
-                appendTerminal('\n[SYSTEM] Training will start when the preview prompt is encoded / El entrenamiento empezará cuando se codifique el prompt de la preview.');
+                appendTerminal('\n[SYSTEM] ' + t('Training will start when the preview prompt is encoded.'));
                 return;
             }
             startScript('train');
@@ -1347,7 +1719,7 @@
 
         async function stopScript() {
             userRequestedStop = true;
-            appendTerminal('\n[SYSTEM] Sending stop signal... / Enviando señal de detención...');
+            appendTerminal('\n[SYSTEM] ' + t('Sending stop signal...'));
             await fetch('/api/stop', { method: 'POST' });
         }
 
@@ -1356,11 +1728,11 @@
             const finalName = document.getElementById('export_final_name').value.trim();
 
             if (!targetDir) {
-                alert('Please select or enter a target Models directory / Por favor selecciona la carpeta destino models/lora.');
+                toast(t('Please select or enter the target models/lora folder.'));
                 return;
             }
 
-            appendTerminal(`\n[SYSTEM] Exporting LoRA model to / Exportando LoRA a: ${targetDir}...`);
+            appendTerminal(`\n[SYSTEM] ${t('Exporting LoRA to')}: ${targetDir}...`);
 
             try {
                 const res = await fetch('/api/export-lora', {
@@ -1370,23 +1742,23 @@
                 });
                 const data = await res.json();
                 if (data.status === 'ok') {
-                    alert(`✓ LoRA exported successfully / LoRA exportado con éxito:\n${data.filename}\n\nCopied from / Copiado desde: ${data.source}`);
-                    appendTerminal(`[SYSTEM] ✓ Export completed / Exportación completada: ${data.dest}`, false, 'term-success');
+                    toast(`✓ ${t('LoRA exported successfully')}:\n${data.filename}\n\n${t('Copied from')}: ${data.source}`, 'success');
+                    appendTerminal(`[SYSTEM] ✓ ${t('Export completed')}: ${data.dest}`, false, 'term-success');
                 } else {
-                    alert(`[!] Export Error / Error de exportación: ${data.error}`);
-                    appendTerminal(`[SYSTEM] [!] Export failed: ${data.error}`, false, 'term-danger');
+                    toast(`[!] ${t('Export error')}: ${data.error}`, 'error');
+                    appendTerminal(`[SYSTEM] [!] ${t('Export error')}: ${data.error}`, false, 'term-danger');
                 }
             } catch (e) {
-                alert(`[!] Network Error / Error de red: ${e}`);
+                toast(`[!] ${t('Network error')}: ${e}`, 'error');
             }
         }
 
         // Mientras el servidor codifica en CPU el prompt/imagen de la preview no se puede lanzar ni detener nada.
         let isRunning = false, encodingStage = null, startAfterEncoding = false;
         const ENCODING_TEXT = {
-            loading: d => `⏳ Loading encoders on ${d}... / Cargando codificadores en ${d}...`,
-            image: d => `⏳ Encoding reference image latent on ${d}... / Codificando latente de la imagen de referencia en ${d}...`,
-            prompt: d => `⏳ Encoding custom prompt on ${d}... / Codificando custom prompt en ${d}...`
+            loading: d => '⏳ ' + t('Loading encoders on {device}...', { device: d }),
+            image: d => '⏳ ' + t('Encoding reference image latent on {device}...', { device: d }),
+            prompt: d => '⏳ ' + t('Encoding custom prompt on {device}...', { device: d })
         };
 
         function applyButtonState() {
@@ -1428,10 +1800,10 @@
             const badge = document.getElementById('status-badge');
             if (running) {
                 badge.className = 'status-badge badge-running';
-                badge.innerText = 'RUNNING / EN EJECUCIÓN';
+                badge.innerText = t('RUNNING');
             } else {
                 badge.className = 'status-badge badge-idle';
-                badge.innerText = 'IDLE / INACTIVO';
+                badge.innerText = t('IDLE');
             }
         }
 
@@ -1444,7 +1816,7 @@
                 document.getElementById('ds-count').innerText = data.image_count;
                 document.getElementById('ds-txt-count').innerText = data.caption_count;
                 document.getElementById('btn-caption-label').innerText = data.caption_count > 0
-                    ? 'Redo Captions / Rehacer Captions' : 'Create Captions / Crear Captions';
+                    ? t('Redo Captions') : t('Create Captions');
                 renderDatasetGrid(allDatasetImages);
                 renderSliderGenLast();
             } catch (e) {}
@@ -1468,16 +1840,16 @@
 
                 const hasCaption = img.has_txt && img.caption && img.caption.trim().length > 0;
                 const dotClass = hasCaption ? 'caption-dot dot-green' : 'caption-dot dot-red';
-                const dotTitle = hasCaption ? 'Caption OK / Texto existente' : 'No Caption / Sin texto';
+                const dotTitle = hasCaption ? t('Caption OK') : t('No caption');
 
                 card.innerHTML = `
                     <div class="img-wrapper">
                         <img src="${mediaUrl(img)}" alt="${img.file}">
-                        <button type="button" class="ds-del" title="Remove from dataset / Eliminar del dataset">&#128465;</button>
+                        <button type="button" class="ds-del" title="${t('Remove from dataset')}">&#128465;</button>
                         <span class="${dotClass}" title="${dotTitle}"></span>
                         <div class="img-filename-tag">${img.file}</div>
                     </div>
-                    <div class="caption">${img.caption || '<em>No .txt caption / Sin texto</em>'}</div>
+                    <div class="caption">${img.caption || `<em>${t('No .txt caption')}</em>`}</div>
                 `;
                 card.querySelector('.ds-del').onclick = (ev) => { ev.stopPropagation(); deleteDatasetImage(img.file); };
                 grid.appendChild(card);
@@ -1488,9 +1860,9 @@
             // En un par de edición se borran las dos mitades y el caption compartido: una sola no sirve.
             const pair = file.match(/^(.*)_(before|after)\.[^.]+$/);
             const what = pair
-                ? `the whole pair "${pair[1]}" (before + after) and its caption ${pair[1]}.txt\n\n¿Eliminar el par completo "${pair[1]}" (antes + después) y su caption ${pair[1]}.txt`
-                : `"${file}" and its .txt caption\n\n¿Eliminar "${file}" y su caption .txt`;
-            if (!confirm(`Remove ${what} del dataset?\n\nThe files are deleted from disk. / Los ficheros se borran del disco.`)) return;
+                ? t('Remove the whole pair "{name}" (before + after) and its caption {name}.txt from the dataset?', { name: pair[1] })
+                : t('Remove "{name}" and its .txt caption from the dataset?', { name: file });
+            if (!await askConfirm(what + '\n\n' + t('The files are deleted from disk.'))) return;
             try {
                 const res = await fetch('/api/delete-dataset-image', {
                     method: 'POST',
@@ -1498,56 +1870,55 @@
                     body: JSON.stringify({ file: file })
                 });
                 const data = await res.json();
-                if (data.status !== 'ok') { alert('Error: ' + (data.error || 'unknown')); return; }
+                if (data.status !== 'ok') { toast('Error: ' + (data.error || t('unknown')), 'error'); return; }
                 loadDatasetInfo();
-            } catch (e) { alert('Error: ' + e); }
+            } catch (e) { toast('Error: ' + e, 'error'); }
         }
 
         async function clearAllCaptions() {
             const n = parseInt(document.getElementById('ds-txt-count').innerText) || 0;
             if (!n) {
-                alert('There are no captions to delete. / No hay captions que borrar.');
+                toast(t('There are no captions to delete.'));
                 return;
             }
             // Se pide escribir el número: un confirm normal se acepta por reflejo y esto no tiene deshacer.
-            const resp = prompt(`This DELETES the .txt of all ${n} captions. There is no undo.\nEsto BORRA el .txt de los ${n} captions. No hay deshacer.\n\nType ${n} to confirm / Escribe ${n} para confirmar:`);
+            const resp = prompt(t('This DELETES the .txt of all {n} captions. There is no undo.', { n }) + '\n\n' + t('Type {n} to confirm:', { n }));
             if (String(resp || '').trim() !== String(n)) return;
             try {
                 const res = await fetch('/api/clear-captions', { method: 'POST' });
                 const data = await res.json();
-                if (data.status === 'error') { alert('Error: ' + (data.error || 'unknown')); return; }
-                appendTerminal(`[CAPTIONS] ${data.removed || 0} .txt deleted / borrados`, false, 'term-warning');
+                if (data.status === 'error') { toast('Error: ' + (data.error || t('unknown')), 'error'); return; }
+                appendTerminal(`[CAPTIONS] ${t('{n} .txt deleted', { n: data.removed || 0 })}`, false, 'term-warning');
                 (data.errors || []).forEach(x => appendTerminal('   ' + x, false, 'term-danger'));
                 loadDatasetInfo();
-            } catch (e) { alert('Error: ' + e); }
+            } catch (e) { toast('Error: ' + e, 'error'); }
         }
 
         async function clearDataset() {
             const n = parseInt(document.getElementById('ds-count').innerText) || 0;
             const path = document.getElementById('dataset_path').value;
-            if (!n) { alert('The dataset is already empty. / El dataset ya está vacío.'); return; }
-            if (isRunning) { alert('Wait until the current process finishes. / Espera a que termine el proceso en curso.'); return; }
+            if (!n) { toast(t('The dataset is already empty.')); return; }
             // Se pide escribir el número: un confirm normal se acepta por reflejo y esto no tiene deshacer.
-            const resp = prompt(`This DELETES the ${n} images of the dataset and their .txt captions:\n${path}\nThere is no undo.\n\nEsto BORRA las ${n} imágenes del dataset y sus captions .txt. No hay deshacer.\n\nType ${n} to confirm / Escribe ${n} para confirmar:`);
+            const resp = prompt(t('This DELETES the {n} files of the dataset and their .txt captions:', { n }) + `\n${path}\n` + t('There is no undo.') + '\n\n' + t('Type {n} to confirm:', { n }));
             if (String(resp || '').trim() !== String(n)) return;
             try {
                 const res = await fetch('/api/clear-dataset', { method: 'POST' });
                 const data = await res.json();
-                if (data.status === 'error') { alert('Error: ' + (data.error || 'unknown')); return; }
-                appendTerminal(`[DATASET] ${data.removed || 0} file(s) deleted / fichero(s) borrado(s): ${data.path}`, false, 'term-warning');
+                if (data.status === 'error') { toast('Error: ' + (data.error || t('unknown')), 'error'); return; }
+                appendTerminal(`[DATASET] ${t('{n} file(s) deleted', { n: data.removed || 0 })}: ${data.path}`, false, 'term-warning');
                 (data.errors || []).forEach(x => appendTerminal('   ' + x, false, 'term-danger'));
                 sgLastGroup = null;
                 document.getElementById('sg-last').innerHTML = '';
                 loadDatasetInfo();
-            } catch (e) { alert('Error: ' + e); }
+            } catch (e) { toast('Error: ' + e, 'error'); }
         }
 
         async function deleteProjectData(target) {
             const texts = {
-                precache: 'This will delete the current pre-cache.\n\nEsto borrará la pre-caché actual.',
-                training: 'This will delete all the current training (checkpoints, resume point and previews).\n\nEsto eliminará todo el entrenamiento actual (checkpoints, punto de reanudación y previews).'
+                precache: t('This will delete the current pre-cache.'),
+                training: t('This will delete all the current training (checkpoints, resume point and previews).')
             };
-            if (!confirm(texts[target] + '\n\nContinue? / ¿Continuar?')) return;
+            if (!await askConfirm(texts[target] + '\n\n' + t('Continue?'))) return;
             try {
                 const res = await fetch('/api/delete-project-data', {
                     method: 'POST',
@@ -1555,12 +1926,12 @@
                     body: JSON.stringify({ target: target })
                 });
                 const data = await res.json();
-                if (data.status === 'error') { alert('Error: ' + (data.error || 'unknown')); return; }
-                let out = `${data.removed} item(s) deleted / elemento(s) borrado(s)\n${data.path}`;
-                if (data.errors && data.errors.length) out += '\n\nCould not delete / No se pudo borrar:\n' + data.errors.join('\n');
-                alert(out);
+                if (data.status === 'error') { toast('Error: ' + (data.error || t('unknown')), 'error'); return; }
+                let out = t('{n} item(s) deleted', { n: data.removed }) + `\n${data.path}`;
+                if (data.errors && data.errors.length) out += '\n\n' + t('Could not delete:') + '\n' + data.errors.join('\n');
+                toast(out);
                 if (target === 'training') { checkCheckpointInfo(); loadPreviews(); }
-            } catch (e) { alert('Error: ' + e); }
+            } catch (e) { toast('Error: ' + e, 'error'); }
         }
 
         // Mismos prompts por defecto que 0_caption_klein9b.py; se guardan en caption_settings_klein9b.json al ejecutar.
@@ -1664,46 +2035,44 @@
             };
         }
 
-        async function runSliderPrompts() {
-            const effect = document.getElementById('sg_effect').value.trim();
-            const maxText = document.getElementById('sg_max_text').value.trim();
-            if (!effect || !maxText) { alert('Write the effect and the maximum (+5). / Escribe el efecto y el máximo (+5).'); return; }
-            if (sgWriter.ready === false && !confirm(`Qwen3-VL-8B is not downloaded yet: ~${sgWriter.download_gb} GB will be downloaded first (shared with the auto-caption).\n\nQwen3-VL-8B aún no está descargado: primero se descargarán ~${sgWriter.download_gb} GB (compartido con el auto-caption).\n\nContinue? / ¿Continuar?`)) return;
-            const d = sliderGenData();
-            if ((d.subject || d.variations.length || SG_POSITIONS.some(p => d.edits[p])) && !confirm('This replaces the detailed prompts below. / Esto sustituye los prompts detallados de abajo.\n\nContinue? / ¿Continuar?')) return;
+        async function saveSliderGenSettings(data) {
             try {
                 const res = await fetch('/api/save-slider-gen-settings', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ...d, effect: effect, max_text: maxText, min_text: document.getElementById('sg_min_text').value.trim() })
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
                 });
-                const data = await res.json();
-                if (data.status !== 'ok') { alert('Error: ' + (data.error || 'unknown')); return; }
-            } catch (e) { alert('Error: ' + e); return; }
+                const out = await res.json();
+                if (out.status !== 'ok') { toast('Error: ' + (out.error || t('unknown')), 'error'); return false; }
+                return true;
+            } catch (e) { toast('Error: ' + e, 'error'); return false; }
+        }
+
+        async function runSliderPrompts() {
+            const d = sliderGenData();
+            if (!d.effect || !d.max_text) { toast(t('Write the effect and the maximum (+5).')); return; }
+            if (sgWriter.ready === false && !await askConfirm(t('Qwen3-VL-8B is not downloaded yet: ~{gb} GB will be downloaded first (shared with the auto-caption).', { gb: sgWriter.download_gb }) + '\n\n' + t('Continue?'))) return;
+            if ((d.subject || d.variations.length || SG_POSITIONS.some(p => d.edits[p])) && !await askConfirm(t('This replaces the detailed prompts below.') + '\n\n' + t('Continue?'))) return;
+            if (!await saveSliderGenSettings(d)) return;
             startScript('sliderprompts');
         }
 
         async function runSliderGen() {
             const d = sliderGenData();
             const filled = SG_POSITIONS.filter(p => d.edits[p]);
-            if (!filled.length) { alert('Write at least one edit (-100, -50, +50 or +100). / Escribe al menos una edición (-100, -50, +50 o +100).'); return; }
-            if (d.base === 'generate' && !d.subject) { alert('Write the subject of the images. / Escribe el tema de las imágenes.'); return; }
+            if (!filled.length) { toast(t('Write at least one edit (-100, -50, +50 or +100).')); return; }
+            if (d.base === 'generate' && !d.subject) { toast(t('Write the subject of the images.')); return; }
             const eng = sgEngines[d.engine];
-            if (eng && !eng.ready && !confirm(`The ${document.getElementById('sg_engine').selectedOptions[0].text} model is not downloaded yet: ~${eng.download_gb} GB will be downloaded first.\n\nEl modelo aún no está descargado: primero se descargarán ~${eng.download_gb} GB.\n\nContinue? / ¿Continuar?`)) return;
-            const groups = d.base === 'mine' ? 'your group_0 images / tus imágenes grupo_0' : `${d.people} groups / grupos`;
-            if (!confirm(`Generate into the dataset folder / Generar en la carpeta del dataset:\n${document.getElementById('dataset_path').value}\n\n${groups} × positions / posiciones 0, ${filled.join(', ')} + ${d.anchors} anchors\n\nImages already there are kept; only the missing ones are generated. / Las imágenes que ya estén se conservan; solo se generan las que faltan.`)) return;
+            if (eng && !eng.ready && !await askConfirm(t('The {model} model is not downloaded yet: ~{gb} GB will be downloaded first.', { model: document.getElementById('sg_engine').selectedOptions[0].text, gb: eng.download_gb }) + '\n\n' + t('Continue?'))) return;
+            const groups = d.base === 'mine' ? t('your group_0 images') : t('{n} groups', { n: d.people });
+            if (!await askConfirm(t('Generate into the dataset folder:') + `\n${document.getElementById('dataset_path').value}\n\n`
+                    + t('{groups} × positions 0, {positions} + {anchors} anchors', { groups, positions: filled.join(', '), anchors: d.anchors }) + '\n\n'
+                    + t('Images already there are kept; only the missing ones are generated.'))) return;
             await savePrecacheSettings(true);
-            try {
-                const res = await fetch('/api/save-slider-gen-settings', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d)
-                });
-                const data = await res.json();
-                if (data.status !== 'ok') { alert('Error: ' + (data.error || 'unknown')); return; }
-            } catch (e) { alert('Error: ' + e); return; }
+            if (!await saveSliderGenSettings(d)) return;
             sgLastGroup = null;
             document.getElementById('sg-progress').style.display = 'block';
             document.getElementById('btn-sg-stop').style.display = '';
             document.getElementById('sg-bar').style.width = '0%';
-            document.getElementById('sg-text').innerText = '🧪 Creating synthetic dataset... / Creando dataset sintético... (loading models / cargando modelos)';
+            document.getElementById('sg-text').innerText = '🧪 ' + t('Creating synthetic dataset... (loading models)');
             document.getElementById('sg-last').innerHTML = '';
             startScript('slidergen');
         }
@@ -1714,11 +2083,11 @@
             if (!m) return;
             const done = parseInt(m[1]), total = parseInt(m[2]);
             document.getElementById('sg-bar').style.width = `${total ? 100 * done / total : 0}%`;
-            let info = `🧪 ${done}/${total} images / imágenes`;
+            let info = `🧪 ${t('{done}/{total} images', { done, total })}`;
             if (m[3] !== '-') info += ` · ${m[3]}`;
             if (m[5] !== undefined) {
-                const s = parseInt(m[5]);
-                info += ` · ~${s >= 60 ? Math.round(s / 60) + ' min' : s + ' s'} left / restantes`;
+                const secs = parseInt(m[5]);
+                info += ` · ${t('~{time} left', { time: secs >= 60 ? Math.round(secs / 60) + ' min' : secs + ' s' })}`;
             }
             document.getElementById('sg-text').innerText = info;
             if (m[4] !== '-') sgLastGroup = m[4];
@@ -1756,7 +2125,7 @@
             const captioned = parseInt(document.getElementById('ds-txt-count').innerText) || 0;
             const overwrite = document.getElementById('caption_overwrite').checked;
             if (captioned > 0 && overwrite) {
-                if (!confirm(`This will OVERWRITE the ${captioned} caption(s) that already exist.\n\nEsto SOBRESCRIBIRÁ los ${captioned} caption(s) que ya existen.\n\nContinue? / ¿Continuar?`)) return;
+                if (!await askConfirm(t('This will OVERWRITE the {n} caption(s) that already exist.', { n: captioned }) + '\n\n' + t('Continue?'))) return;
             }
             // El captioner lee la carpeta del dataset y la palabra clave de pre_cache_settings_klein9b.json.
             await savePrecacheSettings();
@@ -1772,7 +2141,7 @@
                         overwrite: overwrite
                     })
                 });
-            } catch (e) { alert('Error: ' + e); return; }
+            } catch (e) { toast('Error: ' + e, 'error'); return; }
             startScript('caption');
         }
 
@@ -1789,7 +2158,7 @@
             grid.classList.remove('compact', 'large', 'hidden');
             if (mode === 'compact') grid.classList.add('compact');
             if (mode === 'large') grid.classList.add('large');
-            document.getElementById('btn-toggle-ds').innerText = 'Hide / Ocultar';
+            document.getElementById('btn-toggle-ds').innerText = t('Hide');
         }
 
         function toggleDatasetGrid() {
@@ -1797,10 +2166,10 @@
             const btn = document.getElementById('btn-toggle-ds');
             if (grid.classList.contains('hidden')) {
                 grid.classList.remove('hidden');
-                btn.innerText = 'Hide / Ocultar';
+                btn.innerText = t('Hide');
             } else {
                 grid.classList.add('hidden');
-                btn.innerText = 'Show / Mostrar';
+                btn.innerText = t('Show');
             }
         }
 
@@ -1809,33 +2178,21 @@
             const common = document.getElementById('ds-common-caption').value.trim();
             const mode = document.getElementById('ds-common-mode').value;
             if (!trigger && !common) {
-                alert('Enter a Trigger Word, a common text, or both. / Escribe una palabra clave, un texto común, o ambos.');
+                toast(t('Enter a Trigger Word, a common text, or both.'));
                 return;
             }
 
             let msg;
             if (!common) {
-                msg = `Add trigger "${trigger}" to all dataset captions? / ¿Añadir la palabra clave a todos los captions?`;
+                msg = t('Add the trigger "{trigger}" to all dataset captions?', { trigger });
             } else if (mode === 'replace') {
-                msg = `REPLACE every caption with:
-
-    ${trigger ? trigger + ', ' : ''}${common}
-
-REEMPLAZAR todos los captions por ese texto. Lo que hubiera escrito se pierde.`;
+                msg = t('REPLACE every caption with this text? What was written is lost.') + `\n\n    ${trigger ? trigger + ', ' : ''}${common}`;
             } else if (mode === 'remove') {
-                msg = `REMOVE this text from every caption, keeping the rest:
-
-    ${common}
-
-QUITAR ese texto de todos los captions, conservando el resto.`;
+                msg = t('REMOVE this text from every caption, keeping the rest?') + `\n\n    ${common}`;
             } else {
-                msg = `APPEND this text at the end of every caption:
-
-    ${common}
-
-AÑADIR ese texto al final de cada caption. Lo que ya estaba escrito se conserva.`;
+                msg = t('APPEND this text at the end of every caption? What was already written is kept.') + `\n\n    ${common}`;
             }
-            if (!confirm(msg)) return;
+            if (!await askConfirm(msg)) return;
 
             try {
                 const res = await fetch('/api/batch-caption', {
@@ -1843,38 +2200,46 @@ AÑADIR ese texto al final de cada caption. Lo que ya estaba escrito se conserva
                     body: JSON.stringify({ trigger_word: trigger, common: common, mode: mode })
                 });
                 const data = await res.json();
-                if (data.status !== 'ok') { alert('Error: ' + (data.error || 'unknown')); return; }
-                appendTerminal(`[CAPTIONS] ${data.updated_count || 0} caption(s) updated / actualizados`, false, 'term-success');
+                if (data.status !== 'ok') { toast('Error: ' + (data.error || t('unknown')), 'error'); return; }
+                appendTerminal(`[CAPTIONS] ${t('{n} caption(s) updated', { n: data.updated_count || 0 })}`, false, 'term-success');
                 loadDatasetInfo();
-            } catch (e) { alert('Error: ' + e); }
+            } catch (e) { toast('Error: ' + e, 'error'); }
         }
 
+        let previewsSignature = '';
         async function loadPreviews() {
             try {
-                const res = await fetch('/api/previews');
+                const res = await fetch('/api/previews', { cache: 'no-store' });
                 const data = await res.json();
+                const versions = data.versions || {};
+                // Solo se redibuja la galeria si cambia algo (nueva preview o preview sobrescrita).
+                const signature = data.previews.map(f => f + ':' + (versions[f] || '')).join('|');
+                if (signature === previewsSignature) return;
+                previewsSignature = signature;
                 const gallery = document.getElementById('gallery');
                 gallery.innerHTML = '';
                 data.previews.forEach(filename => {
+                    const src = `/api/preview/${filename}?v=${versions[filename] || Date.now()}`;
                     const card = document.createElement('div');
                     card.className = 'preview-card';
-                    card.onclick = () => openModal(`/api/preview/${filename}`, filename, `Generated preview / Previsualización: ${filename}`);
+                    card.onclick = () => openModal(src, filename, `${t('Generated preview')}: ${filename}`);
 
                     let stepTag = filename;
                     const match = filename.match(/preview_step_(\d+)\.png/i);
                     if (match) {
-                        stepTag = `Step / Paso ${match[1]}`;
+                        stepTag = t('Step {n}', { n: match[1] });
                     }
 
                     card.innerHTML = `
-                        <img src="/api/preview/${filename}" alt="${filename}">
+                        <img src="${src}" alt="${filename}">
                         <div class="preview-filename-tag">${stepTag}</div>
                     `;
                     gallery.appendChild(card);
                 });
             } catch (e) {}
         }
-        setInterval(loadPreviews, 8000);
+        setInterval(loadPreviews, 3000);
+        restoreConsole();
         loadPreviews();
 
         // Texto del caption tal como se abrió, para saber si se ha editado.
@@ -1902,9 +2267,9 @@ AÑADIR ese texto al final de cada caption. Lo que ya estaba escrito se conserva
             closeModal();
         }
 
-        function closeModal(force) {
+        async function closeModal(force) {
             if (force !== true && document.getElementById('modal-txt').value !== captionAtOpen
-                    && !confirm('The caption has unsaved changes. Close and lose them?\n\nEl caption tiene cambios sin guardar. ¿Cerrar y perderlos?')) {
+                    && !await askConfirm(t('The caption has unsaved changes. Close and lose them?'))) {
                 return;
             }
             document.getElementById('modal').classList.remove('active');
@@ -1962,7 +2327,7 @@ AÑADIR ese texto al final de cada caption. Lo que ya estaba escrito se conserva
             });
             const data = await res.json();
             if (data.status === 'ok') {
-                alert('✓ Caption saved / Caption guardado!');
+                toast('✓ ' + t('Caption saved!'), 'success');
                 closeModal(true);
                 loadDatasetInfo();
             }
@@ -1978,7 +2343,7 @@ AÑADIR ese texto al final de cada caption. Lo que ya estaba escrito se conserva
             const data = await res.json();
             
             browserPath = data.current_path;
-            document.getElementById('browser-current-path').innerText = `${browserPath} (${data.image_count} images inside)`;
+            document.getElementById('browser-current-path').innerText = `${browserPath} (${t('{n} images inside', { n: data.image_count })})`;
             
             const driveSel = document.getElementById('drive-selector');
             driveSel.innerHTML = '';
@@ -1998,7 +2363,7 @@ AÑADIR ese texto al final de cada caption. Lo que ya estaba escrito se conserva
 
             const parentDiv = document.createElement('div');
             parentDiv.className = 'dir-item';
-            parentDiv.innerHTML = `<strong>📁 .. [Up / Subir]</strong>`;
+            parentDiv.innerHTML = `<strong>📁 .. [${t('Up')}]</strong>`;
             parentDiv.onclick = () => openFolderBrowserWeb(target, data.parent_path);
             dirList.appendChild(parentDiv);
 

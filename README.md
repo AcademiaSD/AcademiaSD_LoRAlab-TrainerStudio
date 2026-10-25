@@ -4,8 +4,142 @@
   <img src="assets/launcher_LoRAlab.jpg" alt="AcademiaSD LoRAlab Trainer Studio" width="900">
 </p>
 
+## 📅 Changelog
+
+What was added, newest first. Each entry links to its commit.
+
+**2026-10-25**
+
+- **MOSS-Image edit LoRAs on armV4**: [akhaliq's MOSS-Image-Edit-HQ](https://huggingface.co/akhaliq/MOSS-Image-Edit-HQ) is the new default edit base (it keeps the unedited parts of the image), with chinoll's as an option; the fused export is a normal LoRA ending in `_FUSED`, for ComfyUI's own edit nodes [`4709970`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/4709970)
+
+**2026-10-24**
+
+- **MOSS-Image edit LoRAs**: before → after pairs trained on top of [chinoll's Moss-Image-Edit](https://huggingface.co/chinoll/Moss-Image-Edit), with edit previews, exported alone or fused with Moss-Image-Edit into one patch for ComfyUI [`a2f78ef`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/a2f78ef)
+- **Training chart in 3D**: a terrain of the loss, from the loss of each step to the smoothed trend, that you can rotate [`f8d4f9f`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/f8d4f9f)
+- Saved LoRAs on the chart at their step: click one to download it or send it to your models folder to test it [`5bad871`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/5bad871)
+- **Training chart**: a live loss chart under the console in every trainer, with markers for previews and checkpoints. Closed by default, it costs nothing until opened [`7b665b1`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/7b665b1)
+- AMD: VRAM read through ADLX on Windows and AMD GPUs listed in the GPU selector, by [@0xDELUXA](https://github.com/0xDELUXA) [`674447e`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/674447e)
+
+**2026-10-23**
+
+- Upload the trained LoRAs to Hugging Face [`e2abfa8`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/e2abfa8)
+
+**2026-10-22**
+
+- YuE2-3B marked as beta: AR is the default stage (it is the one that clones the voice) and the LoRA files carry their stage, `_AR` / `_NAR` [`77c9825`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/77c9825) [`a8c0699`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/a8c0699)
+- MOSS-Image frees the CUDA cache when training fills the VRAM [`f39a4cd`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/f39a4cd)
+
+**2026-10-21**
+
+- <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **YuE2-3B, song LoRAs, with an AR regularizer and fixed NAR conditioning** [`ba65373`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/ba65373) [`f76b32c`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/f76b32c)
+- <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **Fibo 2.0 (BRIA), experimental, with the NF4 model downloaded from Hugging Face** [`951f22f`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/951f22f) [`a73d437`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/a73d437)
+- Launcher cards laid out evenly and responsively [`5c94e0a`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/5c94e0a)
+- Fixes: the Browse folder dialog [`28fc9b5`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/28fc9b5), the Fibo 2.0 pre-cache on large images [`42a08e0`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/42a08e0), training options the interface does not send are kept [`152f270`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/152f270)
+
+**2026-10-20**
+
+- <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **Ming-Image Design, image and edit LoRAs for transparent designs; Save JSON lists the settings changed live** [`678554b`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/678554b) [`aa3a2f0`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/aa3a2f0)
+
+**2026-10-19**
+
+- Models, caches and outputs organized into `Models/`, `Cache_Data/` and `Outputs/`, with automatic migration [`078151d`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/078151d) [`14f942e`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/14f942e)
+- LoRAs exported with normal file permissions [`4834fb4`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/4834fb4)
+
+**2026-10-18**
+
+- <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **Qwen-Image 2512 / Edit 2511** [`a24d45d`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/a24d45d)
+- <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **Boogu Image Edit 0.1, with live settings and a preview size** [`5e8d055`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/5e8d055) [`7013c61`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/7013c61)
+- rsLoRA and LoRA+ in LTX-2.3 and MiniMax-H3 [`2e2a653`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/2e2a653)
+- Edit previews with several ordered reference images [`69e3945`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/69e3945) [`f6d9efc`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/f6d9efc)
+
+**2026-10-17**
+
+- <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **MOSS-Image** [`7e485ac`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/7e485ac)
+- Tour video in the README [`afdf44c`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/afdf44c)
+
+**2026-10-16**
+
+- <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **FLUX.3 Image Klein, with its NF4 converter and captions in BFL's own formats** [`b860ae5`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/b860ae5) [`1f96b77`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/1f96b77) [`52deaa7`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/52deaa7)
+- Before/after datasets train as edit LoRAs even with LoRA Type normal [`a5dbf92`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/a5dbf92)
+- The updater reinstalls URL-pinned packages when their URL changes [`ea6c0b5`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/ea6c0b5)
+
+**2026-10-15**
+
+- Launcher: a running training is never cut when switching trainers, and going back works behind a proxy [`43da9a8`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/43da9a8) [`4ea74e2`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/4ea74e2)
+
+**2026-10-14**
+
+- Trainers open in the launcher tab, with a back button, a glow on the one that is training and trainer switching [`4ed40ad`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/4ed40ad)
+- Windows 11 24H2: trainers are detected without `wmic` [`5432f33`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/5432f33)
+
+<details>
+<summary><b>Earlier changes (2026-09-28 to 2026-10-12)</b></summary>
+
+**2026-10-12**
+
+- LR scheduler selector in every trainer [`f8b2489`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/f8b2489)
+- GPU selector in the launcher [`07d2934`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/07d2934)
+
+**2026-10-09**
+
+- Mobile layout for the trainer interfaces and an Upload button for the edit preview image [`59817f3`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/59817f3)
+- Failed uploads highlighted with a retry, and LoRA downloads named after the project [`8dd6154`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/8dd6154)
+- Visual RefMods keep their source pictures [`8dc926a`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/8dc926a)
+
+**2026-10-08**
+
+- **Experimental AMD (ROCm) support**: installers for Windows and Linux [`b8742cf`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/b8742cf)
+- Fix stale or mixed training previews [`4fc1fb6`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/4fc1fb6)
+
+**2026-10-06**
+
+- <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **ERNIE-Image** [`4067e13`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/4067e13)
+- rsLoRA, LoRA+ and LoKr in the image trainers, with the option in the LoRA file name [`c46e4ee`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/c46e4ee) [`7e3a800`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/7e3a800)
+- Training keeps running when the browser is closed, per-file upload results and non-blocking notifications, by [@Synergyart](https://github.com/Synergyart) [`d350cca`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/d350cca)
+
+**2026-10-05**
+
+- **Translations**: the launcher, the trainers and their consoles in Spanish, German, French, Italian, Portuguese, Japanese and Korean [`c9676f3`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/c9676f3) [`e3b1b51`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/e3b1b51)
+- Clear Dataset button in every trainer [`0acfcf5`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/0acfcf5)
+- The updater updates the current branch and shows the new commits [`e7aef0d`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/e7aef0d) [`b82291d`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/b82291d)
+
+**2026-10-04**
+
+- <img src="https://img.shields.io/badge/NEW%20TRAINERS-ff2d55?style=for-the-badge" alt="NEW TRAINERS" height="22"> **SDXL (Pony, Illustrious, NoobAI, Juggernaut and RealVis presets) and Ideogram 4 (JSON captions)** [`12822e8`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/12822e8) [`6703a8c`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/6703a8c)
+- Password-protected remote access, configured from the launcher [`b786483`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/b786483) [`f12e412`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/f12e412)
+- Dataset upload and LoRA download from the browser [`af53a9d`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/af53a9d)
+- RunPod: Docker image and Deploy button [`de5bb82`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/de5bb82) [`64f7928`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/64f7928)
+- `requirements.txt` and `LORALAB_PYTHON` to use your own Python environment [`a7c232a`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/a7c232a)
+
+**2026-10-03**
+
+- <img src="https://img.shields.io/badge/NEW%20TRAINERS-ff2d55?style=for-the-badge" alt="NEW TRAINERS" height="22"> **Z-Image, Anima (BF16 or NF4) and FLUX.2 Klein 9B** [`385871e`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/385871e) [`0c30cd1`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/0c30cd1) [`6cb669c`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/6cb669c)
+- **Linux support**, by [@jonathanhecl](https://github.com/jonathanhecl) [`60ecb9c`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/60ecb9c)
+
+**2026-10-01**
+
+- README rewritten as a self-contained guide for the public release [`21b5ce7`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/21b5ce7)
+
+**2026-09-30**
+
+- Renamed to AcademiaSD LoRAlab Trainer Studio [`c8705f4`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/c8705f4)
+
+**2026-09-29**
+
+- LoRA export folder shared by all the trainers and settings in two columns [`89f68ad`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/89f68ad) [`db773a2`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/db773a2)
+
+**2026-09-28**
+
+- <img src="https://img.shields.io/badge/FIRST%20VERSION-6366f1?style=for-the-badge" alt="FIRST VERSION" height="22"> **Krea 2, LTX-2.3, MiniMax-H3 and Qwen-Image 2.1, one Python environment and a common launcher** [`72189d7`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/72189d7)
+
+</details>
+
+---
+
+https://github.com/user-attachments/assets/8f3b6d3f-dbd5-45a4-8ae5-028e241c449a
+
 <p align="center">
-  <b>Train LoRAs for the latest image and video models on consumer NVIDIA GPUs — from 8 GB of VRAM.<br>
+  <b>Train LoRAs for the latest image and video models on consumer NVIDIA GPUs (and AMD, experimental) — from 8 GB of VRAM.<br>
   One installation, one Python environment, one launcher. Every trainer in one place.</b>
 </p>
 
@@ -13,9 +147,11 @@
   <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-blue.svg" alt="Windows">
   <img src="https://img.shields.io/badge/Linux-supported-yellow.svg" alt="Linux">
   <img src="https://img.shields.io/badge/GPU-NVIDIA%20RTX%2020xx%2B-green.svg" alt="NVIDIA">
+  <img src="https://img.shields.io/badge/GPU-AMD%20RX%207000%20%7C%209000%20(experimental)-red.svg" alt="AMD (experimental)">
   <img src="https://img.shields.io/badge/Python-3.13-blue.svg" alt="Python">
   <img src="https://img.shields.io/badge/PyTorch-2.14%20cu130-orange.svg" alt="PyTorch">
   <img src="https://img.shields.io/badge/UI-Flask%20%2B%20HTML5-purple.svg" alt="Web UI">
+  <img src="https://img.shields.io/badge/Languages-8-teal.svg" alt="8 languages">
   <a href="https://console.runpod.io/deploy?template=lfxvtg5rrb&ref=jbvdshm0"><img src="https://img.shields.io/badge/Deploy%20on-RunPod-673ab7.svg" alt="Deploy on RunPod"></a>
 </p>
 
@@ -33,15 +169,23 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 
 | Trainer | Trains | Minimum VRAM |
 | :--- | :--- | :--- |
+| **Fibo 2.0** *(experimental)* | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) on BRIA Fibo 2.0 Dev | 10 GB (512²) / 12 GB (1024²) |
 | **Qwen-Image 2.1** | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) | 8 GB |
+| **Qwen-Image 2512 / Edit 2511** | Image LoRAs on Qwen-Image-2512 **and edit LoRAs** on Qwen-Image-Edit-2511 (before → after); 20B in NF4 with block swap | **~4 GB** (512², measured) / 8 GB (edit at 1024²) |
 | **Krea 2** | Image LoRAs (characters, objects, styles) for Krea 2 Raw and Turbo | 8 GB |
+| **Boogu Image Edit 0.1** | Edit LoRAs (before → after) and image LoRAs on Boogu-Image-0.1-Edit | **10 GB** (512², ~8 GB measured) |
 | **Z-Image** | Image LoRAs (characters, objects, styles) for Z-Image and Z-Image-Turbo | 8 GB |
+| **Ming-Image** *(experimental)* | Image LoRAs for transparent designs and edit LoRAs (before → after) on inclusionAI's Ming-Image 0.1 Design | 7 GB (512²) / 13 GB (1024²) |
 | **Anima** | Anime and illustration LoRAs (characters, styles) | **4 GB** (NF4) / 6 GB (BF16) |
+| **ERNIE-Image** | Image LoRAs (characters, objects, styles); supports rsLoRA, LoRA+ and LoKr | **Under 8 GB** (NF4; verified during training) |
 | **FLUX.2 Klein 9B** | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) | 12 GB |
+| **FLUX.3 Image Klein** | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) | 8 GB |
+| **MOSS-Image** | Image LoRAs (characters, objects, styles) on MOSS-Image Base or SFT **and edit LoRAs** (before → after, on top of armV4 or Moss-Image-Edit); supports rsLoRA, LoRA+ and LoKr | **6 GB** (512²) / 8 GB |
 | **Ideogram 4** | Image LoRAs (characters, objects, styles), with JSON captions | 12 GB (16 GB for previews with CFG) |
 | **SDXL** | Image LoRAs for SDXL Base, Pony, Illustrious, NoobAI, Juggernaut, RealVis or your own SDXL checkpoint | **4 GB** (NF4) / 12 GB (BF16) |
 | **LTX-2.3** (also LTX-2.5) | Character and style LoRAs for the LTX video model, trained from images | 12 GB |
 | **MiniMax-H3** | Video LoRAs from images, clips and audio, plus training-free **RefMods** | 8 GB |
+| **YuE2-3B** *(experimental / beta)* | Song LoRAs: the AR clones the singer's voice, the NAR learns lyrics and phrasing | ~8 GB (NF4, measured on NAR) |
 
 ---
 
@@ -49,18 +193,28 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 
 1. **Instalar:** en la carpeta donde quieras instalarlo, escribe `cmd` en la barra de direcciones del explorador y ejecuta
    `git clone https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio.git`
-   (o descarga el ZIP desde el botón verde **Code → Download ZIP** y descomprímelo). Después, doble clic en **`Install_LoRAlab-TrainerStudio.bat`**: instala Git si no lo tienes, Python 3.13.1 y un único entorno `venv` para todos los entrenadores.
+   (o descarga el ZIP desde el botón verde **Code → Download ZIP** y descomprímelo). Después, doble clic en **`Install_LoRAlab-TrainerStudio.bat`**: instala Git si no lo tienes, Python 3.13.1 y un único entorno `venv` para todos los entrenadores. Con GPU AMD usa **`Install_LoRAlab-TrainerStudio_AMD.bat`** (experimental; confirmado con una RX 7800 XT en Windows y MiniMax-H3).
 2. **Abrir:** doble clic en **`Start_LoRAlab-TrainerStudio.bat`** y pulsa la tarjeta del entrenador que quieras. Solo puede haber uno abierto a la vez.
 3. **Entrenar:** nombre del proyecto → carpeta del dataset → *Crear Captions* (opcional) → *Iniciar Pre-Caché* → *Iniciar / Reanudar* → *Send to Models*. El modelo se descarga solo la primera vez.
 4. **Actualizar:** doble clic en **`Update_LoRAlab-TrainerStudio.bat`**. Se conservan tus modelos, proyectos y ajustes, los nuevos entrenadores aparecen en el lanzador y se instalan las librerías nuevas que hagan falta.
 5. **Desde otro equipo:** el botón **🌐 Remote access** del lanzador abre el entrenador a tu red con usuario y contraseña. Con **⬆ Subir** (o arrastrando archivos o un `.zip` al Dataset Manager) mandas el dataset desde ese equipo, y con **⬇ Descargar LoRA** te bajas el resultado.
 6. **Previsualizaciones nítidas en ComfyUI:** algunos de estos modelos son lentos al generar, y conviene ver el resultado de forma anticipada, mientras se genera, para cancelar si no va bien. Para eso hace falta una buena previsualización. Mi recomendación: al usar tus LoRAs de Qwen-Image 2.1, Krea 2 o FLUX.2 / Klein 9B, pon el nodo **Model Preview Override** de [KJNodes](https://github.com/kijai/ComfyUI-KJNodes) con el TAE de AcademiaSD correspondiente ([Qwen-Image 2.1](https://huggingface.co/AcademiaSD/TAE-Qwen-Image-2.1) · [Krea 2](https://huggingface.co/AcademiaSD/TAE-Krea-2) · [FLUX.2](https://huggingface.co/AcademiaSD/TAE_Flux2_AcademiaSD)) en `ComfyUI/models/vae_approx/`. Detalles en la sección *Sharp previews in ComfyUI*.
 7. **Sin GPU potente:** entrena en la nube con **[RunPod](https://console.runpod.io/deploy?template=lfxvtg5rrb&ref=jbvdshm0)**. Es una plantilla ya preparada: eliges una GPU con CUDA 13, entras con el usuario `loralab` y la contraseña que aparece en *Logs → Container*, y al terminar paras y borras el pod. Detalles en la sección *RunPod*.
-8. **Requisitos:** Windows 10/11, GPU NVIDIA **RTX 20xx / GTX 16xx o posterior** con driver **580 o superior**, 8 GB de VRAM (4 GB para Anima y SDXL en NF4, 12 GB para LTX-2.3, FLUX.2 Klein 9B, Ideogram 4 y SDXL en BF16) y 16 GB de RAM (32 GB recomendados).
+8. **Requisitos:** Windows 10/11, GPU NVIDIA **RTX 20xx / GTX 16xx o posterior** con driver **580 o superior** (o AMD **RX 7000 / RX 9000** de 16 GB, experimental), 8 GB de VRAM (4 GB para Anima y SDXL en NF4, 12 GB para LTX-2.3, FLUX.2 Klein 9B, Ideogram 4 y SDXL en BF16) y 16 GB de RAM (32 GB recomendados).
 
 **Linux:** ya tiene soporte para Linux. Cada `.bat` tiene su `.sh` equivalente; la instalación y el uso están en [docs/Linux.md](docs/Linux.md). Gracias a **[Jonathan Hecl (@jonathanhecl)](https://github.com/jonathanhecl)** por aportarlo.
 
-Toda la interfaz y los mensajes de consola están en inglés y en español.
+**FLUX.3 Image Klein:** nuevo entrenador de LoRAs normales y de edición (antes → después) para FLUX.3 Image Klein Base, desde 8 GB de VRAM. El captioner escribe en los formatos propios de FLUX.3 (prosa detallada, y opcionalmente con tabla de cajas `<id>`; en edición, la instrucción con `<ref_image_0>`). Necesita la versión nueva de diffusers: ejecuta **`Update_LoRAlab-TrainerStudio.bat`** antes de abrirlo. Detalles en la sección *FLUX.3 Image Klein*.
+
+**Fibo 2.0:** nuevo entrenador de LoRAs de imagen y de edición (antes → después) para **Fibo 2.0 Dev** de BRIA (8,1 B, CC BY-NC 4.0, uso no comercial). El transformador va en **NF4** (5,2 GB de VRAM) y el text encoder (Qwen3-VL-4B) solo se usa en el pre-caché. Necesita la versión nueva de diffusers (con `BriaFibo2Pipeline`): ejecuta **`Update_LoRAlab-TrainerStudio.bat`** antes de abrirlo. Detalles en la sección *Fibo 2.0*.
+
+**Ming-Image:** nuevo entrenador de LoRAs de imagen y de edición (antes → después) para **Ming-Image 0.1 Design** de inclusionAI, el modelo que genera el canal alfa: los diseños transparentes. El captioner escribe los captions en el JSON estilo Figma del propio modelo. El "text encoder" es un MLLM completo (BailingMoE-V2 + ViT) en NF4. La tarea oficial de edición trabaja a 1024. Detalles en la sección *Ming-Image*.
+
+**MOSS-Image:** nuevo entrenador de LoRAs de imagen para MOSS-Image de OpenMOSS (Apache 2.0), sobre **Base** (el recomendado para LoRAs) o **SFT**, con la misma pre-caché para los dos. Entrena a 512² con menos de 6 GB de VRAM. El text encoder (Qwen3.5-9B) se elige en el pre-caché: BF16 exacto repartido entre GPU y RAM (por defecto), INT8 o NF4. Las previews pueden usar el adaptador turbo de 4 pasos de darask0 (unos 4 s por imagen en vez de 43 s). Detalles en la sección *MOSS-Image*.
+
+**LR Scheduler:** debajo del learning rate puedes elegir cómo cambia durante el entrenamiento: `cosine` (por defecto: sube durante el warmup y baja suavemente hasta el 10%), `constant` (el mismo LR de principio a fin, como el entrenador de Civitai), `constant_with_warmup`, `linear` o `cosine_with_restarts` (repite la curva tantas veces como indique *Ciclos*). Si no lo tocas, cada entrenador funciona igual que antes. Detalles en la sección *LR scheduler*.
+
+**Idiomas:** la interfaz y los mensajes de consola están en inglés, español, alemán, francés, portugués, italiano, japonés y coreano. Elige el idioma en el selector **🌍 Language** de la parte inferior del lanzador y pulsa **💾 Save settings**; por defecto está en inglés. Los prompts de los captions siguen siempre en inglés, que es lo que entienden los modelos. Detalles en la sección *Languages*.
 
 > ⚠️ **Sobre los valores por defecto:** las pruebas se han hecho para comprobar que cada entrenamiento funciona, no para buscar el mejor rendimiento ni la mejor calidad. Haz tus propias pruebas con distintas configuraciones (pasos, learning rate, rank, resolución, captions) para mejorar la calidad de tus LoRAs.
 
@@ -81,10 +235,13 @@ Each trainer downloads **only what it uses**, already quantized. The table compa
 | **SDXL** | ~7 per model | — | **~7 per model** | New trainer: only the preset you pick is downloaded (one `.safetensors` file); your own checkpoint downloads nothing. |
 | **Ideogram 4** | 16.1 (NF4) | — | **16.1** | New trainer: the official NF4 release, which includes the unconditional transformer used only by the previews. It is downloaded from Unsloth's ungated mirror (same weights, no license gate or token needed); the Ideogram license still applies. |
 | **FLUX.2 Klein 9B** | 34.7 | — | **8.8** | New trainer: the 9B transformer (18.2 GB) and the Qwen3-8B text encoder (16.4 GB) in NF4 (4.9 GB + 3.8 GB; only the 28 text encoder layers Klein reads). |
+| **Qwen-Image 2512 / Edit 2511** | 57.8 each | — | **26.8 / 18.6 / 15.7** | New trainer: the 20B transformer of 2512 or Edit-2511 in NF4 (9.9 GB each; only the one you train on is downloaded) and the Qwen2.5-VL-7B text encoder you pick: BF16 (exact, default) / INT8 / NF4. The optional Lightning turbo LoRA adds 0.85 GB. |
+| **MOSS-Image** | 27.2 | — | **20.2 / 13.2 / 9.9** | New trainer: the 5B transformer of Base or SFT in NF4 (3.1 GB each; only the one you train on is downloaded) and the Qwen3.5-9B text encoder you pick: BF16 (exact, default) / INT8 / NF4. The optional turbo preview adapter adds 1.2 GB. |
+| **ERNIE-Image** | 31.6 | — | **~6.7** | New trainer: downloads the prepared NF4 transformer and Ministral 3B text encoder from `AcademiaSD/Ernie-NF4-for-LoRA-Training`. The optional prompt enhancer is not needed for training. |
 
 The automatic captioner adds, only the first time you use it: **nothing** for Krea 2 (it uses Krea 2's own text encoder), **5.5 GB** for Qwen-Image 2.1 when its text encoder is not already the NF4 one and for LTX-2.3, Z-Image, Anima, FLUX.2 Klein 9B and Ideogram 4 (Qwen3-VL-8B NF4, shared by all of them), and **8.9 GB** for MiniMax-H3 (Qwen3-VL-4B).
 
-> **Upgrading from an old standalone LoRAlab?** Copy its model folder into Trainer Studio instead of downloading it again. Then you can delete what is no longer used: `Krea-2-NF4/transformer` (~26 GB) and, in `LTX23-NF4`, the `transformer` (~38 GB) and `text_encoder` (~49 GB) folders.
+> **Upgrading from an old standalone LoRAlab?** Copy its model folder into `Models/` instead of downloading it again. Legacy model, cache and output folders in the project root are moved automatically on first start. Then you can delete what is no longer used: `Models/Krea-2-NF4/transformer` (~26 GB) and, in `Models/LTX23-NF4`, the `transformer` (~38 GB) and `text_encoder` (~49 GB) folders.
 
 ---
 
@@ -94,7 +251,8 @@ The automatic captioner adds, only the first time you use it: **nothing** for Kr
 | :--- | :--- | :--- |
 | **OS** | Windows 10 / 11, or 64-bit Linux ([docs/Linux.md](docs/Linux.md)) | Windows 11 |
 | **GPU** | NVIDIA **RTX 20xx / GTX 16xx or newer** (compute capability 7.5+) with **8 GB VRAM** (4 GB for Anima and SDXL in NF4, 12 GB for LTX-2.3, FLUX.2 Klein 9B, Ideogram 4 and SDXL in BF16) | 12–24 GB VRAM |
-| **Driver** | NVIDIA **580 or newer** (CUDA 13) | Latest |
+| **AMD GPU** *(experimental)* | Radeon **RX 7000 / RX 9000** or Ryzen AI Max (Strix Halo) with 16 GB of VRAM, using the AMD installer (see *Installation*). Confirmed on an RX 7800 XT 16 GB under Windows with MiniMax-H3 | — |
+| **Driver** | NVIDIA **580 or newer** (CUDA 13). AMD: a recent Adrenalin driver on Windows, or `amdgpu` on Linux | Latest |
 | **RAM** | 16 GB | 32 GB |
 | **Disk** | The model of each trainer you use (table above) plus your datasets and caches | SSD |
 | **Other** | Internet the first time each model is used. MiniMax-H3 video clips need **`ffmpeg`** in the `PATH`. | |
@@ -120,11 +278,15 @@ Then, inside the folder:
 
 Pick a disk with plenty of free space: every model is downloaded into this folder.
 
+**AMD GPUs (experimental).** Use **`Install_LoRAlab-TrainerStudio_AMD.bat`** (Windows) or **`Install_LoRAlab-TrainerStudio_AMD.sh`** (Linux) instead of the normal installer. It asks for your GPU family (RX 7000, RX 9000 or Ryzen AI Max / Strix Halo) and installs PyTorch ROCm from AMD's TheRock nightly builds. It is based on [a user's guide](https://civitai.com/articles/36293/training-krea-2minimax-h3etc-lora-on-low-vram-low-ram-amd-gpu-windows), and the same user [confirmed the installer](../../issues/8) on an **RX 7800 XT 16 GB under Windows**: a full MiniMax-H3 training at about 7 s/step, with no errors. The other trainers are not confirmed yet on AMD; results are welcome in that issue. Attention runs on PyTorch's native kernels (SageAttention is NVIDIA only). Do not run `Install_Triton&SageAtten220`, it is NVIDIA only. On Linux you need the `amdgpu` driver and your user in the `render` and `video` groups.
+
+The **VRAM panel** of the trainers reads the real usage of the whole AMD GPU: on Windows through AMD's [ADLX](https://gpuopen.com/adlx/), which comes with the Adrenalin driver (the AMD installer and the updater install its Python package, `amd-adlx`; older installs with `tools/all-smi/` keep working); on Linux straight from the `amdgpu` driver, with nothing to install. The trainers that fit part of a model in the free VRAM also ask ADLX on Windows, because PyTorch for ROCm there only counts its own process, not the desktop or other programs. With two or more AMD GPUs, the launcher's GPU selector lists them too.
+
 **Linux.** Every `.bat` has a `.sh` equivalent with the same name (`Install_LoRAlab-TrainerStudio.sh`, `Start_LoRAlab-TrainerStudio.sh`, `code/Run_LoRAlab-<Model>.sh`…) and the launcher picks the right one. Install and usage steps are in [docs/Linux.md](docs/Linux.md).
 
 ## 🔄 Updating
 
-Double-click **`Update_LoRAlab-TrainerStudio.bat`**. It brings the latest version from GitHub — including any new trainer — and keeps your models, datasets, projects, LoRAs and settings, which are never part of the repository. Then it installs any new or updated library from `requirements.txt`, the single list the installers and the updater share. If the installation was made from the ZIP, the updater turns it into a Git installation the first time.
+Double-click **`Update_LoRAlab-TrainerStudio.bat`**. It brings the latest version from GitHub — including any new trainer — and keeps your models, datasets, projects, LoRAs and settings, which are never part of the repository. Then it installs any new or updated library from `requirements.txt`, the single list the installers and the updater share. If the installation was made from the ZIP, the updater turns it into a Git installation the first time. What each update brought is in the [Changelog](#-changelog).
 
 ---
 
@@ -135,7 +297,7 @@ Double-click **`Update_LoRAlab-TrainerStudio.bat`**. It brings the latest versio
 Every trainer follows the same five steps:
 
 1. **Project and dataset.** Type a project name, an optional trigger word, and pick the dataset folder with **Browse**. Each image needs a `.txt` caption with the same name. From another device, **⬆ Upload** in the Dataset Manager (or dragging files or a `.zip` onto it) copies them into that folder.
-2. **Captions** *(optional)*. **Create Captions** writes a caption for every image with a vision-language model, trigger word first. The prompt is editable and **Overwrite** off only fills the missing ones. Review them in the **Dataset Manager**: click an image to edit its caption, use **Append / Replace / Remove** to change a common text in every caption, delete images, or clear all captions.
+2. **Captions** *(optional)*. **Create Captions** writes a caption for every image with a vision-language model, trigger word first. The prompt is editable and **Overwrite** off only fills the missing ones. Review them in the **Dataset Manager**: click an image to edit its caption, use **Append / Replace / Remove** to change a common text in every caption, delete images, clear all captions, or empty the whole dataset folder with **Clear Dataset** (it asks you to type the number of files; subfolders are kept).
 3. **Pre-Cache.** Choose the resolution and press **Start Pre-Cache**. The text encoder and the VAE run once and their output is stored on disk; the first time, the model is downloaded. Running it again skips the images that did not change.
 4. **Train.** Set steps, learning rate, rank and alpha, and press **Start / Resume**. Watch the progress, VRAM, RAM and GPU temperature, and the previews (each trainer has its own previews panel). **Stop Training** saves the exact step: press **Start / Resume** again — even days later — to continue without losing a step. To train longer, raise the steps and press it again.
 5. **Export.** Type the final name, pick your ComfyUI / Forge / A1111 `models/loras` folder and press **Save Path** — the folder is remembered for **every** trainer — then **🚀 Send to Models**. **⬇ Download LoRA** lists the final LoRA and the step checkpoints and saves the one you pick on the device you are browsing from.
@@ -145,8 +307,78 @@ Also in every trainer:
 - **Live settings:** while training, change steps, save/preview frequency, preview settings or learning rate and press **Save JSON**; the change applies on the next step.
 - **Delete Pre-Cache / Delete Training** empty the current project's folders (the dataset is never touched).
 - Exported LoRAs carry kohya-style metadata (trigger word, rank, steps, resolution) that CivitAI and LoRA managers read.
+- **Several NVIDIA GPUs?** Pick the one to train with in **🎮 GPU**, next to the language at the bottom of the launcher, and press **💾 Save settings**. It applies to the trainers opened from then on, and the VRAM panel shows that card. *Automatic* keeps CUDA's choice, which puts the card it considers fastest first, not always the one with more VRAM. The selector only appears with two or more NVIDIA cards.
 - Optional **Hugging Face token** for faster downloads. Your settings and token are stored in `settings\`, which is never uploaded.
-- Each project uses its own folders: `cached_data_<model>_<project>` for the pre-cache and `<model>_lora_output_<project>` for checkpoints, previews and LoRAs.
+- Models live under `Models/`. Each project uses `Cache_Data/cached_data_<model>_<project>` for the pre-cache and `Outputs/<model>_lora_output_<project>` for checkpoints, previews and LoRAs. Legacy root folders are moved automatically on first start. Migration is skipped while a training or captioning process is running.
+
+---
+
+## 🎛️ LoRA options: rsLoRA, LoRA+ and LoKr
+
+Under **LoRA Rank / Alpha**, the trainers have extra checkboxes. They change **how** the LoRA learns, so they are fixed for the whole training (to change them, *Delete Training* and start again; the pre-cache is reused).
+
+| Option | What it does | Trainers |
+| :--- | :--- | :--- |
+| **rsLoRA** | Scales the LoRA by `alpha/√rank` instead of `alpha/rank`, so high ranks keep learning. Ticking it lowers alpha to keep the same strength. | Z-Image, FLUX.2 Klein 9B, Qwen-Image 2.1, Qwen-Image 2512, Krea 2, Anima, Ideogram 4, ERNIE-Image, MOSS-Image, SDXL, LTX-2.3, MiniMax-H3 |
+| **LoRA+** | The `B` matrix of every layer learns 16× faster than `A`: usually the same quality in fewer steps. Lower the LR if it burns early. | same as rsLoRA |
+| **LoKr** + **Factor** | Replaces LoRA with a Kronecker product (LyCORIS). Much smaller files (~3 MB instead of ~40 MB at rank 8), good for characters with small datasets, more sensitive to the LR. rsLoRA and LoRA+ turn off. | Z-Image, FLUX.2 Klein 9B, Qwen-Image 2.1, Krea 2, Anima, ERNIE-Image, MOSS-Image |
+
+- The exported file is a **standard LoRA / LyCORIS file** that ComfyUI and Forge load as usual (with rsLoRA, the alpha is converted so it acts exactly as trained).
+- **Send to Models** and **⬇ Download LoRA** add **`_rs`**, **`_plus`** or **`_lokr`** to the name, taken from the file's own metadata, so you always know how it was trained. The *Final LoRA Filename* field shows the suffix as you tick the boxes.
+- No extra VRAM: LoKr never builds the full weight matrix, and the other two only change the scaling and the optimizer.
+
+**Which one to use.** All of them are optional: with no box ticked the trainer works exactly as before. Train the same dataset with the same steps, seed and LR to compare them; the pre-cache is shared, so only *Delete Training* is needed between runs.
+
+| Mode | Boxes | When it helps | Starting point | Name suffix |
+| :--- | :--- | :--- | :--- | :--- |
+| **LoRA** (default) | none | Everything: the safe choice | The trainer's defaults | — |
+| **rsLoRA** | rsLoRA | Higher ranks (32-64) for styles or many concepts: with plain LoRA, raising the rank adds little | Rank 32; the alpha it sets for you (≈ alpha/√rank) | `_rs` |
+| **LoRA+** | LoRA+ | Reaching the same result in fewer steps | Same LR; check the intermediate checkpoints, and lower the LR if it burns early | `_plus` |
+| **rsLoRA + LoRA+** | both | The two together: stable high ranks that also learn faster. They do not conflict: one changes the scaling, the other the optimizer | Rank 32, the alpha rsLoRA sets, and an LR about 2× lower than usual, because both make the training stronger | `_rs_plus` |
+| **LoKr** | LoKr (+ Factor) | Characters and objects with small datasets, or when file size matters | Rank 8, alpha 8, factor 16, same LR as LoRA; factor 8 or a higher LR if it learns too little | `_lokr` |
+
+### LR scheduler
+
+Every trainer has an **LR Scheduler** selector under the learning rate, with **Warmup Steps** (and **Cycles** for restarts). The default keeps each trainer's previous behaviour: `cosine` everywhere, `constant_with_warmup` on MiniMax H3.
+
+| Scheduler | What it does |
+| :--- | :--- |
+| `cosine` | Rises during the warmup, then eases down to 10% of the LR |
+| `constant` | The same LR from the first step to the last (no warmup), like the Civitai trainer |
+| `constant_with_warmup` | Rises during the warmup, then stays at the LR |
+| `linear` | Rises during the warmup, then goes down in a straight line to 10% |
+| `cosine_with_restarts` | Like `cosine`, but climbs back up and repeats the curve *Cycles* times; for long trainings |
+
+With `constant` every checkpoint is trained equally hard, so stopping early gives the same result as a shorter training; the decaying ones usually leave cleaner final checkpoints.
+
+The chosen scheduler is shown in the console summary when training starts and saved in the LoRA metadata (`ss_lr_scheduler`). It is read again on every start, so a resumed training continues with whatever is selected.
+
+---
+
+## 🌍 Languages
+
+The launcher, every trainer interface and the console messages are available in **English, Español, Deutsch, Français, Português, Italiano, 日本語 and 한국어**. English is the default.
+
+1. At the bottom of the launcher, pick a language in **🌍 Language**: the launcher switches at once, as a preview.
+2. Press **💾 Save settings**. The choice is stored in `settings/ui.json` and applies to every trainer.
+3. A trainer page that is already open changes after reloading it; the scripts (captioner, pre-cache, training) use the new language on their next run.
+
+What stays in English on purpose:
+
+- **Caption prompts and the captions themselves**, because that is the language the models were trained on.
+- Technical names and log tags: settings such as `vram_budget_gb` or `max_seq_len`, markers such as `[NF4-TE]` or `[BACKFILL]`, model names and paths.
+- The `.bat` and `.sh` windows of the installer, the updater and the launchers.
+
+**Improving a translation.** Each language is one file, `GUI/locales/<code>.json` (`es`, `de`, `fr`, `pt`, `it`, `ja`, `ko`). The key is the English text and the value is its translation:
+
+```json
+{
+  "Start Pre-Cache": "Iniciar Pre-Caché",
+  "{n} images inside": "{n} imágenes dentro"
+}
+```
+
+Keep every `{marker}` of the English text, in the same order when it has no name (`{}`). A text with no translation is shown in English, so nothing breaks while a translation is incomplete; edit the file, reload the page, and the change is there. The German, French, Portuguese, Italian, Japanese and Korean translations are first versions: if a term sounds wrong in your language, open an [issue](../../issues) or a pull request with the fix.
 
 ---
 
@@ -160,7 +392,7 @@ My recommendation: **kijai's KJNodes** plus **AcademiaSD's tiny decoders (TAE)**
 | :--- | :--- | :--- |
 | Qwen-Image 2.1 | [AcademiaSD/TAE-Qwen-Image-2.1](https://huggingface.co/AcademiaSD/TAE-Qwen-Image-2.1) | `TAEQwenImage21_AcademiaSD.safetensors` |
 | Krea 2 | [AcademiaSD/TAE-Krea-2](https://huggingface.co/AcademiaSD/TAE-Krea-2) | `TAE_Krea2_AcademiaSD.safetensors` |
-| FLUX.2 and FLUX.2 Klein 9B | [AcademiaSD/TAE_Flux2_AcademiaSD](https://huggingface.co/AcademiaSD/TAE_Flux2_AcademiaSD) | `TAE_Flux2_AcademiaSD.safetensors` |
+| FLUX.2 and Ideogram4 | [AcademiaSD/TAE_Flux2_AcademiaSD](https://huggingface.co/AcademiaSD/TAE_Flux2_AcademiaSD) | `TAE_Flux2_AcademiaSD.safetensors` |
 
 1. Download the file to `ComfyUI/models/vae_approx/`.
 2. Install [ComfyUI-KJNodes](https://github.com/kijai/ComfyUI-KJNodes) by kijai.
@@ -173,6 +405,32 @@ ComfyUI's built-in TAESD preview method does not load these files: use the KJNod
 > ⚠️ **About the default settings:** the tests were made to check that every training works, not to find the best performance or quality. Run your own tests with different settings (steps, learning rate, rank, resolution, captions) to improve the quality of your LoRAs.
 
 All times were measured on an RTX 5080 16 GB.
+
+### Fibo 2.0 — image and edit LoRAs (BRIA)
+
+> **New and experimental:** full runs (pre-cache, training, previews, edit mode, resume) verified on Fibo 2.0 Dev. It works, but it is young: the defaults will move as more people test it.
+
+- **Normal LoRAs** (characters, objects, styles): one image + one caption each.
+- **Edit LoRAs**: pairs named `name_before.png` / `name_after.png` plus the instruction in `name.txt` (for example `replace the jacket with a red leather one`). Choose **LoRA Type → Edit**. The before image goes through the text encoder with the instruction and, as a clean latent, conditions the generation as context tokens; the loss is computed only on the "after".
+- **The model:** `briaai/Fibo-2.0-dev`, the full non-distilled base (8.1 B, flow matching on the FLUX.2 VAE, Qwen3-VL-4B as text encoder). Its licence is **CC BY-NC 4.0**: non-commercial use only. The NF4 build is downloaded from `AcademiaSD/Fibo-2.0-NF4-for-LoRA-Training` the first time (the transformer in NF4 and the text encoder in BF16, INT8 or NF4); to build it yourself from the diffusers folder, run `tools/fibo2/5_conversor_Fibo2_NF4.py` once with the folder as `Fibo2_Dev-Raw/`. The conversion needs diffusers with `BriaFibo2Pipeline` (merged upstream): run `Update_LoRAlab-TrainerStudio.bat` first.
+- **NF4:** the attention, MLP and cross-attention of the 44 blocks are quantized (342 layers); the perceptor that turns the caption into gist tokens, the modulation of every block and the input/output layers stay in BF16 (73 layers), because quantizing them puts noise in the text path. The transformer is 5.2 GB in VRAM instead of 16 GB.
+- **Text encoder for the pre-cache:** Qwen3-VL-4B, the model's own — **NF4 (~2.7 GB, default)**, INT8, BF16 (9 GB+ VRAM) or BF16 with CPU offload (exact, any GPU). The pre-cache runs it once; the training never loads it.
+- **Captions:** Fibo 2.0 was trained on structured JSON captions (VGL). A plain `.txt` also works (the pipeline reads it as a short description); for the best results drop a `<name>.json` next to the image with the structured caption — the pre-cache prefers the `.json` over the `.txt`, and the Dataset Manager shows and edits whichever one is there. A `text_render` entry is drawn and shown to the model exactly as in training, so the text of the image comes out right; above the noise level 0.9 the caption goes in without those drawings, as in the official recipe.
+- **Recipe:** the one BRIA publishes in `fine_tuning/train_lora.py`: logit-normal noise with 10 % uniform, 10 % text dropout, 20 % context dropout in edit mode, AdamW (weight decay 0.01), gradient clip 1.0.
+- **LoRA Targets:** *All* (default) trains all 415 linear layers, exactly the recipe BRIA used; *Blocks* trains only the attention and MLP of the 44 blocks.
+- **Previews:** 30 steps / CFG 5, the model's own defaults, and a **Preview Size** (Training / 768 / 1024) to see the result at the size you will use in ComfyUI even if you train at 512. **Fast Previews** cuts the steps and the guidance: Fibo 2.0 Dev has no distilled LoRA (the "Edit Turbo" is another checkpoint), so the preview is about twice as fast but rougher.
+- **The LoRA is exported for ComfyUI**, in the format its loader takes (`diffusion_model.<capa>.lora_A/lora_B` + `alpha`). ComfyUI runs its own repack of Fibo 2.0, where the attention, the MLP and the cross-attention are single fused matrices, so the layers that fuse are re-written as one LoRA of several times the rank: the applied change is exactly the same as in diffusers, but the file is about half again as big.
+- **To convert a LoRA trained before this change** (with the `transformer.*` keys), without retraining: `python tools/fibo2/7_conversor_lora_comfyui.py <lora.safetensors>`. It rewrites the keys in place and keeps the metadata.
+- **Technical notes:** [docs/README_Fibo2.md](docs/README_Fibo2.md).
+
+| Measured on an RTX 5080 16 GB (rank 8, LoRA Targets: all) | s/step | Peak VRAM |
+| :--- | :--- | :--- |
+| Image 512² | 2.0 | 8.7 GB |
+| Image 1024² | 6.2 | 11.2 GB |
+| Edit 512² | 3.1 | 9.9 GB |
+| Edit 1024² | 14.9 | 15.9 GB |
+
+The edit mode adds the tokens of the before image to the sequence, so at 1024² it needs 16 GB: train edit LoRAs at 512² (about 10 GB).
 
 ### Qwen-Image 2.1 — image and edit LoRAs
 
@@ -191,6 +449,43 @@ All times were measured on an RTX 5080 16 GB.
 | Steps | 500 (~9 min 20 s) | 300 with 30 pairs (~9 min) |
 
 8 GB cards train at 512² and 768² (previews switch to a tiled VAE decode at 768²). 768²: ~2.2 s/step, ~8.4 GB VRAM; 1024²: ~4.3 s/step.
+
+### Qwen-Image 2512 / Edit 2511 — image and edit LoRAs
+
+> **New:** full runs (pre-cache, training, previews, resume) verified on Qwen-Image-2512 and on Qwen-Image-Edit-2511 with an edit LoRA.
+
+- One trainer, two models, chosen with **Base Model**: **Qwen-Image-2512** (`Qwen/Qwen-Image-2512`, text to image) and **Qwen-Image-Edit-2511** (`Qwen/Qwen-Image-Edit-2511`, editing). An edit LoRA (`name_before` / `name_after` pairs + instruction) always uses Edit-2511. Both are Apache 2.0, share the text encoder and the VAE, and only the transformer you train on is downloaded. They are separate fine-tunes of Qwen-Image (18-23 % apart in the weights), so a LoRA trained on one is not guaranteed to work on the other.
+- The 20B transformer is **NF4** (9.9 GB instead of 40.9 GB), except the modulation of the first block, which stays in BF16: in 4 bits it leaves grain all over the image. **Blocks on GPU** keeps that many of the 60 blocks in VRAM and copies the rest from RAM one by one as they are used, while the next one is already being copied; `-1` picks the number from the free VRAM, the resolution and the rank. Each resident block costs ~0.17 GB and saves its copy time.
+- The LoRA trains attention and MLP of the 60 blocks and is exported as `transformer.transformer_blocks.N.*` with `alpha`, which ComfyUI loads with the standard LoRA loader.
+- **Edit:** the before image goes to the text encoder (~384², as in the official pipeline) and, as a clean latent at the size of the after image, behind the target in the image sequence; Edit-2511 gives those tokens timestep 0.
+- **Text encoder (pre-cache only):** Qwen2.5-VL-7B in **BF16 CPU Offload** (default; exact), **BF16** (18+ GB), **INT8** (10+ GB) or **NF4** (6+ GB). The prompt is encoded with the official templates; in edit mode the before image gets its 3D MRoPE positions, as in ComfyUI.
+- **Captioner** (Qwen3-VL-8B NF4, shared): descriptions in normal mode, imperative instructions in edit mode.
+- **Previews:** 30 steps / CFG 4 with the official norm rescaling. Edit previews always use the preview reference image, with a negative that also sees it, as in the official pipeline. **Turbo LoRA (Fast Previews)** uses lightx2v's [Lightning 4-step LoRAs](https://huggingface.co/lightx2v/Qwen-Image-2512-Lightning) (2512 and [Edit-2511](https://huggingface.co/lightx2v/Qwen-Image-Edit-2511-Lightning)), with their shift 3 and no CFG.
+- Default settings: 500 steps, LR 0.0002, cosine with 100 warmup steps, rank 16 / alpha 16.
+
+| Measured on an RTX 5080, PCIe 3.0 x16 (rank 16, every block from RAM) | Peak VRAM | s/step |
+| :--- | :--- | :--- |
+| Image 512² | 3.0 GB | 2.2 |
+| Image 1024² | 4.9 GB | 5.7 |
+| Edit 512² | 3.6 GB | 2.9 |
+| Edit 1024² | 7.6 GB | 14.1 |
+| Image 512², all 60 blocks on GPU | 13 GB | 1.8 |
+
+Copying the blocks from RAM costs little on a x16 slot (2.2 against 1.8 s/step at 512²); on a x4 slot or a riser it is several times slower.
+
+### Boogu Image Edit 0.1 — edit LoRAs
+
+> **New:** full runs (pre-cache, training, previews, stop and resume) verified with an edit dataset and with normal images.
+
+- Trains on **Boogu-Image-0.1-Edit** (`Boogu/Boogu-Image-0.1-Edit`, Apache 2.0) with the training code of [DiffSynth-Studio](https://github.com/modelscope/DiffSynth-Studio), which is part of the Studio's regular dependencies. The first Pre-Cache downloads the NF4 model once (~11 GB, [AcademiaSD/Boogu-Image-Edit-NF4-for-LoRA-Training](https://huggingface.co/AcademiaSD/Boogu-Image-Edit-NF4-for-LoRA-Training)): transformer and Qwen3-VL-8B text encoder in NF4, ~5 GB each.
+- **Edit LoRAs:** each sample is `name_before.ext`, `name_after.ext` and `name.txt` (the instruction). The before image goes to the text encoder (~384²) and, as a clean latent at the same scale as the target, next to it in the image sequence, as ComfyUI's `TextEncodeBooguEdit` does. **Normal LoRAs** (one image + caption) also work.
+- The LoRA trains the attention layers and is exported as `diffusion_model.*`, which ComfyUI's native Boogu support loads with the standard LoRA loader. rsLoRA, LoRA+ and LoKr are available.
+- **Previews:** 30 steps / CFG 4 on the preview reference image; the negative is empty and does not see the image, as in ComfyUI.
+- Default settings: 500 steps, LR 0.0002, cosine, rank 16 / alpha 16.
+
+| Measured on an RTX 5080 (rank 16, edit, 512²) | |
+| :--- | :--- |
+| Training | ~2.1 s/step, ~7.8 GB (8.3 GB with previews) |
 
 ### Krea 2 — image LoRAs for Krea 2 Raw and Turbo
 
@@ -225,6 +520,23 @@ All times were measured on an RTX 5080 16 GB.
 | Steps | 1,500 (14 images) |
 | Time | ~0.9 s/step at 512²: ~23 min plus previews |
 | LoRA strength in ComfyUI | **Z-Image: 1.0–1.5** · **Z-Image-Turbo: 1.5–2.5** |
+
+### Ming-Image — image and edit LoRAs for transparent designs
+
+> **New and experimental:** full runs (pre-cache, training, previews, edit mode, resume) verified on Ming-Image 0.1 Design. It works, but it is young: the defaults will move as more people test it.
+
+- **Normal LoRAs**: one image + one caption each, in Ming-Image's own **Figma-style JSON** format. The captioner writes it for you.
+- **Edit LoRAs**: pairs named `name_before.png` / `name_after.png` plus one instruction in `name.txt`. The model sees the before image and learns to produce the after.
+- **The model:** `inclusionAI/Ming-Image-0.1-Design`, the Design variant, which generates the **alpha channel**: that is what makes the transparent designs. The NF4 build is published as `AcademiaSD/Ming-Image-NF4-for-LoRA-Training` (16.2 GB instead of ~49 GB).
+- **The "text encoder" is a full MLLM**: BailingMoE-V2 (a Mixture-of-Transformers) plus a ViT, 10.3 B parameters, in NF4. It is asked for the conditioning with `image_gen_only_extract_hidden_states` and returns two tensors: the 256 scale tokens the DiT sees, and the direct LLM states.
+- **VAE with alpha**: the VAE is RGBA, so the images are trained **with** their alpha channel; the opaque ones enter with alpha = 1.
+- **Captioner:** the shared Qwen3-VL-8B-Instruct NF4, with **Normal** (the JSON caption) and **Edit** (one instruction per pair) modes. When the image really has an alpha channel it is told so, so it does not invent a background behind a transparent design.
+- **Previews:** 12 steps / CFG 1.0, the official pipeline's `pos + cfg·(pos−neg)`, and up to **4 reference images** for the edit preview (`<image1>`, `<image2>`, …).
+- **Live settings:** the changes saved with *Save JSON* while the training runs are applied on the next step, and the console says what changed.
+
+Measured on an RTX 5080 16 GB (rank 8, batch 1): **1024² → 12 s/step and 13.2 GB of peak VRAM**; **512² → 2.4 s/step and 7 GB of peak VRAM** (a real run of 960 steps at 512² averaged 1.3 s/step). The pre-cache proposes 768² by default.
+
+The official image-edit task works at 1024: 512 and 768 are out of its distribution, so train edit LoRAs at 1024 if your card allows it.
 
 ### Anima — anime and illustration LoRAs
 
@@ -261,6 +573,44 @@ All times were measured on an RTX 5080 16 GB.
 | LoRA strength in ComfyUI | 1.0 for characters (1,000 steps) · 1.0–1.5 for edit LoRAs |
 | Speed and VRAM | 512²: ~1.5 s/step, ~8 GB · 768²: ~2.6 s/step, ~10 GB · edit at 512²: ~2.3 s/step, ~8 GB · edit at 768²: ~5.7 s/step, ~11 GB |
 
+### FLUX.3 Image Klein — image and edit LoRAs
+
+- Trains on **FLUX.3 Image Klein Base** (`black-forest-labs/flux-3-image-klein-base`, the undistilled model meant for fine-tuning). The LoRA also loads on the distilled Klein.
+- The 5.5B transformer is **NF4** (3.1 GB instead of 11 GB); the Qwen3-VL-4B text encoder of the pre-cache stays in BF16 and, on small GPUs, the layers that do not fit run from RAM, as in Krea 2.
+- **Normal LoRAs** and **Edit LoRAs** with `name_before` / `name_after` pairs: the "before" goes in through FLUX.3's own reference-image stream, clean, as in the official pipeline.
+- Same recipe as the official diffusers Klein trainer: fixed timestep shift 6.93, velocity target, LoRA on attention + MLP of the image, text and single blocks (plus the reference blocks for edit LoRAs). The LoRA is exported with BFL's original layer names, which ComfyUI loads directly.
+- **Captioner** (Qwen3-VL-8B NF4, shared) in **FLUX.3's own caption formats**, adapted from BFL's prompt-upsampler instructions: *Normal* (a detailed prose caption: medium, scene, lighting, frame-relative layout, subjects), *Normal + boxes* (the caption cites each element as `<person_1>` and ends with a JSON table `[{"id", "bbox", "desc"}]`), *Edit* (a detailed instruction that closes with everything else staying identical) and *Edit + boxes* (the instruction cites `<ref_image_0>` and each item, plus `[{"id", "from", "src_bbox", "tgt_bbox", "desc"}]`, the annotation format BFL trained editing on). Boxes are `[y_min, x_min, y_max, x_max]` on a 0-1000 grid; colors go in words (FLUX.3 has no hex palette, unlike Ideogram 4). For edit pairs the captioner sees the before **and** the after and is told which region changed, computed from the pixels.
+- **Previews:** 28 steps / CFG 3.5 (there is no turbo LoRA for FLUX.3 yet).
+- Needs diffusers with FLUX.3 support: `requirements.txt` pins it, so **Update_LoRAlab-TrainerStudio** installs it.
+
+| Measured on an RTX 5080 | |
+| :--- | :--- |
+| Training | 512²: ~0.7 s/step, ~4.2 GB · 768²: ~2.1 s/step · 1024²: ~3.9 s/step, ~5.7 GB · edit at 768²: ~6 s/step (rank 16) |
+| Previews | 1024², 28 steps with CFG: ~35 s, ~3.7 GB |
+| Text encoder (pre-cache only) | ~8.3 GB in BF16; the part that does not fit in VRAM runs from RAM |
+
+### MOSS-Image — image and edit LoRAs for MOSS-Image Base and SFT
+
+- Trains on **MOSS-Image Base** (`OpenMOSS-Team/MOSS-Image-Base`, the model OpenMOSS publishes for LoRA training) or **MOSS-Image SFT** (`OpenMOSS-Team/MOSS-Image-SFT`, Base fine-tuned for quality), chosen with **Base Model**. Both share the text encoder and the VAE, so the same pre-cache works for either.
+- The 5B single-stream transformer is **NF4** (3.1 GB instead of 10.2 GB). The LoRA trains attention (q, k, v, o) and MLP of the 42 blocks and is exported with the original layer names (`diffusion_model.layers.N.proj.*`), which ComfyUI (nightly, with native MOSS-Image support) loads with the standard LoRA loader.
+- **Text encoder (pre-cache only):** Qwen3.5-9B, the same modes as Qwen-Image 2.1: **BF16 CPU Offload** (default; exact, the part that does not fit in VRAM runs from RAM), **BF16** (24+ GB), **INT8** (~7-14 % error, 14+ GB) or **NF4** (~20-30 % error, 8+ GB). Error = relative difference of the embeddings against BF16, measured. Only the version you pick is downloaded.
+- Training recipe from OpenMOSS's technical report: velocity target, logit-normal noise sampling of their last pretraining stage (μ −1.09, s 0.95, cut at σ 0.95, 1 % uniform). The text encoder stays frozen, as they recommend.
+- **Captioner** (Qwen3-VL-8B NF4, shared): detailed prose following OpenMOSS's own recaptioning guide, with any visible text copied exactly, in double quotes, and its layout described.
+- **Previews:** 28 steps / CFG 3 with block 22 skipped in the negative branch, like the official pipeline. **Turbo LoRA (Fast Previews)** uses [darask0's 4-step adapter](https://huggingface.co/darask0/MOSS-Image_4-step_adapter_lora) (no CFG, ~1.2 GB, downloaded on first use). It is not a regular LoRA: it is added unmerged in FP32, with its own time embedding and its own "data-space" sampler, so it does not touch the LoRA being trained. It was distilled from SFT and also works on Base.
+- Default settings: 500 steps, LR 0.0004, cosine with 100 warmup steps, rank 8 / alpha 8.
+- **Edit LoRAs:** MOSS-Image cannot edit on its own; an edit LoRA teaches it, and yours trains on top of it, frozen. Choose **LoRA Type → Edit** and use `name_before.png` / `name_after.png` pairs with the instruction in `name.txt` (the captioner has an **Edit** mode). **Edit Base** picks the edit LoRA, downloaded on first use:
+  - **armV4** (default): [akhaliq's MOSS-Image-Edit-HQ](https://huggingface.co/akhaliq/MOSS-Image-Edit-HQ) (~495 MB), trained on SFT with masks that keep the unedited parts of the image. It follows ai-toolkit's layout: the "before" goes in as a clean reference up to 0.5 MP, and the text encoder also sees it (at 384×384, after "Picture 1:").
+  - **chinoll**: [chinoll's Moss-Image-Edit](https://huggingface.co/chinoll/Moss-Image-Edit) (~300 MB), the first one; the reference long side is scaled to 512 px and the instruction is encoded as plain text.
+
+  Either way the reference goes in at timestep 0 with attention that only looks at the references. Changing the base needs Pre-Cache again. Previews edit the "before" of a pair or up to 4 reference images of your own. Train on **SFT**: both bases were trained on it.
+- **Using an edit LoRA in ComfyUI** needs ComfyUI's own MOSS-Image edit support (recent ComfyUI): a LoRA loader and **Text Encode MOSS-Image Edit** (positive and negative, with the VAE and the image), with `edit_format` **ai-toolkit** for armV4 or **Moss-Image-Edit** for chinoll. **Edit LoRA Export** gives you two choices. **Separate** (default) exports your LoRA alone: load it next to the edit base LoRA (at 1.0). **Fused** merges both into one LoRA (name ending in `_FUSED`) that you load alone; the merge concatenates the matrices, so it is exact. A LoKr can only be exported separately. **Recommended strength for your LoRA: 0.5 to 1.0**; lower it if the effect is too strong (in the fused file it also lowers the edit base).
+
+| Measured on an RTX 5080 | |
+| :--- | :--- |
+| Training | 512², rank 8: ~1.0 s/step, under 6 GB · edit at 512²: ~1.8 s/step |
+| Previews | 1024²: 28 steps with CFG ~43 s · Turbo, 4 steps ~4 s |
+| Text encoder (pre-cache only) | BF16 ~17 GB (the part that does not fit in VRAM runs from RAM) · INT8 ~10 GB · NF4 ~6.5 GB |
+
 ### Ideogram 4 — image LoRAs
 
 - Trains on the official **Ideogram 4 NF4** release (9.3B, diffusers). It is a single-stream transformer: text and image tokens share one sequence.
@@ -282,7 +632,7 @@ All times were measured on an RTX 5080 16 GB.
 
 ### SDXL — Base, Pony, Illustrious, NoobAI, Juggernaut, RealVis or your own checkpoint
 
-- **Base Model** picks what the LoRA is trained on. Each preset is downloaded the first time (~7 GB) into `SDXL-Models/`:
+- **Base Model** picks what the LoRA is trained on. Each preset is downloaded the first time (~7 GB) into `Models/SDXL-Models/`:
 
   | Preset | Best for | Captions | Quality prefix (optional) · Preview CFG |
   | :--- | :--- | :--- | :--- |
@@ -296,7 +646,7 @@ All times were measured on an RTX 5080 16 GB.
 
   A LoRA works best on the model it was trained on and on models derived from it: train on Illustrious v0.1 for Illustrious-based checkpoints such as WAI or NoobAI.
 - **Captioner:** Qwen3-VL-8B NF4 (shared), with **natural language** or **Danbooru tags**. Long captions are encoded in blocks of 75 tokens (up to 225), as kohya does.
-- **Model Precision:** *BF16* or *NF4*, which quantizes the transformer blocks to 4 bits when loading and fits in a **4 GB GPU**. The first training run on a model saves its converted UNet in `SDXL-Models/unet_cache/` (~5 GB on disk); from then on it loads with ~5.5 GB of RAM instead of ~14 GB.
+- **Model Precision:** *BF16* or *NF4*, which quantizes the transformer blocks to 4 bits when loading and fits in a **4 GB GPU**. The first training run on a model saves its converted UNet in `Models/SDXL-Models/unet_cache/` (~5 GB on disk); from then on it loads with ~5.5 GB of RAM instead of ~14 GB.
 - **Training:** the UNet with gradient checkpointing, noise prediction with Min-SNR weighting (γ = 5). **LoRA Targets:** *Blocks* (attention, MLP and projections of the transformer blocks, kohya's default) or *All* (+ the resnet convolutions, LoCon).
 - **Quality prefix in captions** (Pony, Illustrious, NoobAI; off by default): puts the preset's prefix (`score_9, score_8_up, score_7_up` for Pony) before every caption and the preview prompt. Off, the previews show the LoRA alone; on, use the LoRA with that prefix in ComfyUI.
 - **Previews:** Euler, 28 steps, with the preset's negative prompt. **Preview CFG 0** uses the preset's recommended value.
@@ -352,6 +702,38 @@ Rank 16 matters for characters: with rank 8 the likeness is just as good, but th
 
 ---
 
+### YuE2-3B — song LoRAs (voice AR + phrasing NAR) · ⚠ Experimental / Beta
+
+> [!WARNING]
+> **This trainer is experimental and in beta.** The settings below — defaults, "verified starting point", steps, rank and learning rates — are **not final** and should not be taken too seriously: they come from a handful of runs on one dataset. **Check every result by ear and keep adjusting it**; expect the recipe to change.
+
+> [!IMPORTANT]
+> **Real tests: the AR LoRA clones the singer's voice; the NAR LoRA does not.** To get an artist's voice, train the **`ar`** stage (or `both`) and load the AR LoRA in ComfyUI. A NAR LoRA alone changes how the codes are rendered, but the voice stays the base model's.
+
+YuE2-3B (m-a-p) is a **Mixture-of-Transformers**: every one of its 28 blocks carries two complete routes — an **AR** causal route that generates the semantic codec tokens, and a **NAR** route that does flow matching on the 64-dim audio latent. This trainer keeps them apart: choose **`ar` (default), `nar`, or `both`** in Training Settings. Each stage exports its own LoRA and only touches its own branch; `both` runs NAR first, reloads the base model from disk, then runs AR.
+
+- **Datasets:** songs (`.wav`, `.mp3`, `.flac`, …) with their lyrics in a `.txt` of the same name. The prepare pass re-encodes to **48 kHz stereo** and slices by silence into ≤30 s clips (`__cNN.wav`); a global `Style prompt` (and the optional `[Tags]`/`[Lyrics]` protocol) shapes every request.
+- **Real-audio codes:** m-a-p has not released YuE2's audio-to-code tokenizer, so Pre-Cache uses the community one: MERT-v2-FullSong layer 20 → Mothersuperior's tokenizer head (`v5_30k`) → one semantic code per 40 ms latent frame (`<cache>/_realcodes_<clip>.pt`, ~2.8 GB VRAM, ~1.4 GB downloaded once). It gets about 1 code in 5 exactly right, but rendering those codes with the base NAR keeps the song's voice timbre, harmony and structure.
+- **Stage = `nar`** — lyrics and phrasing: it renders the codes into audio. **In real tests it does not clone the voice**: the voice comes from the codes, which the AR writes. It learns the VAE-latent velocity seeing the text prefix **plus the clip's real codes**, the same context ComfyUI gives it, so the LoRA acts where ComfyUI generates. It is exported in ComfyUI's native layout (`diffusion_model.model.layers.N.self_attn.qkv_proj`, `mlp.gate_up_proj`…, q/k/v and gate/up fused losslessly): load it with **Load LoRA (model only)**.
+- **Stage = `ar`** (default) — voice identity, vocal timbre, instruments and the sound of the artist. **This is the stage that clones the voice in real tests**: the AR writes the semantic codes, and the voice lives in those codes (cross-entropy on the clips' real codes). This is the stage of the community's artist LoRAs, mixed 50 % with the minted regularizer pack so a small dataset cannot collapse YuE2's token grammar. It memorizes the training songs past ~1500 steps.
+- **Stage = `both`** — NAR first, then a fresh base model from disk for AR: two exports, `YuE2_FINAL_NAR_LoRA.safetensors` (ComfyUI layout) + `YuE2_FINAL_AR_LoRA.safetensors` (ComfyUI layout for the CLIP side, `text_encoders.model.layers.N.self_attn.qkv_proj`…). In ComfyUI, load the NAR LoRA on the model and the AR LoRA with **Load LoRA** (clip strength). There is no `_BOTH` file: the two stages load in different places, so they are always two LoRAs.
+- **File names:** every LoRA carries its stage. In the output folder: `YuE2_AR_LoRA_step_N` / `YuE2_FINAL_AR_LoRA` and `YuE2_NAR_LoRA_step_N` / `YuE2_FINAL_NAR_LoRA` (older runs named the NAR `YuE2_LoRA_step_N` / `YuE2_FINAL_LoRA`; they are still recognised). **Send to Models** and **Download LoRA** add `_AR` or `_NAR` to your *Final LoRA Filename* (`yue2_lora_<project>_AR.safetensors`), read from the LoRA's own metadata; Send to Models exports the stage selected in *Training Stage*, and with `both` it exports the two files.
+- **Previews** render short songs (codes → 32-step midpoint ODE → VAE decoder) as 48 kHz WAVs during training.
+- **NF4:** a pre-quantized backbone (`YuE2-3B_NF4`, built with `tools/yue2/5_conversor_YuE2_NF4.py`) loads in ~5 s at 3.1 GB; only the attention+MLP of both branches are quantized — the latent bridges (`llm2vae`/`vae2llm`/`time_embedder`), layernorms, embeddings and heads stay BF16. Without the cache the trainer quantizes the raw model on the fly.
+
+| Starting point (not final) | NAR (lyrics & phrasing) | AR (voice, timbre & sound) |
+| :--- | :--- | :--- |
+| Rank / Alpha | 16 / 16 | 8 / 8 |
+| Learning rate | 3e-4 | 2e-4 |
+| Steps | 1200 | 600 |
+| VRAM (NF4, 30-32 s clips) | ~8 GB steady, peaks 8.7 GB | pending |
+
+Measured on an RTX 5080 with the Agila dataset (91 clips, rank 16/16, lr 3e-4): the NF4 backbone loads in 3.1 GB and the run holds **~8 GB of VRAM with brief peaks to ~8.7 GB** (preview ODE + VAE decode and checkpoint saves) — everything fits comfortably under 9 GB on a 16 GB card. Loss went 1.18 → 1.08 in 300 steps and → 1.056 by step 1200, dropping slowly and cleanly; exact-step resume reproduced the schedule mid-run (step 301 continues the same warmup/cosine curve).
+
+The NAR loss depends on the clips' latent amplitude (the latent is not normalized, std ≈ 1.07): ~2.3 at the start on short synthetic test clips, ~1.15 on real music (91 clips of a full album, 30–32 s). It falls slowly and cleanly: 1.18 → 1.08 in 300 steps and → 1.056 at 1200 (rank 16/16, lr 3e-4). Training holds **~8 GB of VRAM on a 16 GB card with the NF4 backbone** (brief peaks ~8.7 GB at preview decode and checkpoint save) and runs at ~0.4 s/step with 30 s clips; the BF16 backbone takes ~7.3 GB more of headroom (~1 s/step with 12 s clips). The initial AR CE is well below `ln(32768)` and drops steadily.
+
+---
+
 ## ☁️ RunPod
 
 No suitable GPU at home? Train in the cloud with the ready-made template:
@@ -403,7 +785,7 @@ Detailed measurements and the reasoning behind each design decision are in `docs
 
 ## 🛠️ Tools for advanced users
 
-`tools\` contains the scripts used to build the NF4 models from the originals (`Run_Conversor_Krea2.bat`, `Run_Conversor_LTX23.bat`, `5_conversor_QwenImage21_NF4.py`, `5_conversor_ZImage_NF4.py`, `5_conversor_Klein9B_NF4.py`) and a `.parquet` dataset extractor for Qwen-Image 2.1 (`6_extract_parquet.py`). They are not needed to train: the trainers download the ready-made NF4 models.
+`tools\` contains the scripts used to build the NF4 models from the originals (`Run_Conversor_Krea2.bat`, `Run_Conversor_LTX23.bat`, `5_conversor_QwenImage21_NF4.py`, `5_conversor_ZImage_NF4.py`, `5_conversor_Klein9B_NF4.py`, `5_conversor_Fibo2_NF4.py`) and a `.parquet` dataset extractor for Qwen-Image 2.1 (`6_extract_parquet.py`). They are not needed to train: the trainers download the ready-made NF4 models.
 
 ## 📁 Structure
 
@@ -412,34 +794,45 @@ AcademiaSD_LoRAlab-TrainerStudio/
 ├── Start_LoRAlab-TrainerStudio.bat   # Launcher (.sh on Linux)
 ├── Update_LoRAlab-TrainerStudio.bat  # Updater (.sh on Linux)
 ├── Install_LoRAlab-TrainerStudio.bat, Install_Triton&SageAtten220.bat (and their .sh)
+├── Install_LoRAlab-TrainerStudio_AMD.bat / .sh   # AMD installer (experimental)
 ├── requirements.txt                  # Dependencies, for your own environment (LORALAB_PYTHON)
 ├── code/                             # Run_LoRAlab-<Model>.bat / .sh
-├── scripts/                          # launcher.py, server_<model>.py, 0_caption / 1_pre_cache / 2_train_lora, remote_access.py, file_transfer.py, refmod.py, melband/
-├── GUI/                              # launcher.html, launcher.json, trainer_ui_<model>.html
+├── scripts/                          # launcher.py, server_<model>.py, 0_caption / 1_pre_cache / 2_train_lora, remote_access.py, file_transfer.py, i18n.py, lora_options.py, refmod.py, melband/
+├── GUI/                              # launcher.html, launcher.json, trainer_ui_<model>.html, i18n.js
+│   └── locales/                      # Translations: <language>.json (English is the built-in text)
 ├── docs/                             # Technical notes per trainer
 ├── assets/                           # Covers and logos
-├── tools/<model>/                    # NF4 converters and dataset tools
+├── tools/<model>/                    # NF4 converters and dataset tools (tools/all-smi/ on AMD Windows)
 ├── Example_Dataset/                  # Small example dataset (MiniMax-H3)
-└── settings/                         # Your settings, HF token and network.json (created on first use, never uploaded)
+├── Models/                           # Downloaded and converted models
+├── Outputs/                          # LoRA checkpoints, previews and final LoRAs
+├── Cache_Data/                       # Text embeddings and VAE latents
+└── settings/                         # Your settings, HF token, network.json and ui.json (created on first use, never uploaded)
 ```
 
-Models (`Krea-2-NF4`, `LTX23-NF4`, `MiniMax-H3-NF4`, `Qwen-Image21-NF4`, `Z-Image_NF4`, `Anima-Base`, `FLUX.2-Klein-9B_NF4`, `Ideogram4-NF4`, `SDXL-Models`, captioners), caches and LoRA outputs are created next to these folders on first use.
+Models (`Krea-2-NF4`, `LTX23-NF4`, `MiniMax-H3-NF4`, `Qwen-Image21-NF4`, `Z-Image_NF4`, `Anima-Base`, `FLUX.2-Klein-9B_NF4`, `FLUX.3-Image-Klein_NF4`, `Ideogram4-NF4`, `MOSS-Image-NF4`, `Ming-Image_NF4`, `Fibo2_Dev-NF4`, `SDXL-Models`, captioners) are created inside `Models/` on first use, and the caches and the LoRA outputs inside `Cache_Data/` and `Outputs/`. Legacy folders in the project root are moved into these folders automatically. A collision keeps both folders and prints a warning, so nothing is overwritten.
 
 ---
 
 ## 📜 Licenses
 
-The code is released under the **MIT License**. The models keep their own licenses, which also apply to the NF4 versions and to the LoRAs you train — check them before using or sharing results:
+The code is released under the **MIT License**. The models keep their own licenses, which also apply to the NF4 versions and to the LoRAs you train — check them before using or sharing results. **Fibo 2.0 is CC BY-NC 4.0: non-commercial use only** (commercial use needs an agreement with BRIA):
 
 | Model | License |
 | :--- | :--- |
 | Qwen-Image 2.1 (and the Viggle Turbo LoRA) | Qwen Research License — non-commercial |
+| Qwen-Image-2512, Qwen-Image-Edit-2511 (and lightx2v's Lightning LoRAs) | Apache 2.0 |
 | Krea 2 | Krea 2 Community License |
 | LTX-2.3 | LTX-2 Open-Source License |
 | MiniMax-H3 | MiniMax-H3 Community License Agreement |
 | Z-Image (and the Z-Image-Fun-Lora-Distill preview LoRA) | Apache 2.0 |
 | Anima | CircleStone Labs Non-Commercial License (plus the NVIDIA Open Model License for Cosmos). Images you generate can be used commercially |
 | FLUX.2 Klein 9B (and the Klein 9B turbo preview LoRA) | FLUX Non-Commercial License — non-commercial |
+| FLUX.3 Image Klein | FLUX Kommunity License (see the model card) |
+| MOSS-Image Base and SFT (and darask0's 4-step turbo adapter) | Apache 2.0 |
+| MOSS-Image-Edit-HQ armV4 LoRA (akhaliq, downloaded at run time) | Apache-2.0 |
+| Moss-Image-Edit LoRA (chinoll, downloaded at run time) | GPL-3.0 (the project's license; no separate license is given for the weights) |
+| Boogu-Image-0.1-Edit | Apache 2.0 |
 | Ideogram 4 | Ideogram Non-Commercial Model Agreement — non-commercial; LoRAs are model derivatives under the same license |
 | SDXL Base 1.0, RealVisXL V5.0 | CreativeML Open RAIL++-M |
 | Pony Diffusion V6 XL, Illustrious XL v0.1, NoobAI-XL 1.1 | Fair AI Public License 1.0-SD |
@@ -451,6 +844,8 @@ Built with PyTorch, Diffusers, Transformers, PEFT, bitsandbytes, Flask and the H
 ## 🙏 Contributors
 
 - **[Jonathan Hecl (@jonathanhecl)](https://github.com/jonathanhecl)** — Linux support ([PR #1](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/pull/1)). Thank you!
+- **[Synergyart (@Synergyart)](https://github.com/Synergyart)** — Training that keeps running after closing the tab, per-file dataset uploads and non-blocking notifications ([PR #10](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/pull/10)), the Krea 2 preview fix ([PR #11](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/pull/11)), and detailed bug reports such as the missing C compiler in the RunPod image ([#15](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/issues/15)). Thank you!
+- **[Cappyadams (@Cappyadams)](https://github.com/Cappyadams)** — AMD support: the [guide for AMD GPUs on Windows](https://civitai.com/articles/36293/training-krea-2minimax-h3etc-lora-on-low-vram-low-ram-amd-gpu-windows) the AMD installer is based on, and the first confirmed AMD training on an RX 7800 XT ([#8](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/issues/8)). Thank you!
 
 ## 🧩 Third-party code and credits
 
@@ -461,14 +856,21 @@ Code adapted or copied from other projects, and the work it builds on:
 | [Fizgig](https://github.com/shootthesound/Fizgig) by [@shootthesound](https://github.com/shootthesound) | MiniMax H3 sigma sampling (`sample_sigmas`) and the video VAE encoder (`MiniMaxH3VideoVAEEncoder`), adapted. The Slider LoRA recipe (push strength, low rank, training only the composition blocks) follows what Fizgig describes for its sliders (no code used) | Apache-2.0 |
 | [Concept Sliders](https://sliders.baulab.info/) by Gandikota et al. | The idea behind Slider LoRAs: one LoRA trained in both directions of a concept (`scripts/slider_core.py`; no code used) | MIT |
 | [ComfyUI](https://github.com/Comfy-Org/ComfyUI) | Origin of the MiniMax H3 video VAE that Fizgig ported; native layer names and LoRA layouts the exports follow | GPL-3.0 |
-| [Diffusers](https://github.com/huggingface/diffusers) | Model classes and pipelines; MiniMax H3 audio positions copied from `build_packed_sequence` | Apache-2.0 |
+| [DiffSynth-Studio](https://github.com/modelscope/DiffSynth-Studio) by ModelScope | Boogu Image Edit model, pipeline and training module; `scripts/boogu_diffsynth_train.py` is adapted from its `examples/boogu_image/model_training/train.py` | Apache-2.0 |
+| [Diffusers](https://github.com/huggingface/diffusers) | Model classes and pipelines; MiniMax H3 audio positions copied from `build_packed_sequence`; Qwen-Image prompt templates, latent packing and edit sizes from `QwenImagePipeline` / `QwenImageEditPlusPipeline`, followed in `scripts/qwen_image2512_model.py` | Apache-2.0 |
 | [Mel-Band-Roformer-Vocal-Model](https://github.com/KimberleyJensen/Mel-Band-Roformer-Vocal-Model) by KimberleyJensen | `scripts/melband/mel_band_roformer.py`, vendored with its source header (vocal separation for MiniMax H3 audio datasets) | not stated |
 | [BS-RoFormer](https://github.com/lucidrains/BS-RoFormer) by lucidrains | Architecture the Mel-Band RoFormer code derives from | MIT |
 | [librosa](https://github.com/librosa/librosa) | Mel filter bank reimplemented in `scripts/melband/mel_converter.py` | ISC |
 | [ai-toolkit](https://github.com/ostris/ai-toolkit) by ostris | Reference for the MiniMax H3 LoRA key layout and the caption text-encoder allowlist | MIT |
+| [all-smi](https://github.com/lablup/all-smi) by Lablup | AMD GPU VRAM for the trainers' panel on Windows (`scripts/gpu_stats.py` reads its JSON snapshot; the AMD installer downloads the signed binary) | Apache-2.0 |
+| [ADLX](https://github.com/GPUOpen-LibrariesAndSDKs/ADLX) by AMD | AMD GPU VRAM and temperature on Windows (`scripts/gpu_stats.py`, through the `amd-adlx` package the AMD installer installs) | ADLX SDK License |
+| [LyCORIS](https://github.com/KohakuBlueleaf/LyCORIS) by KohakuBlueleaf | The LoKr method in `scripts/lora_options.py`: Kronecker factorization, initialization and `lokr_*` key layout (reimplemented for NF4 layers) | Apache-2.0 |
+| [rsLoRA](https://arxiv.org/abs/2312.03732) (Kalajdzievski) and [LoRA+](https://arxiv.org/abs/2402.12354) (Hayou, Ghosh, Yu) | The `alpha/√rank` scaling and the separate learning rate for `lora_B` | papers |
+| [Diffusers FLUX.3 Klein LoRA trainer](https://github.com/huggingface/diffusers/blob/main/examples/dreambooth/train_dreambooth_lora_flux3_klein.py) | FLUX.3 Klein training recipe: timestep shift, position ids, text window and LoRA targets, followed in `scripts/2_train_lora_flux3klein.py` | Apache-2.0 |
+| [MOSS-Image](https://github.com/OpenMOSS/MOSS-Image) by the OpenMOSS Team | The MOSS-Image transformer of `pipeline_moss_image.py`, adapted in `scripts/moss_image_model.py` (NF4 layers, gradient checkpointing); prompt encoding, preview guidance, training noise schedule (technical report) and caption guide | Apache-2.0 |
 | [kohya-ss sd-scripts](https://github.com/kohya-ss/sd-scripts) | `ss_*` LoRA metadata convention, SDXL LoRA key format and 75-token caption chunking | Apache-2.0 |
 
-Models and LoRAs downloaded at run time (not part of this repository): MelBandRoFormer weights by [Kijai](https://huggingface.co/Kijai/MelBandRoFormer_comfy), the Klein 9B turbo preview LoRA by [kalle07](https://huggingface.co/kalle07/FLUX.2-klein-9B-turbo-lora-set), the Qwen-Image 2.1 turbo LoRA by [Viggle](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo), Z-Image-Fun-Lora-Distill by [Alibaba PAI](https://huggingface.co/alibaba-pai/Z-Image-Fun-Lora-Distill), and the ungated Ideogram 4 NF4 mirror by [Unsloth](https://huggingface.co/unsloth/ideogram-4-nf4-diffusers). Thanks to all of them.
+Models and LoRAs downloaded at run time (not part of this repository): MelBandRoFormer weights by [Kijai](https://huggingface.co/Kijai/MelBandRoFormer_comfy), the Klein 9B turbo preview LoRA by [kalle07](https://huggingface.co/kalle07/FLUX.2-klein-9B-turbo-lora-set), the Qwen-Image 2.1 turbo LoRA by [Viggle](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo), the Qwen-Image-2512 and Edit-2511 Lightning LoRAs by [lightx2v](https://huggingface.co/lightx2v/Qwen-Image-2512-Lightning), the MOSS-Image 4-step adapter by [darask0](https://huggingface.co/darask0/MOSS-Image_4-step_adapter_lora) (built on the 8-step adapter by [lodestones](https://huggingface.co/lodestones/MOSS-Image-SFT-8-steps-dmd)), the MOSS-Image-Edit-HQ armV4 LoRA by [akhaliq](https://huggingface.co/akhaliq/MOSS-Image-Edit-HQ), the Moss-Image-Edit LoRA by [chinoll](https://huggingface.co/chinoll/Moss-Image-Edit) (whose reference format, from [ComfyUI-Moss-Image-Edit](https://github.com/Chenkin-x/ComfyUI-Moss-Image-Edit), the trainer reimplements), Z-Image-Fun-Lora-Distill by [Alibaba PAI](https://huggingface.co/alibaba-pai/Z-Image-Fun-Lora-Distill), and the ungated Ideogram 4 NF4 mirror by [Unsloth](https://huggingface.co/unsloth/ideogram-4-nf4-diffusers). Thanks to all of them.
 
 ## 💬 Community & Support
 

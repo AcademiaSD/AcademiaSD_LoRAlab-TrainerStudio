@@ -36,7 +36,7 @@ permanecen guardadas.
 
 Salida:
 
-    ./LTX23-NF4_weights/
+    ./Models/LTX23-NF4_weights/
         config.json
         scheduler_config.json
         pipeline_info.json
@@ -71,8 +71,8 @@ from safetensors.torch import save_file
 # CONFIGURACIÓN
 # ============================================================================
 
-MODEL_ID = "./LTX23-Raw"
-OUTPUT_DIR = "./LTX23-NF4_weights"
+MODEL_ID = "./Models/LTX23-Raw"
+OUTPUT_DIR = "./Models/LTX23-NF4_weights"
 
 COMPUTE_DTYPE = torch.bfloat16
 QUANT_TYPE = "nf4"

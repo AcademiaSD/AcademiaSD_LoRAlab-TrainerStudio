@@ -63,7 +63,7 @@ Here is the exact architectural breakdown of how this is achieved:
   - Physical **GPU VRAM** usage (via `nvidia-smi` / `torch`).
   - **GPU Temperature (°C)** with dynamic color coding (Green <70°C, Orange 70–79°C, Red >80°C).
 - **🔑 Hugging Face Token Support**: Optional HF token (stored in `settings\HF_token.json`) for faster model downloads with live progress bars (MBs, transfer speed, ETA).
-- **✍️ Auto-Captions**: **Create Captions** writes one `.txt` per image with Qwen3-VL-8B (NF4, ~5.5 GB VRAM), the same captioner as the Qwen-Image 2.1 LoRAlab, with the trigger word first. The first time it downloads ~5 GB to `Captioner-Qwen3-VL-8B/`. The prompt is editable and **Overwrite** off only fills the missing captions.
+- **✍️ Auto-Captions**: **Create Captions** writes one `.txt` per image with Qwen3-VL-8B (NF4, ~5.5 GB VRAM), the same captioner as the Qwen-Image 2.1 LoRAlab, with the trigger word first. The first time it downloads ~5 GB to `Models/Captioner-Qwen3-VL-8B/`. The prompt is editable and **Overwrite** off only fills the missing captions.
 - **🖼️ Dataset Manager & Inline Caption Editor**:
   - Visual grid with status badges (🟢 **Green** = Caption present, 🔴 **Red** = Missing caption), resizable by dragging.
   - Modal lightbox to view high-res images and **edit `.txt` captions directly on disk** (warns before closing with unsaved changes).
@@ -72,7 +72,7 @@ Here is the exact architectural breakdown of how this is achieved:
 - **🗑️ Delete Pre-Cache / Delete Training** buttons to empty the current project's folders.
 - **⏱️ Exact Step Resume Checkpoints**: Interrupt or stop training at any step (e.g. Step 333); the exact state (`current_step.txt`, `optimizer.pt`, `adapter_model.safetensors`) is saved automatically. Click **Start/Resume** to continue from that exact step. Resuming always keeps the checkpoint's rank and alpha.
 - **🏷️ LoRA Metadata**: exported LoRAs carry kohya-style metadata (trigger word, rank, steps, resolution) that CivitAI and LoRA managers read.
-- **📂 Automatic Project Folder Management**: Dynamically routes cache and outputs to `./cached_data_LTX23_<project>` and `./LTX23_lora_output_<project>` based on your project name.
+- **📂 Automatic Project Folder Management**: Dynamically routes cache and outputs to `./Cache_Data/cached_data_ltx23_<project>` and `./Outputs/ltx23_lora_output_<project>` based on your project name.
 - **🚀 One-Click WebUI Export ("Send to Models")**: Export the best `.safetensors` LoRA directly to your preferred WebUI folder (ComfyUI, ForgeNeo, etc.).
 - **🌐 Fully Bilingual (English / Español)**: All buttons, console logs, dialogs, and progress bars display labels in both English and Spanish.
 

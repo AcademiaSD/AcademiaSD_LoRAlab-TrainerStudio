@@ -48,6 +48,8 @@ import sys
 import time
 
 import torch
+from i18n import t
+from project_layout import resolve_model_dir
 
 
 # =============================================================================
@@ -75,7 +77,7 @@ DEFAULTS = {
     # Measured: 242 seconds per image. The 4B in NF4 is ~3 GB, fits entirely on
     # any card from 6 GB up, and never touches shared memory.
     "captioner_repo": "Qwen/Qwen3-VL-4B-Instruct",
-    "captioner_dir": "./Qwen3-VL-4B-Instruct",
+    "captioner_dir": "Models/Qwen3-VL-4B-Instruct",
 
     # 4 bits deja el modelo en ~3 GB. Ponlo a False para bf16 (~8 GB) si te
     # sobra VRAM y quieres el maximo de calidad en la descripcion.
@@ -172,23 +174,14 @@ PRECACHE_CONFIG = os.path.join(BASE_DIR, "settings", "pre_cache_settings_minimax
 
 
 def L(en, es):
-    """Ingles primero, siempre. / English first, always."""
-    return "{} / {}".format(en, es)
+    """Mensaje en el idioma elegido en el lanzador (i18n); el español queda aquí como referencia.
+    Message in the language chosen in the launcher."""
+    return t(en)
 
 
 def LF(en, es, *args):
-    """L() con formato, formateando cada idioma por separado.
-
-    L(a, b).format(x) es una trampa: al unir las dos mitades los marcadores de
-    ambas comparten la misma lista de argumentos, asi que hay que pasar cada
-    valor DOS veces y basta olvidarse una para que reviente en tiempo de
-    ejecucion. LF formatea cada mitad por su cuenta y el problema desaparece.
-
-    L() with formatting, formatting each language separately. L(a, b).format(x)
-    is a trap: joining the halves makes both share one argument list, so every
-    value must be passed TWICE and forgetting once blows up at run time.
-    """
-    return "{} / {}".format(en.format(*args), es.format(*args))
+    """L() con formato: traduce y formatea con los argumentos. / L() with formatting."""
+    return t(en, *args)
 
 
 def log(msg="", flush=True):
@@ -245,7 +238,8 @@ def ensure_captioner(cfg):
 
     Downloads the captioning model if it is not on disk already.
     """
-    directory = cfg["captioner_dir"]
+    directory = str(resolve_model_dir(cfg["captioner_dir"], "Models/Qwen3-VL-4B-Instruct"))
+    cfg["captioner_dir"] = directory
 
     if captioner_is_present(directory):
         log(LF("[CAPTION] Model found: {}",

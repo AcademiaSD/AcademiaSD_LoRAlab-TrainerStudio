@@ -11,16 +11,19 @@ torch
 torchvision
 torchaudio
 
-# diffusers from the main branch: Klein 9B, Ideogram 4 and MiniMax-H3 are not in a release yet.
-diffusers @ https://github.com/huggingface/diffusers/archive/refs/heads/main.zip
+# diffusers pinned to a main commit: Klein 9B, Ideogram 4, MiniMax-H3, FLUX.3 and Bria Fibo 2.0 are not in a release yet.
+# pip only compares versions (every main build is 0.41.0.dev0): scripts/sync_pinned.py, run by the updater, reinstalls it when this URL changes.
+diffusers @ https://github.com/huggingface/diffusers/archive/537887041938fc6fe61ad583c3ae77477c9ebac9.zip
 transformers>=5.17
 peft
 accelerate
+diffsynth>=2.1.9
 safetensors
 huggingface_hub
 
 bitsandbytes
 sentencepiece
+tiktoken
 protobuf
 pyarrow
 einops

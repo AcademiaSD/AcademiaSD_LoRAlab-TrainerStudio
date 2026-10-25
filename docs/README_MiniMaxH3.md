@@ -103,7 +103,7 @@ This trainer takes **images, video clips, or both in the same folder**. Images t
 ### System
 - **📊 Real-time telemetry** — RAM, VRAM and GPU temperature with colour coding.
 - **🔑 Hugging Face token support** — optional, stored in `settings\HF_token.json`, for faster downloads with live progress.
-- **📂 Automatic project folders** — `./cached_data_minimaxh3_<project>` and `./minimaxh3_lora_output_<project>`.
+- **📂 Automatic project folders** — `./Cache_Data/cached_data_minimaxh3_<project>` and `./Outputs/minimaxh3_lora_output_<project>`.
 - **🚀 One-click export** — send the finished `.safetensors` to your ComfyUI / Forge / A1111 `models/loras` folder.
 - **🌐 Fully bilingual (English / Español)** — every message is `English / Español` on the same line, English first.
 
@@ -248,7 +248,7 @@ Use the **Dataset Manager** to review everything: caption badges, a lightbox to 
 
 **No captions yet?** Press **Create Captions**. It writes one `.txt` per image with the trigger word first, and turns into **Redo Captions** once they exist (asking before it overwrites anything).
 
-The first run downloads **Qwen3-VL-4B-Instruct** (~8 GB) into `./Qwen3-VL-4B-Instruct`; later runs reuse it. It loads in 4-bit — **4.2 GB of VRAM measured** — and takes about **6 seconds per image** on an RTX 5080. It fits on any card from 6 GB up.
+The first run downloads **Qwen3-VL-4B-Instruct** (~8 GB) into `Models/Qwen3-VL-4B-Instruct`; later runs reuse it. It loads in 4-bit — **4.2 GB of VRAM measured** — and takes about **6 seconds per image** on an RTX 5080. It fits on any card from 6 GB up.
 
 Two details worth knowing:
 
@@ -777,6 +777,28 @@ does it**, no new code: `ref_videos.ref_video_N` paired by index with
 `ref_video_audios.ref_video_audio_N`. Remember those share numbering with your
 RefMods, so adding one shifts every `<Subject N>` after it.
 
+**Several characters without blending: the AcademiaSD nodes.** The main reason
+two RefMods blend, clone one subject or swap voices is not the file but how it
+is applied: the classic Apply node adds the latents *after* text encoding, so
+Qwen never sees the subjects and the prompt cannot say which `<Video N>` is
+whom. **AcademiaSD H3 RefMod Character** + **AcademiaSD H3 RefMod Encode** (in
+comfyui_AcademiaSD) present every RefMod to Qwen with its native label, in the
+same order as the DiT blocks, and write `subject_definitions` for you. They
+read any RefMod; the ones from older versions get their frames VAE-decoded for
+Qwen, which works but shows it a worse picture.
+
+That is why the encoder now **stores the source pictures inside the RefMod**:
+next to each latent frame, the exact photo that produced it, cropped to the
+canvas, as JPEG bytes (`frame_N` tensors, or `ref_I_frame_N` in a bundle) plus
+`frame_layout: "stills"` in the metadata. Other loaders read only `latent` /
+`ref_I` and ignore the rest, so the file stays a valid RefMod everywhere.
+
+The Character node also has an experimental `bind_voice` that emits the
+`video_audio` block described above. It is off by default for the reason given
+two paragraphs up: scattered stills paired with a continuous track claim a
+correspondence that is not there. Whether it helps anyway is for a same-seed
+test to decide.
+
 ### You do not need the whole model
 
 RefMod never loads the DiT, so the 41 GB NF4 repo is not a prerequisite. If the
@@ -843,7 +865,7 @@ Most settings live in the `DEFAULTS` dictionary at the top of each script, docum
 | :--- | :--- | :--- |
 | `lora_dtype` | `fp32` | fp32 master weights + fp32 Adam state. Do not lower. |
 | `optimizer_type` | `adamw` | `adamw8bit` leaves the face soft on H3. |
-| `lr_schedule` | `flat` | A cosine decay spends half the movement budget before the LoRA arrives anywhere. |
+| `lr_scheduler` | `constant_with_warmup` | A cosine decay spends half the movement budget before the LoRA arrives anywhere. |
 | `caption_dropout` | `0.05` | Forces identity into the weights, not into caption correlation. |
 | `nf4_cpu_home` | `True` | Reuses each block's CPU-side bytes instead of copying them back from the GPU. Halves the step time. Safe because NF4 weights are frozen; set `False` only to rule it out while debugging. |
 | `park_mode` | `auto` | Where parked blocks live: `ram`, `disk`, or `auto` (RAM until `ram_limit_gb` would be crossed). |

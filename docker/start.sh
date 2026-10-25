@@ -11,6 +11,7 @@ PY="${LORALAB_PYTHON:-/opt/venv/bin/python}"
 
 echo "Checking libraries / Comprobando librerias (requirements.txt)..."
 "${PY}" -m pip install -r requirements.txt || echo "[WARNING] Could not update the libraries / No se pudieron actualizar las librerias."
+"${PY}" scripts/sync_pinned.py || echo "[WARNING] Could not update diffusers / No se pudo actualizar diffusers."
 
 "${PY}" - <<'PYEOF'
 import os, secrets, sys

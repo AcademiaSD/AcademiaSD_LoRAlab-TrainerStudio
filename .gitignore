@@ -22,9 +22,32 @@ Z-Image_NF4/
 Z-Image-Raw/
 Anima-Base/
 FLUX.2-Klein-9B_NF4/
+FLUX.3-Image-Klein_NF4/
+flux-3-image-klein-base/
+MOSS-Image-NF4/
 FLUX.2-Klein-Base-9B-Raw/
+Ernie-Raw/
+Ernie-NF4/
 SDXL-Models/
 Ideogram4-NF4/
+Qwen-Image-2512-NF4/
+Boogu-image-edit-Raw/
+Boogu-image-edit-NF4/
+Ming-Image_NF4/
+Ming-Image_Raw/
+Ming-Image-Raw/
+Fibo2_Dev-Raw/
+Fibo2_Dev-NF4/
+
+/Models/
+/Outputs/
+/Cache_Data/
+YuE2-3B_Raw/
+YuE2-3B_NF4/
+YuE2-Vae/
+YuE2-Vae-legacy/
+Qwen3-ASR/
+SheetSage2/
 
 # Ejecuciones / Runs
 cached_data_*/
@@ -41,6 +64,21 @@ HF_token.json
 *_bak*.py
 *_bak*.html
 *.bak
+preview_edit_images/
+tools/all-smi/
+MERT-v2-FullSong/
+YuE2-RealAudio-Head/
+
+# Descarga de prueba del paquete NF4 publicado
+Ming-Image_NF4_HF/
+
+# Local: datasets, credenciales y binarios / local only: datasets, credentials and binaries
+7sZEbSMc.txt
+4_descarga_flux.py
+
+Dataset_mrrtsgrl_15/
+Dataset_musica/
+Dataset_tosti_edit/
 
 # Experimentos: imágenes, LoRAs y entrenadores generados / Experiments: generated images, LoRAs and trainers
 experiments/*/work/

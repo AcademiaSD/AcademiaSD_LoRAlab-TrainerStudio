@@ -1,10 +1,11 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AcademiaSD LoRAlab Trainer Studio</title>
     <link rel="icon" type="image/png" href="/assets/qwenimage21/logo_128.png">
+    <script src="/i18n.js"></script>
 
     <style>
         :root {
@@ -42,12 +43,27 @@
             border: 1px solid var(--panel-border);
             border-radius: 16px;
             color: inherit; cursor: pointer;
+            max-width: 100%;
             transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
         }
         .card img {
             display: block; border-radius: 10px;
+            width: var(--img-w, 240px);   /* el JS lo pone al tamaño real de la portada */
+            max-width: 100%;              /* en un movil nunca desborda */
+            height: auto;
             filter: brightness(0.82) saturate(0.95);
             transition: filter 0.2s ease;
+        }
+
+        /* Telefonos y tablets: tarjetas mas pequenas y mas juntas, varias por fila.
+           Phones and tablets: smaller, tighter cards, several per row. */
+        @media (max-width: 760px) {
+            .grid { gap: 16px; }
+            .row { gap: 14px; }
+            .card { padding: 12px 12px 10px; gap: 8px; }
+            .card img { width: min(var(--img-w, 240px), 44vw); }
+            .card .name { font-size: 0.95rem; }
+            .card .desc { font-size: 0.72rem; max-width: 180px; }
         }
         .card:hover, .card:focus-visible {
             outline: none;
@@ -58,6 +74,13 @@
         .card:hover img, .card:focus-visible img { filter: brightness(1.08) saturate(1.1); }
         .card:active { transform: translateY(-2px) scale(0.99); }
         .card.launching { border-color: #10b981; box-shadow: 0 0 0 1px #10b981, 0 0 30px rgba(16, 185, 129, 0.6); }
+
+        /* Brillo pulsante verde del entrenador que ya va corriendo / pulsing green glow of the running trainer */
+        @keyframes card-pulse {
+            0%, 100% { box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.45), 0 0 14px rgba(16, 185, 129, 0.30); }
+            50%      { box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.85), 0 0 32px rgba(16, 185, 129, 0.60); }
+        }
+        .card.active-glow { border-color: #10b981; animation: card-pulse 2.4s ease-in-out infinite; }
 
         .card .name { font-size: 1.1rem; font-weight: 700; }
         .card .desc { font-size: 0.8rem; color: var(--text-muted); text-align: center; max-width: 250px; }
@@ -79,11 +102,11 @@
                         color: var(--text-main); background: var(--bg-dark); border: 1px solid var(--panel-border); }
         footer button:hover { border-color: var(--accent); }
 
-        #net { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(2, 6, 23, 0.75); z-index: 10; }
-        #net.open { display: flex; }
-        #net form { width: min(440px, 92vw); display: flex; flex-direction: column; gap: 12px; padding: 22px;
+        #net, #confirm { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(2, 6, 23, 0.75); z-index: 10; }
+        #net.open, #confirm.open { display: flex; }
+        #net form, #confirm form { width: min(440px, 92vw); display: flex; flex-direction: column; gap: 12px; padding: 22px;
                     background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 14px; }
-        #net h2 { font-size: 1.1rem; }
+        #net h2, #confirm h2 { font-size: 1.1rem; }
         #net label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--text-muted); }
         #net label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--text-main); font-size: 0.9rem; }
         #net input[type=text], #net input[type=password], #net input[type=number] {
@@ -91,12 +114,21 @@
         #net .pair { display: flex; gap: 10px; }
         #net .pair label { flex: 1; }
         #net .note { font-size: 0.78rem; color: var(--text-muted); line-height: 1.4; }
+        #confirm .note { font-size: 0.85rem; color: var(--text-muted); line-height: 1.6; }
         #net .note.warn { color: #f59e0b; }
-        #net .actions { display: flex; gap: 10px; justify-content: flex-end; }
-        #net .actions button { padding: 7px 14px; border-radius: 6px; border: 1px solid var(--panel-border); cursor: pointer;
+        #net .actions, #confirm .actions { display: flex; gap: 10px; justify-content: flex-end; }
+        #net .actions button, #confirm .actions button { padding: 7px 14px; border-radius: 6px; border: 1px solid var(--panel-border); cursor: pointer;
                                color: var(--text-main); background: var(--bg-dark); font-weight: 600; }
-        #net .actions button.primary { background: var(--accent); border-color: var(--accent); }
+        #net .actions button.primary, #confirm .actions button.primary { background: var(--accent); border-color: var(--accent); }
         #net-msg { font-size: 0.8rem; min-height: 1.2em; }
+
+        #ui-settings { display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; font-size: 0.85rem; color: var(--text-muted); }
+        #ui-settings select, #ui-settings button { font: inherit; font-size: 0.85rem; padding: 6px 10px; border-radius: 6px; cursor: pointer;
+                                                   color: var(--text-main); background: var(--bg-dark); border: 1px solid var(--panel-border); }
+        #ui-settings button:hover, #ui-settings select:hover { border-color: var(--accent); }
+        #ui-msg { min-width: 1em; }
+        #ui-msg.ok { color: #10b981; }
+        #ui-msg.warn { color: #f59e0b; }
     </style>
 </head>
 <body>
@@ -108,6 +140,15 @@
     </header>
 
     <div class="grid" id="grid"></div>
+    <div id="ui-settings">
+        <label for="ui-lang">🌍 <span>Language</span></label>
+        <select id="ui-lang" onchange="previewLanguage()"></select>
+        <label for="ui-gpu" id="ui-gpu-label" style="display:none"
+               title="GPU used to train when this PC has more than one NVIDIA card. Automatic lets CUDA pick, which puts the card it considers fastest first, not always the one with more VRAM. It applies to the trainers opened from now on.">🎮 <span>GPU</span></label>
+        <select id="ui-gpu" style="display:none"></select>
+        <button type="button" onclick="saveSettings()">💾 Save settings</button>
+        <span id="ui-msg"></span>
+    </div>
     <div id="status"></div>
 
     <footer>
@@ -115,47 +156,59 @@
         <a href="https://twitter.com/Academia_S_D" target="_blank">𝕏 X (Twitter)</a>
         <a href="https://discord.gg/Syuaduy678" target="_blank">💬 Discord</a>
         <a href="https://ko-fi.com/academiasd" target="_blank">☕ Ko-Fi</a>
-        <button type="button" id="net-open" onclick="openNetwork()" hidden>🌐 Remote access / Acceso remoto</button>
+        <button type="button" id="net-open" onclick="openNetwork()" hidden>🌐 Remote access</button>
     </footer>
 
     <!-- Acceso desde otros equipos de la red. Solo se edita desde este PC (/api/network). -->
     <div id="net" onclick="if (event.target === this) closeNetwork()">
         <form onsubmit="saveNetwork(event)">
-            <h2>🌐 Remote access / Acceso remoto</h2>
-            <label class="check"><input type="checkbox" id="net-listen"> Allow other devices on the network / Permitir otros equipos de la red</label>
+            <h2>🌐 Remote access</h2>
+            <label class="check"><input type="checkbox" id="net-listen"> <span>Allow other devices on the network</span></label>
             <div class="pair">
-                <label>Launcher port / Puerto lanzador<input type="number" id="net-lport" min="1024" max="65535"></label>
-                <label>Trainer port / Puerto entrenador<input type="number" id="net-tport" min="1024" max="65535"></label>
+                <label><span>Launcher port</span><input type="number" id="net-lport" min="1024" max="65535"></label>
+                <label><span>Trainer port</span><input type="number" id="net-tport" min="1024" max="65535"></label>
             </div>
             <div class="pair">
-                <label>User / Usuario<input type="text" id="net-user" autocomplete="off"></label>
-                <label>Password / Contraseña<input type="password" id="net-pass" autocomplete="new-password"></label>
+                <label><span>User</span><input type="text" id="net-user" autocomplete="off"></label>
+                <label><span>Password</span><input type="password" id="net-pass" autocomplete="new-password"></label>
             </div>
-            <label class="check" title="Only if a reverse proxy in front already asks for a login (Authelia, Authentik, Cloudflare Access...). / Solo si un proxy inverso delante ya pide inicio de sesión (Authelia, Authentik, Cloudflare Access...).">
-                <input type="checkbox" id="net-extauth"> I use my own authentication (reverse proxy) / Uso mi propia autenticación (proxy inverso)</label>
-            <div class="note warn" id="net-extauth-warn" hidden>No login from here: without a proxy with authentication in front, anyone on the network can control this PC. /
-                Sin login desde aquí: sin un proxy con autenticación delante, cualquiera de la red puede controlar este PC.</div>
-            <label>Trainer public URL (optional, behind a proxy) / URL pública del entrenador (opcional, tras un proxy)
+            <label class="check" title="Only if a reverse proxy in front already asks for a login (Authelia, Authentik, Cloudflare Access...).">
+                <input type="checkbox" id="net-extauth"> <span>I use my own authentication (reverse proxy)</span></label>
+            <div class="note warn" id="net-extauth-warn" hidden>No login from here: without a proxy with authentication in front, anyone on the network can control this PC.</div>
+            <label><span>Trainer public URL (optional, behind a proxy)</span>
                 <input type="text" id="net-turl" placeholder="https://trainer.example.com" autocomplete="off"></label>
             <div class="note" id="net-url"></div>
-            <div class="note">This PC never asks for the password; other devices always do. Changes apply after restarting the launcher and the trainer. /
-                Este PC nunca pide contraseña; los demás equipos siempre. Los cambios se aplican al reiniciar el lanzador y el entrenador.</div>
-            <div class="note warn">Plain HTTP: for your home network only. To connect from the Internet use Tailscale or an SSH tunnel, never an open port. /
-                HTTP sin cifrar: solo para la red de casa. Para entrar desde Internet usa Tailscale o un túnel SSH, nunca un puerto abierto.</div>
+            <div class="note">This PC never asks for the password; other devices always do. Changes apply after restarting the launcher and the trainer.</div>
+            <div class="note warn">Plain HTTP: for your home network only. To connect from the Internet use Tailscale or an SSH tunnel, never an open port.</div>
             <div id="net-msg"></div>
             <div class="actions">
-                <button type="button" onclick="closeNetwork()">Close / Cerrar</button>
-                <button type="submit" class="primary">Save / Guardar</button>
+                <button type="button" onclick="closeNetwork()">Close</button>
+                <button type="submit" class="primary">Save</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Cambiar de entrenador: aviso antes de cerrar el activo. -->
+    <div id="confirm" onclick="if (event.target === this && window.resolveConfirm) resolveConfirm(false)">
+        <form onsubmit="event.preventDefault(); resolveConfirm(true)">
+            <h2 id="confirm-title"></h2>
+            <p class="note" id="confirm-text"></p>
+            <div class="actions">
+                <button type="button" onclick="resolveConfirm(false)">Cancel</button>
+                <button type="submit" class="primary" id="confirm-ok"></button>
             </div>
         </form>
     </div>
 
     <script>
-        // Filas: hasta 3 entrenadores en una fila; con más, dos filas y la de arriba con el sobrante
-        // (4 -> 2+2, 5 -> 3+2, 6 -> 3+3, 7 -> 4+3). "rows" en launcher.json fija el número a mano.
+        // Reparto de las tarjetas: se calcula cuantas caben en una fila con el ancho que hay
+        // y se equilibran las filas, para que no quede ninguna tarjeta suelta en medio.
+        // El reparto se recalcula al cambiar el tamano de la ventana, asi que el movil, la
+        // tablet y el escritorio reciben cada uno el que les toca.
+        // "rows" en launcher.json fija el numero de filas a mano; "auto" lo calcula.
         function splitRows(items, rows) {
             const n = items.length;
-            const count = rows === 'auto' || !rows ? (n <= 3 ? 1 : 2) : Math.max(1, parseInt(rows));
+            const count = Math.max(1, parseInt(rows) || 1);
             const out = [];
             let start = 0;
             for (let r = 0; r < count; r++) {
@@ -166,32 +219,166 @@
             return out.filter(row => row.length);
         }
 
+        // Ancho util de la pagina y separacion entre tarjetas / usable width and card gap
+        function availableWidth() {
+            const cs = getComputedStyle(document.body);
+            return document.body.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+        }
+        function rowGap() {
+            const row = document.querySelector('.row');
+            return row ? (parseFloat(getComputedStyle(row).columnGap) || 28) : 28;
+        }
+
+        // Tamano real de cada portada, para no tener que volver a cargarla al repintar
+        const portadaSizes = {};
+        let pendingImages = 0;
+        let generation = 0;
+
+        function buildCard(tr, scale, gen) {
+            const card = document.createElement('button');
+            card.type = 'button';
+            card.className = 'card';
+            card.dataset.id = tr.id;
+            card.dataset.desc = tr.description || '';
+            card.title = `${tr.name}: ${tr.run}`;
+            const img = document.createElement('img');
+            img.alt = tr.name;
+            // El tamaño sale de la imagen real: image_scale = 0.2 es el 20 % de su tamaño.
+            if (portadaSizes[tr.image]) card.style.setProperty('--img-w', portadaSizes[tr.image]);
+            img.onload = () => {
+                if (gen !== generation) return;      // repintado anterior: su tarjeta ya no existe
+                portadaSizes[tr.image] = Math.round(img.naturalWidth * scale) + 'px';
+                card.style.setProperty('--img-w', portadaSizes[tr.image]);
+                imageReady();
+            };
+            img.onerror = () => { if (gen === generation) imageReady(); };
+            img.src = '/' + tr.image;
+            const name = document.createElement('div');
+            name.className = 'name';
+            name.innerText = tr.name;
+            const desc = document.createElement('div');
+            desc.className = 'desc';
+            card.append(img, name, desc);
+            card.onclick = () => launch(tr, card);
+            return card;
+        }
+
+        function imageReady() {
+            if (--pendingImages <= 0) { pendingImages = 0; relayout(); }
+        }
+
+        // Pinta las tarjetas en las filas indicadas / paints the cards in the given rows
+        function paint(rows, scale) {
+            const grid = document.getElementById('grid');
+            const gen = ++generation;
+            grid.innerHTML = '';
+            pendingImages = cfg.trainers.length;
+            for (const rowItems of splitRows(cfg.trainers, rows)) {
+                const row = document.createElement('div');
+                row.className = 'row';
+                for (const tr of rowItems) row.appendChild(buildCard(tr, scale, gen));
+                grid.appendChild(row);
+            }
+            renderTexts();
+            updateGlow();
+            // Comprobacion de seguridad: si alguna portada no avisa, el reparto se hace igual.
+            requestAnimationFrame(() => relayout());
+            setTimeout(() => relayout(), 600);
+        }
+
+        // Cuantas tarjetas caben por fila y cuantas filas hacen falta / columns and rows
+        function relayout() {
+            const grid = document.getElementById('grid');
+            const cards = grid.querySelectorAll('.card');
+            if (!cards.length) return;
+            let maxW = 0;
+            for (const c of cards) maxW = Math.max(maxW, c.offsetWidth);
+            if (!maxW) return;
+            const gap = rowGap();
+            const cols = Math.max(1, Math.floor((availableWidth() + gap) / (maxW + gap)));
+            const auto = (cfg.rows === 'auto' || !cfg.rows);
+            const rows = auto ? Math.ceil(cfg.trainers.length / cols)
+                              : Math.max(1, parseInt(cfg.rows) || 1);
+            if (grid.dataset.rows === String(rows)) return;
+            grid.dataset.rows = String(rows);
+            paint(rows, parseFloat(cfg.image_scale) || 0.2);
+        }
+
+        let resizeTimer = null;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(relayout, 150);
+        });
+
         function setStatus(html, cls) {
             const el = document.getElementById('status');
             el.className = cls || '';
             el.innerHTML = html;
         }
 
+        let live = { trainer: false, active: null, url: null };
+
+        // Confirmación propia, mismo estilo que el resto del lanzador.
+        // Own confirm box, in the launcher's own style.
+        function askConfirm(title, text, okLabel) {
+            return new Promise(resolve => {
+                const modal = document.getElementById('confirm');
+                document.getElementById('confirm-title').innerText = title;
+                document.getElementById('confirm-text').innerText = text;
+                document.getElementById('confirm-ok').innerText = okLabel;
+                const onKey = e => { if (e.key === 'Escape') finish(false); };
+                const finish = value => {
+                    modal.classList.remove('open');
+                    document.removeEventListener('keydown', onKey);
+                    window.resolveConfirm = null;
+                    resolve(value);
+                };
+                window.resolveConfirm = finish;
+                document.addEventListener('keydown', onKey);
+                modal.classList.add('open');
+            });
+        }
+
+        async function apiLaunch(id, force) {
+            const res = await fetch('/api/launch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id, force: !!force })
+            });
+            return res.json();
+        }
+
         async function launch(trainer, card) {
             card.classList.add('launching');
-            setStatus(`Abriendo / Opening ${trainer.name}...`);
+            setStatus(t('Opening {name}...', { name: trainer.name }));
             try {
-                const res = await fetch('/api/launch', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: trainer.id })
-                });
-                const data = await res.json();
-                if (data.status === 'ok' && data.remote) {
-                    setStatus(`✓ ${trainer.name}: arrancando en el PC de entrenamiento; ábrelo en unos segundos en / starting on the training PC; open it in a few seconds at `
-                        + `<a href="${data.url}" target="_blank">${data.url}</a>`, 'ok');
-                } else if (data.status === 'ok') {
-                    setStatus(`✓ ${trainer.name}: se abrirá en una ventana nueva y en el navegador / will open in a new window and in the browser.`, 'ok');
-                } else if (data.status === 'busy') {
-                    setStatus(`Ya hay un entrenador abierto en <a href="${data.url}" target="_blank">${data.url}</a>. Ciérralo antes de abrir otro. / `
-                        + `A trainer is already open at <a href="${data.url}" target="_blank">${data.url}</a>. Close it before opening another.`, 'warn');
-                } else {
+                let data = await apiLaunch(trainer.id, false);
+                if (data.status === 'busy') {
+                    // Otro entrenador en marcha: avisar antes de cerrarlo.
+                    // Another trainer running: warn before closing it.
+                    const current = (cfg.trainers.find(x => x.id === live.active) || {}).name || t('Another trainer');
+                    const ok = await askConfirm(
+                        t('Switch trainer'),
+                        t('{current} is open. Opening {next} will close the current trainer and its console window. Continue?',
+                          { current, next: trainer.name }),
+                        t('Close and open'));
+                    setStatus('');
+                    if (!ok) { card.classList.remove('launching'); return; }
+                    setStatus(t('Closing {current}...', { current }));
+                    data = await apiLaunch(trainer.id, true);
+                }
+                if (data.status === 'training') {
+                    // Entrenamiento en curso: no se cierra; se explica y se enlaza al entrenador.
+                    // Training in progress: it is not closed; explained, with a link to the trainer.
+                    setStatus(`[!] ${data.error} ${link(data.url)}`, 'warn');
+                } else if (data.status !== 'ok') {
                     setStatus(`[!] ${data.error || 'Error'}`, 'warn');
+                } else if (data.already) {
+                    // Tarjeta con brillo: el entrenador ya va corriendo.
+                    // Glowing card: the trainer is already running.
+                    window.location.href = data.url;
+                } else {
+                    await waitForTrainer(data.url, trainer.name);
                 }
             } catch (e) {
                 setStatus(`[!] ${e}`, 'warn');
@@ -199,39 +386,113 @@
             setTimeout(() => card.classList.remove('launching'), 1500);
         }
 
+        // Misma pestaña: espera a que el puerto del entrenador responda y navega aquí.
+        // Same tab: wait for the trainer port to answer, then navigate in place.
+        async function waitForTrainer(url, name) {
+            const deadline = Date.now() + 120000;
+            while (Date.now() < deadline) {
+                setStatus(t('Waiting for {name} to start...', { name }));
+                try {
+                    const s = await (await fetch('/api/status')).json();
+                    if (s.trainer) { window.location.href = url; return; }
+                } catch (e) { /* el lanzador está ocupado / the launcher is busy */ }
+                await new Promise(r => setTimeout(r, 750));
+            }
+            setStatus(t('{name} did not start in time. Open it manually at {url}.', { name, url: link(url) }), 'warn');
+        }
+
+        // Brillo de la tarjeta del entrenador en marcha / glow on the running trainer's card
+        async function updateGlow() {
+            try {
+                live = await (await fetch('/api/status')).json();
+            } catch (e) { return; }
+            document.querySelectorAll('.card').forEach(c =>
+                c.classList.toggle('active-glow', live.trainer && live.active === c.dataset.id));
+        }
+
+        function link(url) { return `<a href="${url}" target="_blank">${url}</a>`; }
+
+        let cfg = null;
+
+        function renderTexts() {
+            document.getElementById('subtitle').innerText = t(cfg.subtitle || '');
+            document.querySelectorAll('.card').forEach(card => {
+                card.querySelector('.desc').innerText = t(card.dataset.desc);
+            });
+            if (netInfo) netUrl();
+        }
+
+        function fillLanguages() {
+            const sel = document.getElementById('ui-lang');
+            sel.innerHTML = '';
+            for (const [code, name] of I18N.languages) sel.add(new Option(name, code));
+            sel.value = I18N.lang;
+        }
+
+        // Al cambiar el selector se ve el idioma al momento; "Guardar ajustes" lo deja fijo para todo.
+        async function previewLanguage() {
+            await I18N.load(document.getElementById('ui-lang').value);
+            renderTexts();
+            document.getElementById('ui-msg').innerText = '';
+        }
+
+        // Selector de GPU: solo con más de una tarjeta NVIDIA. "" = la que elija CUDA (como hasta ahora).
+        async function fillGpus() {
+            try {
+                const data = await (await fetch('/api/gpu')).json();
+                if (!data.gpus || data.gpus.length < 2) return;
+                const sel = document.getElementById('ui-gpu');
+                sel.innerHTML = '';
+                sel.add(new Option(t('Automatic'), ''));
+                for (const g of data.gpus) sel.add(new Option(`${g.index}: ${g.name} (${g.total_gb} GB)`, g.index));
+                sel.value = data.selected || '';
+                sel.style.display = '';
+                document.getElementById('ui-gpu-label').style.display = '';
+            } catch (e) { /* sin selector: se usa la GPU de siempre */ }
+        }
+
+        async function saveSettings() {
+            const msg = document.getElementById('ui-msg');
+            try {
+                const gpuSel = document.getElementById('ui-gpu');
+                if (gpuSel.style.display !== 'none') {
+                    const g = await (await fetch('/api/gpu', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ gpu: gpuSel.value })
+                    })).json();
+                    if (g.status !== 'ok') throw new Error(g.error);
+                }
+                const res = await fetch('/api/i18n', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ language: document.getElementById('ui-lang').value })
+                });
+                const data = await res.json();
+                if (data.status !== 'ok') throw new Error(data.error);
+                msg.className = 'ok';
+                msg.innerText = '✓ ' + t('Saved. Trainers already open use it after reloading the page; scripts, on their next run.')
+                    + (gpuSel.style.display !== 'none' ? ' ' + t('The GPU applies to the trainers opened from now on.') : '');
+            } catch (e) {
+                msg.className = 'warn';
+                msg.innerText = '[!] ' + e.message;
+            }
+        }
+
         async function init() {
-            const cfg = await (await fetch('/launcher.json')).json();
+            fillLanguages();
+            fillGpus();
+            cfg = await (await fetch('/launcher.json')).json();
             document.title = cfg.title || document.title;
             document.getElementById('title').alt = cfg.title || '';
-            document.getElementById('subtitle').innerText = cfg.subtitle || '';
             const scale = parseFloat(cfg.image_scale) || 0.2;
 
             const grid = document.getElementById('grid');
-            for (const rowItems of splitRows(cfg.trainers, cfg.rows)) {
-                const row = document.createElement('div');
-                row.className = 'row';
-                for (const t of rowItems) {
-                    const card = document.createElement('button');
-                    card.type = 'button';
-                    card.className = 'card';
-                    card.title = `${t.name}: ${t.run}`;
-                    const img = document.createElement('img');
-                    img.alt = t.name;
-                    // El tamaño sale de la imagen real: image_scale = 0.2 es el 20 % de su tamaño.
-                    img.onload = () => { img.width = Math.round(img.naturalWidth * scale); };
-                    img.src = '/' + t.image;
-                    const name = document.createElement('div');
-                    name.className = 'name';
-                    name.innerText = t.name;
-                    const desc = document.createElement('div');
-                    desc.className = 'desc';
-                    desc.innerText = t.description || '';
-                    card.append(img, name, desc);
-                    card.onclick = () => launch(t, card);
-                    row.appendChild(card);
-                }
-                grid.appendChild(row);
-            }
+            // Un reparto inicial; en cuanto las portadas han cargado se calcula el definitivo.
+            paint(2, scale);
+            renderTexts();
+            updateGlow();
+            setInterval(updateGlow, 2000);
         }
         let netInfo = null;
 
@@ -239,8 +500,8 @@
             const listen = document.getElementById('net-listen').checked;
             document.getElementById('net-extauth-warn').hidden = !document.getElementById('net-extauth').checked;
             document.getElementById('net-url').innerHTML = listen
-                ? `From other devices / Desde otros equipos: <b>http://${netInfo.lan_ip}:${document.getElementById('net-lport').value}</b>`
-                : 'Only this PC / Solo este PC (127.0.0.1).';
+                ? t('From other devices: {url}', { url: `<b>http://${netInfo.lan_ip}:${document.getElementById('net-lport').value}</b>` })
+                : t('Only this PC (127.0.0.1).');
         }
 
         async function loadNetwork() {
@@ -259,7 +520,7 @@
             document.getElementById('net-turl').value = netInfo.trainer_url;
             const pass = document.getElementById('net-pass');
             pass.value = '';
-            pass.placeholder = netInfo.has_password ? '(unchanged / sin cambios)' : '';
+            pass.placeholder = netInfo.has_password ? t('(unchanged)') : '';
             document.getElementById('net-msg').innerText = '';
             netUrl();
             document.getElementById('net').classList.add('open');
@@ -287,9 +548,9 @@
             if (data.status !== 'ok') { msg.style.color = '#f59e0b'; msg.innerText = '[!] ' + data.error; return; }
             netInfo = data;
             document.getElementById('net-pass').value = '';
-            document.getElementById('net-pass').placeholder = data.has_password ? '(unchanged / sin cambios)' : '';
+            document.getElementById('net-pass').placeholder = data.has_password ? t('(unchanged)') : '';
             msg.style.color = '#10b981';
-            msg.innerText = '✓ Saved. Restart the launcher to apply. / Guardado. Reinicia el lanzador para aplicarlo.';
+            msg.innerText = '✓ ' + t('Saved. Restart the launcher to apply.');
             netUrl();
         }
 

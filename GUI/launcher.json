@@ -1,69 +1,125 @@
 {
   "title": "AcademiaSD LoRAlab Trainer Studio",
-  "subtitle": "Elige un entrenador / Choose a trainer",
+  "subtitle": "Choose a trainer",
   "image_scale": 0.2,
   "rows": "auto",
   "trainers": [
     {
       "id": "ltx23",
       "name": "LTX 2.3 (2.5)",
-      "description": "LoRAs de vídeo / Video LoRAs",
+      "description": "Video LoRAs",
       "image": "assets/ltx23/portada.jpg",
       "run": "Run_LoRAlab-LTX23.bat"
     },
     {
       "id": "krea2",
       "name": "Krea 2",
-      "description": "LoRAs de imagen / Image LoRAs",
+      "description": "Image LoRAs",
       "image": "assets/krea2/portada.jpg",
       "run": "Run_LoRAlab-Krea2.bat"
     },
     {
       "id": "minimaxh3",
       "name": "MiniMax-H3",
-      "description": "LoRAs de vídeo y audio / Video and audio LoRAs",
+      "description": "Video and audio LoRAs",
       "image": "assets/minimaxh3/portada.jpg",
       "run": "Run_LoRAlab-MiniMaxH3.bat"
     },
     {
       "id": "qwenimage21",
       "name": "Qwen-Image 2.1",
-      "description": "LoRAs de imagen y edición / Image and edit LoRAs",
+      "description": "Image and edit LoRAs",
       "image": "assets/qwenimage21/portada.jpg",
       "run": "Run_LoRAlab-QwenImage21.bat"
     },
     {
+      "id": "fibo2",
+      "name": "Fibo 2.0",
+      "description": "Image and edit LoRAs (BRIA)",
+      "image": "assets/fibo2/portada.jpg",
+      "run": "Run_LoRAlab-Fibo2.bat"
+    },
+    {
+      "id": "qwenimage2512",
+      "name": "Qwen-Image 2512",
+      "description": "Image LoRAs (2512) and edit LoRAs (Edit-2511)",
+      "image": "assets/qwenimage2512/portada.jpg",
+      "run": "Run_LoRAlab-QwenImage2512.bat"
+    },
+    {
+      "id": "boogu",
+      "name": "Boogu Image Edit",
+      "description": "Image-edit LoRAs",
+      "image": "assets/boogu/portada.jpg",
+      "run": "Run_LoRAlab-Boogu.bat"
+    },
+    {
       "id": "zimage",
       "name": "Z-Image",
-      "description": "LoRAs de imagen (también Z-Image-Turbo) / Image LoRAs (also Z-Image-Turbo)",
+      "description": "Image LoRAs (also Z-Image-Turbo)",
       "image": "assets/zimage/portada.jpg",
       "run": "Run_LoRAlab-ZImage.bat"
     },
     {
+      "id": "mingimage",
+      "name": "Ming-Image",
+      "description": "Text-to-image LoRAs (transparent designs)",
+      "image": "assets/mingimage/portada.jpg",
+      "run": "Run_LoRAlab-MingImage.bat"
+    },
+    {
       "id": "anima",
       "name": "Anima",
-      "description": "LoRAs de anime e ilustración / Anime and illustration LoRAs",
+      "description": "Anime and illustration LoRAs",
       "image": "assets/anima/portada.jpg",
       "run": "Run_LoRAlab-Anima.bat"
     },
     {
+      "id": "yue2",
+      "name": "YuE2-3B",
+      "description": "Music LoRAs (voice AR and phrasing NAR) · Experimental beta",
+      "image": "assets/yue2/portada.jpg",
+      "run": "Run_LoRAlab-YuE2.bat"
+    },
+    {
       "id": "klein9b",
       "name": "FLUX.2 Klein 9B",
-      "description": "LoRAs de imagen y edición / Image and edit LoRAs",
+      "description": "Image and edit LoRAs",
       "image": "assets/klein9b/portada.jpg",
       "run": "Run_LoRAlab-Klein9B.bat"
     },
     {
+      "id": "flux3klein",
+      "name": "FLUX.3 Image Klein",
+      "description": "Image and edit LoRAs",
+      "image": "assets/flux3klein/portada.jpg",
+      "run": "Run_LoRAlab-Flux3Klein.bat"
+    },
+    {
+      "id": "ernie",
+      "name": "ERNIE-Image",
+      "description": "Text-to-image LoRAs",
+      "image": "assets/ernie/portada.jpg",
+      "run": "Run_LoRAlab-Ernie.bat"
+    },
+    {
+      "id": "mossimage",
+      "name": "MOSS-Image",
+      "description": "Text-to-image LoRAs (Base and SFT)",
+      "image": "assets/mossimage/portada.jpg",
+      "run": "Run_LoRAlab-MossImage.bat"
+    },
+    {
       "id": "ideogram4",
       "name": "Ideogram 4",
-      "description": "LoRAs de imagen / Image LoRAs",
+      "description": "Image LoRAs",
       "image": "assets/ideogram4/portada.jpg",
       "run": "Run_LoRAlab-Ideogram4.bat"
     },
     {
       "id": "sdxl",
       "name": "SDXL",
-      "description": "SDXL Base, Pony, Illustrious, NoobAI, Juggernaut, RealVis y checkpoints propios / and custom checkpoints",
+      "description": "SDXL Base, Pony, Illustrious, NoobAI, Juggernaut, RealVis and custom checkpoints",
       "image": "assets/sdxl/portada.jpg",
       "run": "Run_LoRAlab-SDXL.bat"
     }

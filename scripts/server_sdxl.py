@@ -5,6 +5,7 @@ Web backend for AcademiaSD SDXL Trainer
 """
 
 import json
+import time
 import os
 import subprocess
 import sys
@@ -18,9 +19,15 @@ import logging
 import webbrowser
 
 from console_stream import read_console
+from trainer_stream import TrainerStream
+import i18n
+import project_layout
 import remote_access
 import file_transfer
+import training_metrics
+import gpu_stats
 from pathlib import Path
+from i18n import t
 
 
 # =============================================================================
@@ -36,7 +43,7 @@ def ensure_package(package_name, import_name=None):
 
     print()
     print("=" * 70)
-    print(f"[INFO] Installing missing package / Instalando paquete: '{package_name}'...")
+    print("[INFO] " + t("Installing missing package: '{name}'...", name=package_name))
     print(f"[INFO] Python: {sys.executable}")
     print("=" * 70)
     print()
@@ -44,13 +51,13 @@ def ensure_package(package_name, import_name=None):
     try:
         subprocess.check_call([sys.executable, "-m", "pip", "install", package_name])
     except subprocess.CalledProcessError as exc:
-        print(f"\n[ERROR] Failed to install '{package_name}'. Exit code: {exc.returncode}\n")
+        print("\n[ERROR] " + t("Failed to install '{name}'. Exit code: {code}", name=package_name, code=exc.returncode) + "\n")
         raise
 
     if importlib.util.find_spec(import_name) is None:
-        raise RuntimeError(f"Package '{package_name}' installed but import failed.")
+        raise RuntimeError(t("Package '{name}' installed but import failed.", name=package_name))
 
-    print(f"[OK] '{package_name}' installed successfully / instalado correctamente.")
+    print("[OK] " + t("'{name}' installed successfully.", name=package_name))
 
 
 ensure_package("Flask", "flask")
@@ -95,9 +102,9 @@ TRAIN_SCRIPT = SCRIPTS_DIR / "2_train_lora_sdxl.py"
 
 app = Flask(__name__)
 
-active_process = None
-active_script = None
-process_lock = threading.Lock()
+project_layout.ensure_layout_and_log(BASE_DIR)
+
+runtime = TrainerStream(BASE_DIR, SETTINGS_DIR, "sdxl")
 
 
 # =============================================================================
@@ -129,7 +136,7 @@ def read_json_file(path, default=None):
             data = json.load(f)
         return data if isinstance(data, dict) else default
     except Exception as exc:
-        print(f"[ERROR] Could not read {path}: {exc}")
+        print("[ERROR] " + t("Could not read {path}: {error}", path=path, error=exc))
         return default
 
 
@@ -145,10 +152,7 @@ def write_json_file(path, data):
 def resolve_config_path(value, default):
     if value is None or str(value).strip() == "":
         value = default
-    path = Path(str(value))
-    if path.is_absolute():
-        return path
-    return (BASE_DIR / path).resolve()
+    return project_layout.resolve_project_path(value, default, BASE_DIR)
 
 
 def get_train_output_dir():
@@ -183,17 +187,7 @@ def get_script_for_name(script_name):
 
 
 def get_status():
-    global active_process
-    global active_script
-
-    with process_lock:
-        if active_process is None:
-            return {"running": False, "script": None, "pid": None}
-        if active_process.poll() is not None:
-            active_process = None
-            active_script = None
-            return {"running": False, "script": None, "pid": None}
-        return {"running": True, "script": active_script, "pid": active_process.pid}
+    return runtime.status()
 
 
 # =============================================================================
@@ -302,9 +296,18 @@ def select_folder_native():
             root = tk.Tk()
             root.withdraw()
             root.attributes('-topmost', True)
+            # Sin esto el dialogo sale detras de la ventana del navegador y parece
+            # que el boton no hace nada.
+            # Without this the dialog opens behind the browser window and the button
+            # looks like it does nothing.
+            try:
+                root.update()
+                root.focus_force()
+            except Exception:
+                pass
             
             chosen = filedialog.askdirectory(
-                title="Select Folder / Seleccionar Carpeta",
+                title=t("Select Folder"),
                 initialdir=initial_dir
             )
             root.destroy()
@@ -333,7 +336,7 @@ def select_folder_native():
         if selected_path:
             return jsonify({"status": "ok", "path": selected_path})
         if not dialog_shown:
-            return jsonify({"status": "error", "error": "No native folder dialog / Sin diálogo nativo de carpetas"})
+            return jsonify({"status": "error", "error": t("No native folder dialog")})
         else:
             return jsonify({"status": "cancelled", "path": None})
 
@@ -356,38 +359,8 @@ def get_system_stats():
         "percent": ram.percent
     }
 
-    vram_info = {
-        "total_gb": 0.0,
-        "used_gb": 0.0,
-        "percent": 0.0,
-        "temp_c": 0,
-        "gpu_name": "N/A"
-    }
-
-    try:
-        creation_flag = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
-        cmd = ["nvidia-smi", "--query-gpu=memory.total,memory.used,name,temperature.gpu", "--format=csv,nounits,noheader"]
-        output = subprocess.check_output(cmd, text=True, errors="ignore", creationflags=creation_flag).strip().splitlines()[0]
-        parts = [p.strip() for p in output.split(",")]
-        total_m = float(parts[0])
-        used_m = float(parts[1])
-        vram_info["gpu_name"] = parts[2]
-        vram_info["temp_c"] = int(float(parts[3]))
-        vram_info["total_gb"] = round(total_m / 1024.0, 2)
-        vram_info["used_gb"] = round(used_m / 1024.0, 2)
-        vram_info["percent"] = round((used_m / total_m) * 100, 1) if total_m > 0 else 0.0
-    except Exception:
-        try:
-            import torch
-            if torch.cuda.is_available():
-                vram_info["gpu_name"] = torch.cuda.get_device_name(0)
-                free_b, total_b = torch.cuda.mem_get_info(0)
-                used_b = total_b - free_b
-                vram_info["total_gb"] = round(total_b / (1024**3), 2)
-                vram_info["used_gb"] = round(used_b / (1024**3), 2)
-                vram_info["percent"] = round((used_b / total_b) * 100, 1) if total_b > 0 else 0.0
-        except Exception:
-            pass
+    # nvidia-smi de la GPU elegida, all-smi / amdgpu con AMD; ver gpu_stats.py.
+    vram_info = gpu_stats.vram_info()
 
     return jsonify({"ram": ram_info, "vram": vram_info})
 
@@ -442,11 +415,11 @@ def export_lora():
         custom_name = data.get("final_name", "").strip()
 
         if not target_dir_str:
-            return jsonify({"status": "error", "error": "Please select a target folder / Por favor selecciona una carpeta de destino."}), 400
+            return jsonify({"status": "error", "error": t("Please select a target folder.")}), 400
 
         target_dir = Path(target_dir_str).resolve()
         if not target_dir.exists() or not target_dir.is_dir():
-            return jsonify({"status": "error", "error": f"Target folder does not exist / Carpeta de destino no existe: {target_dir}"}), 400
+            return jsonify({"status": "error", "error": t("Target folder does not exist: {path}", path=target_dir)}), 400
 
         if not custom_name:
             custom_name = "sdxl_lora.safetensors"
@@ -455,7 +428,7 @@ def export_lora():
 
         output_dir = get_train_output_dir()
         if not output_dir.exists():
-            return jsonify({"status": "error", "error": f"Output folder does not exist / Carpeta de salida no existe: {output_dir}"}), 404
+            return jsonify({"status": "error", "error": t("Output folder does not exist: {path}", path=output_dir)}), 404
 
         final_file = output_dir / "SDXL_FINAL_LoRA.safetensors"
         source_file = None
@@ -473,10 +446,11 @@ def export_lora():
                 source_file = candidates[0][1]
 
         if not source_file or not source_file.exists():
-            return jsonify({"status": "error", "error": f"No .safetensors files found in / No se encontraron archivos .safetensors en: {output_dir}"}), 404
+            return jsonify({"status": "error", "error": t("No .safetensors files found in: {path}", path=output_dir)}), 404
 
+        custom_name = file_transfer.with_lora_options_suffix(custom_name, source_file)
         dest_file = target_dir / custom_name
-        shutil.copy2(source_file, dest_file)
+        shutil.copyfile(source_file, dest_file)
 
         return jsonify({
             "status": "ok",
@@ -496,7 +470,7 @@ def export_lora():
 @app.route("/")
 def index():
     if not UI_FILE.exists():
-        return f"File not found / No se encuentra: trainer_ui.html in {UI_FILE.parent}", 404
+        return t("File not found: {path}", path=UI_FILE), 404
     return send_from_directory(str(UI_FILE.parent), UI_FILE.name)
 
 
@@ -536,13 +510,13 @@ def save_precache():
     try:
         data = request.get_json(force=True)
         if not isinstance(data, dict):
-            return jsonify({"status": "error", "error": "JSON object required / Objeto JSON requerido."}), 400
+            return jsonify({"status": "error", "error": t("JSON object required.")}), 400
         
         proj = data.get("project_name", "").strip()
         cache_dir_name = f"cached_data_sdxl_{proj}" if proj else "cached_data_sdxl"
         output_dir_name = f"sdxl_lora_output_{proj}" if proj else "sdxl_lora_output"
 
-        data["cache_dir"] = f"./{cache_dir_name}"
+        data["cache_dir"] = f"./Cache_Data/{cache_dir_name}"
 
         # 1. Guardar en raíz con nombre genérico pre_cache_settings_sdxl.json (lectura por defecto)
         write_json_file(PRECACHE_CONFIG, data)
@@ -554,7 +528,7 @@ def save_precache():
             cache_dir_path.mkdir(parents=True, exist_ok=True)
             cache_json_file = cache_dir_path / f"pre_cache_settings_{proj}.json"
             write_json_file(cache_json_file, data)
-            saved_files.append(f"{cache_dir_name}/{cache_json_file.name}")
+            saved_files.append(f"Cache_Data/{cache_dir_name}/{cache_json_file.name}")
 
         # Sincronizar train_settings_sdxl.json en raíz
         train_cfg = read_json_file(TRAIN_CONFIG, {})
@@ -563,7 +537,7 @@ def save_precache():
         if "project_name" in data:
             train_cfg["project_name"] = data["project_name"]
             train_cfg["cache_dir"] = data["cache_dir"]
-            train_cfg["output_dir"] = f"./{output_dir_name}"
+            train_cfg["output_dir"] = f"./Outputs/{output_dir_name}"
         if "trigger_word" in data:
             train_cfg["trigger_word"] = data["trigger_word"]
         if "preview_custom_prompt" in data:
@@ -618,17 +592,20 @@ def save_train():
     try:
         data = request.get_json(force=True)
         if not isinstance(data, dict):
-            return jsonify({"status": "error", "error": "JSON object required / Objeto JSON requerido."}), 400
+            return jsonify({"status": "error", "error": t("JSON object required.")}), 400
         
         proj = data.get("project_name", "").strip()
         cache_dir_name = f"cached_data_sdxl_{proj}" if proj else "cached_data_sdxl"
         output_dir_name = f"sdxl_lora_output_{proj}" if proj else "sdxl_lora_output"
 
-        data["cache_dir"] = f"./{cache_dir_name}"
-        data["output_dir"] = f"./{output_dir_name}"
+        data["cache_dir"] = f"./Cache_Data/{cache_dir_name}"
+        data["output_dir"] = f"./Outputs/{output_dir_name}"
 
         # 1. Guardar en raíz con nombre genérico
-        write_json_file(TRAIN_CONFIG, data)
+        # Lo que había antes: con el entrenamiento en marcha, la GUI avisa solo de lo que ha cambiado.
+        previous = read_json_file(TRAIN_CONFIG, {})
+
+        write_json_file(TRAIN_CONFIG, {**read_json_file(TRAIN_CONFIG, {}), **data})
 
         # El Pre-Cache codifica el prompt de las previews desde su propio json.
         precache_cfg = read_json_file(PRECACHE_CONFIG, {})
@@ -654,9 +631,9 @@ def save_train():
             output_dir_path.mkdir(parents=True, exist_ok=True)
             output_json_file = output_dir_path / f"train_settings_{proj}.json"
             write_json_file(output_json_file, data)
-            saved_files.append(f"{output_dir_name}/{output_json_file.name}")
+            saved_files.append(f"Outputs/{output_dir_name}/{output_json_file.name}")
 
-        return jsonify({"status": "ok", "file": saved_files[0], "all_saved": saved_files, "encoding": encoding_stage(), "encoding_device": prompt_job["device"]})
+        return jsonify({"status": "ok", "previous": previous, "file": saved_files[0], "all_saved": saved_files, "encoding": encoding_stage(), "encoding_device": prompt_job["device"]})
     except Exception as exc:
         return jsonify({"status": "error", "error": str(exc)}), 500
 
@@ -693,104 +670,24 @@ def checkpoint_info():
 
 @app.route("/api/run", methods=["POST"])
 def run_script():
-    global active_process
-    global active_script
+    data = request.get_json(force=True) or {}
+    script_name = data.get("script")
+    script_path = get_script_for_name(script_name)
 
-    try:
-        data = request.get_json(force=True) or {}
-        script_name = data.get("script")
-        script_path = get_script_for_name(script_name)
+    if script_path is None or not script_path.exists():
+        return jsonify({"status": "error", "error": t("Script not found: {name}", name=script_name)}), 404
 
-        if script_path is None or not script_path.exists():
-            return jsonify({"status": "error", "error": f"Script not found / Script no encontrado: {script_name}"}), 404
+    if encoding_stage() is not None:
+        return jsonify({"status": "error", "error": t("Encoding the preview prompt, wait until it finishes.")}), 409
 
-        if encoding_stage() is not None:
-            return jsonify({"status": "error", "error": "Encoding the preview prompt, wait until it finishes / Codificando el prompt de la preview, espera a que termine."}), 409
-
-        with process_lock:
-            if active_process is not None and active_process.poll() is None:
-                return jsonify({"status": "error", "error": f"Process already running / Proceso en ejecución: {active_script}"}), 409
-
-            command = [sys.executable, "-u", str(script_path)]
-
-            creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
-
-            process = subprocess.Popen(
-                command,
-                cwd=str(BASE_DIR),
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                creationflags=creation_flags
-            )
-
-            active_process = process
-            active_script = script_name
-
-        def stream():
-            global active_process
-            global active_script
-
-            yield f"data: {json.dumps({'type': 'start', 'script': script_name}, ensure_ascii=False)}\n\n"
-
-            try:
-                if process.stdout is not None:
-                    for text, replace in read_console(process.stdout):
-                        yield f"data: {json.dumps({'type': 'output', 'text': text, 'replace': replace}, ensure_ascii=False)}\n\n"
-
-                return_code = process.wait()
-                yield f"data: {json.dumps({'type': 'done', 'script': script_name, 'code': return_code}, ensure_ascii=False)}\n\n"
-
-            except GeneratorExit:
-                pass
-            finally:
-                with process_lock:
-                    if active_process is process:
-                        active_process = None
-                        active_script = None
-
-        return Response(stream(), mimetype="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
-
-    except Exception as exc:
-        with process_lock:
-            active_process = None
-            active_script = None
-        return jsonify({"status": "error", "error": str(exc)}), 500
-
+    ok, error = runtime.start(script_name, script_path)
+    if not ok:
+        return jsonify({"status": "error", "error": error}), 409
+    return jsonify({"status": "ok", "script": script_name})
 
 @app.route("/api/stop", methods=["POST"])
 def stop_script():
-    global active_process
-    global active_script
-
-    with process_lock:
-        process = active_process
-        script = active_script
-
-    if process is None or process.poll() is not None:
-        with process_lock:
-            active_process = None
-            active_script = None
-        return jsonify({"status": "not_running"})
-
-    try:
-        if os.name == "nt":
-            process.send_signal(signal.CTRL_BREAK_EVENT)
-        else:
-            process.send_signal(signal.SIGINT)
-
-        return jsonify({"status": "terminating", "script": script})
-    except Exception as exc:
-        try:
-            process.terminate()
-        except Exception:
-            pass
-        return jsonify({"status": "terminated", "script": script})
-
-
-# =============================================================================
-# PREVIEWS & DATASET API
-# =============================================================================
+    return jsonify(runtime.stop())
 
 @app.route("/api/previews", methods=["GET"])
 def get_previews():
@@ -799,9 +696,15 @@ def get_previews():
     if output_dir.is_dir():
         for file_path in output_dir.iterdir():
             if file_path.is_file() and file_path.name.startswith("preview_step_") and file_path.suffix.lower() == ".png":
-                previews.append(file_path)
-    previews.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-    return jsonify({"output_dir": str(output_dir), "previews": [p.name for p in previews[:50]]})
+                st = file_path.stat()
+                # Un PNG recien escrito puede estar a medias: se ensena en el siguiente sondeo.
+                if st.st_size > 0 and time.time() - st.st_mtime > 1.0:
+                    previews.append((file_path.name, st.st_mtime))
+    previews.sort(key=lambda p: p[1], reverse=True)
+    previews = previews[:50]
+    # versions = mtime en ms, para que el navegador no reutilice una imagen vieja con el mismo nombre.
+    return jsonify({"output_dir": str(output_dir), "previews": [n for n, _ in previews],
+                    "versions": {n: int(m * 1000) for n, m in previews}})
 
 
 @app.route("/api/preview/<path:filename>")
@@ -814,7 +717,9 @@ def serve_preview(filename):
         return "", 403
     if not requested.is_file():
         return "", 404
-    return send_from_directory(str(output_dir), requested.name)
+    response = send_from_directory(str(output_dir), requested.name)
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 def caption_path(image_path):
@@ -938,6 +843,31 @@ def batch_caption():
         return jsonify({"status": "error", "error": str(exc)}), 500
 
 
+@app.route("/api/clear-dataset", methods=["POST"])
+def clear_dataset():
+    """
+    Vacía la carpeta del dataset: sus imágenes (y vídeos y audios donde los hay) y sus .txt. Las
+    subcarpetas y los demás ficheros no se tocan. Con un proceso en marcha no se borra nada (lo estaría leyendo).
+    La GUI pide escribir el número de ficheros antes de llamar aquí.
+    """
+    try:
+        if get_status()["running"]:
+            return jsonify({"status": "error", "error": t("A process is running")}), 409
+        dataset_dir = get_dataset_dir()
+        removed, errors = 0, []
+        if dataset_dir.is_dir():
+            for f in dataset_dir.iterdir():
+                if f.is_file() and f.suffix.lower() in DATASET_EXTS + (".txt",):
+                    try:
+                        f.unlink()
+                        removed += 1
+                    except Exception as exc:
+                        errors.append(f"{f.name}: {exc}")
+        return jsonify({"status": "ok" if not errors else "partial", "removed": removed, "errors": errors, "path": str(dataset_dir)})
+    except Exception as exc:
+        return jsonify({"status": "error", "error": str(exc)}), 500
+
+
 @app.route("/api/clear-captions", methods=["POST"])
 def clear_captions():
     """
@@ -970,9 +900,9 @@ def delete_dataset_image():
 
         # El nombre viene del navegador: tiene que seguir dentro del dataset.
         if not filename or dataset_dir.resolve() not in target.parents:
-            return jsonify({"status": "error", "error": "Path outside the dataset / Ruta fuera del dataset"}), 400
+            return jsonify({"status": "error", "error": t("Path outside the dataset")}), 400
         if not target.is_file() or target.suffix.lower() not in DATASET_EXTS:
-            return jsonify({"status": "error", "error": f"Not found / No existe: {filename}"}), 404
+            return jsonify({"status": "error", "error": t("Not found: {name}", name=filename)}), 404
 
         removed = []
         for f in (target, caption_path(target)):
@@ -994,12 +924,12 @@ def delete_project_data():
         elif target == "training":
             path = get_train_output_dir()
         else:
-            return jsonify({"status": "error", "error": f"Unknown target / Destino desconocido: {target}"}), 400
+            return jsonify({"status": "error", "error": t("Unknown target: {name}", name=target)}), 400
 
         # Un proceso en marcha tiene ficheros abiertos en esas carpetas.
         if get_status()["running"]:
             return jsonify({"status": "error",
-                            "error": "A process is running. Stop it first. / Hay un proceso en marcha. Detenlo primero."}), 409
+                            "error": t("A process is running. Stop it first.")}), 409
 
         removed, errors = 0, []
         if path.is_dir():
@@ -1035,21 +965,28 @@ def save_caption_settings():
 
 
 def open_browser():
+    # El lanzador abre el navegador en su propia pestaña.
+    # The launcher opens the browser in its own tab.
+    if os.environ.get("LORALAB_SKIP_BROWSER"):
+        return
     try:
         webbrowser.open(remote_access.local_url("trainer_port"))
     except Exception:
         pass
 
 
+i18n.register(app)
 file_transfer.register(app, get_dataset_dir, get_train_output_dir, DATASET_EXTS)
+runtime.register(app)
+training_metrics.register(app, get_train_output_dir)
 
 
 if __name__ == "__main__":
     print("\n" + "=" * 70)
     print("  ACADEMIASD — SDXL LORA TRAINER WEB SERVER")
     print("=" * 70)
-    print(f"  Base Dir / Carpeta  : {BASE_DIR}")
-    print(f"  Python Interpreter  : {sys.executable}")
+    print(f"  {t('Base folder'):<20}: {BASE_DIR}")
+    print(f"  {t('Python interpreter'):<20}: {sys.executable}")
     print(f"  URL                 : {remote_access.local_url('trainer_port')}")
     print("=" * 70 + "\n")
 

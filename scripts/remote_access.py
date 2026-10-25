@@ -11,6 +11,9 @@ settings/network.json (se edita desde el lanzador / edited from the launcher):
     external_auth  true = la autenticación la pone otro (proxy inverso): no se pide contraseña
     trainer_url    dirección pública del entrenador tras un proxy (https://trainer.dominio); vacío = host:trainer_port
 
+En los entrenadores, serve() publica además GET /api/launcher-url con la dirección del lanzador
+(este PC, su puerto), que es el destino del botón «← Back» de la interfaz.
+
 Las peticiones desde este mismo PC nunca piden contraseña. Las remotas la piden siempre, y sin
 contraseña configurada se rechazan, salvo con external_auth: la interfaz lanza procesos y escribe
 archivos, así que solo se abre sin contraseña si hay otra autenticación delante. Es HTTP sin cifrar,
@@ -22,6 +25,8 @@ from pathlib import Path
 
 from flask import Response, jsonify, request
 from werkzeug.security import check_password_hash, generate_password_hash
+
+from i18n import t
 
 SETTINGS_FILE = Path(__file__).resolve().parent.parent / "settings" / "network.json"
 DEFAULTS = {"listen": False, "launcher_port": 4990, "trainer_port": 5000, "user": "", "password_hash": "",
@@ -70,15 +75,13 @@ def _check():
     cfg = load()
     if not cfg["external_auth"]:
         if not cfg["password_hash"]:
-            return Response("Remote access needs a password: set it in the launcher, on the training PC.\n"
-                            "El acceso remoto necesita contraseña: ponla en el lanzador, en el PC de entrenamiento.\n",
-                            403, mimetype="text/plain")
+            return Response(t("Remote access needs a password: set it in the launcher, on the training PC.") + "\n", 403, mimetype="text/plain")
         auth = request.authorization
         if not auth or auth.username != cfg["user"] or not check_password_hash(cfg["password_hash"], auth.password or ""):
-            return Response("Login required / Inicio de sesión necesario\n", 401,
+            return Response(t("Login required") + "\n", 401,
                             {"WWW-Authenticate": 'Basic realm="AcademiaSD LoRAlab", charset="UTF-8"'}, mimetype="text/plain")
     if request.path in NATIVE_DIALOGS:
-        return jsonify({"status": "error", "error": "Remote access: type the path. / Acceso remoto: escribe la ruta."})
+        return jsonify({"status": "error", "error": t("Remote access: type the path.")})
     return None
 
 
@@ -86,16 +89,23 @@ def serve(app, port_key):
     """Arranca el servidor Flask con la IP y el puerto de network.json. port_key: launcher_port o trainer_port."""
     cfg = load()
     app.before_request(_check)
+    if port_key == "trainer_port":
+        # El botón «← Back» de la interfaz necesita el puerto del lanzador.
+        # The trainer UI's "← Back" button needs the launcher's port.
+        def launcher_url():
+            cfg = load()
+            return jsonify({"url": f"http://{request.host.rsplit(':', 1)[0]}:{cfg['launcher_port']}"})
+        app.add_url_rule("/api/launcher-url", "launcher_url", launcher_url)
     host = "0.0.0.0" if cfg["listen"] else "127.0.0.1"
     port = cfg[port_key]
     if cfg["listen"]:
         if cfg["external_auth"]:
-            note = "  [!] No login: external authentication / Sin login: autenticación externa"
+            note = "  [!] " + t("No login: external authentication")
         elif not cfg["password_hash"]:
-            note = "  [!] No password: remote access refused / Sin contraseña: acceso remoto rechazado"
+            note = "  [!] " + t("No password: remote access refused")
         else:
             note = ""
-        print(f"  Network / Red: http://{lan_address()}:{port}{note}")
+        print(f"  {t('Network')}: http://{lan_address()}:{port}{note}")
     app.run(host=host, port=port, debug=False, threaded=True)
 
 

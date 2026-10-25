@@ -21,7 +21,7 @@ Qwen3-VL localiza en su formato nativo [x1, y1, x2, y2]; aquí se le da la vuelt
 Usa el captioner compartido con los demás entrenadores: el text encoder NF4 del repo de Qwen-Image
 2.1 (Qwen3-VL-8B-Instruct, ~5.5 GB de VRAM). El text encoder de Ideogram 4 es el mismo modelo sin
 lm_head, así que no puede escribir. La primera vez se descargan solo text_encoder_NF4/ y processor/
-(~5 GB) a Captioner-Qwen3-VL-8B/.
+(~5 GB) a Models/Captioner-Qwen3-VL-8B/.
 
 Lee caption_settings_ideogram4.json; la ruta del dataset y el trigger salen de
 pre_cache_settings_ideogram4.json.
@@ -37,6 +37,8 @@ import torch
 from PIL import Image
 from huggingface_hub import snapshot_download
 from transformers import AutoProcessor, Qwen3VLForConditionalGeneration, StoppingCriteria, StoppingCriteriaList
+from i18n import t
+from project_layout import resolve_model_dir
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -48,7 +50,7 @@ except Exception:
 warnings.filterwarnings("ignore", message=".*is not aligned for fast kernel.*")
 
 DEFAULTS = {
-    "captioner_dir": "Captioner-Qwen3-VL-8B",
+    "captioner_dir": "Models/Captioner-Qwen3-VL-8B",
     "dataset_path": "./dataset",
     "trigger_word": "",
     "caption_style": "json",
@@ -107,18 +109,19 @@ def load_config():
 
 
 def load_captioner(captioner_dir):
+    captioner_dir = str(resolve_model_dir(captioner_dir, "Models/Captioner-Qwen3-VL-8B"))
     path = os.path.join(captioner_dir, "text_encoder_NF4")
     if not os.path.exists(os.path.join(path, "config.json")):
-        print(f"Downloading captioner from Hugging Face / Descargando el captioner desde Hugging Face: {HF_REPO_ID} (~5 GB)", flush=True)
+        print(t("Downloading the captioner from Hugging Face: {repo} (~5 GB)", repo=HF_REPO_ID), flush=True)
         token = read_json("settings/HF_token.json").get("token", "").strip() or None
         snapshot_download(repo_id=HF_REPO_ID, local_dir=captioner_dir, token=token, max_workers=2,
                           allow_patterns=["text_encoder_NF4/*", "processor/*"])
 
-    print("Loading Qwen3-VL-8B (NF4)... / Cargando Qwen3-VL-8B (NF4)...", flush=True)
+    print(t("Loading {name}...", name="Qwen3-VL-8B (NF4)"), flush=True)
     model = Qwen3VLForConditionalGeneration.from_pretrained(path, dtype=torch.bfloat16, device_map="cuda")
     model.eval()
     processor = AutoProcessor.from_pretrained(os.path.join(captioner_dir, "processor"))
-    print(f"Ready / Listo. VRAM: {torch.cuda.memory_allocated() / 1e9:.1f} GB", flush=True)
+    print(f"{t('Ready.')} VRAM: {torch.cuda.memory_allocated() / 1e9:.1f} GB", flush=True)
     return model, processor
 
 
@@ -216,7 +219,7 @@ def loads_caption(text):
         if i >= 0:
             i = text.find("{", i)
     if not isinstance(merged.get("compositional_deconstruction"), dict):
-        raise ValueError("JSON without the Ideogram caption keys / JSON sin las claves del caption de Ideogram")
+        raise ValueError(t("JSON without the Ideogram caption keys"))
     return merged
 
 
@@ -330,7 +333,7 @@ def main():
     dataset = cfg["dataset_path"]
 
     if not os.path.isdir(dataset):
-        print(f"[!] Dataset folder does not exist / La carpeta del dataset no existe: {dataset}")
+        print("[!] " + t("Dataset folder does not exist: {path}", path=dataset))
         return 1
 
     images = sorted(f for f in os.listdir(dataset) if f.lower().endswith(IMAGE_EXTS))
@@ -341,14 +344,14 @@ def main():
             continue
         pending.append(name)
 
-    print(f"  Dataset / Ruta Dataset : {os.path.abspath(dataset)}")
-    print(f"  Images / Imágenes      : {len(images)}, {len(pending)} to caption / por describir")
-    print(f"  Style / Estilo         : {cfg['caption_style']}")
-    print(f"  Trigger Word / Palabra : {cfg['trigger_word'] or '(none / ninguna)'}")
-    print(f"  Overwrite / Rehacer    : {'yes / sí' if cfg['overwrite'] else 'only missing / solo los que faltan'}")
+    print(f"  {t('Dataset'):<22}: {os.path.abspath(dataset)}")
+    print(f"  {t('Images'):<22}: {len(images)}, {t('{n} to caption', n=len(pending))}")
+    print(f"  {t('Style'):<22}: {cfg['caption_style']}")
+    print(f"  {t('Trigger Word'):<22}: {cfg['trigger_word'] or t('(none)')}")
+    print(f"  {t('Overwrite'):<22}: {t('yes') if cfg['overwrite'] else t('only missing')}")
 
     if not pending:
-        print("Nothing to do: every image already has a caption. / Nada que hacer: todas las imágenes ya tienen caption.")
+        print(t("Nothing to do: every image already has a caption."))
         return 0
 
     model, processor = load_captioner(cfg["captioner_dir"])
@@ -363,7 +366,7 @@ def main():
                 image = shrink(img.convert("RGB"), int(cfg["max_image_side"]))
             caption = caption_image(model, processor, image, cfg["caption_prompt"], cfg)
             if not caption:
-                raise RuntimeError("empty caption / caption vacío")
+                raise RuntimeError(t("empty caption"))
 
             final = with_trigger(cfg["trigger_word"], caption)
             with open(os.path.join(dataset, stem + ".txt"), "w", encoding="utf-8") as f:
@@ -379,13 +382,13 @@ def main():
             print(f"    {final[:200]}{'...' if len(final) > 200 else ''}", flush=True)
         except Exception as e:
             failed.append(name)
-            print(f"[{i}/{len(pending)}] {name} FAILED / FALLÓ: {e}", flush=True)
+            print(f"[{i}/{len(pending)}] {name} {t('FAILED')}: {e}", flush=True)
 
     total = time.time() - started
-    print(f"\n✓ {done} captions in / en {int(total // 60)}m{int(total % 60):02d}s ({total / max(done, 1):.1f}s per image / por imagen).")
+    print("\n✓ " + t("{n} captions in {time} ({per:.1f}s per image).", n=done, time=f"{int(total // 60)}m{int(total % 60):02d}s", per=total / max(done, 1)))
     if failed:
-        print(f"[!] {len(failed)} failed / fallaron: {', '.join(failed[:10])}")
-    print("Review them in the Dataset Manager before pre-caching. / Revísalos en el Dataset Manager antes del pre-caché.")
+        print("[!] " + t("{n} failed: {names}", n=len(failed), names=', '.join(failed[:10])))
+    print(t("Review them in the Dataset Manager before pre-caching."))
     return 0 if done else 1
 
 

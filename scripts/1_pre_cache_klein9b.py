@@ -18,6 +18,8 @@ from diffusers import AutoencoderKLFlux2, Flux2KleinPipeline
 from transformers import AutoTokenizer, Qwen3Model
 import logging
 import sys
+from i18n import t
+from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 
 import slider_core
 
@@ -34,9 +36,9 @@ HF_REPO_ID = "AcademiaSD/FLUX.2-Klein-9B-NF4-for-LoRA-Training"
 
 # ── DEFAULTS / VALORES POR DEFECTO ──────────────────────────────────────────
 DEFAULTS = {
-    "model_id": "FLUX.2-Klein-9B_NF4",
+    "model_id": "Models/FLUX.2-Klein-9B_NF4",
     "dataset_path": "./dataset",
-    "cache_dir": "./cached_data_klein9b",
+    "cache_dir": "./Cache_Data/cached_data_klein9b",
     "target_area": 768 * 768,
     "max_side": 1536,
     "multiple": 16,
@@ -44,8 +46,25 @@ DEFAULTS = {
     "trigger_word": "",
     "preview_custom_prompt": "",
     "preview_edit_image": "",
+    "preview_edit_images": [],
     "lora_type": "normal",
 }
+
+PREVIEW_MAX = 4
+
+
+def as_image_list(value):
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, (list, tuple)):
+        value = []
+    return [str(p).strip() for p in value if str(p).strip()]
+
+
+def config_preview_images(cfg):
+    images = as_image_list(cfg.get("preview_edit_images"))
+    return (images or as_image_list(cfg.get("preview_edit_image")))[:PREVIEW_MAX]
+
 
 # ── CARGAR CONFIGURACIÓN / LOAD CONFIG ──────────────────────────────────────
 CONFIG_PATH = "settings/pre_cache_settings_klein9b.json"
@@ -53,12 +72,12 @@ CONFIG_PATH = "settings/pre_cache_settings_klein9b.json"
 if os.path.exists(CONFIG_PATH):
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         cfg = json.load(f)
-    print(f"✓ Configuration loaded from {CONFIG_PATH} / Configuración cargada desde {CONFIG_PATH}")
+    print("✓ " + t("Configuration loaded from {path}", path=CONFIG_PATH))
 else:
     cfg = {}
-    print(f"⚠ {CONFIG_PATH} not found, using defaults / No se encontró {CONFIG_PATH}, usando valores por defecto.")
+    print("⚠ " + t("{path} not found, using default values.", path=CONFIG_PATH))
 
-MODEL_ID     = cfg.get("model_id",     DEFAULTS["model_id"])
+MODEL_ID     = str(resolve_model_dir(cfg.get("model_id"), DEFAULTS["model_id"]))
 DATASET_PATH = cfg.get("dataset_path", DEFAULTS["dataset_path"])
 TARGET_AREA  = cfg.get("target_area",  DEFAULTS["target_area"])
 MAX_SIDE     = cfg.get("max_side",     DEFAULTS["max_side"])
@@ -71,28 +90,25 @@ PREVIEW_CUSTOM_PROMPT = cfg.get("preview_custom_prompt", "").strip()
 LORA_TYPE = cfg.get("lora_type", DEFAULTS["lora_type"])
 SLIDER = slider_core.read_settings(cfg)
 SLIDER_EDIT = LORA_TYPE == "slider" and SLIDER["slider_mode"] == "edit"
-# Solo edición: imagen de antes (fuera del dataset) para ver en las previews cómo aplica el efecto.
-PREVIEW_EDIT_IMAGE = cfg.get("preview_edit_image", "").strip() if LORA_TYPE == "edit" or SLIDER_EDIT else ""
+# Solo edición: imágenes de referencia (fuera del dataset) para ver en las previews cómo aplica el efecto.
+PREVIEW_EDIT_IMAGES = config_preview_images(cfg) if LORA_TYPE == "edit" or SLIDER_EDIT else []
 
 # Formato automático de carpeta de caché según nombre del proyecto
-if PROJECT_NAME:
-    CACHE_DIR = f"./cached_data_klein9b_{PROJECT_NAME}"
-else:
-    CACHE_DIR = cfg.get("cache_dir", DEFAULTS["cache_dir"])
+CACHE_DIR = str(resolve_cache_dir(f"./cached_data_klein9b_{PROJECT_NAME}" if PROJECT_NAME else cfg.get("cache_dir"), DEFAULTS["cache_dir"]))
 
 # VAE 8x + parches 2x2 en el transformer: lados múltiplos de 16 px.
 if MULTIPLE not in (16, 32, 64):
-    print(f"⚠ Invalid Multiple {MULTIPLE}. Defaulting to 16 / Múltiplo inválido {MULTIPLE}. Usando 16 por defecto.")
+    print("⚠ " + t("Invalid Multiple {n}. Using 16.", n=MULTIPLE))
     MULTIPLE = 16
 
-print(f"  Model ID / ID Modelo        : {MODEL_ID}")
-print(f"  Project Name / Proyecto     : {PROJECT_NAME if PROJECT_NAME else '(Default)'}")
-print(f"  Trigger Word / Palabra      : {TRIGGER_WORD}")
-print(f"  Dataset Path / Ruta Dataset : {DATASET_PATH}")
-print(f"  Cache Dir / Carpeta Caché   : {CACHE_DIR}")
-print(f"  Target Area / Área Objetivo : {TARGET_AREA} px²")
-print(f"  Max Side / Lado Máximo      : {MAX_SIDE}")
-print(f"  Multiple / Múltiplo         : {MULTIPLE}")
+print(f"  {t('Model ID'):<22}: {MODEL_ID}")
+print(f"  {t('Project Name'):<22}: {PROJECT_NAME if PROJECT_NAME else t('(Default)')}")
+print(f"  {t('Trigger Word'):<22}: {TRIGGER_WORD}")
+print(f"  {t('Dataset Path'):<22}: {DATASET_PATH}")
+print(f"  {t('Cache Dir'):<22}: {CACHE_DIR}")
+print(f"  {t('Target Area'):<22}: {TARGET_AREA} px²")
+print(f"  {t('Max Side'):<22}: {MAX_SIDE}")
+print(f"  {t('Multiple'):<22}: {MULTIPLE}")
 
 os.makedirs(DATASET_PATH, exist_ok=True)
 os.makedirs(CACHE_DIR, exist_ok=True)
@@ -110,7 +126,7 @@ def get_hf_token():
                 token_data = json.load(f)
                 token = token_data.get("token", "").strip()
                 if token:
-                    print("✓ Using HF Token / Usando token de HF")
+                    print("✓ " + t("Using HF Token"))
                     return token
         except Exception:
             pass
@@ -146,9 +162,10 @@ def enable_hf_file_progress():
     os.environ["TQDM_MININTERVAL"] = "0.5"
 
 
-def bucket_size(w: int, h: int):
+def bucket_size(w: int, h: int, area=None):
+    area = TARGET_AREA if area is None else area
     ar = w / h
-    bh = math.sqrt(TARGET_AREA / ar)
+    bh = math.sqrt(area / ar)
     bw = ar * bh
     bw = max(MULTIPLE, round(bw / MULTIPLE) * MULTIPLE)
     bh = max(MULTIPLE, round(bh / MULTIPLE) * MULTIPLE)
@@ -162,18 +179,18 @@ def bucket_size(w: int, h: int):
 def ensure_model_downloaded(local_path, repo_id):
     if (os.path.exists(os.path.join(local_path, "model_index.json"))
             and os.path.exists(os.path.join(local_path, "text_encoder", "config.json"))):
-        print(f"✓ Local model found at / Modelo local encontrado en: {local_path}")
+        print("✓ " + t("Local model found at: {path}", path=local_path))
         return local_path
 
-    print(f"⚠ Local model not found at / No se encontró modelo local en: {local_path}")
-    print(f"  Downloading from Hugging Face / Descargando desde Hugging Face: {repo_id}")
+    print("⚠ " + t("Local model not found at: {path}", path=local_path))
+    print("  " + t("Downloading from Hugging Face: {repo}", repo=repo_id))
 
     enable_hf_file_progress()
 
     try:
         from huggingface_hub import snapshot_download
     except ImportError:
-        raise ImportError("huggingface_hub is required. Install with pip install huggingface_hub")
+        raise ImportError(t("huggingface_hub is required. Install it with: pip install huggingface_hub"))
 
     downloaded_path = snapshot_download(
         repo_id=repo_id,
@@ -181,7 +198,7 @@ def ensure_model_downloaded(local_path, repo_id):
         token=get_hf_token(),
         max_workers=2,
     )
-    print(f"✓ Model downloaded to / Modelo descargado en: {downloaded_path}")
+    print("✓ " + t("Model downloaded to: {path}", path=downloaded_path))
     return downloaded_path
 
 
@@ -217,6 +234,13 @@ def fit(img, bw, bh):
     left, top = (img.width - bw) // 2, (img.height - bh) // 2
     return img.crop((left, top, left + bw, top + bh))
 
+def dataset_pairs():
+    """(pares nombre_before/nombre_after, imágenes que no forman parte de ningún par)."""
+    stems = {os.path.splitext(f)[0] for f in os.listdir(DATASET_PATH) if f.lower().endswith((".png", ".jpg", ".jpeg", ".webp"))}
+    pairs = {s[:-len("_before")] for s in stems if s.endswith("_before") and s[:-len("_before")] + "_after" in stems}
+    loose = stems - {p + suffix for p in pairs for suffix in ("_before", "_after")}
+    return pairs, loose
+
 
 def find_samples():
     """
@@ -240,11 +264,15 @@ def read_caption(name):
         return f.read().strip()
 
 
-def preview_edit_source(samples, image_path=None):
-    # Imagen de antes para la preview de edición: la del usuario (fuera del dataset, mide si generaliza)
-    # o, si no hay, el antes del primer par.
-    image_path = PREVIEW_EDIT_IMAGE if image_path is None else image_path
-    return image_path if image_path and os.path.exists(image_path) else samples[0][2]
+def preview_edit_sources(samples, image_paths=None):
+    paths = PREVIEW_EDIT_IMAGES if image_paths is None else as_image_list(image_paths)
+    missing = [p for p in paths if not os.path.exists(p)]
+    if missing:
+        print("⚠ " + t("Preview reference image not found (it is skipped; later image numbers shift): {path}", path=", ".join(missing)))
+    paths = [p for p in paths if os.path.exists(p)][:PREVIEW_MAX]
+    if paths:
+        return paths
+    return [samples[0][2]] if samples and samples[0][2] else []
 
 
 def dataset_stems():
@@ -252,13 +280,33 @@ def dataset_stems():
     return {os.path.splitext(f)[0]: os.path.join(DATASET_PATH, f) for f in files}
 
 
-def slider_preview_source(groups, image_path=None):
-    # Imagen de entrada de la preview del slider (edición): la del usuario o la primera del primer grupo.
-    image_path = PREVIEW_EDIT_IMAGE if image_path is None else image_path
-    if image_path and os.path.exists(image_path):
-        return image_path
+def slider_preview_source(groups, image_paths=None):
+    # Imagen de entrada de la preview del slider (edición): la primera del usuario que exista o la
+    # primera del primer grupo. El slider edita una sola foto: las demás imágenes no se usan.
+    paths = PREVIEW_EDIT_IMAGES if image_paths is None else as_image_list(image_paths)
+    for path in paths:
+        if os.path.exists(path):
+            return path
     first = groups[sorted(groups)[0]]
     return dataset_stems()[first[min(first)]]
+
+
+def preview_image_area(count):
+    return max(MULTIPLE * MULTIPLE, int(TARGET_AREA * 2 / max(1, count + 1)))
+
+
+def custom_ctrl_name(index):
+    return "_custom_ctrl.pt" if index == 0 else f"_custom_ctrl_{index + 1}.pt"
+
+
+def custom_ctrl_names(count):
+    return {custom_ctrl_name(i) for i in range(count)}
+
+
+def remove_stale_custom_ctrls(expected):
+    for f in os.listdir(CACHE_DIR):
+        if f.startswith("_custom_ctrl") and f.endswith(".pt") and f not in expected:
+            os.remove(os.path.join(CACHE_DIR, f))
 
 
 def encode_latents(vae, jobs, device):
@@ -283,29 +331,39 @@ def encode_latents(vae, jobs, device):
             os.replace(tmp, os.path.join(CACHE_DIR, out))
             del img_tensor, z, latent
 
-            print(f"[{idx}/{len(jobs)}] Image / Imagen: {os.path.basename(src)} -> {out} | {bw}x{bh}", flush=True)
+            print(f"[{idx}/{len(jobs)}] {t('Image')}: {os.path.basename(src)} -> {out} | {bw}x{bh}", flush=True)
 
 
 def preprocess_klein9b():
     if not os.path.exists(DATASET_PATH):
-        print(f"[!] Dataset folder does not exist / La carpeta del dataset no existe: {DATASET_PATH}")
+        print("[!] " + t("Dataset folder does not exist: {path}", path=DATASET_PATH))
         sys.exit(1)
 
+    # Pares nombre_before / nombre_after con el tipo en "normal": se entrenarían como imágenes sueltas,
+    # sin la referencia y sin su caption (nombre.txt). Si solo hay pares, es un LoRA de edición.
+    global LORA_TYPE, PREVIEW_EDIT_IMAGES
     if os.path.exists(os.path.join(CACHE_DIR, slider_core.MANIFEST)):
         os.remove(os.path.join(CACHE_DIR, slider_core.MANIFEST))
     if LORA_TYPE == "slider":
         return preprocess_slider()
 
+    pairs, loose = dataset_pairs()
+    if LORA_TYPE != "edit" and pairs and not loose:
+        print("⚠ " + t("The dataset only has name_before / name_after pairs: training an EDIT LoRA. Set LoRA Type to Edit to use the preview reference image."))
+        LORA_TYPE = "edit"
+        PREVIEW_EDIT_IMAGES = config_preview_images(cfg)
+    elif LORA_TYPE != "edit" and pairs:
+        print("⚠ " + t("The dataset mixes {n} before/after pairs with normal images: with LoRA Type normal the pairs train as loose images without their caption.", n=len(pairs)))
+
     samples = find_samples()
     edit = LORA_TYPE == "edit"
     if not samples:
         if edit:
-            print(f"[!] Edit LoRA but no name_before / name_after pairs in '{DATASET_PATH}' / "
-                  f"LoRA de edición pero no hay pares nombre_before / nombre_after.")
+            print("[!] " + t("Edit LoRA but there are no name_before / name_after pairs in '{path}'.", path=DATASET_PATH))
         else:
-            print(f"[!] No images found in '{DATASET_PATH}'. Please add images.")
+            print("[!] " + t("No images found in '{path}'. Please add images.", path=DATASET_PATH))
         sys.exit(1)
-    print(f"  LoRA type / Tipo de LoRA    : {'edit (before/after pairs) / edición (pares antes/después)' if edit else 'normal'} | {len(samples)} samples")
+    print(f"  {t('LoRA Type'):<22}: {t('edit (before/after pairs)') if edit else 'normal'} | {t('{n} samples', n=len(samples))}")
 
     # El trainer carga todo lo que haya en la caché: se quitan las muestras que ya no están en el
     # dataset y, al pasar de edición a normal, los antes (_ctrl).
@@ -315,7 +373,7 @@ def preprocess_klein9b():
     for f in stale:
         os.remove(os.path.join(CACHE_DIR, f))
     if stale:
-        print(f"  Removed {len(stale)} stale cache files / Eliminados {len(stale)} ficheros antiguos de la caché")
+        print("  " + t("Removed {n} stale cache files", n=len(stale)))
 
     ensure_model_downloaded(local_path=MODEL_ID, repo_id=HF_REPO_ID)
 
@@ -324,15 +382,19 @@ def preprocess_klein9b():
     for name, target, _ in samples:
         with Image.open(target) as im:
             buckets[name] = bucket_size(*im.size)
-    preview_src = preview_edit_source(samples) if edit else None
-    if preview_src:
-        with Image.open(preview_src) as im:
-            buckets["_custom"] = bucket_size(*im.size)
+    preview_sources = preview_edit_sources(samples) if edit else []
+    preview_buckets = []
+    preview_area = preview_image_area(len(preview_sources))
+    for src in preview_sources:
+        with Image.open(src) as im:
+            preview_buckets.append(bucket_size(*im.size, area=preview_area))
+    if preview_buckets:
+        buckets["_custom"] = preview_buckets[0]
 
     # ── FASE 1: TEXT ENCODER (Qwen3-8B NF4) ─────────────────────────────────
     # El text encoder y el VAE nunca coinciden en VRAM. Klein solo lee el texto: en edición
     # la imagen de antes no pasa por el text encoder, va al transformer como latente.
-    print("\nLoading Text Encoder (Qwen3-8B NF4)... / Cargando Text Encoder (Qwen3-8B NF4)...")
+    print("\n" + t("Loading {name}...", name="Text Encoder (Qwen3-8B NF4)"))
     te, tok = load_text_encoder("cuda")
 
     encode_and_save(te, tok, "", "_neg")
@@ -342,13 +404,13 @@ def preprocess_klein9b():
     custom_prompt = PREVIEW_CUSTOM_PROMPT or (read_caption(samples[0][0]) if edit else "")
     if custom_prompt:
         c_prompt = with_trigger(custom_prompt)
-        print(f"[Custom Prompt Cache] Encoding: '{c_prompt}'" + (f" + {os.path.basename(preview_src)}" if edit else ""))
+        print("[Custom Prompt Cache] " + t("Encoding: '{prompt}'", prompt=c_prompt) + (f" + {', '.join(os.path.basename(p) for p in preview_sources)}" if edit else ""))
         encode_and_save(te, tok, c_prompt, "_custom")
         # El trainer y el servidor comparan con estos textos para saber si la caché está al día.
         with open(os.path.join(CACHE_DIR, "_custom_prompt.txt"), "w", encoding="utf-8") as f:
             f.write(c_prompt)
         with open(os.path.join(CACHE_DIR, "_custom_image.txt"), "w", encoding="utf-8") as f:
-            f.write(PREVIEW_EDIT_IMAGE)
+            f.write("\n".join(PREVIEW_EDIT_IMAGES))
     # Restos de un prompt anterior, o de la preview de edición si el dataset ya no es de pares.
     stale = () if custom_prompt else ("_custom_embed.pt", "_custom_prompt.txt", "_custom_image.txt")
     if not (custom_prompt and edit):
@@ -356,10 +418,11 @@ def preprocess_klein9b():
     for f in stale:
         if os.path.exists(os.path.join(CACHE_DIR, f)):
             os.remove(os.path.join(CACHE_DIR, f))
+    expected_custom_ctrls = custom_ctrl_names(len(preview_sources)) if custom_prompt and edit else set()
 
     for idx, (name, _, _) in enumerate(samples, 1):
         encode_and_save(te, tok, with_trigger(read_caption(name)), name)
-        print(f"[{idx}/{len(samples)}] Text / Texto: {name}")
+        print(f"[{idx}/{len(samples)}] {t('Text')}: {name}")
 
     del te, tok
     free_vram()
@@ -371,31 +434,35 @@ def preprocess_klein9b():
     # La imagen de la preview de edición se codifica siempre: puede ser otro fichero más antiguo.
     jobs = [(target, f"{name}_latent.pt", buckets[name]) for name, target, _ in samples]
     jobs += [(control, f"{name}_ctrl.pt", buckets[name]) for name, _, control in samples if control]
-    if preview_src and custom_prompt:
-        jobs.append((preview_src, "_custom_ctrl.pt", buckets["_custom"]))
+    if custom_prompt and edit:
+        jobs += [(src, custom_ctrl_name(i), bucket)
+                 for i, (src, bucket) in enumerate(zip(preview_sources, preview_buckets))]
 
     pending = pending_jobs(jobs)
 
     if len(pending) < len(jobs):
-        print(f"\n{len(jobs) - len(pending)} latents already cached, skipped / latentes ya cacheados, se saltan.")
+        print("\n" + t("{n} latents already cached, skipped.", n=len(jobs) - len(pending)))
     if not pending:
-        print("\n✓ Pre-caching finished! / ¡Pre-caché finalizado!")
+        remove_stale_custom_ctrls(expected_custom_ctrls)
+        print("\n✓ " + t("Pre-caching finished!"))
         return
 
-    print("\nLoading VAE (FLUX.2)... / Cargando VAE (FLUX.2)...")
+    print("\n" + t("Loading {name}...", name="VAE (FLUX.2)"))
     vae = AutoencoderKLFlux2.from_pretrained(MODEL_ID, subfolder="vae", torch_dtype=torch.bfloat16).to("cuda")
     encode_latents(vae, pending, "cuda")
+    remove_stale_custom_ctrls(expected_custom_ctrls)
     del vae
     free_vram()
-    print("\n✓ Pre-caching finished! VRAM freed / ¡Pre-caché finalizado! VRAM liberada.")
+    print("\n✓ " + t("Pre-caching finished! VRAM freed."))
 
 
 def pending_jobs(jobs):
-    # Un latente ya cacheado con el tamaño de bucket actual y más nuevo que su imagen no se vuelve a codificar.
+    # Un latente ya cacheado con el tamaño de bucket actual y más nuevo que su imagen no se vuelve a
+    # codificar. Las imágenes de la preview de edición se codifican siempre: pueden ser otros ficheros.
     pending = []
     for src, out, (bw, bh) in jobs:
         lat_path = os.path.join(CACHE_DIR, out)
-        if (out != "_custom_ctrl.pt" and os.path.exists(lat_path) and os.path.getmtime(lat_path) > os.path.getmtime(src)
+        if (not out.startswith("_custom_ctrl") and os.path.exists(lat_path) and os.path.getmtime(lat_path) > os.path.getmtime(src)
                 and tuple(torch.load(lat_path, weights_only=True).shape[-2:]) == (bh // 16, bw // 16)):
             continue
         pending.append((src, out, (bw, bh)))
@@ -429,7 +496,7 @@ def preprocess_slider():
     for f in stale:
         os.remove(os.path.join(CACHE_DIR, f))
     if stale:
-        print(f"  Removed {len(stale)} stale cache files / Eliminados {len(stale)} ficheros antiguos de la caché")
+        print("  " + t("Removed {n} stale cache files", n=len(stale)))
 
     ensure_model_downloaded(local_path=MODEL_ID, repo_id=HF_REPO_ID)
 
@@ -446,7 +513,7 @@ def preprocess_slider():
         with Image.open(preview_src) as im:
             buckets["_custom"] = bucket_size(*im.size)
 
-    print("\nLoading Text Encoder (Qwen3-8B NF4)... / Cargando Text Encoder (Qwen3-8B NF4)...")
+    print("\n" + t("Loading {name}...", name="Text Encoder (Qwen3-8B NF4)"))
     te, tok = load_text_encoder("cuda")
     encode_and_save(te, tok, "", "_neg")
 
@@ -456,18 +523,16 @@ def preprocess_slider():
     # Las previews del slider siempre tienen prompt: el manual o el caption del primer grupo.
     default_prompt = caption(sorted(groups)[0])
     c_prompt = with_trigger(PREVIEW_CUSTOM_PROMPT) if PREVIEW_CUSTOM_PROMPT else default_prompt
-    print(f"[Custom Prompt Cache] Encoding: '{c_prompt}'" + (f" + {os.path.basename(preview_src)}" if preview_src else ""))
+    print("[Custom Prompt Cache] " + t("Encoding: '{prompt}'", prompt=c_prompt) + (f" + {os.path.basename(preview_src)}" if preview_src else ""))
     encode_and_save(te, tok, c_prompt, "_custom")
     with open(os.path.join(CACHE_DIR, "_custom_prompt.txt"), "w", encoding="utf-8") as f:
         f.write(c_prompt)
     with open(os.path.join(CACHE_DIR, "_custom_image.txt"), "w", encoding="utf-8") as f:
-        f.write(PREVIEW_EDIT_IMAGE)
-    if not preview_src and os.path.exists(os.path.join(CACHE_DIR, "_custom_ctrl.pt")):
-        os.remove(os.path.join(CACHE_DIR, "_custom_ctrl.pt"))
+        f.write("\n".join(PREVIEW_EDIT_IMAGES))
 
     for idx, name in enumerate(captions, 1):
         encode_and_save(te, tok, caption(name), name)
-        print(f"[{idx}/{len(captions)}] Text / Texto: {name}")
+        print(f"[{idx}/{len(captions)}] {t('Text')}: {name}")
 
     del te, tok
     free_vram()
@@ -477,48 +542,61 @@ def preprocess_slider():
         jobs.append((preview_src, "_custom_ctrl.pt", buckets["_custom"]))
     pending = pending_jobs(jobs)
     if len(pending) < len(jobs):
-        print(f"\n{len(jobs) - len(pending)} latents already cached, skipped / latentes ya cacheados, se saltan.")
+        print("\n" + t("{n} latents already cached, skipped.", n=len(jobs) - len(pending)))
     if pending:
-        print("\nLoading VAE (FLUX.2)... / Cargando VAE (FLUX.2)...")
+        print("\n" + t("Loading {name}...", name="VAE (FLUX.2)"))
         vae = AutoencoderKLFlux2.from_pretrained(MODEL_ID, subfolder="vae", torch_dtype=torch.bfloat16).to("cuda")
         encode_latents(vae, pending, "cuda")
         del vae
         free_vram()
+    remove_stale_custom_ctrls({"_custom_ctrl.pt"} if preview_src else set())
 
     # El manifiesto, el último: el trainer lo usa para saber que la caché es de un slider.
     slider_core.write_manifest(CACHE_DIR, groups, anchors, mode, default_prompt)
-    print("\n✓ Pre-caching finished! VRAM freed / ¡Pre-caché finalizado! VRAM liberada.")
+    print("\n✓ " + t("Pre-caching finished! VRAM freed."))
 
 
-def encode_preview_prompt(cache_dir, prompt, image_path, device):
-    """
-    Codifica solo el prompt manual de las previews (y en edición su imagen de antes). Lo lanza el
-    servidor al guardar un prompt o una imagen nuevos. Sin entrenamiento en marcha va en GPU; con el
-    entrenamiento en marcha va en CPU (VAE en FP32) para no tocar su VRAM, y el trainer relee el
-    embedding antes de la siguiente preview.
-    """
+def parse_preview_images_arg(value):
+    value = (value or "").strip()
+    if value.startswith("["):
+        try:
+            return as_image_list(json.loads(value))
+        except (ValueError, TypeError):
+            return []
+    return as_image_list(value)
+
+
+def encode_preview_prompt(cache_dir, prompt, images_arg, device):
     global CACHE_DIR
     CACHE_DIR = cache_dir
     where = device.upper().replace("CUDA", "GPU")
+    requested = parse_preview_images_arg(images_arg)
     manifest = slider_core.read_manifest(cache_dir)
     if manifest:
-        has_image = manifest[2] == "edit"
+        # Slider: una sola imagen de entrada, al área de entrenamiento.
+        sources = [slider_preview_source(manifest[0], requested)] if manifest[2] == "edit" else []
+        area = TARGET_AREA
     else:
         has_image = any(f.endswith("_ctrl.pt") and not f.startswith("_") for f in os.listdir(cache_dir))
-    if has_image:
-        src = slider_preview_source(manifest[0], image_path) if manifest else preview_edit_source(find_samples(), image_path)
+        sources = preview_edit_sources(find_samples(), requested) if has_image else []
+        area = preview_image_area(len(sources))
+    buckets = []
+    for src in sources:
         with Image.open(src) as im:
-            bucket = bucket_size(*im.size)
+            buckets.append(bucket_size(*im.size, area=area))
+
+    if sources:
         # Se escribe aparte y se coloca al final junto al texto.
         # El servidor lee las líneas "[Custom Prompt] Image/Prompt" para mostrar la fase en la GUI.
-        print(f"[Custom Prompt] Image: encoding reference image on {where} / Codificando imagen de referencia en {where}: {src}", flush=True)
+        print("[Custom Prompt] Image: " + t("Encoding the reference image on {device}: {path}", device=where, path=", ".join(os.path.basename(p) for p in sources)), flush=True)
         vae = AutoencoderKLFlux2.from_pretrained(
             MODEL_ID, subfolder="vae", torch_dtype=torch.bfloat16 if device == "cuda" else torch.float32).to(device)
-        encode_latents(vae, [(src, "_custom_ctrl.new", bucket)], device)
+        encode_latents(vae, [(src, custom_ctrl_name(i) + ".new", bucket)
+                             for i, (src, bucket) in enumerate(zip(sources, buckets))], device)
         del vae
         free_vram()
 
-    print(f"[Custom Prompt] Prompt: encoding on {where} / Codificando en {where}: '{prompt}'", flush=True)
+    print("[Custom Prompt] Prompt: " + t("Encoding the prompt on {device}: '{prompt}'", device=where, prompt=prompt), flush=True)
     te, tok = load_text_encoder(device)
     embeds = encode_text(te, tok, prompt, device)
     del te, tok
@@ -530,17 +608,20 @@ def encode_preview_prompt(cache_dir, prompt, image_path, device):
         write(tmp)
         os.replace(tmp, os.path.join(cache_dir, name))
 
-    if has_image:
-        os.replace(os.path.join(cache_dir, "_custom_ctrl.new"), os.path.join(cache_dir, "_custom_ctrl.pt"))
+    if sources:
+        for i in range(len(sources)):
+            name = custom_ctrl_name(i)
+            os.replace(os.path.join(cache_dir, name + ".new"), os.path.join(cache_dir, name))
+    remove_stale_custom_ctrls(custom_ctrl_names(len(sources)))
     replace("_custom_prompt.txt", lambda f: open(f, "w", encoding="utf-8").write(prompt))
-    replace("_custom_image.txt", lambda f: open(f, "w", encoding="utf-8").write(image_path))
+    replace("_custom_image.txt", lambda f: open(f, "w", encoding="utf-8").write("\n".join(requested)))
     replace("_custom_embed.pt", lambda f: torch.save(embeds, f))
-    print("[Custom Prompt] Ready / Listo.", flush=True)
+    print("[Custom Prompt] " + t("Ready."), flush=True)
 
 
 if __name__ == "__main__":
     if len(sys.argv) == 6 and sys.argv[1] == "--prompt-only":
-        # --prompt-only <carpeta de caché> <prompt con el trigger ya puesto> <imagen de antes o ""> <cuda|cpu>
+        # --prompt-only <carpeta de caché> <prompt con el trigger ya puesto> <rutas JSON o una ruta> <cuda|cpu>
         encode_preview_prompt(*sys.argv[2:])
     else:
         preprocess_klein9b()

@@ -28,6 +28,13 @@ from safetensors import safe_open
 from safetensors.torch import save_file, load, load_file
 from bitsandbytes.functional import QuantState
 from bitsandbytes.nn import Linear4bit, Params4bit
+from i18n import t
+from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
+import lora_options
+import training_metrics
+
+# La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
+STEP_WORD = t("Step")
 
 # slider_core vive junto a este script (también cuando otro script lo importa desde otra carpeta).
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -42,17 +49,24 @@ except Exception:
 HF_REPO_ID = "AcademiaSD/FLUX.2-Klein-9B-NF4-for-LoRA-Training"
 
 DEFAULTS = {
-    "model_id": "FLUX.2-Klein-9B_NF4",
-    "cache_dir": "./cached_data_klein9b",
-    "output_dir": "./klein9b_lora_output",
+    "model_id": "Models/FLUX.2-Klein-9B_NF4",
+    "cache_dir": "./Cache_Data/cached_data_klein9b",
+    "output_dir": "./Outputs/klein9b_lora_output",
     "total_steps": 1000,
     "batch_size": 1,
     "grad_accum_steps": 4,
     "lr": 3e-4,
     "min_lr_ratio": 0.1,
     "warmup_steps": 100,
+    "lr_scheduler": "cosine",
+    "lr_cycles": 3,
     "lora_rank": 16,
     "lora_alpha": 16,
+    "use_rslora": False,
+    "use_loraplus": False,
+    "loraplus_ratio": 16.0,
+    "use_lokr": False,
+    "lokr_factor": 16,
     "lora_targets": "blocks",
     "weight_decay": 0.0,
     "max_grad_norm": 1.0,
@@ -76,21 +90,33 @@ CONFIG_PATH = "settings/train_settings_klein9b.json"
 if os.path.exists(CONFIG_PATH):
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         cfg = json.load(f)
-    print(f"[OK] Configuration loaded from {CONFIG_PATH} / Configuración cargada desde {CONFIG_PATH}")
+    print("[OK] " + t("Configuration loaded from {path}", path=CONFIG_PATH))
 else:
     cfg = {}
-    print(f"[!] {CONFIG_PATH} not found, using default values / No se encontró {CONFIG_PATH}, usando valores por defecto.")
+    print("[!] " + t("{path} not found, using default values.", path=CONFIG_PATH))
 
-MODEL_ID          = cfg.get("model_id",          DEFAULTS["model_id"])
+MODEL_ID          = str(resolve_model_dir(cfg.get("model_id"), DEFAULTS["model_id"]))
 TOTAL_STEPS       = cfg.get("total_steps",       DEFAULTS["total_steps"])
 BATCH_SIZE        = cfg.get("batch_size",        DEFAULTS["batch_size"])
 GRAD_ACCUM_STEPS  = cfg.get("grad_accum_steps",  DEFAULTS["grad_accum_steps"])
 LR                = cfg.get("lr",                DEFAULTS["lr"])
 MIN_LR_RATIO      = cfg.get("min_lr_ratio",      DEFAULTS["min_lr_ratio"])
 WARMUP_STEPS      = cfg.get("warmup_steps",      DEFAULTS["warmup_steps"])
+LR_SCHEDULER      = cfg.get("lr_scheduler",      DEFAULTS["lr_scheduler"])
+LR_CYCLES         = cfg.get("lr_cycles",         DEFAULTS["lr_cycles"])
 LORA_RANK         = cfg.get("lora_rank",         DEFAULTS["lora_rank"])
 LORA_ALPHA        = cfg.get("lora_alpha",        DEFAULTS["lora_alpha"])
 LORA_TARGETS      = "all" if cfg.get("lora_targets", DEFAULTS["lora_targets"]) == "all" else "blocks"
+# rsLoRA escala el LoRA por alpha/√rank en vez de alpha/rank; LoRA+ da a lora_B un LR ratio veces mayor.
+# Las dos cambian cómo aprende, no el formato: el LoRA exportado es estándar (ver export_alpha).
+# LoKr (LyCORIS) sustituye a LoRA: cada capa aprende w1 ⊗ (w2_a·w2_b); con él no se usan las otras dos.
+USE_RSLORA        = bool(cfg.get("use_rslora",   DEFAULTS["use_rslora"]))
+USE_LORAPLUS      = bool(cfg.get("use_loraplus", DEFAULTS["use_loraplus"]))
+LORAPLUS_RATIO    = float(cfg.get("loraplus_ratio", DEFAULTS["loraplus_ratio"]))
+USE_LOKR          = bool(cfg.get("use_lokr",     DEFAULTS["use_lokr"]))
+LOKR_FACTOR       = max(1, int(cfg.get("lokr_factor", DEFAULTS["lokr_factor"])))
+if USE_LOKR:
+    USE_RSLORA = USE_LORAPLUS = False
 WEIGHT_DECAY      = cfg.get("weight_decay",      DEFAULTS["weight_decay"])
 MAX_GRAD_NORM     = cfg.get("max_grad_norm",     DEFAULTS["max_grad_norm"])
 SAVE_EVERY        = cfg.get("save_every",        DEFAULTS["save_every"])
@@ -118,29 +144,28 @@ TURBO_LORA_FILE     = "Flux_Klein_9b_Turbo_lora_rank_64_bf16_standard.safetensor
 TRIGGER_WORD     = cfg.get("trigger_word", "")
 PROJECT_NAME      = cfg.get("project_name", "").strip()
 
-if PROJECT_NAME:
-    CACHE_DIR  = f"./cached_data_klein9b_{PROJECT_NAME}"
-    OUTPUT_DIR = f"./klein9b_lora_output_{PROJECT_NAME}"
-else:
-    CACHE_DIR  = cfg.get("cache_dir",  DEFAULTS["cache_dir"])
-    OUTPUT_DIR = cfg.get("output_dir", DEFAULTS["output_dir"])
+CACHE_DIR = str(resolve_cache_dir(f"./cached_data_klein9b_{PROJECT_NAME}" if PROJECT_NAME else cfg.get("cache_dir"), DEFAULTS["cache_dir"]))
+OUTPUT_DIR = str(resolve_output_dir(f"./klein9b_lora_output_{PROJECT_NAME}" if PROJECT_NAME else cfg.get("output_dir"), DEFAULTS["output_dir"]))
 
-print(f"  Model ID / ID Modelo     : {MODEL_ID}")
-print(f"  Project / Proyecto       : {PROJECT_NAME if PROJECT_NAME else '(Default)'}")
-print(f"  Trigger Word / Palabra   : {TRIGGER_WORD}")
-print(f"  Cache Dir / Carpeta Caché: {CACHE_DIR}")
-print(f"  Output Dir / Salida      : {OUTPUT_DIR}")
-print(f"  Total Steps / Pasos      : {TOTAL_STEPS}")
-print(f"  Learning Rate / LR       : {LR}")
-print(f"  LoRA Rank/Alpha          : {LORA_RANK}/{LORA_ALPHA}")
-print(f"  LoRA Targets             : {LORA_TARGETS}")
-print(f"  Batch / Grad Accum       : {BATCH_SIZE}/{GRAD_ACCUM_STEPS}")
-print(f"  Preview Mode / Prompt    : Mode={PREVIEW_CAPTION_MODE} | Custom='{PREVIEW_CUSTOM_PROMPT}'")
-print(f"  Preview Every / Steps / CFG / Size: {PREVIEW_EVERY} / {PREVIEW_STEPS} / {PREVIEW_CFG} / {PREVIEW_SIZE or 'training'}")
-print(f"  Seed Configured / Semilla: {SEED} ({'RANDOM' if SEED <= 0 else 'FIXED'})")
-print(f"  Turbo LoRA Previews      : {'ON (Strength=' + str(TURBO_LORA_STRENGTH) + ')' if USE_TURBO else 'OFF'}")
+print(f"  {t('Model ID'):<22}: {MODEL_ID}")
+print(f"  {t('Project Name'):<22}: {PROJECT_NAME if PROJECT_NAME else t('(Default)')}")
+print(f"  {t('Trigger Word'):<22}: {TRIGGER_WORD}")
+print(f"  {t('Cache Dir'):<22}: {CACHE_DIR}")
+print(f"  {t('Output Dir'):<22}: {OUTPUT_DIR}")
+print(f"  {t('Total Steps'):<22}: {TOTAL_STEPS}")
+print(f"  {t('Learning Rate'):<22}: {LR}")
+print(f"  {t('LR Scheduler'):<22}: {lora_options.lr_scheduler_label(LR_SCHEDULER, WARMUP_STEPS, LR_CYCLES)}")
+print(f"  {'LoRA Rank/Alpha':<22}: {LORA_RANK}/{LORA_ALPHA}")
+print(f"  {'rsLoRA / LoRA+':<22}: {'on' if USE_RSLORA else 'off'} / {f'x{LORAPLUS_RATIO:g}' if USE_LORAPLUS else 'off'}")
+print(f"  {'LoKr':<22}: {f'factor {LOKR_FACTOR}' if USE_LOKR else 'off'}")
+print(f"  {t('LoRA Targets'):<22}: {LORA_TARGETS}")
+print(f"  {'Batch / Grad Accum':<22}: {BATCH_SIZE}/{GRAD_ACCUM_STEPS}")
+print(f"  {t('Preview'):<22}: {t('Mode')}={PREVIEW_CAPTION_MODE} | Prompt='{PREVIEW_CUSTOM_PROMPT}'")
+print(f"  {t('Preview Every'):<22}: {PREVIEW_EVERY} | {t('Preview Steps')} {PREVIEW_STEPS} | CFG {PREVIEW_CFG} | {t('Preview Size')} {PREVIEW_SIZE or t('Training')}")
+print(f"  {t('Seed'):<22}: {SEED} ({t('random') if SEED <= 0 else t('fixed')})")
+print(f"  {'Turbo LoRA':<22}: {t('ON (strength {s})', s=TURBO_LORA_STRENGTH) if USE_TURBO else t('OFF')}")
 if cfg.get("lora_type") == "slider":
-    print(f"  Slider                   : strength at 100% / fuerza al 100 % {SLIDER['slider_strength_100']:g} | "
+    print(f"  {'Slider':<22}: strength at 100% / fuerza al 100 % {SLIDER['slider_strength_100']:g} | "
           f"push {SLIDER['slider_push']:g} | ultra {'ON' if SLIDER['slider_ultra'] else 'OFF'}")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -165,7 +190,7 @@ def get_hf_token():
                 token_data = json.load(f)
                 token = token_data.get("token", "").strip()
                 if token:
-                    print("✓ Using HF Token / Usando token de HF")
+                    print("✓ " + t("Using HF Token"))
                     return token
         except Exception:
             pass
@@ -204,18 +229,18 @@ def enable_hf_file_progress():
 def ensure_model_downloaded(local_path, repo_id):
     if (os.path.exists(os.path.join(local_path, "transformer", "index.json"))
             and os.path.exists(os.path.join(local_path, "vae", "config.json"))):
-        print(f"[OK] Local model found at / Modelo local encontrado en: {local_path}")
+        print("[OK] " + t("Local model found at: {path}", path=local_path))
         return local_path
 
-    print(f"⚠ Local model not found at / No se encontró modelo local en: {local_path}")
-    print(f"  Downloading from Hugging Face / Descargando desde Hugging Face: {repo_id}")
+    print("⚠ " + t("Local model not found at: {path}", path=local_path))
+    print("  " + t("Downloading from Hugging Face: {repo}", repo=repo_id))
 
     enable_hf_file_progress()
 
     try:
         from huggingface_hub import snapshot_download
     except ImportError:
-        raise ImportError("huggingface_hub is required. Install with pip install huggingface_hub")
+        raise ImportError(t("huggingface_hub is required. Install it with: pip install huggingface_hub"))
 
     # El entrenamiento no usa el text encoder: ya está todo en el pre-cache.
     downloaded_path = snapshot_download(
@@ -226,7 +251,7 @@ def ensure_model_downloaded(local_path, repo_id):
         ignore_patterns=["text_encoder/*"],
     )
 
-    print(f"[OK] Model downloaded to / Modelo descargado en: {downloaded_path}")
+    print("[OK] " + t("Model downloaded to: {path}", path=downloaded_path))
     return downloaded_path
 
 
@@ -263,10 +288,10 @@ def model_inputs(sample, latents, H, W, device):
     txt_ids = Flux2KleinPipeline._prepare_text_ids(sample["emb"]).to(device)
     if "ctrl" not in sample:
         return latents, img_ids, txt_ids
-    # Con batch > 1 cada muestra lleva su propio antes; en la preview hay uno solo.
-    ctrl = sample["ctrl"].to(device, non_blocking=True)
-    ctrl_ids = Flux2KleinPipeline._prepare_image_ids([ctrl[:1]]).to(device)
-    hidden = torch.cat([latents, pack_latents(ctrl).expand(B, -1, -1).to(latents.dtype)], dim=1)
+    ctrls = sample.get("ctrls") or [sample["ctrl"]]
+    ctrls = [c.to(device, non_blocking=True) for c in ctrls]
+    ctrl_ids = Flux2KleinPipeline._prepare_image_ids([c[:1] for c in ctrls]).to(device)
+    hidden = torch.cat([latents] + [pack_latents(c).expand(B, -1, -1).to(latents.dtype) for c in ctrls], dim=1)
     return hidden, torch.cat([img_ids, ctrl_ids.expand(B, -1, -1)], dim=1), txt_ids
 
 
@@ -279,7 +304,7 @@ def load_nf4_transformer(model_dir):
     index_path = os.path.join(cache_dir, "index.json")
 
     if not os.path.exists(index_path):
-        raise FileNotFoundError(f"index.json not found in NF4 cache / No existe index.json en caché NF4: {cache_dir}")
+        raise FileNotFoundError(t("index.json not found in the NF4 cache: {path}", path=cache_dir))
 
     with open(index_path, "r", encoding="utf-8") as f:
         index = json.load(f)
@@ -320,9 +345,9 @@ def load_nf4_transformer(model_dir):
 
     missing = [n for n, t in list(transformer.named_parameters()) + list(transformer.named_buffers()) if t.is_meta]
     if missing:
-        raise RuntimeError(f"NF4 cache incomplete / Caché NF4 incompleta: {missing[:5]}")
+        raise RuntimeError(t("NF4 cache incomplete: {names}", names=missing[:5]))
 
-    print(f"[OK] NF4 layers / Capas NF4: {len(index['quantized'])} | BF16 layers / Capas BF16: {len(index['unquantized'])}")
+    print("[OK] " + t("NF4 layers: {a} | BF16 layers: {b}", a=len(index['quantized']), b=len(index['unquantized'])))
     return transformer
 
 
@@ -337,12 +362,12 @@ def build_lora_metadata(step):
         "trained_with": "AcademiaSD LoRAlab FLUX.2 Klein 9B",
         "ss_sd_model_name": "FLUX.2-klein-base-9B",
         "ss_base_model_version": "Flux.2 Klein 9B",
-        "ss_network_module": "peft.LoraModel",
+        "ss_network_module": "lycoris.kohya" if USE_LOKR else "peft.LoraModel",
         "ss_network_dim": LORA_RANK,
-        "ss_network_alpha": LORA_ALPHA,
+        "ss_network_alpha": export_alpha(),
         "lora_targets": LORA_TARGETS,
         "ss_learning_rate": LR,
-        "ss_lr_scheduler": "cosine_with_warmup",
+        "ss_lr_scheduler": LR_SCHEDULER,
         "ss_lr_warmup_steps": WARMUP_STEPS,
         "ss_max_train_steps": TOTAL_STEPS,
         "ss_steps": step,
@@ -356,6 +381,18 @@ def build_lora_metadata(step):
         meta["slider"] = "true"
         meta["slider_mode"] = SLIDER_RUN["mode"]
         meta["slider_strength_100"] = SLIDER["slider_strength_100"]
+    # La GUI lee estas claves al exportar o descargar para poner el sufijo _rs / _plus / _lokr al nombre.
+    if USE_RSLORA:
+        meta["rslora"] = "true"
+        meta["rslora_train_alpha"] = LORA_ALPHA
+    if USE_LORAPLUS:
+        meta["loraplus_ratio"] = LORAPLUS_RATIO
+    if USE_RSLORA or USE_LORAPLUS:
+        meta["ss_network_args"] = json.dumps({"rslora": USE_RSLORA,
+                                              "loraplus_lr_ratio": LORAPLUS_RATIO if USE_LORAPLUS else None})
+    if USE_LOKR:
+        meta["lokr_factor"] = LOKR_FACTOR
+        meta["ss_network_args"] = json.dumps({"algo": "lokr", "factor": LOKR_FACTOR})
 
     trigger = TRIGGER_WORD.strip()
     if trigger:
@@ -378,9 +415,17 @@ def build_lora_metadata(step):
     return {k: str(v) for k, v in meta.items()}
 
 
+def export_alpha():
+    return lora_options.export_alpha(LORA_ALPHA, LORA_RANK, USE_RSLORA)
+
+
 def _export_lora(model, path, step):
     # Formato PEFT/diffusers que carga ComfyUI. Se incluye alpha por capa: sin él,
     # ComfyUI aplicaría el LoRA con escala 1 en lugar de alpha/rank.
+    if USE_LOKR:
+        save_file(lora_options.lokr_export(model, lambda name: "transformer." + name, export_alpha()),
+                  path, metadata=build_lora_metadata(step))
+        return
     # En un slider, lora_B se escala para que la fuerza al 100 % (5) dé la posición 100 del dataset.
     clean = {}
     for k, v in get_peft_model_state_dict(model).items():
@@ -389,7 +434,7 @@ def _export_lora(model, path, step):
             v = v * SLIDER_RUN["factor"]
         clean[k] = v.to(torch.bfloat16).cpu().contiguous()
         if k.endswith(".lora_A.weight"):
-            clean[k[:-len(".lora_A.weight")] + ".alpha"] = torch.tensor(float(LORA_ALPHA))
+            clean[k[:-len(".lora_A.weight")] + ".alpha"] = torch.tensor(float(export_alpha()))
     save_file(clean, path, metadata=build_lora_metadata(step))
 
 
@@ -492,7 +537,7 @@ class TurboHolder:
         path = os.path.join(MODEL_ID, "LoRAs", TURBO_LORA_FILE)
         if not os.path.exists(path):
             from huggingface_hub import hf_hub_download
-            print(f"  Downloading Turbo LoRA / Descargando Turbo LoRA (~350 MB): {TURBO_LORA_REPO}")
+            print("  " + t("Downloading Turbo LoRA (~350 MB): {repo}", repo=TURBO_LORA_REPO))
             path = hf_hub_download(TURBO_LORA_REPO, TURBO_LORA_FILE, local_dir=os.path.join(MODEL_ID, "LoRAs"))
 
         # Claves diffusion_model.<capa>.lora_down/lora_up (sin alpha: escala 1) y .diff de las normas q/k.
@@ -553,7 +598,7 @@ def apply_turbo_lora(model):
             model.get_submodule("base_model.model." + name).weight.data.copy_(w)
         saved.clear()
 
-    print(f"  🚀 Turbo LoRA: {len(hooks)} layers + {len(TurboHolder.norms)} norms / capas + normas (strength / fuerza {TURBO_LORA_STRENGTH})")
+    print("  🚀 Turbo LoRA: " + t("{a} layers + {b} norms (strength {s})", a=len(hooks), b=len(TurboHolder.norms), s=TURBO_LORA_STRENGTH))
     return undo
 
 
@@ -567,7 +612,7 @@ def run_preview(model, scheduler, sample, neg, size, step, slider=None):
     model.eval()
 
     actual_seed = random.randint(1, 2147483647) if SEED <= 0 else SEED
-    print(f"  ↳ Preview Seed used / Semilla utilizada: {actual_seed}")
+    print("  ↳ " + t("Preview seed used: {seed}", seed=actual_seed))
 
     dial = slider[1] if slider else [(None, None)]
     undo_turbo = apply_turbo_lora(model) if USE_TURBO else None
@@ -595,7 +640,7 @@ def run_preview(model, scheduler, sample, neg, size, step, slider=None):
                 except torch.OutOfMemoryError:
                     # Con 8 GB y el entrenamiento cargado no siempre cabe entera: por mosaicos usa mucha
                     # menos memoria, a cambio de alguna marca leve en las uniones. Sigue así el resto del run.
-                    print("  ↳ Low VRAM: tiled VAE decode for previews / Poca VRAM: decodificación por mosaicos en las previews")
+                    print("  ↳ " + t("Low VRAM: tiled VAE decode for previews"))
                     torch.cuda.empty_cache()
                     vae.enable_tiling()
                     img = vae.decode(lat, return_dict=False)[0]
@@ -622,7 +667,7 @@ def run_preview(model, scheduler, sample, neg, size, step, slider=None):
                 result.paste(im, (i * pil[0].width, 0))
         out = os.path.join(OUTPUT_DIR, f"preview_step_{step}.png")
         result.save(out)
-        print(f"  ↳ Preview saved to / Preview guardada: {out}")
+        print("  ↳ " + t("Preview saved to: {path}", path=out))
     finally:
         if slider:
             slider_core.set_multiplier(slider[0], 1.0)
@@ -642,10 +687,8 @@ def check_custom_prompt(has_custom):
     if PREVIEW_CAPTION_MODE != "custom":
         return
     if not has_custom:
-        print("\n[PREVIEW] Custom mode but the cache has no encoded prompt: set it, Save JSON and run Pre-Cache "
-              "(it only re-encodes the texts). Using the first caption meanwhile.")
-        print("[PREVIEW] Modo custom pero la caché no tiene el prompt codificado: escríbelo, Save JSON y lanza el "
-              "Pre-Caché (solo vuelve a codificar los textos). Mientras, se usa el primer caption.")
+        print("\n[PREVIEW] " + t("Custom mode but the cache has no encoded prompt: set it, Save JSON and run Pre-Cache "
+                                "(it only re-encodes the texts). Using the first caption meanwhile."))
         return
 
     wanted = PREVIEW_CUSTOM_PROMPT
@@ -653,10 +696,9 @@ def check_custom_prompt(has_custom):
         wanted = f"{TRIGGER_WORD}, {wanted}"
     prompt_file = os.path.join(CACHE_DIR, "_custom_prompt.txt")
     encoded = open(prompt_file, "r", encoding="utf-8").read() if os.path.exists(prompt_file) else ""
-    print(f"\n[PREVIEW] Custom prompt / Prompt manual: '{encoded}'")
+    print(f"\n[PREVIEW] {t('Custom prompt')}: '{encoded}'")
     if wanted and wanted != encoded:
-        print("[PREVIEW] The new prompt is being encoded on CPU (Save JSON); previews switch to it when ready.")
-        print("[PREVIEW] El prompt nuevo se está codificando en CPU (Save JSON); las previews lo usarán en cuanto esté.")
+        print("[PREVIEW] " + t("The new prompt is being encoded on CPU (Save JSON); previews switch to it when ready."))
 
 
 _live_mtime = None
@@ -719,14 +761,14 @@ def reload_live_settings():
 
 
 def train_klein9b():
-    global LORA_RANK, LORA_ALPHA  # al reanudar se toman del checkpoint (el alpha se exporta con el LoRA)
+    global LORA_RANK, LORA_ALPHA, USE_RSLORA, USE_LORAPLUS, LORAPLUS_RATIO, USE_LOKR, LOKR_FACTOR  # al reanudar se toman del checkpoint (el alpha se exporta con el LoRA)
     global BATCH_SIZE, SLIDER_RUN
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.benchmark = True
 
     if not os.path.exists(CACHE_DIR) or not any(f.endswith("_latent.pt") for f in os.listdir(CACHE_DIR)):
-        print(f"\n[!] ERROR: Cache directory '{CACHE_DIR}' is empty or does not exist.")
-        print(f"[!] Please run Pre-Cache first! / ¡Por favor ejecuta el Pre-Caché primero!")
+        print("\n[!] ERROR: " + t("Cache directory '{path}' is empty or does not exist.", path=CACHE_DIR))
+        print("[!] " + t("Please run Pre-Cache first!"))
         sys.exit(2)  # la GUI muestra este código como "falta la pre-caché"
 
     # Slider: lo decide la caché (su manifiesto), que es lo que de verdad se va a entrenar.
@@ -746,15 +788,19 @@ def train_klein9b():
             # El multiplicador del LoRA es uno por capa: un batch no puede mezclar pares de signos distintos.
             print(f"[i] Slider: batch {BATCH_SIZE} -> 1 (use Grad Accum to average more steps / usa Grad Accum para promediar más pasos)")
             BATCH_SIZE = 1
+        if USE_LOKR:
+            # El dial cambia la escala de las capas LoRA de PEFT; LoKr no las usa.
+            print("[i] Slider: LoKr -> LoRA (the dial needs LoRA layers / el dial necesita capas LoRA)")
+            USE_LOKR = False
 
     ensure_model_downloaded(local_path=MODEL_ID, repo_id=HF_REPO_ID)
 
-    print("Loading FLUX.2 Klein 9B Transformer (NF4)... / Cargando Transformer de FLUX.2 Klein 9B (NF4)...")
+    print(t("Loading {name}...", name="FLUX.2 Klein 9B Transformer (NF4)"))
     t0 = time.time()
     transformer = load_nf4_transformer(MODEL_ID)
     transformer.to("cuda")
     free_vram()
-    print(f"Transformer 9B loaded in / cargado en {time.time() - t0:.1f}s. VRAM: {torch.cuda.memory_allocated()/1e9:.1f} GB", flush=True)
+    print(t("Transformer loaded in {s:.1f}s.", s=time.time() - t0) + f" VRAM: {torch.cuda.memory_allocated()/1e9:.1f} GB", flush=True)
 
     scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(MODEL_ID, subfolder="scheduler")
 
@@ -771,31 +817,71 @@ def train_klein9b():
         # (composición). El detalle fino queda intacto y el dial aguanta fuerzas mucho más altas.
         target_modules = [n for n in target_modules if n.startswith("transformer_blocks.")
                           or (n.startswith("single_transformer_blocks.") and int(n.split(".")[1]) < 8)]
-    print(f"Target LoRA Layers / Capas LoRA objetivo: {len(target_modules)} ({LORA_TARGETS}{', ultra' if manifest and SLIDER['slider_ultra'] else ''})")
+    print(t("Target LoRA layers: {n} ({kind})", n=len(target_modules),
+            kind=LORA_TARGETS + (", ultra" if manifest and SLIDER["slider_ultra"] else "")))
 
     # Reanudar es continuar EL MISMO LoRA: capas, rank y alpha salen del checkpoint, no de la GUI.
     # Si se construyera con otros, el optimizador no encajaría y quedaría una mezcla de pesos.
     # Las capas se leen de los PESOS guardados: adapter_config.json las guarda abreviadas.
-    resume_weights = os.path.join(RESUME_DIR, "adapter_model.safetensors")
-    if os.path.exists(STEP_FILE) and os.path.exists(resume_weights):
+    # El checkpoint dice además si era LoRA o LoKr: se sigue con el mismo método.
+    lora_weights = os.path.join(RESUME_DIR, "adapter_model.safetensors")
+    lokr_weights = os.path.join(RESUME_DIR, lora_options.LOKR_WEIGHTS)
+    if os.path.exists(STEP_FILE) and (os.path.exists(lora_weights) or os.path.exists(lokr_weights)):
+        saved_lokr = not os.path.exists(lora_weights)
+        if saved_lokr != USE_LOKR:
+            print("\n[!] " + t("Resuming with the checkpoint's method: {m} (settings ask for {m2}; it applies to new trainings).",
+                              m="LoKr" if saved_lokr else "LoRA", m2="LoKr" if USE_LOKR else "LoRA"))
+        USE_LOKR = saved_lokr
+    resume_weights = lokr_weights if USE_LOKR else lora_weights
+    if os.path.exists(STEP_FILE) and os.path.exists(resume_weights) and USE_LOKR:
+        with safe_open(resume_weights, framework="pt", device="cpu") as f:
+            saved_targets = sorted({k.rsplit(".", 1)[0] for k in f.keys()})
+        with open(os.path.join(RESUME_DIR, lora_options.LOKR_CONFIG), "r", encoding="utf-8") as f:
+            saved_cfg = json.load(f)
+        saved = (len(saved_targets), saved_cfg["r"], saved_cfg["lora_alpha"])
+        if saved != (len(target_modules), LORA_RANK, LORA_ALPHA) or saved_cfg["lokr_factor"] != LOKR_FACTOR:
+            print("\n[!] " + t("Resuming with the checkpoint's LoKr: {n} layers, rank {r}, alpha {a}, factor {f} "
+                              "(settings ask for {n2} layers, rank {r2}, alpha {a2}, factor {f2}; they apply to new trainings).",
+                              n=saved[0], r=saved[1], a=saved[2], f=saved_cfg["lokr_factor"],
+                              n2=len(target_modules), r2=LORA_RANK, a2=LORA_ALPHA, f2=LOKR_FACTOR))
+        target_modules, LORA_RANK, LORA_ALPHA = saved_targets, saved[1], saved[2]
+        LOKR_FACTOR = saved_cfg["lokr_factor"]
+    elif os.path.exists(STEP_FILE) and os.path.exists(resume_weights):
         with safe_open(resume_weights, framework="pt", device="cpu") as f:
             saved_targets = sorted({k.split(".lora_")[0].replace("base_model.model.", "", 1) for k in f.keys()})
         with open(os.path.join(RESUME_DIR, "adapter_config.json"), "r", encoding="utf-8") as f:
             saved_cfg = json.load(f)
         saved = (len(saved_targets), saved_cfg["r"], saved_cfg["lora_alpha"])
         if saved != (len(target_modules), LORA_RANK, LORA_ALPHA):
-            print(f"\n[!] Resuming with the checkpoint's LoRA: {saved[0]} layers, rank {saved[1]}, alpha {saved[2]} "
-                  f"(settings ask for {len(target_modules)} layers, rank {LORA_RANK}, alpha {LORA_ALPHA}; they apply to new trainings).")
-            print(f"[!] Se reanuda con el LoRA del checkpoint: {saved[0]} capas, rank {saved[1]}, alpha {saved[2]} "
-                  f"(los ajustes piden {len(target_modules)} capas, rank {LORA_RANK}, alpha {LORA_ALPHA}; se aplican a entrenamientos nuevos).")
+            print("\n[!] " + t("Resuming with the checkpoint's LoRA: {n} layers, rank {r}, alpha {a} "
+                              "(settings ask for {n2} layers, rank {r2}, alpha {a2}; they apply to new trainings).",
+                              n=saved[0], r=saved[1], a=saved[2], n2=len(target_modules), r2=LORA_RANK, a2=LORA_ALPHA))
         target_modules, LORA_RANK, LORA_ALPHA = saved_targets, saved[1], saved[2]
+        # rsLoRA lo guarda PEFT en adapter_config.json; LoRA+ va en lora_options.json. Un checkpoint
+        # anterior a estas opciones no tiene ninguno de los dos: se entrenó sin ellas.
+        opts_file = os.path.join(RESUME_DIR, "lora_options.json")
+        opts = {}
+        if os.path.exists(opts_file):
+            with open(opts_file, "r", encoding="utf-8") as f:
+                opts = json.load(f)
+        saved_opts = (bool(saved_cfg.get("use_rslora", False)), bool(opts.get("use_loraplus", False)),
+                      float(opts.get("loraplus_ratio", LORAPLUS_RATIO)))
+        if saved_opts[:2] != (USE_RSLORA, USE_LORAPLUS):
+            print("\n[!] " + t("Resuming with the checkpoint's options: rsLoRA {a}, LoRA+ {b} "
+                              "(settings ask for rsLoRA {a2}, LoRA+ {b2}; they apply to new trainings).",
+                              a=saved_opts[0], b=saved_opts[1], a2=USE_RSLORA, b2=USE_LORAPLUS))
+        USE_RSLORA, USE_LORAPLUS, LORAPLUS_RATIO = saved_opts
 
-    lora_config = LoraConfig(
-        r=LORA_RANK, lora_alpha=LORA_ALPHA, lora_dropout=0.0,
-        target_modules=target_modules, use_dora=False, init_lora_weights=True,
-    )
+    if USE_LOKR:
+        USE_RSLORA = USE_LORAPLUS = False
+        model = lora_options.LoKrModel(transformer, target_modules, LORA_RANK, LORA_ALPHA, LOKR_FACTOR)
+    else:
+        lora_config = LoraConfig(
+            r=LORA_RANK, lora_alpha=LORA_ALPHA, lora_dropout=0.0,
+            target_modules=target_modules, use_dora=False, init_lora_weights=True, use_rslora=USE_RSLORA
+        )
 
-    model = get_peft_model(transformer, lora_config)
+        model = get_peft_model(transformer, lora_config)
     # LoRA y estados del optimizador en FP32: en 8/16 bits se pierde el detalle fino (caras).
     for p in model.parameters():
         if p.requires_grad:
@@ -804,28 +890,37 @@ def train_klein9b():
     slider_layers = slider_core.lora_layers(model) if manifest else None
 
     trainable = [p for p in model.parameters() if p.requires_grad]
-    optimizer = torch.optim.AdamW(trainable, lr=LR, weight_decay=WEIGHT_DECAY)
+    # LoRA+: lora_B en su propio grupo, con el LR multiplicado (lr_mult se aplica en cada paso).
+    if USE_LORAPLUS:
+        lora_b = [p for n, p in model.named_parameters() if p.requires_grad and "lora_B" in n]
+        lora_a = [p for n, p in model.named_parameters() if p.requires_grad and "lora_B" not in n]
+        optimizer = torch.optim.AdamW([{"params": lora_a, "lr_mult": 1.0},
+                                       {"params": lora_b, "lr_mult": LORAPLUS_RATIO}],
+                                      lr=LR, weight_decay=WEIGHT_DECAY)
+    else:
+        optimizer = torch.optim.AdamW(trainable, lr=LR, weight_decay=WEIGHT_DECAY)
 
     def lr_at(step):
-        if step < WARMUP_STEPS:
-            return LR * step / max(1, WARMUP_STEPS)
-        prog = (step - WARMUP_STEPS) / max(1, TOTAL_STEPS - WARMUP_STEPS)
-        return LR * (MIN_LR_RATIO + (1 - MIN_LR_RATIO) * 0.5 * (1 + math.cos(math.pi * prog)))
+        return LR * lora_options.lr_factor(LR_SCHEDULER, step, TOTAL_STEPS, WARMUP_STEPS, MIN_LR_RATIO, LR_CYCLES)
 
     start_step = 0
-    lora_weights_path = os.path.join(RESUME_DIR, "adapter_model.safetensors")
+    lora_weights_path = resume_weights
     if os.path.exists(STEP_FILE) and os.path.exists(OPT_FILE) and os.path.exists(lora_weights_path):
         print("=" * 65)
-        print("¡Checkpoint detected! Restoring state... / ¡Checkpoint detectado! Restaurando estado...")
+        print(t("Checkpoint detected! Restoring state..."))
         try:
             with open(STEP_FILE, "r", encoding="utf-8") as f:
                 start_step = int(f.read().strip())
             with open(lora_weights_path, "rb") as f:
-                set_peft_model_state_dict(model, {k: v.float() for k, v in load(f.read()).items()})
+                saved_sd = load(f.read())
+            if USE_LOKR:
+                model.load_lokr_state_dict(saved_sd)
+            else:
+                set_peft_model_state_dict(model, {k: v.float() for k, v in saved_sd.items()})
             optimizer.load_state_dict(torch.load(OPT_FILE, weights_only=False))
-            print(f"Resuming training from step / Reanudando entrenamiento desde el paso {start_step}...")
+            print(t("Resuming training from step {n}...", n=start_step))
         except Exception as e:
-            print(f"[!] Warning reading checkpoint / Advertencia al leer checkpoint: {e}")
+            print("[!] " + t("Warning reading checkpoint: {error}", error=e))
             start_step = 0
         print("=" * 65)
 
@@ -834,19 +929,25 @@ def train_klein9b():
     def save_checkpoint_now(current_s):
         if current_s <= 0:
             return
-        print(f"\nSaving checkpoint state at step / Guardando estado en paso {current_s}...")
+        print("\n" + t("Saving checkpoint state at step {n}...", n=current_s))
         os.makedirs(RESUME_DIR, exist_ok=True)
         model.save_pretrained(RESUME_DIR)
+        # Solo puede quedar uno: los pesos del otro método serían de un entrenamiento anterior.
+        stale = os.path.join(RESUME_DIR, "adapter_model.safetensors" if USE_LOKR else lora_options.LOKR_WEIGHTS)
+        if os.path.exists(stale):
+            os.remove(stale)
+        with open(os.path.join(RESUME_DIR, "lora_options.json"), "w", encoding="utf-8") as f:
+            json.dump({"use_loraplus": USE_LORAPLUS, "loraplus_ratio": LORAPLUS_RATIO}, f)
         torch.save(optimizer.state_dict(), OPT_FILE)
         with open(STEP_FILE, "w", encoding="utf-8") as f:
             f.write(str(current_s))
         ckpt = os.path.join(OUTPUT_DIR, f"Klein9B_LoRA_step_{current_s}.safetensors")
         _export_lora(model, ckpt, current_s)
-        print(f"✓ Checkpoint saved successfully at step / Checkpoint guardado en paso {current_s}: {ckpt}")
+        print("✓ " + t("Checkpoint saved at step {n}: {path}", n=current_s, path=ckpt))
 
     def handle_signal(sig, frame):
         nonlocal last_step_executed
-        print(f"\n[!] Signal received / Señal de detención recibida ({sig}).")
+        print("\n[!] " + t("Stop signal received ({sig}).", sig=sig))
         save_checkpoint_now(last_step_executed)
         sys.exit(0)
 
@@ -872,6 +973,15 @@ def train_klein9b():
             if os.path.exists(path):
                 t = torch.load(path, weights_only=True).to(torch.bfloat16)
                 sample[key] = t.pin_memory() if pin else t
+        if "ctrl" in sample:
+            ctrls = [sample["ctrl"]]
+            index = 2
+            while os.path.exists(f"{CACHE_DIR}/{nombre}_ctrl_{index}.pt"):
+                extra = torch.load(f"{CACHE_DIR}/{nombre}_ctrl_{index}.pt", weights_only=True).to(torch.bfloat16)
+                ctrls.append(extra.pin_memory() if pin else extra)
+                index += 1
+            if len(ctrls) > 1:
+                sample["ctrls"] = ctrls
         return sample
 
     if manifest:
@@ -955,10 +1065,11 @@ def train_klein9b():
         print(f"\nSTARTING SLIDER TRAINING / ¡ARRANCANDO ENTRENAMIENTO SLIDER! {slider_core.describe(groups, anchors)} "
               f"(anchors in {sampler.p_anchor():.0%} of the steps / en el {sampler.p_anchor():.0%} de los pasos).")
     else:
-        kind = "before/after pairs / pares antes/después" if edit_mode else "images / imágenes"
-        print(f"\nSTARTING TRAINING / ¡ARRANCANDO ENTRENAMIENTO! {len(all_preview_names)} {kind} in {len(buckets)} buckets.")
+        kind = t("before/after pairs") if edit_mode else t("images")
+        print("\n" + t("STARTING TRAINING! {n} {kind} in {b} buckets.", n=len(all_preview_names), kind=kind, b=len(buckets)))
 
     reload_live_settings()
+    metrics = training_metrics.MetricsLog(OUTPUT_DIR, start_step)
     step = start_step
     try:
         # while y no range(): TOTAL_STEPS puede cambiar en caliente, en ambos sentidos.
@@ -968,7 +1079,7 @@ def train_klein9b():
 
             changes = reload_live_settings()
             if changes:
-                print("\n[LIVE] Settings reloaded without stopping / Ajustes recargados sin parar:")
+                print("\n[LIVE] " + t("Settings reloaded without stopping:"))
                 for c in changes:
                     print(f"[LIVE]   {c}")
                 if any(c.startswith(("preview_custom_prompt", "preview_caption_mode")) for c in changes):
@@ -979,7 +1090,8 @@ def train_klein9b():
             t0 = time.time()
 
             if manifest:
-                running_loss += slider_step() * GRAD_ACCUM_STEPS
+                step_loss = slider_step() * GRAD_ACCUM_STEPS
+                running_loss += step_loss
             else:
                 size = random.choice(list(buckets))
                 names = [random.choice(buckets[size]) for _ in range(BATCH_SIZE)]
@@ -1014,13 +1126,14 @@ def train_klein9b():
 
                 loss = F.mse_loss(pred.float(), target.float()) / GRAD_ACCUM_STEPS
                 loss.backward()
-                running_loss += loss.item() * GRAD_ACCUM_STEPS
+                step_loss = loss.item() * GRAD_ACCUM_STEPS
+                running_loss += step_loss
 
             # La norma solo existe al aplicar el optimizador: entre medias se muestra la última.
             if step % GRAD_ACCUM_STEPS == 0:
                 grad_norm = torch.nn.utils.clip_grad_norm_(trainable, MAX_GRAD_NORM).item()
                 for gparam in optimizer.param_groups:
-                    gparam["lr"] = lr_at(step)
+                    gparam["lr"] = lr_at(step) * gparam.get("lr_mult", 1.0)
                 optimizer.step()
                 optimizer.zero_grad(set_to_none=True)
 
@@ -1033,11 +1146,12 @@ def train_klein9b():
 
             avg_loss = running_loss / max(1, step - start_step)
             progress_line = (
-                f"Step/Paso {step:4d}/{TOTAL_STEPS} [{barra}] {pct*100:5.1f}% | "
+                f"{STEP_WORD} {step:4d}/{TOTAL_STEPS} [{barra}] {pct*100:5.1f}% | "
                 f"Loss {avg_loss:.4f} | gnorm {grad_norm:.3f} | "
                 f"lr {lr_at(step):.2e} | {t_step_avg:.2f}s/it | ETA {eta}"
             )
             print(f"\r{progress_line}", end="", flush=True)
+            metrics.log(step, step_loss, lr_at(step), grad_norm, t_step, TOTAL_STEPS)
 
             if SAVE_EVERY > 0 and step % SAVE_EVERY == 0:
                 print()
@@ -1064,7 +1178,7 @@ def train_klein9b():
                     # (como en ComfyUI, la salida hereda el tamaño de la referencia). El prompt manual
                     # sin imagen usa el tamaño de la primera del dataset.
                     ref = sample.get("ctrl", sample.get("lat", cache_data[all_preview_names[0]]["lat"]))
-                print(f"\n  [Preview] Mode: {PREVIEW_CAPTION_MODE} | Sample: {p_name}")
+                print(f"\n  [Preview] {t('Mode')}: {PREVIEW_CAPTION_MODE} | {t('Sample')}: {p_name}")
                 H, W = ref.shape[2], ref.shape[3]
                 if PREVIEW_SIZE > 0:
                     # Cada token es un parche de 16x16 px.
@@ -1076,10 +1190,10 @@ def train_klein9b():
         save_checkpoint_now(last_step_executed)
         return
 
-    print("\n\nTraining completed! / ¡Entrenamiento finalizado!")
+    print("\n\n" + t("Training completed!"))
     final = os.path.join(OUTPUT_DIR, "Klein9B_FINAL_LoRA.safetensors")
     _export_lora(model, final, min(last_step_executed, TOTAL_STEPS))
-    print(f"✓ Final LoRA saved to / Tu LoRA definitivo está en: {final}")
+    print("✓ " + t("Final LoRA saved to: {path}", path=final))
 
 
 if __name__ == "__main__":

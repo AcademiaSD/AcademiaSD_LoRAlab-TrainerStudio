@@ -17,7 +17,7 @@ carpeta autosuficiente en la raíz de LoRAlab Trainer Studio:
                                 (vae, tokenizer, scheduler, model_index.json, ...)
 
 Se ejecuta desde la raíz (cwd) con el modelo original (formato diffusers) en
-./FLUX.2-Klein-Base-9B-Raw.
+./Models/FLUX.2-Klein-Base-9B-Raw.
 
 Transformer:
     Solo se cuantizan las Linear de los bloques (8.8B de 9.1B parámetros). La
@@ -55,8 +55,8 @@ from safetensors.torch import save_file
 # CONFIGURACIÓN
 # ============================================================================
 
-MODEL_ID = "./FLUX.2-Klein-Base-9B-Raw"
-OUTPUT_DIR = "./FLUX.2-Klein-9B_NF4"
+MODEL_ID = "./Models/FLUX.2-Klein-Base-9B-Raw"
+OUTPUT_DIR = "./Models/FLUX.2-Klein-9B_NF4"
 REPO_ID = "black-forest-labs/FLUX.2-klein-base-9B"
 
 DTYPE = torch.bfloat16

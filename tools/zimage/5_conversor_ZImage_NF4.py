@@ -16,8 +16,8 @@ carpeta autosuficiente en la raíz de LoRAlab Trainer Studio:
         ...                     resto del modelo descargado, copiado sin cambios
                                 (vae, tokenizer, scheduler, model_index.json, ...)
 
-Se ejecuta desde la raíz (cwd) con el modelo original en ./Z-Image-Raw o
-./Z-Image-Turbo-Raw.
+Se ejecuta desde la raíz (cwd) con el modelo original en ./Models/Z-Image-Raw o
+./Models/Z-Image-Turbo-Raw.
 
 Base y Turbo comparten text encoder, tokenizer y VAE (mismos pesos): si la
 carpeta Raw no trae text_encoder/, se copia el NF4 ya convertido de la otra
@@ -58,8 +58,8 @@ from safetensors.torch import save_file
 
 # variante -> (modelo original en formato diffusers, carpeta NF4, repo original)
 VARIANTS = {
-    "base": ("./Z-Image-Raw", "./Z-Image_NF4", "Tongyi-MAI/Z-Image"),
-    "turbo": ("./Z-Image-Turbo-Raw", "./Z-Image-Turbo_NF4", "Tongyi-MAI/Z-Image-Turbo"),
+    "base": ("./Models/Z-Image-Raw", "./Models/Z-Image_NF4", "Tongyi-MAI/Z-Image"),
+    "turbo": ("./Models/Z-Image-Turbo-Raw", "./Models/Z-Image-Turbo_NF4", "Tongyi-MAI/Z-Image-Turbo"),
 }
 
 VARIANT = sys.argv[1] if len(sys.argv) > 1 else "base"

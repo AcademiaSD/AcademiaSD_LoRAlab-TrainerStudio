@@ -5,7 +5,7 @@
 Convierte el Transformer de Krea-2-Raw a NF4 y guarda una caché
 reutilizable en:
 
-    ./Krea-2-NF4/
+    ./Models/Krea-2-NF4/
 
 La conversión pesada se ejecuta UNA SOLA VEZ.
 
@@ -40,8 +40,8 @@ from safetensors.torch import save_file
 # CONFIGURACIÓN
 # ============================================================================
 
-MODEL_ID = "./Krea-2-Raw"
-OUTPUT_DIR = "./Krea-2-NF4"
+MODEL_ID = "./Models/Krea-2-Raw"
+OUTPUT_DIR = "./Models/Krea-2-NF4"
 
 DTYPE = torch.bfloat16
 

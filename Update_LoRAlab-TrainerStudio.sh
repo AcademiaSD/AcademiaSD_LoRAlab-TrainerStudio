@@ -108,6 +108,8 @@ echo
 echo "Actualizando librerias de Python... / Updating Python libraries..."
 if [ -x "${PY_EXE}" ]; then
     "${PY_EXE}" -m pip install -r requirements.txt || echo "[AVISO] No se pudieron actualizar las librerias / [WARNING] Could not update the libraries."
+    # pip no reinstala diffusers si solo cambia el commit de la URL: lo hace este script.
+    "${PY_EXE}" scripts/sync_pinned.py || echo "[AVISO] No se pudo actualizar diffusers / [WARNING] Could not update diffusers."
 else
     echo "[AVISO] No hay entorno: ejecuta ./Install_LoRAlab-TrainerStudio.sh / [WARNING] No environment: run ./Install_LoRAlab-TrainerStudio.sh"
 fi

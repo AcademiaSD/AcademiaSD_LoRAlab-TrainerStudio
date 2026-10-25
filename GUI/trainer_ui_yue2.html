@@ -1,0 +1,2036 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AcademiaSD YuE2 LoRAlab</title>
+    <script src="/i18n.js"></script>
+    <script src="/notify.js"></script>
+    <script src="/loss_chart.js"></script>
+
+    <!-- Favicon de la pestaña del navegador -->
+    <link rel="icon" type="image/png" href="/assets/logo_128.png">
+    <link rel="shortcut icon" type="image/png" href="/assets/logo_128.png">
+
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --panel-bg: #1e293b;
+            --panel-border: #334155;
+            --accent: #6366f1;
+            --accent-hover: #4f46e5;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: var(--bg-dark); color: var(--text-main); display: flex; flex-direction: column; min-height: 100vh; padding: 20px; }
+        
+        .beta-notice { display: flex; flex-direction: column; gap: 4px; background: rgba(245, 158, 11, 0.10); border: 1px solid rgba(245, 158, 11, 0.45); color: #fbbf24; border-radius: 12px; padding: 12px 18px; margin-bottom: 20px; font-size: 0.9rem; }
+        .beta-notice span { color: var(--text-muted); }
+        header { display: flex; flex-direction: column; background: var(--panel-bg); padding: 18px 25px; border-radius: 12px; border: 1px solid var(--panel-border); margin-bottom: 20px; gap: 15px; }
+
+        /* Banner Superior Panorámico */
+        .banner-container { width: 100%; max-height: 140px; overflow: hidden; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: #020617; border: 1px solid var(--panel-border); }
+        .banner-img { width: 100%; height: 100%; max-height: 140px; object-fit: contain; display: block; }
+
+        /* Botón de vuelta al lanzador, bajo el título / back-to-launcher button, under the title */
+        .back-to-launcher {
+            display: inline-flex; align-items: center; gap: 6px; margin-top: 8px;
+            padding: 4px 12px; border-radius: 6px;
+            font-size: 0.78rem; font-weight: 600; line-height: 1; text-decoration: none;
+            color: var(--text-muted); background: #0f172a; border: 1px solid var(--panel-border);
+            transition: color 0.2s, border-color 0.2s;
+        }
+        .back-to-launcher svg { display: block; flex: 0 0 auto; }
+        .back-to-launcher:hover { color: #fff; border-color: var(--accent); }
+
+        .header-content { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; width: 100%; }
+        .logo-title { display: flex; align-items: center; gap: 15px; }
+        .logo-title h1 { font-size: 1.5rem; font-weight: 800; color: #fff; letter-spacing: -0.5px; }
+        .logo-title span { font-size: 0.85rem; color: var(--text-muted); display: block; }
+
+        /* Social Links */
+        .social-links { display: flex; gap: 8px; flex-wrap: wrap; }
+        .social-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; text-decoration: none; color: #fff; background: #0f172a; border: 1px solid var(--panel-border); transition: background 0.2s, border-color 0.2s; }
+        .social-btn:hover { border-color: var(--accent); background: #1a2332; }
+        .btn-yt { color: #ff0000; }
+        .btn-x { color: #f8fafc; }
+        .btn-discord { color: #5865f2; }
+        .btn-kofi { color: #ff5e5b; }
+
+        /* Hardware Monitor Cards (RAM, VRAM, GPU Temp) */
+        .hardware-monitor { display: flex; gap: 12px; }
+        .hw-card { background: #0f172a; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--panel-border); min-width: 140px; }
+        .hw-card .label { font-size: 0.7rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
+        .hw-card .value { font-size: 0.95rem; font-weight: bold; margin: 3px 0; color: #38bdf8; }
+        .progress-bar-bg { width: 100%; height: 6px; background: #334155; border-radius: 3px; overflow: hidden; }
+        .progress-bar-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.5s ease, background-color 0.5s ease; }
+
+        .main-grid { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 20px; flex: 1; }
+
+        /* Ajustes en 2 columnas desde 1400 px (1080p al 100 % y al 125 %); por debajo, en una.
+           Cada columna se apila por su cuenta, sin depender de la altura de la otra.
+           Settings in 2 columns from 1400 px (1080p at 100 % and 125 %); below that, in one.
+           Each column stacks on its own, whatever the height of the other one. */
+        .sidebar { display: flex; flex-direction: column; gap: 20px; width: 440px; }
+        .side-group { display: contents; }
+        .side-col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+        .side-a { order: 1; }
+        .side-b { order: 2; }
+        .side-c { order: 3; }
+        .side-d { order: 4; }
+        @media (min-width: 1400px) {
+            /* Pre-Caché + Export | Training + Previews */
+            .sidebar { display: grid; grid-template-columns: repeat(2, clamp(370px, 21vw, 440px)); align-items: start; width: auto; }
+            .side-group { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+        }
+        /* Telefono en vertical / Phone portrait: la barra lateral tiene 440 px
+           fijos y la columna de consola + Dataset Manager quedaba aplastada en
+           una franja ilegible. Debajo de 960 px todo se apila a ancho completo.
+           The sidebar is a fixed 440 px, which crushed the console + Dataset
+           Manager column into an unreadable sliver. Below 960 px everything
+           stacks at full width. */
+        @media (max-width: 960px) {
+            body { padding: 10px; }
+            header { padding: 12px 14px; }
+            .main-grid { grid-template-columns: minmax(0, 1fr); }
+            .sidebar { width: 100%; }
+            .header-content { flex-direction: column; align-items: stretch; }
+            .logo-title { justify-content: center; text-align: center; }
+            .social-links { justify-content: center; }
+            .hardware-monitor { flex-wrap: wrap; }
+            .hw-card { flex: 1 1 140px; }
+            .panel { padding: 14px; }
+        }
+        .panel { background: var(--panel-bg); border-radius: 12px; border: 1px solid var(--panel-border); padding: 20px; }
+        
+        /* Títulos desplegables / Collapsible Panels */
+        .panel-title { font-size: 1.05rem; font-weight: 600; margin-bottom: 12px; color: #f1f5f9; border-bottom: 1px solid var(--panel-border); padding-bottom: 8px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; transition: color 0.15s; }
+        .panel-title:hover { color: #38bdf8; }
+        .panel.collapsed .panel-title { margin-bottom: 0; border-bottom: none; padding-bottom: 0; }
+        .panel.collapsed .panel-body { display: none; }
+        .toggle-icon { font-size: 0.75rem; color: var(--text-muted); font-weight: bold; }
+
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px; font-weight: 500; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; background: #0f172a; border: 1px solid var(--panel-border); color: #fff; padding: 8px 12px; border-radius: 6px; font-size: 0.9rem; outline: none; }
+        .form-group input[readonly] { background: #1a2332; color: #94a3b8; cursor: not-allowed; border-style: dashed; }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--accent); }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+        .btn { padding: 9px 14px; border-radius: 6px; font-weight: 600; cursor: pointer; border: none; font-size: 0.88rem; transition: background 0.2s, transform 0.1s; display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; }
+        .btn-full { width: 100%; }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-success { background: var(--success); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-secondary { background: #334155; color: white; }
+        .btn-secondary:hover { background: #475569; }
+        .btn-warning { background: var(--warning); color: black; }
+        .btn-sm { padding: 4px 10px; font-size: 0.75rem; width: auto; }
+        
+        .btn-row { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 10px !important; width: 100% !important; box-sizing: border-box !important; }
+
+        .btn-tall { display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; padding: 8px 6px !important; line-height: 1.25 !important; text-align: center !important; min-height: 50px !important; width: 100% !important; box-sizing: border-box !important; }
+        .btn-tall .main-text { font-size: 0.85rem; font-weight: 700; color: inherit; }
+        .btn-tall .sub-text { font-size: 0.72rem; font-weight: 500; opacity: 0.85; margin-top: 2px; }
+
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .console-container { display: flex; flex-direction: column; gap: 20px; }
+        .terminal { background: #020617; border-radius: 8px; border: 1px solid var(--panel-border); padding: 15px; font-family: 'Consolas', 'Courier New', monospace; font-size: 0.85rem; color: #38bdf8; overflow-y: auto; white-space: pre-wrap; word-break: break-all; height: 320px; }
+        .terminal-line { margin-bottom: 2px; line-height: 1.4; }
+        .terminal-line.term-success { color: #10b981; font-weight: bold; }
+        .terminal-line.term-warning { color: #f59e0b; font-weight: bold; }
+        .terminal-line.term-danger { color: #ef4444; font-weight: bold; }
+
+        .ds-toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; flex: 1 1 480px; justify-content: flex-end; }
+        .ds-title { flex-wrap: wrap; gap: 8px; }
+        .ds-title > span:first-child { white-space: nowrap; }
+        .ds-search { flex: 1; min-width: 150px; background: #0f172a; border: 1px solid var(--panel-border); color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 0.8rem; }
+        .ds-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; max-height: 380px; overflow-y: auto; padding-right: 5px; }
+        .ds-grid.compact { grid-template-columns: repeat(auto-fill, minmax(95px, 1fr)); }
+        .ds-grid.large { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+        .ds-grid.hidden { display: none; }
+        .ds-resizer { height: 11px; margin: 2px 0 -6px 0; cursor: ns-resize; display: flex; align-items: center; justify-content: center; border-radius: 4px; touch-action: none; }
+        .ds-resizer::before { content: ""; width: 46px; height: 3px; border-radius: 2px; background: var(--panel-border); transition: background .12s; }
+        .ds-resizer:hover::before, .ds-resizer.dragging::before { background: #38bdf8; }
+        .ds-grid.hidden + .ds-resizer { display: none; }
+        .ds-caption-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 0 10px 0; border-bottom: 1px solid var(--panel-border); margin-bottom: 10px; }
+        .ds-caption-prompt { flex: 1 1 100%; min-width: 260px; min-height: 76px; resize: vertical; line-height: 1.45; font-family: inherit; }
+        .ds-mode-select { flex: 0 0 auto; background: #0f172a; color: #fff; border: 1px solid var(--panel-border); border-radius: 6px; padding: 6px 8px; font-size: 0.8rem; }
+        .ds-inline-label { display: flex; align-items: center; gap: 5px; font-size: 0.74rem; color: var(--text-muted); white-space: nowrap; cursor: pointer; }
+        .ds-step-hint { font-size: 0.74rem; color: var(--text-muted); }
+        .ds-del { position: absolute; top: 6px; left: 6px; width: 22px; height: 22px; border: none; border-radius: 5px; background: rgba(15,23,42,0.82); color: #fca5a5; font-size: 0.82rem; line-height: 1; cursor: pointer; z-index: 3; opacity: 0; transition: opacity 0.15s, background 0.15s; }
+        .ds-card:hover .ds-del { opacity: 1; }
+        .ds-del:hover { background: var(--danger); color: #fff; }
+
+        .ds-card { background: #0f172a; border: 1px solid var(--panel-border); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; cursor: pointer; transition: transform 0.15s, border-color 0.15s; }
+        .ds-card:hover { transform: translateY(-2px); border-color: var(--accent); }
+        
+        .img-wrapper { position: relative; width: 100%; height: 115px; background: #020617; }
+        .ds-grid.compact .img-wrapper { height: 75px; }
+        .ds-grid.large .img-wrapper { height: 165px; }
+        .img-wrapper img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        /* Una toma de audio no tiene miniatura. En vez de un hueco gris se pone
+           el reproductor: lo unico que se necesita comprobar de un clip de cancion
+           es como suena, y eso esta ahi. (Port del .ds-audio de MiniMax-H3.)
+           An audio take has no thumbnail. Rather than a grey blank, the player
+           goes in: the only thing worth checking on a song clip is how it
+           sounds, and that is right there. (Port of MiniMax-H3's .ds-audio.) */
+        .ds-audio { display: flex; flex-direction: column; align-items: center;
+                    justify-content: center; gap: 8px; height: 100%;
+                    background: #0f172a; padding: 8px; }
+        /* El icono ES la tarjeta: crece hasta donde permita la altura del modo
+           de rejilla. More specific than `.img-wrapper img`, so it overrides it.
+           The icon IS the card: it grows to whatever the grid mode's height
+           allows. More specific than `.img-wrapper img`, so it wins. */
+        .ds-audio .ds-audio-icon { width: auto; max-width: 78%; max-height: 62%;
+                                   height: auto; object-fit: contain; opacity: 0.9; }
+        .ds-audio audio { width: 100%; height: 32px; }
+
+        .caption-dot { position: absolute; top: 6px; right: 6px; width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid #0f172a; box-shadow: 0 0 5px rgba(0,0,0,0.8); z-index: 2; }
+        .dot-green { background-color: var(--success); }
+        .dot-red { background-color: var(--danger); }
+
+        .img-filename-tag { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(2px); padding: 3px 6px; font-size: 0.68rem; color: #f8fafc; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-top: 1px solid rgba(255,255,255,0.05); }
+        .ds-card .caption { padding: 6px; font-size: 0.72rem; color: var(--text-muted); height: 40px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.2; background: #0f172a; }
+
+        /* Galería de Previsualizaciones (AMPLIADA A GRAN ALTURA) */
+        .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; max-height: 800px; overflow-y: auto; padding-right: 5px; }
+        .preview-card { position: relative; border-radius: 8px; overflow: hidden; border: 1px solid var(--panel-border); cursor: pointer; background: #0f172a; transition: transform 0.15s, border-color 0.15s; }
+        .preview-card:hover { transform: translateY(-2px); border-color: #38bdf8; }
+        .preview-card img { width: 100%; height: 280px; object-fit: cover; display: block; }
+        /* Las previews de YuE2 son AUDIO: tarjeta con icono de altavoz + nombre
+           + reproductor en vez del hueco de imagen rota. (Mismo criterio que el
+           `.ds-audio` del Dataset Manager.)
+           YuE2's previews are AUDIO: a card with a speaker icon + name + player
+           instead of the broken-image hole. (Same criterion as the Dataset
+           Manager's `.ds-audio`.) */
+        .pv-audio { display: flex; flex-direction: column; align-items: center;
+                    justify-content: center; gap: 10px; height: 280px;
+                    padding: 14px; background: #0f172a; }
+        .pv-audio .pv-audio-icon { width: 96px; height: auto; opacity: 0.9; }
+        .pv-audio audio { width: 100%; height: 34px; }
+        .pv-audio .pv-audio-name { font-size: 0.72rem; color: #cbd5e1;
+                                   font-weight: 600; text-align: center;
+                                   word-break: break-all; }
+        .preview-filename-tag { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(2px); padding: 6px 8px; font-size: 0.8rem; color: #38bdf8; font-weight: 600; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        .status-badge { font-size: 0.75rem; padding: 3px 8px; border-radius: 12px; font-weight: bold; text-transform: uppercase; }
+        .badge-idle { background: #334155; color: #cbd5e1; }
+        .badge-running { background: var(--success); color: #fff; }
+
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000; justify-content: center; align-items: center; padding: 20px; }
+        .modal.active { display: flex; }
+        .modal-content { background: var(--panel-bg); border-radius: 12px; border: 1px solid var(--panel-border); max-width: 800px; width: 100%; padding: 20px; display: flex; flex-direction: column; gap: 15px; max-height: 90vh; }
+        .modal-content img { max-height: 55vh; object-fit: contain; border-radius: 8px; }
+        .modal-content textarea { width: 100%; height: 90px; background: #0f172a; border: 1px solid var(--panel-border); color: #fff; padding: 10px; border-radius: 6px; resize: none; font-size: 0.9rem; }
+
+        .drive-selector { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+        .dir-list { max-height: 250px; overflow-y: auto; background: #0f172a; border: 1px solid var(--panel-border); border-radius: 6px; padding: 8px; margin-top: 6px; }
+        .dir-item { padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center; }
+        .dir-item:hover { background: #1e293b; color: var(--accent); }
+    </style>
+</head>
+<body>
+
+    <!-- Selector Oculto para Cargar Ficheros JSON -->
+    <input type="file" id="json_file_input" accept=".json" style="display:none;" onchange="handleJsonFileLoad(event)">
+
+    <header>
+        <!-- Banner de la cabecera -->
+        <div class="banner-container">
+            <img src="/assets/logo.jpg" alt="AcademiaSD YuE2 LoRAlab" class="banner-img" onerror="this.src='/assets/logo.jpg'; this.onerror=null;">
+        </div>
+
+        <div class="header-content">
+            <div class="logo-title">
+                <div>
+                    <h1>AcademiaSD YuE2 LoRAlab</h1>
+                    <span>Web GUI & Automation</span>
+                    <a id="back-to-launcher" class="back-to-launcher" href="#" title="Back to the launcher"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Back</a>
+                </div>
+            </div>
+
+            <!-- Redes Sociales / Social Links -->
+            <div class="social-links">
+                <a href="https://www.youtube.com/@Academia_SD" target="_blank" class="social-btn"><span class="btn-yt">▶</span> YouTube</a>
+                <a href="https://twitter.com/Academia_S_D" target="_blank" class="social-btn"><span class="btn-x">𝕏</span> X (Twitter)</a>
+                <a href="https://discord.gg/Syuaduy678" target="_blank" class="social-btn"><span class="btn-discord">💬</span> Discord</a>
+                <a href="https://ko-fi.com/academiasd" target="_blank" class="social-btn"><span class="btn-kofi">☕</span> Ko-Fi</a>
+            </div>
+
+            <!-- Hardware Monitor (RAM, VRAM, GPU Temp) -->
+            <div class="hardware-monitor">
+                <div class="hw-card">
+                    <div class="label">RAM Usage</div>
+                    <div class="value" id="ram-text">-- GB</div>
+                    <div class="progress-bar-bg"><div class="progress-bar-fill" id="ram-bar"></div></div>
+                </div>
+                <div class="hw-card">
+                    <div class="label">VRAM Usage</div>
+                    <div class="value" id="vram-text">-- GB</div>
+                    <div class="progress-bar-bg"><div class="progress-bar-fill" id="vram-bar" style="background:#38bdf8;"></div></div>
+                </div>
+                <div class="hw-card">
+                    <div class="label">GPU Temp</div>
+                    <div class="value" id="gpu-temp-text">-- °C</div>
+                    <div class="progress-bar-bg"><div class="progress-bar-fill" id="gpu-temp-bar" style="background:var(--success);"></div></div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Aviso: trainer experimental (beta) / Notice: experimental (beta) trainer -->
+    <div class="beta-notice">
+        <strong>⚠ Experimental — Beta</strong>
+        <span>This trainer is a work in progress. The default settings and the recommended values are not final: do not rely on them too much.</span>
+        <span>Check every result by ear and keep adjusting it.</span>
+    </div>
+
+    <script>
+        // El botón «Back» vuelve al lanzador: si hay referrer (se llegó desde él, en la misma
+        // pestaña o a través de un proxy), history.back() deja la pestaña como estaba; sin
+        // referrer (arranque directo del .bat/.sh) se navega a la URL de /api/launcher-url, la
+        // única que se puede construir sin saber si hay un proxy delante.
+        // The "Back" button returns to the launcher: with a referrer (reached from it, same tab
+        // or through a proxy) history.back() leaves the tab as it was; without one (direct
+        // .bat/.sh run) it navigates to the URL from /api/launcher-url, the only one that can
+        // be built without knowing whether a proxy is in front.
+        (function () {
+            const b = document.getElementById('back-to-launcher');
+            if (!b) return;
+            let launcherUrl = '';
+            b.addEventListener('click', function (e) {
+                if (document.referrer && history.length > 1) {
+                    e.preventDefault();
+                    history.back();
+                } else if (document.referrer) {
+                    e.preventDefault();
+                    window.location.href = document.referrer;
+                } else if (launcherUrl) {
+                    e.preventDefault();
+                    window.location.href = launcherUrl;
+                }
+            });
+            fetch('/api/launcher-url')
+                .then(r => r.json())
+                .then(d => { if (d.url) { launcherUrl = d.url; b.href = d.url; } else b.remove(); })
+                .catch(() => b.remove());
+        })();
+    </script>
+
+    <div class="main-grid">
+        <!-- Sidebar: Settings -->
+        <div class="sidebar">
+         <div class="side-group">
+          <div class="side-col side-a">
+            
+            <!-- 0. Hugging Face Token Panel (CERRADO POR DEFECTO) -->
+            <div class="panel collapsed">
+                <div class="panel-title" onclick="togglePanel(this)">
+                    <span>Hugging Face Token (Optional)</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="panel-body">
+                    <div class="form-group" style="margin-bottom: 8px;">
+                        <label>HF Token:</label>
+                        <input type="password" id="hf_token" value="" placeholder="hf_..." autocomplete="off">
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-full" onclick="saveHfToken()">
+                        Save HF Token
+                    </button>
+                </div>
+            </div>
+
+            <!-- 1. Pre-Cache Settings Panel (ABIERTO POR DEFECTO) -->
+            <div class="panel">
+                <div class="panel-title" onclick="togglePanel(this)">
+                    <span>1. Pre-Cache Settings</span>
+                    <span class="toggle-icon">▲</span>
+                </div>
+                <div class="panel-body">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Project Name:</label>
+                            <input type="text" id="project_name" value="" placeholder="e.g. cherry2" oninput="updateProjectPaths()">
+                        </div>
+                        <div class="form-group">
+                            <label>Trigger Word:</label>
+                            <input type="text" id="trigger_word" value="">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Dataset Path:</label>
+                        <div style="display:flex; gap:8px;">
+                            <input type="text" id="dataset_path" value="./dataset" onchange="datasetPathChanged()">
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="browseFolderNative('dataset')">Browse</button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Cache Folder (Auto):</label>
+                        <input type="text" id="precache_cache_dir" value="./Cache_Data/cached_data_yue2" readonly title="Path generated automatically, for information">
+                    </div>
+
+                    <div class="form-group">
+                        <label title="One line of tags for the whole dataset: voice, instruments, genre, production. It goes in the [Tags] section of every clip, next to its lyrics (.txt), and is what you write in ComfyUI to get this sound.">Style (tags):</label>
+                        <textarea id="precache_style_prompt" rows="3" placeholder="raspy male rock vocals, distorted electric guitars, driving bass and live drums, raw Spanish garage rock"></textarea>
+                    </div>
+
+                    <div class="form-group" title="The AR can collapse YuE2's token grammar with a small
+                        dataset. The community mixes 4,732 songs generated by YuE2 itself (the 'minted
+                        pack', 97 MB) into the AR training so the voice is learned without losing the
+                        music. The Pre-Cache only downloads it.">
+                        <label>Regularizer (AR):</label>
+                        <label style="display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer;">
+                            <input type="checkbox" id="precache_regularizer" checked style="width: 18px; height: 18px; cursor: pointer;">
+                            Download the minted pack (97 MB)
+                        </label>
+                    </div>
+
+                    <!-- Botones Load JSON y Save JSON -->
+                    <div class="btn-row" style="margin-top:12px;">
+                        <button type="button" class="btn btn-secondary btn-tall" onclick="triggerLoadJson('precache')">
+                            <span class="main-text">Load JSON</span>
+                        </button>
+                        <button type="button" class="btn btn-secondary btn-tall" onclick="savePrecacheSettings()">
+                            <span class="main-text">Save JSON</span>
+                        </button>
+                    </div>
+
+                    <button type="button" class="btn btn-primary btn-tall btn-full" id="btn-precache" onclick="runPrecache()" style="margin-top:8px;">
+                        <span class="main-text">Start Pre-Cache</span>
+                    </button>
+                    <button type="button" class="btn btn-danger btn-sm btn-full" onclick="deleteProjectData('precache')" style="margin-top:6px;"
+                            title="Empties this project's pre-cache folder (latents and embeddings). The dataset is NOT touched.">
+                        Delete Pre-Cache
+                    </button>
+                </div>
+            </div>
+
+          </div>
+
+          <div class="side-col side-d">
+            <!-- 3. Export to WebUI Models Panel (ABIERTO POR DEFECTO) -->
+            <div class="panel">
+                <div class="panel-title" onclick="togglePanel(this)">
+                    <span>3. Export to WebUI</span>
+                    <span class="toggle-icon">▲</span>
+                </div>
+                
+                <div class="panel-body">
+                    <div class="form-group">
+                        <label>Final LoRA Filename (.safetensors):</label>
+                        <input type="text" id="export_final_name" value="yue2_lora.safetensors" placeholder="mi_lora_yue2.safetensors">
+                    </div>
+
+                    <div class="form-group">
+                        <label>UI LoRA Folder (ComfyUI / Forge / A1111):</label>
+                        <div style="display:flex; gap:8px;">
+                            <input type="text" id="export_models_dir" value="" placeholder="C:/ComfyUI/models/loras">
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="browseFolderNative('export')">Browse</button>
+                        </div>
+                        <button type="button" class="btn btn-secondary btn-sm btn-full" onclick="saveExportPath()" style="margin-top:6px;"
+                                title="Saves this folder for all the LoRAlab trainers: they all open with it filled in.">
+                            Save Path
+                        </button>
+                    </div>
+
+                    <button type="button" class="btn btn-warning btn-tall btn-full" onclick="sendToModels()" style="margin-top:5px;">
+                        <span class="main-text">🚀 Send to Models</span>
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm btn-full" onclick="ftDownload()" style="margin-top:6px;"
+                            title="Downloads the LoRA to the device you are browsing from (another PC, RunPod...).">
+                        ⬇ Download LoRA
+                    </button>
+                </div>
+            </div>
+          </div>
+         </div>
+
+         <div class="side-group">
+          <div class="side-col side-b">
+            <!-- 2. Training Settings Panel (ABIERTO POR DEFECTO) -->
+            <div class="panel">
+                <div class="panel-title" onclick="togglePanel(this)">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span>2. Training Settings</span>
+                        <span id="checkpoint-badge" style="font-size:0.75rem; color:#38bdf8;"></span>
+                    </div>
+                    <span class="toggle-icon">▲</span>
+                </div>
+                
+                <div class="panel-body">
+                    <div class="form-group">
+                        <label>Output Dir (Auto):</label>
+                        <input type="text" id="train_output_dir" value="./Outputs/yue2_lora_output" readonly title="Path generated automatically, for information">
+                    </div>
+
+                    <div class="form-group" title="AR writes the semantic codes, and the voice lives in those codes: it learns voice identity, vocal timbre, instruments and the sound of the artist. NAR renders those codes into audio and learns the lyrics and their phrasing. Both trains NAR first, then reloads the base model from disk and trains AR. Pre-Cache extracts the semantic codes of your real audio (MERT-v2 + a community tokenizer head, since m-a-p has not released theirs): NAR learns to render them like ComfyUI does, AR learns to write them. AR memorizes your songs past ~1500 steps. The NAR LoRA loads in ComfyUI with Load LoRA (model only), the AR LoRA with Load LoRA (clip strength). Stage is fixed when training starts. Experimental: these descriptions and the defaults are not final.">
+                        <label>Training Stage:</label>
+                        <select id="train_stage">
+                            <option value="ar" selected>AR — voice, timbre &amp; sound</option>
+                            <option value="nar">NAR — lyrics &amp; phrasing</option>
+                            <option value="both">Both — NAR, then AR</option>
+                        </select>
+                        <small style="display:block;color:var(--text-muted);margin-top:4px;">AR: voice, timbre and sound of the artist. NAR: lyrics and phrasing. Both exports a LoRA for each stage.</small>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Total Steps:</label>
+                            <input type="number" id="train_total_steps" value="600">
+                        </div>
+                        <div class="form-group">
+                            <label>Learning Rate:</label>
+                            <input type="text" id="train_lr" value="0.0002">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group" title="How the flow-matching timestep is drawn. logit_normal is what
+                            the reference training uses; uniform draws t evenly.">
+                            <label>T Sampling:</label>
+                            <select id="train_timestep_sampling" class="no-i18n">
+                                <option value="logit_normal" selected>logit_normal</option>
+                                <option value="uniform">uniform</option>
+                            </select>
+                        </div>
+                        <div class="form-group" title="How many AR steps use a song from the minted pack instead of
+                            the artist's. 0 disables the regularizer, 0.5 is the community's recipe.">
+                            <label>Regularizer Mix:</label>
+                            <input type="number" id="train_regularizer_ratio" value="0.5" min="0" max="1" step="0.05">
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-top:8px;" title="Mix the minted pack into the AR training so a small dataset
+                        cannot collapse the token grammar. Only the AR stage uses it.">
+                        <label style="display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer;">
+                            <input type="checkbox" id="train_regularizer" checked style="width: 18px; height: 18px; cursor: pointer;">
+                            Mix the minted pack in the AR stage
+                        </label>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group" title="How the learning rate changes during training. cosine: rises during the warmup, then eases down to 10% of the LR. constant: the same LR from the first step to the last. constant_with_warmup: rises during the warmup, then stays. linear: rises during the warmup, then goes down in a straight line to 10%. cosine_with_restarts: like cosine, but it climbs back up and repeats the curve as many times as Cycles.">
+                            <label>LR Scheduler:</label>
+                            <select id="train_lr_scheduler" class="no-i18n" onchange="updateLrSchedulerFields()">
+                                <option value="cosine" selected>cosine</option>
+                                <option value="constant">constant</option>
+                                <option value="constant_with_warmup">constant_with_warmup</option>
+                                <option value="linear">linear</option>
+                                <option value="cosine_with_restarts">cosine_with_restarts</option>
+                            </select>
+                        </div>
+                        <div class="form-group" title="Steps in which the LR rises from 0 to its value at the start of the training. Ignored with constant.">
+                            <label>Warmup Steps:</label>
+                            <input type="number" id="train_warmup_steps" value="50" min="0">
+                        </div>
+                        <div class="form-group" id="train_lr_cycles_group" title="How many times cosine_with_restarts repeats the cosine curve." style="display: none;">
+                            <label>Cycles:</label>
+                            <input type="number" id="train_lr_cycles" value="3" min="1">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>LoRA Rank (R):</label>
+                            <input type="number" id="train_lora_rank" value="8">
+                        </div>
+                        <div class="form-group">
+                            <label>LoRA Alpha (A):</label>
+                            <input type="number" id="train_lora_alpha" value="8">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group" title="Rank-stabilized LoRA: scales the LoRA by alpha/√rank instead of alpha/rank, so higher ranks keep learning instead of fading out. Ticking it lowers alpha to keep the same strength; raise it for a stronger effect. The exported LoRA is a standard one (its alpha is converted) and Send to Models adds _rs to its name. Fixed for the whole training: to change it, start a new one.">
+                            <label style="display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer;" for="train_use_rslora">
+                                <input type="checkbox" id="train_use_rslora" onchange="toggleRsLora(this.checked)" style="width: 18px; height: 18px; cursor: pointer;">
+                                rsLoRA
+                            </label>
+                        </div>
+                        <div class="form-group" title="LoRA+: the B matrix of every layer learns 16 times faster than A. It usually reaches the same quality in fewer steps; if the training looks unstable or burns early, lower the learning rate. The exported file is a normal LoRA and Send to Models adds _plus to its name. Fixed for the whole training: to change it, start a new one.">
+                            <label style="display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer;" for="train_use_loraplus">
+                                <input type="checkbox" id="train_use_loraplus" onchange="updateFinalNameSuffix()" style="width: 18px; height: 18px; cursor: pointer;">
+                                LoRA+
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group" title="LoKr (LyCORIS): each layer learns a Kronecker product w1 ⊗ w2 instead of B·A. The file is far smaller (about 3 MB instead of 40 MB at rank 8) and it often works well for characters with small datasets, but it is more sensitive to the learning rate. Rank and alpha apply to w2. ComfyUI and Forge load it like any LoRA, and Send to Models adds _lokr to its name. rsLoRA and LoRA+ are for LoRA only and turn off. Fixed for the whole training: to change it, start a new one.">
+                            <label style="display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer;" for="train_use_lokr">
+                                <input type="checkbox" id="train_use_lokr" onchange="toggleLokr(this.checked)" style="width: 18px; height: 18px; cursor: pointer;">
+                                LoKr
+                            </label>
+                        </div>
+                        <div class="form-group" title="LoKr factor: how each layer is split. Higher = smaller file and less capacity; lower = more capacity. 16 is the usual value; try 8 if the LoKr learns too little.">
+                            <label style="display: flex; align-items: center; gap: 8px; margin: 0;">
+                                <span>Factor:</span>
+                                <input type="number" id="train_lokr_factor" value="16" min="2" step="1" disabled style="padding: 3px 8px; width: 80px;">
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>LoRA Targets:</label>
+                        <select id="train_lora_targets"
+                                title="Blocks trains self-attention, cross-attention and MLP of the 28 blocks: enough for characters, objects and styles, and it combines well with other LoRAs. All also trains the adaLN modulation, timestep and input/output layers. The LLM adapter is never trained.">
+                            <option value="blocks" selected>Blocks: attention + MLP (recommended)</option>
+                            <option value="all">All linear layers</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label title="BF16 downloads the raw m-a-p/YuE2-3B (~7.3 GB) plus YuE2-Vae. NF4 downloads the pre-quantized AcademiaSD package and uses less VRAM. Changing precision needs Stop -> Resume.">Model Precision:</label>
+                        <select id="train_precision">
+                            <option value="bf16" selected>BF16 (full quality)</option>
+                            <option value="nf4">NF4 (low VRAM, 4-6 GB)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Batch Size:</label>
+                            <input type="number" id="train_batch_size" value="1">
+                        </div>
+                        <div class="form-group">
+                            <label>Grad Accum Steps:</label>
+                            <input type="number" id="train_grad_accum" value="4">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Save Every:</label>
+                            <input type="number" id="train_save_every" value="50">
+                        </div>
+                        <div class="form-group">
+                            <label>Seed (-1 or 0 = Random):</label>
+                            <input type="number" id="train_seed" value="42">
+                        </div>
+                    </div>
+
+                    <!-- Botones Load JSON y Save JSON -->
+                    <div class="btn-row" style="margin-top:12px;">
+                        <button type="button" class="btn btn-secondary btn-tall" onclick="triggerLoadJson('train')">
+                            <span class="main-text">Load JSON</span>
+                        </button>
+                        <button type="button" class="btn btn-secondary btn-tall" onclick="saveTrainSettings()">
+                            <span class="main-text">Save JSON</span>
+                        </button>
+                    </div>
+
+                    <!-- Botones Start/Resume y Stop -->
+                    <div class="btn-row" style="margin-top:8px;">
+                        <button type="button" class="btn btn-success btn-tall" id="btn-train" onclick="runTrain()">
+                            <span class="main-text">Start / Resume</span>
+                        </button>
+                        <button type="button" class="btn btn-danger btn-tall" id="btn-stop" onclick="stopScript()" disabled>
+                            <span class="main-text">Stop Training</span>
+                        </button>
+                    </div>
+                    <div id="encode-status" style="display:none; margin-top:8px; padding:8px 10px; border:1px solid var(--warning); border-radius:6px; color:var(--warning); font-size:0.85rem;"></div>
+                    <button type="button" class="btn btn-danger btn-sm btn-full" onclick="deleteProjectData('training')" style="margin-top:6px;"
+                            title="Empties this project's output folder: LoRA checkpoints, resume point and previews. The pre-cache and the dataset are NOT touched.">
+                        Delete Training
+                    </button>
+                </div>
+            </div>
+          </div>
+
+          <div class="side-col side-c">
+            <!-- 2b. Previews del entrenamiento (CERRADO POR DEFECTO): se guardan en el mismo train_settings.json -->
+            <div class="panel collapsed">
+                <div class="panel-title" onclick="togglePanel(this)">
+                    <span>2b. Training Previews</span>
+                    <span class="toggle-icon">▼</span>
+                </div>
+
+                <div class="panel-body">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Preview Every:</label>
+                            <input type="number" id="train_preview_every" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Caption Mode:</label>
+                            <select id="train_preview_caption_mode" onchange="toggleCaptionMode(this.value)">
+                                <option value="first">First</option>
+                                <option value="random">Random</option>
+                                <option value="rotate4">Rotate 4</option>
+                                <option value="custom">Custom prompt</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- CAMPO PROMPT MANUAL (SE MUESTRA SOLO EN MODO CUSTOM) -->
+                    <div class="form-group" id="custom_prompt_container" style="display:none; margin-top: 4px;">
+                        <label style="color:#38bdf8; font-weight:600;">Custom Preview Prompt:</label>
+                        <textarea id="train_preview_custom_prompt" rows="2" placeholder="Write your custom prompt for the preview here..."></textarea>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group" title="ODE refinement steps for the audio preview. Lower is faster; increase it for a more refined preview. Applies at the next preview.">
+                            <label>Preview ODE Steps:</label>
+                            <input type="number" id="train_preview_ode_steps" value="16" min="1">
+                        </div>
+                        <div class="form-group" title="Audio preview duration. Applies at the next preview without reloading YuE2.">
+                            <label>Preview Duration (seconds):</label>
+                            <input type="number" id="train_preview_seconds" value="20" min="1" step="1">
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-top:8px;">
+                        <label title="Generate two audio previews with the same seed: with LoRA and with adapters disabled. Can be toggled live for the next preview." style="display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer;">
+                            <input type="checkbox" id="train_preview_compare_base" style="width: 18px; height: 18px; cursor: pointer;">
+                            Compare preview with and without LoRA
+                        </label>
+                    </div>
+
+                    <!-- Mismo guardado que Training: durante el entrenamiento se aplica en el siguiente paso -->
+                    <button type="button" class="btn btn-secondary btn-tall btn-full" onclick="saveTrainSettings()" style="margin-top:12px;"
+                            title="Saves the training settings, previews included. While training, they apply on the next step.">
+                        <span class="main-text">Save JSON</span>
+                    </button>
+                </div>
+            </div>
+          </div>
+         </div>
+        </div>
+
+        <!-- Right Column: Terminal, Dataset Inspector & Previews -->
+        <div class="panel console-container">
+            <div class="panel-title" style="cursor:default;">
+                <span>Console Output</span>
+                <span class="status-badge badge-idle" id="status-badge">IDLE</span>
+            </div>
+            
+            <div class="terminal no-i18n" id="terminal"></div>
+
+            <!-- Dataset Manager -->
+            <div>
+                <div class="panel-title ds-title" style="cursor:default;">
+                    <span><span>Dataset Manager</span> (<span id="ds-count" class="no-i18n">0</span> img, <span id="ds-txt-count" class="no-i18n">0</span> txt)</span>
+                    <div class="ds-toolbar">
+                        <input type="text" class="ds-search" id="ds-search" placeholder="Search..." oninput="filterDatasetGrid()">
+                        <input type="file" id="ds-upload" multiple hidden>
+                        <button type="button" class="btn btn-primary btn-sm" id="btn-ds-upload" onclick="ftUpload()"
+                                title="Uploads files or a .zip into the dataset folder (you can also drag them here). Useful from another device or RunPod.">⬆ Upload</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="setGridMode('compact')">Compact</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="setGridMode('normal')">Normal</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="setGridMode('large')">Expand</button>
+                        <button type="button" class="btn btn-secondary btn-sm" id="btn-toggle-ds" onclick="toggleDatasetGrid()">Hide</button>
+                        <select class="ds-mode-select" id="ds-common-mode"
+                                title="What to do with the common text. Append adds it at the end of every caption (twice does not duplicate it), Replace writes only this text, Remove takes it out of every caption (undoes a wrong trigger).">
+                            <option value="append">Append</option>
+                            <option value="replace">Replace</option>
+                            <option value="remove">Remove</option>
+                        </select>
+                        <input type="text" class="ds-search" id="ds-common-caption" style="min-width:220px;"
+                               placeholder="Common text (optional)"
+                               title="Leave it empty and Apply to All only puts the trigger word first where it is missing.">
+                        <button type="button" class="btn btn-warning btn-sm" onclick="addTriggerToAllCaptions()">Apply to All</button>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="clearAllCaptions()"
+                                title="Deletes the .txt of every image. There is no undo.">Clear Captions</button>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="clearDataset()"
+                                title="Deletes every file of the dataset folder and its .txt captions (subfolders are kept). There is no undo.">Clear Dataset</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="loadDatasetInfo()">Refresh</button>
+                    </div>
+                </div>
+
+                <!-- Auto-caption con Qwen3-VL-8B, compartido con LTX-2.3 y Z-Image (Captioner-Qwen3-VL-8B/). -->
+                <!-- En YuE2 el boton "captions" lanza el troceado de audio
+                     (0_prepare_yue2.py): re-codifica a 48 kHz y corta por
+                     silencios. No hay captioner de imagenes: la letra son las
+                     descripciones que escribes por clip, con los dos estilos de
+                     abajo alineados con las dos etapas del Mixture-of-Transformers. -->
+                <div class="ds-caption-bar">
+                    <button type="button" class="btn btn-primary btn-sm" id="btn-caption" onclick="runCaption()"
+                            title="In YuE2 this runs the AUDIO SPLIT (scripts/0_prepare_yue2.py), not an image captioner: it re-encodes every song to 48 kHz stereo and slices by silence into <=30 s takes (__cNN). Then Transcribe writes each clip's lyrics into its .txt; you can fix them by hand in this window.">
+                        <span id="btn-caption-label">Prepare Clips</span>
+                    </button>
+                    <!-- Whisper lee el AUDIO real de cada clip y escribe la
+                         letra en su .txt (lo que condiciona la etapa AR).
+                         Reemplaza al reparto manual entre trozos por silencios.
+                         Whisper reads the actual clip AUDIO and writes the
+                         lyrics into each .txt (AR conditioning). Replaces the
+                         manual distribution across silence-sliced takes. -->
+                    <button type="button" class="btn btn-warning btn-sm" id="btn-whisper" onclick="runWhisper()"
+                            title="Transcribes every clip with Whisper and writes the actual lyrics into each .txt — far more accurate than splitting one lyrics file by silences. Clips that turn out instrumental (or hallucinated repetition) get an empty .txt you can fix by hand. Model download on first use; large-v3 ≈ 3.2 GB VRAM, turbo ≈ 1.6 GB.">
+                        <span id="btn-whisper-label">Transcribe (Whisper)</span>
+                    </button>
+                    <select class="ds-mode-select" id="whisper_model"
+                            title="Whisper checkpoint for the transcription. large-v3 = best accuracy on raspy Spanish vocals (~3.2 GB VRAM). large-v3-turbo = 8x faster decode, slightly worse (~1.6 GB). medium/small = lighter fallbacks.">
+                        <option value="openai/whisper-large-v3">Whisper large-v3 (~3.2 GB)</option>
+                        <option value="openai/whisper-large-v3-turbo">Whisper large-v3-turbo (~1.6 GB)</option>
+                        <option value="openai/whisper-medium">Whisper medium (~1.5 GB)</option>
+                        <option value="openai/whisper-small">Whisper small (~0.5 GB)</option>
+                    </select>
+                    <span class="ds-step-hint">audio split 0_prepare · before Pre-Cache</span>
+                    <label class="ds-inline-label" title="Off = only clips with no caption are processed.">
+                        <input type="checkbox" id="caption_overwrite" checked>
+                        Overwrite
+                    </label>
+                </div>
+
+                <div class="ds-grid no-i18n" id="ds-grid"></div>
+                <div class="ds-resizer" id="ds-resizer"
+                     title="Drag to make the grid taller or shorter. Double-click to reset."></div>
+            </div>
+
+            <!-- Previews -->
+            <div>
+                <div class="panel-title" style="cursor:default;">Generated Step Previews</div>
+                <div class="gallery no-i18n" id="gallery"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Edit Caption & Inspection -->
+    <div class="modal" id="modal" onmousedown="modalOverlayDown(event)" onclick="modalOverlayClick(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h3 id="modal-filename" class="no-i18n" style="font-size:1rem;">Filename</h3>
+                <span style="font-size:0.8rem; color:var(--text-muted);">Click outside or button to close</span>
+            </div>
+            <img id="modal-img" src="" alt="Dataset Image">
+            <div id="modal-audio" style="display:none; text-align:center; padding:18px 0;">
+                <img src="/assets/audio_solo.png" alt="Audio"
+                     style="width:96px; height:auto; opacity:0.9; display:block; margin:0 auto 14px;">
+                <audio id="modal-audio-el" src="" controls preload="metadata"
+                       style="width:100%;"></audio>
+            </div>
+            <div class="form-group">
+                <label>Caption Text (.txt):</label>
+                <textarea id="modal-txt"></textarea>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <button type="button" class="btn btn-success btn-full" onclick="saveCurrentCaption()">Save Caption</button>
+                <button type="button" class="btn btn-secondary btn-full" onclick="closeModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Folder Browser Backup -->
+    <div class="modal" id="folder-modal" onclick="closeFolderModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()" style="max-width:600px;">
+            <h3>Select Directory</h3>
+            <div style="font-size:0.85rem; color:var(--text-muted);" id="browser-current-path" class="no-i18n">/</div>
+            
+            <div class="drive-selector no-i18n" id="drive-selector"></div>
+            <div class="dir-list no-i18n" id="dir-list"></div>
+
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <button type="button" class="btn btn-primary btn-full" onclick="confirmFolderSelection()">Use Selected Folder</button>
+                <button type="button" class="btn btn-secondary btn-full" onclick="closeFolderModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Paso actual en la consola: "Step 12/1000" en inglés o en el idioma elegido.
+        function stepRe() {
+            const word = t('Step').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            return new RegExp(`(?:Step|${word})\\s+(\\d+)/(\\d+)`, 'i');
+        }
+        let allDatasetImages = [];
+        let currentEditingFilename = '';
+        let browserPath = '';
+        let currentBrowserTarget = 'dataset';
+        let currentLoadTarget = 'precache';
+        
+        let userRequestedStop = false;
+        let lastExecutedStep = 0;
+        let totalTargetSteps = 0;
+
+        function togglePanel(headerEl) {
+            const panel = headerEl.closest('.panel');
+            panel.classList.toggle('collapsed');
+            const icon = headerEl.querySelector('.toggle-icon');
+            if (icon) {
+                icon.innerText = panel.classList.contains('collapsed') ? '▼' : '▲';
+            }
+        }
+
+        function toggleCaptionMode(mode) {
+            const container = document.getElementById('custom_prompt_container');
+            if (mode === 'custom') {
+                container.style.display = 'block';
+            } else {
+                container.style.display = 'none';
+            }
+        }
+
+        async function updateSystemStats() {
+            try {
+                const res = await fetch('/api/system-stats');
+                const data = await res.json();
+                document.getElementById('ram-text').innerText = `${data.ram.used_gb} / ${data.ram.total_gb} GB`;
+                document.getElementById('ram-bar').style.width = `${data.ram.percent}%`;
+                document.getElementById('vram-text').innerText = `${data.vram.used_gb} / ${data.vram.total_gb} GB`;
+                document.getElementById('vram-bar').style.width = `${data.vram.percent}%`;
+
+                const temp = data.vram.temp_c || 0;
+                document.getElementById('gpu-temp-text').innerText = temp ? `${temp} °C` : 'N/A';
+                
+                const tempBar = document.getElementById('gpu-temp-bar');
+                const tempPct = Math.min(100, Math.max(0, (temp / 100) * 100));
+                tempBar.style.width = `${tempPct}%`;
+
+                if (temp >= 80) {
+                    tempBar.style.backgroundColor = 'var(--danger)';
+                } else if (temp >= 70) {
+                    tempBar.style.backgroundColor = 'var(--warning)';
+                } else {
+                    tempBar.style.backgroundColor = 'var(--success)';
+                }
+            } catch (e) {}
+        }
+        setInterval(updateSystemStats, 3000);
+        updateSystemStats();
+
+        async function loadHfToken() {
+            try {
+                const res = await fetch('/api/hf-token');
+                const data = await res.json();
+                if (data.token) {
+                    document.getElementById('hf_token').value = data.token;
+                }
+            } catch (e) {}
+        }
+
+        async function saveExportPath() {
+            try {
+                const res = await fetch('/api/save-export-settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ export_models_dir: document.getElementById('export_models_dir').value.trim() })
+                });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    toast('✓ ' + t('LoRA folder saved for every trainer!'), 'success');
+                } else {
+                    toast(`[!] Error: ${data.error}`, 'error');
+                }
+            } catch (e) {
+                toast(`[!] ${t('Network error')}: ${e}`, 'error');
+            }
+        }
+
+        async function saveHfToken() {
+            const token = document.getElementById('hf_token').value.trim();
+            try {
+                const res = await fetch('/api/save-hf-token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: token })
+                });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    toast('✓ ' + t('HF Token saved!'), 'success');
+                } else {
+                    toast(`[!] Error: ${data.error}`, 'error');
+                }
+            } catch (e) {
+                toast(`[!] ${t('Network error')}: ${e}`, 'error');
+            }
+        }
+
+        function updateProjectPaths() {
+            const proj = document.getElementById('project_name').value.trim();
+            const cacheDir = proj ? `./Cache_Data/cached_data_yue2_${proj}` : './Cache_Data/cached_data_yue2';
+            const outputDir = proj ? `./Outputs/yue2_lora_output_${proj}` : './Outputs/yue2_lora_output';
+            
+            document.getElementById('precache_cache_dir').value = cacheDir;
+            document.getElementById('train_output_dir').value = outputDir;
+            
+            if (proj) {
+                document.getElementById('export_final_name').value = `yue2_lora_${proj}.safetensors`;
+                updateFinalNameSuffix();
+            }
+            checkCheckpointInfo();
+        }
+
+        async function loadSettings() {
+            try {
+                await loadHfToken();
+                const res = await fetch('/api/settings');
+                const data = await res.json();
+                if (data.export && data.export.export_models_dir) document.getElementById('export_models_dir').value = data.export.export_models_dir;
+                if (data.pre_cache) {
+                    const p = data.pre_cache;
+                    if (p.project_name) document.getElementById('project_name').value = p.project_name;
+                    if (p.trigger_word) document.getElementById('trigger_word').value = p.trigger_word;
+                    if (p.dataset_path) document.getElementById('dataset_path').value = p.dataset_path;
+                    if (p.style_prompt !== undefined) document.getElementById('precache_style_prompt').value = p.style_prompt;
+                    if (p.regularizer !== undefined) document.getElementById('precache_regularizer').checked = p.regularizer;
+                }
+                if (data.train) {
+                    const t = data.train;
+                    lastTrainSaved = { ...t };
+                    if (t.stage) document.getElementById('train_stage').value = t.stage;
+                    if (t.total_steps) document.getElementById('train_total_steps').value = t.total_steps;
+                    if (t.lr) document.getElementById('train_lr').value = t.lr;
+                    if (t.lr_scheduler) document.getElementById('train_lr_scheduler').value = t.lr_scheduler;
+                    if (t.warmup_steps !== undefined) document.getElementById('train_warmup_steps').value = t.warmup_steps;
+                    if (t.lr_cycles) document.getElementById('train_lr_cycles').value = t.lr_cycles;
+                    updateLrSchedulerFields();
+                    if (t.lora_rank) document.getElementById('train_lora_rank').value = t.lora_rank;
+                    if (t.lora_alpha) document.getElementById('train_lora_alpha').value = t.lora_alpha;
+                    if (t.use_rslora !== undefined) document.getElementById('train_use_rslora').checked = t.use_rslora;
+                    if (t.use_loraplus !== undefined) document.getElementById('train_use_loraplus').checked = t.use_loraplus;
+                    if (t.lokr_factor !== undefined) document.getElementById('train_lokr_factor').value = t.lokr_factor;
+                    if (t.use_lokr !== undefined) { document.getElementById('train_use_lokr').checked = t.use_lokr; setLokrState(t.use_lokr); }
+                    if (t.lora_targets) document.getElementById('train_lora_targets').value = t.lora_targets;
+                    if (t.timestep_sampling) document.getElementById('train_timestep_sampling').value = t.timestep_sampling;
+                    if (t.regularizer !== undefined) document.getElementById('train_regularizer').checked = t.regularizer;
+                    if (t.regularizer_ratio !== undefined) document.getElementById('train_regularizer_ratio').value = t.regularizer_ratio;
+                    if (t.precision) document.getElementById('train_precision').value = t.precision;
+                    if (t.batch_size) document.getElementById('train_batch_size').value = t.batch_size;
+                    if (t.grad_accum_steps) document.getElementById('train_grad_accum').value = t.grad_accum_steps;
+                    if (t.save_every !== undefined) document.getElementById('train_save_every').value = t.save_every;
+                    if (t.seed !== undefined) document.getElementById('train_seed').value = t.seed;
+                    if (t.preview_every !== undefined) document.getElementById('train_preview_every').value = t.preview_every;
+                    if (t.preview_caption_mode) {
+                        document.getElementById('train_preview_caption_mode').value = t.preview_caption_mode;
+                        toggleCaptionMode(t.preview_caption_mode);
+                    }
+                    if (t.preview_custom_prompt !== undefined) document.getElementById('train_preview_custom_prompt').value = t.preview_custom_prompt;
+                    if (t.preview_ode_steps !== undefined || t.preview_steps !== undefined) document.getElementById('train_preview_ode_steps').value = t.preview_ode_steps ?? t.preview_steps;
+                    if (t.preview_seconds !== undefined) document.getElementById('train_preview_seconds').value = t.preview_seconds;
+                    if (t.preview_compare_base !== undefined) document.getElementById('train_preview_compare_base').checked = !!t.preview_compare_base;
+                    if (t.export_final_name) document.getElementById('export_final_name').value = t.export_final_name;
+                    updateFinalNameSuffix();
+                }
+                updateProjectPaths();
+                loadDatasetInfo();
+            } catch (e) {}
+        }
+        loadSettings();
+
+        function triggerLoadJson(target) {
+            currentLoadTarget = target;
+            document.getElementById('json_file_input').click();
+        }
+
+        function handleJsonFileLoad(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    
+                    if (data.project_name !== undefined) document.getElementById('project_name').value = data.project_name;
+                    if (data.trigger_word !== undefined) document.getElementById('trigger_word').value = data.trigger_word;
+                    if (data.dataset_path !== undefined) document.getElementById('dataset_path').value = data.dataset_path;
+                    
+                    if (data.stage !== undefined) document.getElementById('train_stage').value = data.stage;
+                    if (data.total_steps !== undefined) document.getElementById('train_total_steps').value = data.total_steps;
+                    if (data.lr !== undefined) document.getElementById('train_lr').value = data.lr;
+                    if (data.lr_scheduler) document.getElementById('train_lr_scheduler').value = data.lr_scheduler;
+                    if (data.warmup_steps !== undefined) document.getElementById('train_warmup_steps').value = data.warmup_steps;
+                    if (data.lr_cycles) document.getElementById('train_lr_cycles').value = data.lr_cycles;
+                    updateLrSchedulerFields();
+                    if (data.lora_rank !== undefined) document.getElementById('train_lora_rank').value = data.lora_rank;
+                    if (data.lora_alpha !== undefined) document.getElementById('train_lora_alpha').value = data.lora_alpha;
+                    if (data.use_rslora !== undefined) document.getElementById('train_use_rslora').checked = data.use_rslora;
+                    if (data.use_loraplus !== undefined) document.getElementById('train_use_loraplus').checked = data.use_loraplus;
+                    if (data.lokr_factor !== undefined) document.getElementById('train_lokr_factor').value = data.lokr_factor;
+                    if (data.use_lokr !== undefined) { document.getElementById('train_use_lokr').checked = data.use_lokr; setLokrState(data.use_lokr); }
+                    if (data.lora_targets !== undefined) document.getElementById('train_lora_targets').value = data.lora_targets;
+                    if (data.precision !== undefined) document.getElementById('train_precision').value = data.precision;
+                    if (data.batch_size !== undefined) document.getElementById('train_batch_size').value = data.batch_size;
+                    if (data.grad_accum_steps !== undefined) document.getElementById('train_grad_accum').value = data.grad_accum_steps;
+                    if (data.save_every !== undefined) document.getElementById('train_save_every').value = data.save_every;
+                    if (data.seed !== undefined) document.getElementById('train_seed').value = data.seed;
+                    if (data.preview_every !== undefined) document.getElementById('train_preview_every').value = data.preview_every;
+                    if (data.preview_caption_mode !== undefined) {
+                        document.getElementById('train_preview_caption_mode').value = data.preview_caption_mode;
+                        toggleCaptionMode(data.preview_caption_mode);
+                    }
+                    if (data.preview_custom_prompt !== undefined) document.getElementById('train_preview_custom_prompt').value = data.preview_custom_prompt;
+                    if (data.preview_ode_steps !== undefined || data.preview_steps !== undefined) document.getElementById('train_preview_ode_steps').value = data.preview_ode_steps ?? data.preview_steps;
+                    if (data.preview_seconds !== undefined) document.getElementById('train_preview_seconds').value = data.preview_seconds;
+                    if (data.preview_compare_base !== undefined) document.getElementById('train_preview_compare_base').checked = !!data.preview_compare_base;
+                    if (data.export_final_name !== undefined) document.getElementById('export_final_name').value = data.export_final_name;
+                    updateFinalNameSuffix();
+
+                    updateProjectPaths();
+                    
+                    if (currentLoadTarget === 'precache') {
+                        await savePrecacheSettings();
+                    } else if (currentLoadTarget === 'train') {
+                        await saveTrainSettings();
+                    }
+
+                    toast('✓ ' + t('Configuration loaded from:') + `\n${file.name}`, 'success');
+                    loadDatasetInfo();
+                } catch (err) {
+                    toast(`[!] ${t('Error reading JSON')}: ${err}`, 'error');
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        async function browseFolderNative(target) {
+            currentBrowserTarget = target;
+            let currentPath = '';
+            if (target === 'dataset') currentPath = document.getElementById('dataset_path').value;
+            else if (target === 'export') currentPath = document.getElementById('export_models_dir').value;
+
+            try {
+                const res = await fetch('/api/select-folder', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ initial_dir: currentPath })
+                });
+                const data = await res.json();
+                
+                if (data.status === 'ok' && data.path) {
+                    if (target === 'dataset') {
+                        document.getElementById('dataset_path').value = data.path;
+                        datasetPathChanged();
+                    } else if (target === 'export') {
+                        document.getElementById('export_models_dir').value = data.path;
+                    }
+                } else {
+                    // 'cancelled' (se cerro el dialogo nativo) o 'error' (no hay dialogo
+                    // nativo): se abre el explorador web, que siempre funciona.
+                    openFolderBrowserWeb(target, currentPath);
+                }
+            } catch (e) {
+                openFolderBrowserWeb(target, currentPath);
+            }
+        }
+
+        // El servidor lee la ruta del dataset de pre_cache_settings_yue2.json: hay que guardarla ANTES de
+        // refrescar el Dataset Manager, o seguiría mostrando la carpeta anterior.
+        async function datasetPathChanged() {
+            await savePrecacheSettings(true);
+        }
+
+        async function savePrecacheSettings(silent = false) {
+            const proj = document.getElementById('project_name').value.trim();
+            const precacheData = {
+                project_name: proj,
+                trigger_word: document.getElementById('trigger_word').value,
+                dataset_path: document.getElementById('dataset_path').value,
+                style_prompt: document.getElementById('precache_style_prompt').value.trim(),
+                cache_dir: document.getElementById('precache_cache_dir').value,
+                preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim(),
+                regularizer: document.getElementById('precache_regularizer').checked
+            };
+            const res = await fetch('/api/save-precache', { method: 'POST', body: JSON.stringify(precacheData) });
+            const data = await res.json();
+            if (data.status === 'ok') {
+                const listStr = data.all_saved ? data.all_saved.join('\n • ') : data.file;
+                if (!silent) toast('✓ ' + t('Pre-Cache settings saved to:') + `\n • ${listStr}`, 'success');
+                loadDatasetInfo();
+            }
+        }
+
+        // rsLoRA escala por alpha/√rank en vez de alpha/rank: al marcarlo se reajusta el alpha para que
+        // el LoRA conserve la misma fuerza (alpha/√rank), y al desmarcarlo se deshace.
+        function toggleRsLora(on) {
+            const rank = parseInt(document.getElementById('train_lora_rank').value) || 1;
+            const el = document.getElementById('train_lora_alpha');
+            const alpha = parseInt(el.value) || rank;
+            el.value = Math.max(1, Math.round(on ? alpha / Math.sqrt(rank) : alpha * Math.sqrt(rank)));
+            updateFinalNameSuffix();
+        }
+
+        // El nombre final lleva _rs / _plus / _lokr según las casillas; al exportar o descargar, el
+        // servidor lo corrige con lo que dicen los metadatos del LoRA entrenado y añade _AR / _NAR.
+        function updateFinalNameSuffix() {
+            const el = document.getElementById('export_final_name');
+            const base = el.value.trim().replace(/(_rs)?(_plus)?(_lokr)?(_n?ar)?(\.safetensors)?$/i, '');
+            if (!base) return;
+            const lk = document.getElementById('train_use_lokr');
+            const sfx = lk && lk.checked ? '_lokr'
+                : (document.getElementById('train_use_rslora').checked ? '_rs' : '')
+                + (document.getElementById('train_use_loraplus').checked ? '_plus' : '');
+            el.value = base + sfx + '.safetensors';
+        }
+
+        // LoKr sustituye a LoRA: rsLoRA y LoRA+ (propias de LoRA) se apagan y el factor se activa.
+        function setLokrState(on) {
+            document.getElementById('train_use_rslora').disabled = on;
+            document.getElementById('train_use_loraplus').disabled = on;
+            document.getElementById('train_lokr_factor').disabled = !on;
+        }
+
+        function toggleLokr(on) {
+            const rs = document.getElementById('train_use_rslora');
+            if (on && rs.checked) { rs.checked = false; toggleRsLora(false); }
+            if (on) document.getElementById('train_use_loraplus').checked = false;
+            setLokrState(on);
+            updateFinalNameSuffix();
+        }
+
+        function updateLrSchedulerFields() {
+            const sched = document.getElementById('train_lr_scheduler').value;
+            document.getElementById('train_warmup_steps').disabled = sched === 'constant';
+            document.getElementById('train_lr_cycles_group').style.display = sched === 'cosine_with_restarts' ? '' : 'none';
+        }
+
+        // Save JSON con el entrenamiento en marcha: cuándo aplica el trainer cada clave (-> id del campo).
+        // Sacado de su código: live: relee en el paso siguiente; resume: se leen al arrancar; new: al reanudar se sigue con el LoRA del checkpoint.
+        const LIVE_APPLY = {
+            live: { total_steps: 'train_total_steps', lr: 'train_lr', save_every: 'train_save_every',
+                    seed: 'train_seed', preview_every: 'train_preview_every',
+                    preview_caption_mode: 'train_preview_caption_mode',
+                    preview_custom_prompt: 'train_preview_custom_prompt',
+                    preview_ode_steps: 'train_preview_ode_steps', preview_seconds: 'train_preview_seconds',
+                    preview_compare_base: 'train_preview_compare_base' },
+            resume: { stage: 'train_stage', lr_scheduler: 'train_lr_scheduler', warmup_steps: 'train_warmup_steps',
+                      lr_cycles: 'train_lr_cycles', precision: 'train_precision', batch_size: 'train_batch_size',
+                      grad_accum_steps: 'train_grad_accum' },
+            new: { lora_rank: 'train_lora_rank', lora_alpha: 'train_lora_alpha', use_rslora: 'train_use_rslora',
+                   use_loraplus: 'train_use_loraplus', use_lokr: 'train_use_lokr', lokr_factor: 'train_lokr_factor',
+                   lora_targets: 'train_lora_targets' },
+        };
+
+        async function saveTrainSettings() {
+            const proj = document.getElementById('project_name').value.trim();
+            const trainData = {
+                project_name: proj,
+                trigger_word: document.getElementById('trigger_word').value,
+                dataset_path: document.getElementById('dataset_path').value,
+                cache_dir: document.getElementById('precache_cache_dir').value,
+                output_dir: document.getElementById('train_output_dir').value,
+                stage: document.getElementById('train_stage').value,
+                total_steps: parseInt(document.getElementById('train_total_steps').value),
+                lr: parseFloat(document.getElementById('train_lr').value),
+                lr_scheduler: document.getElementById('train_lr_scheduler').value,
+                warmup_steps: parseInt(document.getElementById('train_warmup_steps').value) || 0,
+                lr_cycles: parseInt(document.getElementById('train_lr_cycles').value) || 3,
+                lora_rank: parseInt(document.getElementById('train_lora_rank').value),
+                lora_alpha: parseInt(document.getElementById('train_lora_alpha').value),
+                use_rslora: document.getElementById('train_use_rslora').checked,
+                use_loraplus: document.getElementById('train_use_loraplus').checked,
+                use_lokr: document.getElementById('train_use_lokr').checked,
+                lokr_factor: parseInt(document.getElementById('train_lokr_factor').value) || 16,
+                lora_targets: document.getElementById('train_lora_targets').value,
+                timestep_sampling: document.getElementById('train_timestep_sampling').value,
+                regularizer: document.getElementById('train_regularizer').checked,
+                regularizer_ratio: parseFloat(document.getElementById('train_regularizer_ratio').value) || 0,
+                precision: document.getElementById('train_precision').value,
+                batch_size: parseInt(document.getElementById('train_batch_size').value),
+                grad_accum_steps: parseInt(document.getElementById('train_grad_accum').value),
+                save_every: parseInt(document.getElementById('train_save_every').value),
+                seed: parseInt(document.getElementById('train_seed').value),
+                preview_every: parseInt(document.getElementById('train_preview_every').value),
+                preview_caption_mode: document.getElementById('train_preview_caption_mode').value,
+                preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim(),
+                preview_ode_steps: parseInt(document.getElementById('train_preview_ode_steps').value),
+                preview_seconds: parseFloat(document.getElementById('train_preview_seconds').value),
+                preview_compare_base: document.getElementById('train_preview_compare_base').checked,
+                export_final_name: document.getElementById('export_final_name').value
+            };
+            const res = await fetch('/api/save-train', { method: 'POST', body: JSON.stringify(trainData) });
+            const data = await res.json();
+            setEncodingState(data.encoding, data.encoding_device);
+            if (data.status === 'ok') {
+                const listStr = data.all_saved ? data.all_saved.join('\n • ') : data.file;
+                // Con el entrenamiento en marcha se dice qué ha cambiado y cuándo lo aplica el trainer.
+                const running = document.getElementById('status-badge').classList.contains('badge-running');
+                const live = running ? '\n\n' + liveChangesText(data.previous || lastTrainSaved, trainData, LIVE_APPLY) : '';
+                lastTrainSaved = { ...trainData };
+                const encoding = data.encoding
+                    ? '\n\n' + t('The preview prompt is being encoded on {device}. Start/Resume and Stop are disabled until it finishes.', { device: data.encoding_device })
+                    : '';
+                toast('✓ ' + t('Train settings saved to:') + `\n • ${listStr}${live}${encoding}`, 'success', running ? 12000 : 5000);
+            }
+            return data;
+        }
+
+        async function checkCheckpointInfo() {
+            try {
+                const res = await fetch('/api/checkpoint-info');
+                const data = await res.json();
+                const badge = document.getElementById('checkpoint-badge');
+                if (data.has_checkpoint) {
+                    badge.innerText = `[${t('Resume step {step}', { step: data.current_step })}]`;
+                } else {
+                    badge.innerText = `[${t('New')}]`;
+                }
+            } catch (e) {}
+        }
+
+        function appendTerminal(text, replace = false, extraClass = '') {
+            const term = document.getElementById('terminal');
+            // Barras de progreso con nombre ("Fetching 256 files: 26%|..."): varias a la vez (descargas) se
+            // actualizan cada una en su línea en vez de apilarse.
+            const bar = extraClass ? null : text.match(/^\s*([^:|\[]{3,60}):.*(\d%\||█|\| [\d.]+[kMGT]?B$)/);
+            const label = bar ? bar[1].trim() : '';
+            if (label) {
+                const same = [...term.children].slice(-8).find(el => el.dataset.bar === label);
+                if (same) {
+                    same.innerText = text;
+                    term.scrollTop = term.scrollHeight;
+                    return;
+                }
+                replace = false;
+            }
+            const last = term.lastElementChild;
+            if (replace && last && !last.dataset.bar) {
+                last.innerText = text;
+                if (extraClass) last.className = `terminal-line ${extraClass}`;
+            } else {
+                const div = document.createElement('div');
+                div.className = extraClass ? `terminal-line ${extraClass}` : 'terminal-line';
+                div.innerText = text;
+                if (label) div.dataset.bar = label;
+                term.appendChild(div);
+            }
+            term.scrollTop = term.scrollHeight;
+        }
+
+        let consoleSince = 0;
+        let consoleController = null;
+
+        // La consola vive en el servidor: al reabrir la página (o abrirla desde otro navegador)
+        // se vuelve a enganchar y se repinta lo ya emitido, incluido el paso actual.
+        async function attachConsole() {
+            if (consoleController) consoleController.abort();
+            consoleController = new AbortController();
+            try {
+                const response = await fetch(`/api/console/stream?since=${consoleSince}`, { signal: consoleController.signal });
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+
+                    const parts = buffer.split('\n\n');
+                    buffer = parts.pop();
+
+                    for (const part of parts) {
+                        if (!part.startsWith('data: ')) continue;
+                        let msg = null;
+                        try { msg = JSON.parse(part.slice(6)); } catch (e) { continue; }
+
+                        if (msg.type === 'line') {
+                            consoleSince = msg.seq;
+                            appendTerminal(msg.text, msg.replace);
+
+                            const stepMatch = msg.text.match(stepRe());
+                            if (stepMatch) {
+                                lastExecutedStep = parseInt(stepMatch[1]);
+                                totalTargetSteps = parseInt(stepMatch[2]);
+                            }
+                        } else if (msg.type === 'done') {
+                            consoleSince = msg.seq;
+                            consoleDone(msg);
+                        }
+                    }
+                }
+            } catch (e) {
+                // AbortError al cerrar la pestaña: el entrenamiento sigue en el servidor.
+            }
+        }
+
+        function consoleDone(msg) {
+            if (msg.code === 0) {
+                let successMsg = "";
+                let msgClass = 'term-success';
+
+                if (msg.script === 'train') {
+                    const totalFormSteps = totalTargetSteps || parseInt(document.getElementById('train_total_steps').value);
+                    const isPausedEarly = userRequestedStop || (lastExecutedStep > 0 && lastExecutedStep < totalFormSteps);
+
+                    if (isPausedEarly) {
+                        successMsg = '\n[SYSTEM] ⏸ ' + t('Training paused successfully! Checkpoint saved.');
+                        msgClass = 'term-warning';
+                    } else {
+                        successMsg = '\n[SYSTEM] ✓ ' + t('LoRA training completed successfully!');
+                        msgClass = 'term-success';
+                    }
+                } else if (msg.script === 'precache') {
+                    if (userRequestedStop) {
+                        successMsg = '\n[SYSTEM] ⏸ ' + t('Pre-Cache stopped by user.');
+                        msgClass = 'term-warning';
+                    } else {
+                        successMsg = '\n[SYSTEM] ✓ ' + t('Pre-Cache completed successfully!');
+                        msgClass = 'term-success';
+                    }
+                } else {
+                    successMsg = `\n[SYSTEM] ✓ ${t('Finished successfully with code')}: ${msg.code}`;
+                }
+
+                appendTerminal(successMsg, false, msgClass);
+            } else if (msg.script === 'train' && msg.code === 2) {
+                appendTerminal('\n[SYSTEM] ✗ ' + t('Training could not be run: create the Pre-Cache first.'), false, 'term-danger');
+            } else {
+                appendTerminal(`\n[SYSTEM] ⚠ ${t('Process finished with code')}: ${msg.code}`, false, 'term-danger');
+            }
+
+            setRunningState(false);
+            loadPreviews();
+            checkCheckpointInfo();
+        }
+
+        async function startScript(scriptName) {
+            document.getElementById('terminal').innerHTML = '';
+            consoleSince = 0;
+            appendTerminal(`[SYSTEM] ${t('Launching {script}...', { script: scriptName })}`);
+            setRunningState(true);
+
+            userRequestedStop = false;
+            lastExecutedStep = 0;
+            totalTargetSteps = 0;
+
+            try {
+                const res = await fetch('/api/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ script: scriptName })
+                });
+                const data = await res.json();
+
+                if (data.status !== 'ok') {
+                    appendTerminal(`\n[SYSTEM] ${t('Execution error')}: ${data.error}`, false, 'term-danger');
+                    setRunningState(false);
+                    return;
+                }
+                attachConsole();
+            } catch (err) {
+                appendTerminal(`\n[SYSTEM] ${t('Execution error')}: ${err}`, false, 'term-danger');
+                setRunningState(false);
+            }
+        }
+
+        // Si ya hay un entrenamiento en marcha al cargar la página, repinta la consola completa
+        // y el progreso, y sigue enganchado a lo que siga saliendo.
+        async function restoreConsole() {
+            try {
+                const st = await (await fetch('/api/status')).json();
+                if (st.running) {
+                    setRunningState(true);
+                    attachConsole();
+                }
+            } catch (e) {}
+        }
+
+        async function runPrecache() {
+            await savePrecacheSettings();
+            startScript('precache');
+        }
+
+        async function runTrain() {
+            const data = await saveTrainSettings();
+            if (data && data.encoding) {
+                // El trainer arrancaría con el prompt anterior: se lanza solo al terminar la codificación.
+                startAfterEncoding = true;
+                appendTerminal('\n[SYSTEM] ' + t('Training will start when the preview prompt is encoded.'));
+                return;
+            }
+            startScript('train');
+        }
+
+        async function stopScript() {
+            userRequestedStop = true;
+            appendTerminal('\n[SYSTEM] ' + t('Sending stop signal...'));
+            await fetch('/api/stop', { method: 'POST' });
+        }
+
+        async function sendToModels() {
+            const targetDir = document.getElementById('export_models_dir').value.trim();
+            const finalName = document.getElementById('export_final_name').value.trim();
+
+            if (!targetDir) {
+                toast(t('Please select or enter the target models/lora folder.'));
+                return;
+            }
+
+            appendTerminal(`\n[SYSTEM] ${t('Exporting LoRA to')}: ${targetDir}...`);
+
+            try {
+                const res = await fetch('/api/export-lora', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ target_dir: targetDir, final_name: finalName,
+                                           stage: document.getElementById('train_stage').value })
+                });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    toast(`✓ ${t('LoRA exported successfully')}:\n${data.filename}\n\n${t('Copied from')}: ${data.source}`, 'success');
+                    appendTerminal(`[SYSTEM] ✓ ${t('Export completed')}: ${data.dest}`, false, 'term-success');
+                } else {
+                    toast(`[!] ${t('Export error')}: ${data.error}`, 'error');
+                    appendTerminal(`[SYSTEM] [!] ${t('Export error')}: ${data.error}`, false, 'term-danger');
+                }
+            } catch (e) {
+                toast(`[!] ${t('Network error')}: ${e}`, 'error');
+            }
+        }
+
+        // Mientras el servidor codifica el prompt de la preview no se puede lanzar ni detener nada.
+        let isRunning = false, encodingStage = null, startAfterEncoding = false;
+        const ENCODING_TEXT = {
+            loading: d => '⏳ ' + t('Loading text encoder on {device}...', { device: d }),
+            prompt: d => '⏳ ' + t('Encoding custom prompt on {device}...', { device: d })
+        };
+
+        function applyButtonState() {
+            const encoding = encodingStage !== null;
+            document.getElementById('btn-caption').disabled = isRunning || encoding;
+            document.getElementById('btn-precache').disabled = isRunning || encoding;
+            document.getElementById('btn-train').disabled = isRunning || encoding;
+            document.getElementById('btn-stop').disabled = !isRunning || encoding;
+        }
+
+        function setEncodingState(stage, device) {
+            const wasEncoding = encodingStage !== null;
+            encodingStage = stage || null;
+            const box = document.getElementById('encode-status');
+            box.style.display = encodingStage ? 'block' : 'none';
+            box.innerText = encodingStage ? ENCODING_TEXT[encodingStage](device) : '';
+            applyButtonState();
+            if (wasEncoding && !encodingStage && startAfterEncoding) {
+                startAfterEncoding = false;
+                startScript('train');
+            }
+        }
+
+        async function pollEncoding() {
+            try {
+                const res = await fetch('/api/status?_=' + Date.now());
+                const data = await res.json();
+                setEncodingState(data.encoding, data.encoding_device);
+            } catch (e) {}
+        }
+        setInterval(pollEncoding, 2000);
+
+        function setRunningState(running) {
+            isRunning = running;
+            applyButtonState();
+            
+            const badge = document.getElementById('status-badge');
+            if (running) {
+                badge.className = 'status-badge badge-running';
+                badge.innerText = t('RUNNING');
+            } else {
+                badge.className = 'status-badge badge-idle';
+                badge.innerText = t('IDLE');
+            }
+        }
+
+        async function loadDatasetInfo() {
+            try {
+                // Sin cache-busting el navegador puede servir la respuesta anterior y Refresh no refresca.
+                const res = await fetch('/api/dataset-info?_=' + Date.now());
+                const data = await res.json();
+                allDatasetImages = data.images || [];
+                document.getElementById('ds-count').innerText = data.image_count;
+                document.getElementById('ds-txt-count').innerText = data.caption_count;
+                // El label refleja lo que el boton hace en YuE2: trocear audio.
+                document.getElementById('btn-caption-label').innerText = data.caption_count > 0
+                    ? t('Prepare Again') : t('Prepare Clips');
+                renderDatasetGrid(allDatasetImages);
+            } catch (e) {}
+        }
+
+        // El mtime en la URL hace que una imagen reemplazada en su sitio no salga de la caché del navegador.
+        function mediaUrl(img) {
+            return '/api/dataset-image/' + encodeURIComponent(img.file) + (img.mtime ? '?v=' + img.mtime : '');
+        }
+
+        function renderDatasetGrid(images) {
+            const grid = document.getElementById('ds-grid');
+            grid.innerHTML = '';
+            images.forEach(img => {
+                const card = document.createElement('div');
+                card.className = 'ds-card';
+                // kind lo trae el server; si una respuesta vieja no lo trae,
+                // la extension decide (todo el dataset de YuE2 es audio).
+                // kind comes from the server; if an older response misses it,
+                // the extension decides (YuE2's dataset is all audio).
+                const esAudio = img.kind === 'audio' ||
+                                /\.(wav|flac|mp3|ogg|m4a|opus)$/i.test(img.file);
+                card.onclick = (ev) => {
+                    if (ev.target.closest('.ds-del')) return;
+                    openModal(mediaUrl(img), img.file, img.caption || '', esAudio);
+                };
+
+                const hasCaption = img.has_txt && img.caption && img.caption.trim().length > 0;
+                const dotClass = hasCaption ? 'caption-dot dot-green' : 'caption-dot dot-red';
+                const dotTitle = hasCaption ? t('Caption OK') : t('No caption');
+
+                const medio = esAudio
+                    ? `<div class="ds-audio">
+                           <img class="ds-audio-icon" src="/assets/audio_solo.png" alt="audio">
+                           <audio src="${mediaUrl(img)}" controls preload="metadata"></audio>
+                       </div>`
+                    : `<img src="${mediaUrl(img)}" alt="${img.file}">`;
+
+                card.innerHTML = `
+                    <div class="img-wrapper">
+                        ${medio}
+                        <button type="button" class="ds-del" title="${t('Remove from dataset')}">&#128465;</button>
+                        <span class="${dotClass}" title="${dotTitle}"></span>
+                        <div class="img-filename-tag">${img.file}</div>
+                    </div>
+                    <div class="caption">${img.caption || `<em>${t('No .txt caption')}</em>`}</div>
+                `;
+                card.querySelector('.ds-del').onclick = (ev) => { ev.stopPropagation(); deleteDatasetImage(img.file); };
+                grid.appendChild(card);
+            });
+        }
+
+        async function deleteDatasetImage(file) {
+            if (!await askConfirm(t('Remove "{name}" and its .txt caption from the dataset?', { name: file }) + '\n\n' + t('The files are deleted from disk.'))) return;
+            try {
+                const res = await fetch('/api/delete-dataset-image', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file: file })
+                });
+                const data = await res.json();
+                if (data.status !== 'ok') { toast('Error: ' + (data.error || t('unknown')), 'error'); return; }
+                loadDatasetInfo();
+            } catch (e) { toast('Error: ' + e, 'error'); }
+        }
+
+        async function clearAllCaptions() {
+            const n = parseInt(document.getElementById('ds-txt-count').innerText) || 0;
+            if (!n) {
+                toast(t('There are no captions to delete.'));
+                return;
+            }
+            // Se pide escribir el número: un confirm normal se acepta por reflejo y esto no tiene deshacer.
+            const resp = prompt(t('This DELETES the .txt of all {n} captions. There is no undo.', { n }) + '\n\n' + t('Type {n} to confirm:', { n }));
+            if (String(resp || '').trim() !== String(n)) return;
+            try {
+                const res = await fetch('/api/clear-captions', { method: 'POST' });
+                const data = await res.json();
+                if (data.status === 'error') { toast('Error: ' + (data.error || t('unknown')), 'error'); return; }
+                appendTerminal(`[CAPTIONS] ${t('{n} .txt deleted', { n: data.removed || 0 })}`, false, 'term-warning');
+                (data.errors || []).forEach(x => appendTerminal('   ' + x, false, 'term-danger'));
+                loadDatasetInfo();
+            } catch (e) { toast('Error: ' + e, 'error'); }
+        }
+
+        async function clearDataset() {
+            const n = parseInt(document.getElementById('ds-count').innerText) || 0;
+            const path = document.getElementById('dataset_path').value;
+            if (!n) { toast(t('The dataset is already empty.')); return; }
+            // Se pide escribir el número: un confirm normal se acepta por reflejo y esto no tiene deshacer.
+            const resp = prompt(t('This DELETES the {n} files of the dataset and their .txt captions:', { n }) + `\n${path}\n` + t('There is no undo.') + '\n\n' + t('Type {n} to confirm:', { n }));
+            if (String(resp || '').trim() !== String(n)) return;
+            try {
+                const res = await fetch('/api/clear-dataset', { method: 'POST' });
+                const data = await res.json();
+                if (data.status === 'error') { toast('Error: ' + (data.error || t('unknown')), 'error'); return; }
+                appendTerminal(`[DATASET] ${t('{n} file(s) deleted', { n: data.removed || 0 })}: ${data.path}`, false, 'term-warning');
+                (data.errors || []).forEach(x => appendTerminal('   ' + x, false, 'term-danger'));
+                loadDatasetInfo();
+            } catch (e) { toast('Error: ' + e, 'error'); }
+        }
+
+        async function deleteProjectData(target) {
+            const texts = {
+                precache: t('This will delete the current pre-cache.'),
+                training: t('This will delete all the current training (checkpoints, resume point and previews).')
+            };
+            if (!await askConfirm(texts[target] + '\n\n' + t('Continue?'))) return;
+            try {
+                const res = await fetch('/api/delete-project-data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ target: target })
+                });
+                const data = await res.json();
+                if (data.status === 'error') { toast('Error: ' + (data.error || t('unknown')), 'error'); return; }
+                let out = t('{n} item(s) deleted', { n: data.removed }) + `\n${data.path}`;
+                if (data.errors && data.errors.length) out += '\n\n' + t('Could not delete:') + '\n' + data.errors.join('\n');
+                toast(out);
+                if (target === 'training') { checkCheckpointInfo(); loadPreviews(); }
+            } catch (e) { toast('Error: ' + e, 'error'); }
+        }
+
+        // Prompts por defecto por ETAPA (YuE2 no tiene captioner de imágenes:
+        // el botón lanza el troceado de audio y los .txt los escribe el
+        // usuario). Dos tipos, uno por rama del Mixture-of-Transformers:
+        //  - nar: cómo SUENA el clip (timbre de voz, instrumentos, producción).
+        //    Condiciona la rama NAR, la que renderiza los códigos (letra y fraseo).
+        //  - ar: la LETRA del clip (cruda, sin títulos) o su plan/estructura.
+        //    Condiciona la rama AR, la que escribe los códigos (voz, timbre y sonido).
+        // Default prompts per STAGE (YuE2 has no image captioner: the button
+        // runs the audio split and the .txt files are written by the user).
+        // Two kinds, one per branch of the Mixture-of-Transformers:
+        //  - nar: how the clip SOUNDS (voice timbre, instruments, production).
+        //    Conditions the NAR branch, the one that renders the codes (lyrics, phrasing).
+        //  - ar: the clip's LYRICS (raw, no headings) or its plan/structure.
+        //    Conditions the AR branch, the one that writes the codes (voice, timbre, sound).
+        async function loadCaptionSettings() {
+            let data = {};
+            try {
+                data = await (await fetch('/api/caption-settings')).json();
+            } catch (e) {}
+            if (data.overwrite !== undefined) document.getElementById('caption_overwrite').checked = !!data.overwrite;
+            // Modelo Whisper persistido (si el JSON trae uno que ya no existe
+            // en el select, se respetan los aunque el select no lo suelte).
+            // Persisted Whisper model (unknown values fall back to the select).
+            if (data.whisper_model) {
+                const sel = document.getElementById('whisper_model');
+                if (Array.from(sel.options).some(o => o.value === data.whisper_model)) sel.value = data.whisper_model;
+            }
+        }
+        loadCaptionSettings();
+
+        // Guardar los settings de caption (overwrite, modelo
+        // Whisper). Lo usan los DOS botones: Prepare (troceado) y Transcribe.
+        // Save caption settings (overwrite, Whisper model).
+        // Used by BOTH buttons: Prepare (audio split) and Transcribe.
+        async function saveCaptionSettings() {
+            const overwrite = document.getElementById('caption_overwrite').checked;
+            try {
+                await fetch('/api/save-caption-settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        whisper_model: document.getElementById('whisper_model').value,
+                        overwrite: overwrite
+                    })
+                });
+            } catch (e) { toast('Error: ' + e, 'error'); return false; }
+            return true;
+        }
+
+        async function runCaption() {
+            const captioned = parseInt(document.getElementById('ds-txt-count').innerText) || 0;
+            const overwrite = document.getElementById('caption_overwrite').checked;
+            if (captioned > 0 && overwrite) {
+                if (!await askConfirm(t('This will OVERWRITE the {n} caption(s) that already exist.', { n: captioned }) + '\n\n' + t('Continue?'))) return;
+            }
+            // El troceado lee la carpeta del dataset y los ajustes de pre_cache_settings_yue2.json.
+            await savePrecacheSettings();
+            if (!await saveCaptionSettings()) return;
+            startScript('caption');
+        }
+
+        async function runWhisper() {
+            const captioned = parseInt(document.getElementById('ds-txt-count').innerText) || 0;
+            const overwrite = document.getElementById('caption_overwrite').checked;
+            // Whisper si respeta los .txt con texto salvo Overwrite: el aviso
+            // solo cabe si vas a aplastar letras ya trascritas/escritas a mano.
+            // Whisper keeps non-empty .txt files unless Overwrite: the warning
+            // only applies when you are about to REPLACE existing lyrics.
+            if (captioned > 0 && overwrite) {
+                if (!await askConfirm(t('This will OVERWRITE the {n} caption(s) that already exist.', { n: captioned }) + '\n\n' + t('Continue?'))) return;
+            }
+            if (!await saveCaptionSettings()) return;
+            startScript('whisper');
+        }
+
+        function filterDatasetGrid() {
+            const q = document.getElementById('ds-search').value.toLowerCase();
+            const filtered = allDatasetImages.filter(img => 
+                img.file.toLowerCase().includes(q) || (img.caption && img.caption.toLowerCase().includes(q))
+            );
+            renderDatasetGrid(filtered);
+        }
+
+        function setGridMode(mode) {
+            const grid = document.getElementById('ds-grid');
+            grid.classList.remove('compact', 'large', 'hidden');
+            if (mode === 'compact') grid.classList.add('compact');
+            if (mode === 'large') grid.classList.add('large');
+            document.getElementById('btn-toggle-ds').innerText = t('Hide');
+        }
+
+        function toggleDatasetGrid() {
+            const grid = document.getElementById('ds-grid');
+            const btn = document.getElementById('btn-toggle-ds');
+            if (grid.classList.contains('hidden')) {
+                grid.classList.remove('hidden');
+                btn.innerText = t('Hide');
+            } else {
+                grid.classList.add('hidden');
+                btn.innerText = t('Show');
+            }
+        }
+
+        async function addTriggerToAllCaptions() {
+            const trigger = document.getElementById('trigger_word').value.trim();
+            const common = document.getElementById('ds-common-caption').value.trim();
+            const mode = document.getElementById('ds-common-mode').value;
+            if (!trigger && !common) {
+                toast(t('Enter a Trigger Word, a common text, or both.'));
+                return;
+            }
+
+            let msg;
+            if (!common) {
+                msg = t('Add the trigger "{trigger}" to all dataset captions?', { trigger });
+            } else if (mode === 'replace') {
+                msg = t('REPLACE every caption with this text? What was written is lost.') + `\n\n    ${trigger ? trigger + ', ' : ''}${common}`;
+            } else if (mode === 'remove') {
+                msg = t('REMOVE this text from every caption, keeping the rest?') + `\n\n    ${common}`;
+            } else {
+                msg = t('APPEND this text at the end of every caption? What was already written is kept.') + `\n\n    ${common}`;
+            }
+            if (!await askConfirm(msg)) return;
+
+            try {
+                const res = await fetch('/api/batch-caption', {
+                    method: 'POST',
+                    body: JSON.stringify({ trigger_word: trigger, common: common, mode: mode })
+                });
+                const data = await res.json();
+                if (data.status !== 'ok') { toast('Error: ' + (data.error || t('unknown')), 'error'); return; }
+                appendTerminal(`[CAPTIONS] ${t('{n} caption(s) updated', { n: data.updated_count || 0 })}`, false, 'term-success');
+                loadDatasetInfo();
+            } catch (e) { toast('Error: ' + e, 'error'); }
+        }
+
+        let previewsSignature = '';
+        async function loadPreviews() {
+            try {
+                const res = await fetch('/api/previews', { cache: 'no-store' });
+                const data = await res.json();
+                const versions = data.versions || {};
+                // Solo se redibuja la galeria si cambia algo (nueva preview o preview sobrescrita).
+                const signature = data.previews.map(f => f + ':' + (versions[f] || '')).join('|');
+                if (signature === previewsSignature) return;
+                previewsSignature = signature;
+                const gallery = document.getElementById('gallery');
+                gallery.innerHTML = '';
+                data.previews.forEach(filename => {
+                    const src = `/api/preview/${filename}?v=${versions[filename] || Date.now()}`;
+                    const card = document.createElement('div');
+                    card.className = 'preview-card';
+
+                    // YuE2 genera WAV: tarjeta de audio con icono + nombre +
+                    // reproductor. Un fichero de imagen .png (raro, p.ej. de una
+                    // sesion antigua) renderiza como antes.
+                    // YuE2 produces WAV: audio card with icon + name + player.
+                    // A stray .png (e.g. from an old session) renders as before.
+                    const esAudio = /\.wav$/i.test(filename);
+                    card.onclick = () => openModal(src, filename, `${t('Generated preview')}: ${filename}`, esAudio);
+
+                    let stepTag = filename;
+                    const match = filename.match(/preview_step_(\d+)\.(wav|png)/i);
+                    if (match) {
+                        stepTag = t('Step {n}', { n: match[1] });
+                    }
+
+                    if (esAudio) {
+                        card.innerHTML = `
+                            <div class="pv-audio">
+                                <img class="pv-audio-icon" src="/assets/audio_solo.png" alt="audio">
+                                <div class="pv-audio-name no-i18n">${filename}</div>
+                                <audio controls preload="metadata"
+                                       onpointerdown="event.stopPropagation()"
+                                       onkeydown="event.stopPropagation()"></audio>
+                            </div>
+                        `;
+                        card.querySelector('audio').src = src;
+                    } else {
+                        card.innerHTML = `
+                            <img src="${src}" alt="${filename}">
+                            <div class="preview-filename-tag">${stepTag}</div>
+                        `;
+                    }
+                    gallery.appendChild(card);
+                });
+            } catch (e) {}
+        }
+        setInterval(loadPreviews, 3000);
+        restoreConsole();
+        loadPreviews();
+
+        // Texto del caption tal como se abrió, para saber si se ha editado.
+        let captionAtOpen = '';
+
+        function openModal(imgSrc, filename, text, esAudio) {
+            currentEditingFilename = filename;
+            captionAtOpen = text || '';
+            document.getElementById('modal-filename').innerText = filename;
+            const im = document.getElementById('modal-img');
+            const au = document.getElementById('modal-audio');
+            const ae = document.getElementById('modal-audio-el');
+            if (esAudio) {
+                // Con audio: la imagen se retira y el src se vacía ANTES de
+                // ocultar (un <img> con src roto sigue pidiendo la URL).
+                // Hidden <img> with a stale src keeps requesting the URL:
+                // empty it first.
+                im.removeAttribute('src');
+                im.style.display = 'none';
+                ae.removeAttribute('src');
+                ae.src = imgSrc;
+                au.style.display = 'block';
+            } else {
+                ae.pause();
+                ae.removeAttribute('src');
+                au.style.display = 'none';
+                im.src = imgSrc;
+                im.style.display = 'block';
+            }
+            document.getElementById('modal-txt').value = text;
+            document.getElementById('modal').classList.add('active');
+        }
+
+        // El click se dispara al SOLTAR: seleccionar texto del caption y soltar fuera cerraba el modal.
+        // Solo se cierra si la pulsación empezó en el fondo.
+        let modalPressedOnBackdrop = false;
+
+        function modalOverlayDown(e) {
+            modalPressedOnBackdrop = (e.target === e.currentTarget);
+        }
+
+        function modalOverlayClick(e) {
+            if (e.target !== e.currentTarget || !modalPressedOnBackdrop) return;
+            closeModal();
+        }
+
+        async function closeModal(force) {
+            if (force !== true && document.getElementById('modal-txt').value !== captionAtOpen
+                    && !await askConfirm(t('The caption has unsaved changes. Close and lose them?'))) {
+                return;
+            }
+            document.getElementById('modal').classList.remove('active');
+            // Vaciar el audio del modal antes de ocultarlo: un <audio> escondido
+            // con src sigue descargando y sigue sonando.
+            // Clear the modal audio BEFORE hiding: a hidden <audio> with a src
+            // keeps downloading and keeps playing.
+            const ae = document.getElementById('modal-audio-el');
+            if (ae) { ae.pause(); ae.removeAttribute('src'); ae.load(); }
+        }
+
+        const DS_GRID_MIN = 380;
+        const DS_GRID_STORE = 'ds_grid_height';
+
+        function applyDsGridHeight(px) {
+            const grid = document.getElementById('ds-grid');
+            const alto = Math.min(Math.max(DS_GRID_MIN, Math.round(window.innerHeight * 0.85)), Math.max(DS_GRID_MIN, Math.round(px)));
+            grid.style.maxHeight = alto + 'px';
+        }
+
+        (function initDsResizer() {
+            const handle = document.getElementById('ds-resizer');
+            const grid = document.getElementById('ds-grid');
+            // Un localStorage bloqueado (ventana privada) no debe impedir dibujar la rejilla.
+            try {
+                const saved = parseInt(localStorage.getItem(DS_GRID_STORE), 10);
+                if (saved > 0) applyDsGridHeight(saved);
+            } catch (e) {}
+
+            let startY = 0, startH = 0;
+            handle.addEventListener('pointerdown', ev => {
+                ev.preventDefault();
+                startY = ev.clientY;
+                startH = grid.getBoundingClientRect().height;
+                handle.classList.add('dragging');
+                handle.setPointerCapture(ev.pointerId);
+            });
+            handle.addEventListener('pointermove', ev => {
+                if (handle.classList.contains('dragging')) applyDsGridHeight(startH + (ev.clientY - startY));
+            });
+            const release = ev => {
+                if (!handle.classList.contains('dragging')) return;
+                handle.classList.remove('dragging');
+                try { handle.releasePointerCapture(ev.pointerId); } catch (e) {}
+                try { localStorage.setItem(DS_GRID_STORE, String(Math.round(grid.getBoundingClientRect().height))); } catch (e) {}
+            };
+            handle.addEventListener('pointerup', release);
+            handle.addEventListener('pointercancel', release);
+            handle.addEventListener('dblclick', () => {
+                applyDsGridHeight(DS_GRID_MIN);
+                try { localStorage.removeItem(DS_GRID_STORE); } catch (e) {}
+            });
+            window.addEventListener('resize', () => applyDsGridHeight(grid.getBoundingClientRect().height));
+        })();
+
+        async function saveCurrentCaption() {
+            const newCaption = document.getElementById('modal-txt').value;
+            const res = await fetch('/api/save-caption', {
+                method: 'POST',
+                body: JSON.stringify({ filename: currentEditingFilename, caption: newCaption })
+            });
+            const data = await res.json();
+            if (data.status === 'ok') {
+                toast('✓ ' + t('Caption saved!'), 'success');
+                closeModal(true);
+                loadDatasetInfo();
+            }
+        }
+
+        async function openFolderBrowserWeb(target = 'dataset', path = '') {
+            currentBrowserTarget = target;
+            if (!path) {
+                if (target === 'dataset') path = document.getElementById('dataset_path').value;
+                else if (target === 'export') path = document.getElementById('export_models_dir').value;
+            }
+            const res = await fetch(`/api/browse-dir?path=${encodeURIComponent(path)}`);
+            const data = await res.json();
+            
+            browserPath = data.current_path;
+            document.getElementById('browser-current-path').innerText = `${browserPath} (${t('{n} images inside', { n: data.image_count })})`;
+            
+            const driveSel = document.getElementById('drive-selector');
+            driveSel.innerHTML = '';
+            if (data.drives && data.drives.length > 0) {
+                data.drives.forEach(drv => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'btn btn-secondary btn-sm';
+                    btn.innerText = `💾 ${drv}`;
+                    btn.onclick = () => openFolderBrowserWeb(target, drv);
+                    driveSel.appendChild(btn);
+                });
+            }
+
+            const dirList = document.getElementById('dir-list');
+            dirList.innerHTML = '';
+
+            const parentDiv = document.createElement('div');
+            parentDiv.className = 'dir-item';
+            parentDiv.innerHTML = `<strong>📁 .. [${t('Up')}]</strong>`;
+            parentDiv.onclick = () => openFolderBrowserWeb(target, data.parent_path);
+            dirList.appendChild(parentDiv);
+
+            data.directories.forEach(d => {
+                const item = document.createElement('div');
+                item.className = 'dir-item';
+                item.innerHTML = `<span>📁 ${d.name}</span>`;
+                item.onclick = () => openFolderBrowserWeb(target, d.path);
+                dirList.appendChild(item);
+            });
+
+            document.getElementById('folder-modal').classList.add('active');
+        }
+
+        function confirmFolderSelection() {
+            if (currentBrowserTarget === 'dataset') {
+                document.getElementById('dataset_path').value = browserPath;
+                datasetPathChanged();
+            } else if (currentBrowserTarget === 'export') {
+                document.getElementById('export_models_dir').value = browserPath;
+            }
+            closeFolderModal();
+        }
+
+        function closeFolderModal(e) {
+            document.getElementById('folder-modal').classList.remove('active');
+        }
+    </script>
+    <script src="/file_transfer.js"></script>
+</body>
+</html>

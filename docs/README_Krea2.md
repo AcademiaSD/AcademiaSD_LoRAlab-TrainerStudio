@@ -82,7 +82,7 @@ Here is the exact architectural breakdown of how this is achieved:
 - **🗑️ Delete Pre-Cache / Delete Training** buttons to empty the current project's folders.
 - **⏱️ Exact Step Resume Checkpoints**: Interrupt or stop training at any step (e.g. Step 333); the exact state (`current_step.txt`, `optimizer.pt`, `adapter_model.safetensors`) is saved automatically. Click **Start/Resume** to continue from that exact step. Resuming always keeps the checkpoint's rank and alpha.
 - **🏷️ LoRA Metadata**: exported LoRAs carry their alpha (ComfyUI applies them at the same strength as the previews) and kohya-style metadata (trigger word, rank, steps, resolution) that CivitAI and LoRA managers read.
-- **📂 Automatic Project Folder Management**: Dynamically routes cache and outputs to `./cached_data_krea2_<project>` and `./krea2_lora_output_<project>` based on your project name.
+- **📂 Automatic Project Folder Management**: Dynamically routes cache and outputs to `./Cache_Data/cached_data_krea2_<project>` and `./Outputs/krea2_lora_output_<project>` based on your project name.
 - **🚀 One-Click WebUI Export ("Send to Models")**: Export the best `.safetensors` LoRA directly to your preferred WebUI folder (ComfyUI, Forge, Automatic1111).
 - **🌐 Fully Bilingual (English / Español)**: All buttons, console logs, dialogs, and progress bars display labels in both English and Spanish.
 

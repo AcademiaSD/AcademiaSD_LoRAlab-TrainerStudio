@@ -2,7 +2,7 @@
 setlocal EnableExtensions
 title AcademiaSD - LTX-2.3 NF4 Converter
 
-rem Los scripts usan rutas relativas a la raiz del LoRAlab (venv, LTX23-Raw, LTX23-NF4_weights).
+rem Los scripts usan rutas relativas a la raiz del LoRAlab (venv, Models\LTX23-Raw, Models\LTX23-NF4_weights).
 cd /d "%~dp0..\.."
 call venv\Scripts\activate.bat
 
@@ -11,8 +11,8 @@ echo.
 echo ====================================================
 echo   ACADEMIASD - LTX-2.3 NF4 CONVERTER
 echo ====================================================
-echo 1. Descargar LTX-2.3 Raw / Download LTX-2.3 Raw (.\LTX23-Raw)
-echo 2. Convertir Raw a NF4 / Convert Raw to NF4 (.\LTX23-NF4_weights)
+echo 1. Descargar LTX-2.3 Raw / Download LTX-2.3 Raw (.\Models\LTX23-Raw)
+echo 2. Convertir Raw a NF4 / Convert Raw to NF4 (.\Models\LTX23-NF4_weights)
 echo 3. Salir / Exit
 echo.
 set "opcion="

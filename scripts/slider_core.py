@@ -160,9 +160,13 @@ def lora_layers(model):
 
 
 def set_multiplier(layers, mult, adapter="default"):
-    """Escala de cada capa LoRA = alpha / rank * mult (mult = 1 es el LoRA normal)."""
+    """
+    Escala de cada capa LoRA = su escala normal * mult (mult = 1 es el LoRA normal). La escala normal
+    se guarda la primera vez: alpha / rank, o alpha / √rank con rsLoRA.
+    """
     for layer in layers:
-        layer.scaling[adapter] = layer.lora_alpha[adapter] / layer.r[adapter] * mult
+        base = layer.__dict__.setdefault("_slider_base_scaling", dict(layer.scaling))
+        layer.scaling[adapter] = base[adapter] * mult
 
 
 def export_factor(settings):
