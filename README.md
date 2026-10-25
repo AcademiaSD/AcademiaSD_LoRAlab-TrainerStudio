@@ -10,6 +10,7 @@ What was added, newest first. Each entry links to its commit.
 
 **2026-10-25**
 
+- 🧪 **Slider LoRAs on Qwen-Image 2.1**: the dial LoRA type of FLUX.2 Klein 9B now also in the Qwen-Image 2.1 trainer, in edit and text-to-image mode; slider previews edit an image near position 0, so both ends of the dial show [`5cf8675`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/5cf8675)
 - **MOSS-Image edit LoRAs on armV5**: the latest [MOSS-Image-Edit-HQ](https://huggingface.co/akhaliq/MOSS-Image-Edit-HQ) is the default edit base now, with armV4 and chinoll's as options [`ab231b1`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/ab231b1)
 - **MOSS-Image edit LoRAs on armV4**: [akhaliq's MOSS-Image-Edit-HQ](https://huggingface.co/akhaliq/MOSS-Image-Edit-HQ) is the new default edit base (it keeps the unedited parts of the image), with chinoll's as an option; the fused export is a normal LoRA ending in `_FUSED`, for ComfyUI's own edit nodes [`4709970`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/4709970)
 
