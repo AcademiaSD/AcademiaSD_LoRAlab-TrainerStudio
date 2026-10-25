@@ -8,6 +8,10 @@
 
 What was added, newest first. Each entry links to its commit.
 
+**2026-10-25**
+
+- **MOSS-Image edit LoRAs on armV4**: [akhaliq's MOSS-Image-Edit-HQ](https://huggingface.co/akhaliq/MOSS-Image-Edit-HQ) is the new default edit base (it keeps the unedited parts of the image), with chinoll's as an option; the fused export is a normal LoRA ending in `_FUSED`, for ComfyUI's own edit nodes [`4709970`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/4709970)
+
 **2026-10-24**
 
 - **MOSS-Image edit LoRAs**: before → after pairs trained on top of [chinoll's Moss-Image-Edit](https://huggingface.co/chinoll/Moss-Image-Edit), with edit previews, exported alone or fused with Moss-Image-Edit into one patch for ComfyUI [`a2f78ef`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/a2f78ef)
@@ -68,13 +72,13 @@ What was added, newest first. Each entry links to its commit.
 - Trainers open in the launcher tab, with a back button, a glow on the one that is training and trainer switching [`4ed40ad`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/4ed40ad)
 - Windows 11 24H2: trainers are detected without `wmic` [`5432f33`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/5432f33)
 
+<details>
+<summary><b>Earlier changes (2026-09-28 to 2026-10-12)</b></summary>
+
 **2026-10-12**
 
 - LR scheduler selector in every trainer [`f8b2489`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/f8b2489)
 - GPU selector in the launcher [`07d2934`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/07d2934)
-
-<details>
-<summary><b>Earlier changes (2026-09-28 to 2026-10-09)</b></summary>
 
 **2026-10-09**
 
