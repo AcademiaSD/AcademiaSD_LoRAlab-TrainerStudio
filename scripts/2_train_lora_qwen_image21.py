@@ -1150,9 +1150,17 @@ def train_qwen_image21():
                     check_custom_prompt(True)
                 dial = None
                 if manifest:
-                    # Slider: el prompt de la preview (y en edición su imagen) con el dial a -100 %, -50 %, 0, 50 % y 100 %.
-                    p_name, sample = "_custom", cache_data["_custom"]
-                    ref = sample.get("ctrl", next(iter(slider_lat.values())))
+                    # Slider: la tira del dial a -100 %, -50 %, 0, 50 % y 100 %. Con el prompt manual, su texto
+                    # (y en edición su imagen); si no, la imagen central de un grupo según el modo de caption.
+                    if PREVIEW_CAPTION_MODE == "custom" and "_custom" in cache_data:
+                        p_name, sample = "_custom", cache_data["_custom"]
+                        ref = sample.get("ctrl", next(iter(slider_lat.values())))
+                    else:
+                        group, p_name = slider_core.preview_reference(groups, PREVIEW_CAPTION_MODE,
+                                                                      step // max(1, PREVIEW_EVERY))
+                        ref = slider_lat[p_name]
+                        # En edición el texto es el de cada imagen (Qwen3-VL la ve); en texto a imagen, el del grupo.
+                        sample = dict(slider_text[p_name], ctrl=ref) if slider_mode == "edit" else                             dict(slider_text[slider_core.caption_stem(p_name)])
                     dial = (slider_layers, [(f"{s:+g}" if s else "0", slider_core.strength_to_multiplier(s, SLIDER))
                                             for s in slider_core.preview_strengths(SLIDER)])
                 else:

@@ -186,6 +186,25 @@ def strength_to_multiplier(strength, settings):
     return strength * export_factor(settings)
 
 
+def preview_reference(groups, caption_mode, index, rng=random):
+    """
+    Grupo e imagen de la tira del dial cuando la preview no usa el prompt manual: el primer grupo
+    ('first'), los 4 primeros por turnos ('rotate4', index = número de preview) o uno al azar.
+    La imagen es la más cercana al 50 % de la escala: la posición 0 si el grupo va de -100 a 100, la 50
+    si va de 0 a 100. Desde ahí el dial tiene recorrido en los dos sentidos.
+    """
+    names = sorted(groups)
+    if caption_mode == "random":
+        group = rng.choice(names)
+    elif caption_mode == "rotate4":
+        group = names[index % min(4, len(names))]
+    else:
+        group = names[0]
+    pos = groups[group]
+    mid = 0 if min(pos) < 0 else 50
+    return group, pos[min(pos, key=lambda p: (abs(p - mid), p))]
+
+
 def write_manifest(cache_dir, groups, anchors, mode, default_prompt=""):
     # default_prompt: el de las previews sin prompt manual (caption del primer grupo o el neutro).
     data = {"mode": mode, "anchors": anchors, "default_prompt": default_prompt,

@@ -950,9 +950,8 @@
         }
 
         function toggleCaptionMode(mode) {
-            // El slider siempre usa el prompt manual (y en edición su imagen) para la tira del dial.
-            const slider = document.getElementById('lora_type').value === 'slider';
-            document.getElementById('custom_prompt_container').style.display = (mode === 'custom' || slider) ? 'block' : 'none';
+            // También en el slider: con First / Random / Rotate 4 la tira del dial usa la imagen central de un grupo.
+            document.getElementById('custom_prompt_container').style.display = mode === 'custom' ? 'block' : 'none';
         }
 
         async function updateSystemStats() {
