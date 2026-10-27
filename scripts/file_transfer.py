@@ -149,6 +149,10 @@ def register(app, get_dataset_dir, get_output_dir, dataset_exts):
     def notify_js():
         return send_from_directory(str(GUI_DIR), "notify.js")
 
+    @app.route("/preview_size.js")
+    def preview_size_js():
+        return send_from_directory(str(GUI_DIR), "preview_size.js")
+
     @app.route("/api/upload-dataset", methods=["POST"])
     def upload_dataset():
         folder = get_dataset_dir()
