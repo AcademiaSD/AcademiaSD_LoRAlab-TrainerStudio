@@ -118,6 +118,7 @@
   "Preview CFG": "プレビューのCFG",
   "Preview Size": "プレビューのサイズ",
   "Aspect Ratio": "アスペクト比",
+  "Training = the sample's own ratio and size. Pick a ratio and Preview Size to force a fixed output. Dimensions snap to the model's required grid and stay within its native size.": "学習時と同じ = サンプル画像自身の縦横比とサイズ。比率とプレビューのサイズを選ぶと固定出力になります。寸法はモデルが要求するグリッドに合わせ、ネイティブサイズ内に収めます。",
   "Training = the sample's own ratio and size. Pick a ratio and Preview Size to force a fixed output (for example 16:9 at 1024 x 1024 area = 1376 x 768). Sides snap to the model's 32 px grid.": "学習時と同じ = サンプル本来の縦横比とサイズ。縦横比とプレビューのサイズを選ぶと出力サイズを固定できます（例: 16:9、面積 1024 x 1024 = 1376 x 768）。辺はモデルの 32 px グリッドに合わせます。",
   "Training = the sample's own ratio and size. Pick a ratio and Preview Size to force a fixed output (for example 16:9 at 1024 x 1024 area = 1344 x 768). Sides snap to SDXL's 64 px grid and stay within its native area.": "学習時と同じ = サンプル本来の縦横比とサイズ。縦横比とプレビューのサイズを選ぶと出力サイズを固定できます（例: 16:9、面積 1024 x 1024 = 1344 x 768）。辺は SDXL の 64 px グリッドに合わせ、ネイティブの面積内に収めます。",
   "Area of the preview, as before: 1024 keeps about the same cost and VRAM whatever the ratio. Training keeps the sample size and ratio.": "プレビューの面積（従来どおり）: 1024 なら縦横比に関係なく処理時間と VRAM はほぼ同じです。「学習時と同じ」はサンプルのサイズと縦横比を保ちます。",
