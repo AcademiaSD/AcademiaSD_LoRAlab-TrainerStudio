@@ -6,6 +6,8 @@
     <title>AcademiaSD Qwen-Image 2512 LoRAlab</title>
     <script src="/i18n.js"></script>
     <script src="/notify.js"></script>
+    <script src="/preview_size.js"></script>
+    <script>if (window.PreviewSize) PreviewSize.configure({ step: 16, maxSide: 1280 });</script>
     <script src="/loss_chart.js"></script>
 
     <!-- Favicon de la pestaña del navegador -->
@@ -663,6 +665,32 @@
                         </div>
                     </div>
 
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label title="Training = the sample's own ratio and size. Pick a ratio and Preview Size to force a fixed output. Dimensions snap to the model's required grid and stay within its native size.">Aspect Ratio:</label>
+                            <select id="train_preview_aspect" onchange="syncPreviewSize()">
+                                <option value="auto" selected>Training</option>
+                                <option value="1:1">1:1</option>
+                                <option value="2:3">2:3</option>
+                                <option value="3:4">3:4</option>
+                                <option value="4:3">4:3</option>
+                                <option value="16:9">16:9</option>
+                                <option value="9:16">9:16</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label title="Area of the preview, as before: 1024 keeps about the same cost and VRAM whatever the ratio. Training keeps the sample size and ratio.">Preview Size:</label>
+                            <select id="train_preview_size" onchange="syncPreviewSize()">
+                                <option value="0" selected>Training</option>
+                                <option value="512">512 x 512 (area)</option>
+                                <option value="768">768 x 768 (area)</option>
+                                <option value="1024">1024 x 1024 (area)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="preview_size_hint" style="font-size:0.72rem; color:var(--text-muted); margin-top:-2px; line-height:1.35;"></div>
+                    <div id="preview_edit_note" style="display:none; font-size:0.72rem; color:var(--text-muted); margin-top:2px; line-height:1.35;">Edit LoRAs follow the before image proportions, so Aspect Ratio stays on Training.</div>
+
                     <!-- Mismo guardado que Training: durante el entrenamiento se aplica en el siguiente paso -->
                     <button type="button" class="btn btn-secondary btn-tall btn-full" onclick="saveTrainSettings()" style="margin-top:12px;"
                             title="Saves the training settings, previews included. While training, they apply on the next step.">
@@ -828,6 +856,18 @@
             const base = document.getElementById('train_base_model');
             if (edit) base.value = 'edit2511';
             base.querySelector('option[value="2512"]').disabled = edit;
+            syncPreviewAspectForEdit();
+        }
+
+        function syncPreviewAspectForEdit() {
+            const aspect = document.getElementById('train_preview_aspect');
+            const note = document.getElementById('preview_edit_note');
+            if (!aspect) return;
+            const edit = document.getElementById('lora_type').value === 'edit';
+            if (edit) aspect.value = 'auto';
+            aspect.disabled = edit;
+            if (note) note.style.display = edit ? 'block' : 'none';
+            syncPreviewSize();
         }
 
         function toggleCaptionMode(mode) {
@@ -1000,6 +1040,8 @@
                     }
                     if (t.preview_steps !== undefined) document.getElementById('train_preview_steps').value = t.preview_steps;
                     if (t.preview_cfg !== undefined) document.getElementById('train_preview_cfg').value = t.preview_cfg;
+                    PreviewSize.apply(t);
+                    syncPreviewAspectForEdit();
                     if (t.export_final_name) document.getElementById('export_final_name').value = t.export_final_name;
                     updateFinalNameSuffix();
                 }
@@ -1078,6 +1120,8 @@
                     }
                     if (data.preview_steps !== undefined) document.getElementById('train_preview_steps').value = data.preview_steps;
                     if (data.preview_cfg !== undefined) document.getElementById('train_preview_cfg').value = data.preview_cfg;
+                    PreviewSize.apply(data);
+                    syncPreviewAspectForEdit();
                     if (data.export_final_name !== undefined) document.getElementById('export_final_name').value = data.export_final_name;
                     updateFinalNameSuffix();
 
@@ -1309,7 +1353,8 @@
                     turbo_lora_strength: 'train_turbo_strength', save_every: 'train_save_every', seed: 'train_seed',
                     preview_every: 'train_preview_every', preview_caption_mode: 'train_preview_caption_mode',
                     preview_custom_prompt: 'train_preview_custom_prompt', preview_edit_image: 'preview_edit_image',
-                    preview_steps: 'train_preview_steps', preview_cfg: 'train_preview_cfg' },
+                    preview_steps: 'train_preview_steps', preview_cfg: 'train_preview_cfg',
+                    preview_aspect_ratio: 'train_preview_aspect', preview_size: 'train_preview_size' },
             resume: { trigger_word: 'trigger_word', lr_scheduler: 'train_lr_scheduler',
                       warmup_steps: 'train_warmup_steps', lr_cycles: 'train_lr_cycles', base_model: 'train_base_model',
                       blocks_on_gpu: 'train_blocks_on_gpu', batch_size: 'train_batch_size',
@@ -1352,6 +1397,7 @@
                 lora_type: document.getElementById('lora_type').value,
                 preview_steps: parseInt(document.getElementById('train_preview_steps').value),
                 preview_cfg: parseFloat(document.getElementById('train_preview_cfg').value),
+                ...PreviewSize.values(),
                 use_filter_bypass: false,
                 filter_bypass_strength: 0.01,
                 export_final_name: document.getElementById('export_final_name').value
