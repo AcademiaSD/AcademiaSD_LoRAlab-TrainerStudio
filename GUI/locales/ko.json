@@ -118,6 +118,7 @@
   "Preview CFG": "미리보기 CFG",
   "Preview Size": "미리보기 크기",
   "Aspect Ratio": "화면 비율",
+  "Training = the sample's own ratio and size. Pick a ratio and Preview Size to force a fixed output. Dimensions snap to the model's required grid and stay within its native size.": "학습과 동일 = 샘플 이미지 자체의 비율과 크기. 비율과 미리보기 크기를 선택하면 고정 출력이 됩니다. 크기는 모델이 요구하는 그리드에 맞추고 네이티브 크기 안에서 유지됩니다.",
   "Training = the sample's own ratio and size. Pick a ratio and Preview Size to force a fixed output (for example 16:9 at 1024 x 1024 area = 1376 x 768). Sides snap to the model's 32 px grid.": "학습과 동일 = 샘플 고유의 비율과 크기. 비율과 미리보기 크기를 고르면 출력 크기가 고정됩니다(예: 16:9, 면적 1024 x 1024 = 1376 x 768). 변은 모델의 32 px 격자에 맞춰집니다.",
   "Training = the sample's own ratio and size. Pick a ratio and Preview Size to force a fixed output (for example 16:9 at 1024 x 1024 area = 1344 x 768). Sides snap to SDXL's 64 px grid and stay within its native area.": "학습과 동일 = 샘플 고유의 비율과 크기. 비율과 미리보기 크기를 고르면 출력 크기가 고정됩니다(예: 16:9, 면적 1024 x 1024 = 1344 x 768). 변은 SDXL의 64 px 격자에 맞춰지고 기본 면적 안에 유지됩니다.",
   "Area of the preview, as before: 1024 keeps about the same cost and VRAM whatever the ratio. Training keeps the sample size and ratio.": "미리보기 면적(기존과 동일): 1024는 비율과 관계없이 시간과 VRAM이 거의 같습니다. '학습과 동일'은 샘플의 크기와 비율을 유지합니다.",
