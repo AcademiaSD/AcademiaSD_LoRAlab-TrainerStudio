@@ -11,6 +11,7 @@ import gc
 import time
 import random
 import json
+import math
 import signal
 import sys
 import logging
@@ -70,6 +71,9 @@ DEFAULTS = {
     "preview_every": 0,
     "preview_steps": 30,
     "preview_cfg": 4.0,
+    "preview_size": 0,
+    "preview_width": 0,
+    "preview_height": 0,
     "use_turbo": False,
     "turbo_lora_strength": 1.0,
     "preview_caption_mode": "first",
@@ -117,6 +121,9 @@ TIMESTEP_SAMPLING = cfg.get("timestep_sampling", DEFAULTS["timestep_sampling"])
 PREVIEW_EVERY     = cfg.get("preview_every",     DEFAULTS["preview_every"])
 PREVIEW_STEPS     = cfg.get("preview_steps",     DEFAULTS["preview_steps"])
 PREVIEW_CFG       = cfg.get("preview_cfg",       DEFAULTS["preview_cfg"])
+PREVIEW_SIZE      = int(cfg.get("preview_size",  DEFAULTS["preview_size"]))
+PREVIEW_WIDTH     = int(cfg.get("preview_width",  DEFAULTS["preview_width"]))
+PREVIEW_HEIGHT    = int(cfg.get("preview_height", DEFAULTS["preview_height"]))
 PREVIEW_CAPTION_MODE  = cfg.get("preview_caption_mode",  DEFAULTS["preview_caption_mode"])
 PREVIEW_CUSTOM_PROMPT = cfg.get("preview_custom_prompt", DEFAULTS["preview_custom_prompt"]).strip()
 
@@ -510,7 +517,7 @@ def reload_live_settings():
     y carpetas se fijan al arrancar y siguen necesitando Stop -> Resume.
     """
     global _live_mtime, TOTAL_STEPS, SAVE_EVERY, LR, MAX_GRAD_NORM
-    global PREVIEW_EVERY, PREVIEW_STEPS, PREVIEW_CFG, PREVIEW_CAPTION_MODE, PREVIEW_CUSTOM_PROMPT, SEED
+    global PREVIEW_EVERY, PREVIEW_STEPS, PREVIEW_CFG, PREVIEW_SIZE, PREVIEW_WIDTH, PREVIEW_HEIGHT, PREVIEW_CAPTION_MODE, PREVIEW_CUSTOM_PROMPT, SEED
     global USE_TURBO, TURBO_LORA_STRENGTH
 
     try:
@@ -549,6 +556,9 @@ def reload_live_settings():
     PREVIEW_EVERY         = fresh("preview_every",         int,   PREVIEW_EVERY)
     PREVIEW_STEPS         = fresh("preview_steps",         int,   PREVIEW_STEPS)
     PREVIEW_CFG           = fresh("preview_cfg",           float, PREVIEW_CFG)
+    PREVIEW_SIZE          = fresh("preview_size",          int,   PREVIEW_SIZE)
+    PREVIEW_WIDTH         = fresh("preview_width",         int,   PREVIEW_WIDTH)
+    PREVIEW_HEIGHT        = fresh("preview_height",        int,   PREVIEW_HEIGHT)
     PREVIEW_CAPTION_MODE  = fresh("preview_caption_mode",  str,   PREVIEW_CAPTION_MODE)
     PREVIEW_CUSTOM_PROMPT = fresh("preview_custom_prompt", lambda v: str(v).strip(), PREVIEW_CUSTOM_PROMPT)
     USE_TURBO             = fresh("use_turbo",             bool,  USE_TURBO)
@@ -885,7 +895,17 @@ def train_qwenimage2512():
                 p_neg = neg
                 if "ctrl" in sample:
                     p_neg = (cache_data["_custom_neg"]["emb"], cache_data["_custom_neg"]["msk"]) if "_custom_neg" in cache_data else None
-                run_preview(model, scheduler, sample, p_neg, (ref.shape[2], ref.shape[3]), step)
+                size = (ref.shape[2], ref.shape[3])
+                if PREVIEW_WIDTH > 0 and PREVIEW_HEIGHT > 0 and not edit_cache:
+                    # Lados explícitos en píxeles: VAE 8x y parches 2x2 (16 px).
+                    size = (max(2, round(PREVIEW_HEIGHT / 8 / 2) * 2),
+                            max(2, round(PREVIEW_WIDTH / 8 / 2) * 2))
+                elif PREVIEW_SIZE > 0:
+                    # Área clásica: conserva la proporción de la referencia.
+                    s = PREVIEW_SIZE / 8 / math.sqrt(size[0] * size[1])
+                    size = (max(2, round(size[0] * s / 2) * 2),
+                            max(2, round(size[1] * s / 2) * 2))
+                run_preview(model, scheduler, sample, p_neg, size, step)
 
     except (KeyboardInterrupt, SystemExit):
         save_checkpoint_now(last_step_executed)
