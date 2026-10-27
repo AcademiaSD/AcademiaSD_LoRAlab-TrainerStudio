@@ -127,4 +127,12 @@
     window.syncPreviewSize = sync;
     document.addEventListener('DOMContentLoaded', sync);
     window.addEventListener('load', sync);
+    // i18n changes document.documentElement.lang before re-applying the DOM.
+    // Rebuild the hint so it follows the selected UI language too.
+    if (window.MutationObserver && document.documentElement) {
+        new MutationObserver(sync).observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ['lang'],
+        });
+    }
 })();

@@ -689,6 +689,7 @@
                         </div>
                     </div>
                     <div id="preview_size_hint" style="font-size:0.72rem; color:var(--text-muted); margin-top:-2px; line-height:1.35;"></div>
+                    <div id="preview_edit_note" style="display:none; font-size:0.72rem; color:var(--text-muted); margin-top:2px; line-height:1.35;">Edit LoRAs follow the before image proportions, so Aspect Ratio stays on Training.</div>
 
                     <!-- Mismo guardado que Training: durante el entrenamiento se aplica en el siguiente paso -->
                     <button type="button" class="btn btn-secondary btn-tall btn-full" onclick="saveTrainSettings()" style="margin-top:12px;"
@@ -859,6 +860,18 @@
         function applyLoraType() {
             const edit = document.getElementById('lora_type').value === 'edit';
             document.getElementById('edit_image_container').style.display = edit ? 'block' : 'none';
+            syncPreviewAspectForEdit();
+        }
+
+        function syncPreviewAspectForEdit() {
+            const aspect = document.getElementById('train_preview_aspect');
+            const note = document.getElementById('preview_edit_note');
+            if (!aspect) return;
+            const edit = document.getElementById('lora_type').value === 'edit';
+            if (edit) aspect.value = 'auto';
+            aspect.disabled = edit;
+            if (note) note.style.display = edit ? 'block' : 'none';
+            syncPreviewSize();
         }
 
         function toggleCaptionMode(mode) {
@@ -1030,6 +1043,7 @@
                     if (t.preview_steps !== undefined) document.getElementById('train_preview_steps').value = t.preview_steps;
                     if (t.preview_cfg !== undefined) document.getElementById('train_preview_cfg').value = t.preview_cfg;
                     PreviewSize.apply(t);
+                    syncPreviewAspectForEdit();
                     if (t.use_turbo !== undefined) document.getElementById('train_use_turbo').checked = t.use_turbo;
                     if (t.turbo_lora_strength !== undefined) document.getElementById('train_turbo_strength').value = t.turbo_lora_strength;
                     if (t.export_final_name) document.getElementById('export_final_name').value = t.export_final_name;
@@ -1109,6 +1123,7 @@
                     if (data.preview_steps !== undefined) document.getElementById('train_preview_steps').value = data.preview_steps;
                     if (data.preview_cfg !== undefined) document.getElementById('train_preview_cfg').value = data.preview_cfg;
                     PreviewSize.apply(data);
+                    syncPreviewAspectForEdit();
                     if (data.use_turbo !== undefined) document.getElementById('train_use_turbo').checked = data.use_turbo;
                     if (data.turbo_lora_strength !== undefined) document.getElementById('train_turbo_strength').value = data.turbo_lora_strength;
                     if (data.export_final_name !== undefined) document.getElementById('export_final_name').value = data.export_final_name;

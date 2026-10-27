@@ -1028,7 +1028,7 @@ def train_qwen_image21():
                 ref = sample.get("ctrl", sample.get("lat", next(iter(cache_data.values()))["lat"]))
                 print(f"\n  [Preview] {t('Mode')}: {PREVIEW_CAPTION_MODE} | {t('Sample')}: {p_name}")
                 H, W = ref.shape[2], ref.shape[3]
-                if PREVIEW_WIDTH > 0 and PREVIEW_HEIGHT > 0:
+                if PREVIEW_WIDTH > 0 and PREVIEW_HEIGHT > 0 and not edit_mode:
                     # Lados explícitos en píxeles: VAE 16x y ranuras 2x2 de img_mask (32 px).
                     H = max(2, round(PREVIEW_HEIGHT / 16 / 2) * 2)
                     W = max(2, round(PREVIEW_WIDTH / 16 / 2) * 2)
