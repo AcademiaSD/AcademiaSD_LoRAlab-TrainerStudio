@@ -278,6 +278,8 @@ def boogu_image_parser():
     parser.add_argument("--trigger_word", type=str, default="")
     parser.add_argument("--live_settings", type=str, default="")
     parser.add_argument("--preview_size", type=int, default=0)
+    parser.add_argument("--preview_width", type=int, default=0)
+    parser.add_argument("--preview_height", type=int, default=0)
     return parser
 
 
@@ -294,6 +296,8 @@ LIVE_KEYS = {
     "preview_custom_prompt": ("preview_custom_prompt", lambda v: str(v).strip()),
     "preview_edit_image": ("preview_edit_image", lambda v: str(v).strip()),
     "preview_size": ("preview_size", int),
+    "preview_width": ("preview_width", int),
+    "preview_height": ("preview_height", int),
     "seed": ("seed", int),  # solo previews
 }
 
@@ -506,7 +510,11 @@ def run_boogu_preview(model, dataset, args, step):
         cached_path = cache_path(args.boogu_cache_dir, sample_key)
     sample = torch.load(cached_path, map_location="cpu", weights_only=True)
     height, width = int(sample["height"]), int(sample["width"])
-    if args.preview_size > 0:
+    if args.preview_width > 0 and args.preview_height > 0 and "reference_latents" not in sample:
+        # Lados explícitos en píxeles; múltiplo 16 (VAE /8 y parches 2x2).
+        height = max(16, round(args.preview_height / 16) * 16)
+        width = max(16, round(args.preview_width / 16) * 16)
+    elif args.preview_size > 0:
         # Misma proporción con el área elegida; múltiplo 16 (VAE /8 y parches 2x2).
         scale = args.preview_size / math.sqrt(height * width)
         height, width = max(16, round(height * scale / 16) * 16), max(16, round(width * scale / 16) * 16)
