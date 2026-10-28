@@ -40,7 +40,7 @@ LR=float(cfg.get("lr",3e-4)); WARMUP=int(cfg.get("warmup_steps",100)); MIN_LR_RA
 RANK=int(cfg.get("lora_rank",16)); ALPHA=float(cfg.get("lora_alpha",16)); USE_RSLORA=bool(cfg.get("use_rslora",False)); USE_LORAPLUS=bool(cfg.get("use_loraplus",False)); LORAPLUS_RATIO=float(cfg.get("loraplus_ratio",16)); USE_LOKR=bool(cfg.get("use_lokr",False)); LOKR_FACTOR=max(1,int(cfg.get("lokr_factor",16)))
 LORA_TARGETS="all" if cfg.get("lora_targets","blocks")=="all" else "blocks"
 WEIGHT_DECAY=float(cfg.get("weight_decay",0)); MAX_GRAD_NORM=float(cfg.get("max_grad_norm",1.0)); PREVIEW_EVERY=int(cfg.get("preview_every",0))
-PREVIEW_STEPS=int(cfg.get("preview_steps",28)); PREVIEW_CFG=float(cfg.get("preview_cfg",4)); PREVIEW_SIZE=int(cfg.get("preview_size",0))
+PREVIEW_STEPS=int(cfg.get("preview_steps",28)); PREVIEW_CFG=float(cfg.get("preview_cfg",4)); PREVIEW_SIZE=int(cfg.get("preview_size",0)); PREVIEW_WIDTH=int(cfg.get("preview_width",0)); PREVIEW_HEIGHT=int(cfg.get("preview_height",0))
 PREVIEW_MODE=cfg.get("preview_caption_mode","first")
 SEED=int(cfg.get("seed",42)); TRIGGER=cfg.get("trigger_word","").strip(); CUSTOM=cfg.get("preview_custom_prompt","").strip()
 os.makedirs(OUT,exist_ok=True); RESUME=os.path.join(OUT,"resume_checkpoint"); OPT=os.path.join(OUT,"optimizer.pt"); STEPFILE=os.path.join(OUT,"current_step.txt")
@@ -209,7 +209,7 @@ def main():
             if live_mtime is None: live_mtime=mt
             elif mt!=live_mtime:
                 fresh=json.load(open(CONFIG,encoding="utf-8")); live_mtime=mt; changed=[]
-                for key,var,cast in (("total_steps","STEPS",int),("save_every","SAVE_EVERY",int),("lr","LR",float),("max_grad_norm","MAX_GRAD_NORM",float),("preview_every","PREVIEW_EVERY",int),("preview_steps","PREVIEW_STEPS",int),("preview_cfg","PREVIEW_CFG",float),("preview_size","PREVIEW_SIZE",int),("preview_caption_mode","PREVIEW_MODE",str),("preview_custom_prompt","CUSTOM",str),("seed","SEED",int)):
+                for key,var,cast in (("total_steps","STEPS",int),("save_every","SAVE_EVERY",int),("lr","LR",float),("max_grad_norm","MAX_GRAD_NORM",float),("preview_every","PREVIEW_EVERY",int),("preview_steps","PREVIEW_STEPS",int),("preview_cfg","PREVIEW_CFG",float),("preview_size","PREVIEW_SIZE",int),("preview_width","PREVIEW_WIDTH",int),("preview_height","PREVIEW_HEIGHT",int),("preview_caption_mode","PREVIEW_MODE",str),("preview_custom_prompt","CUSTOM",str),("seed","SEED",int)):
                     old=globals()[var]; new=cast(fresh.get(key,old)); globals()[var]=new
                     if old!=new: changed.append(f"{key}: {old} -> {new}")
                 if changed: print("\n[LIVE] Settings reloaded: " + " | ".join(changed),flush=True)
@@ -248,7 +248,9 @@ def main():
             custom_path=os.path.join(CACHE,"_custom_embed.pt")
             if PREVIEW_MODE=="custom" and os.path.isfile(custom_path): e=torch.load(custom_path,weights_only=True)
             h,w=size
-            if PREVIEW_SIZE>0:
+            if PREVIEW_WIDTH>0 and PREVIEW_HEIGHT>0:
+                h=max(2,round(PREVIEW_HEIGHT/32/2)*2); w=max(2,round(PREVIEW_WIDTH/32/2)*2)
+            elif PREVIEW_SIZE>0:
                 scale=PREVIEW_SIZE/max(h,w); h=max(1,round(h*scale)); w=max(1,round(w*scale))
             preview(model,scheduler,e,(h,w),step)
     save(); export(model,os.path.join(OUT,"Ernie_FINAL_LoRA.safetensors"),step); print("Training completed.",flush=True)
