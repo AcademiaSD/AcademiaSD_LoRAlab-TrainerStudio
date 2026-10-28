@@ -120,12 +120,45 @@ def find_samples(dataset, mode):
     return [(stem, [os.path.join(dataset, name)]) for stem, name in stems.items() if not stem.endswith(EDIT_SUFFIXES)]
 
 
+def enable_hf_file_progress():
+    # Lanzado desde la GUI la salida no es una terminal y tqdm se desactiva: la descarga del captioner
+    # (~5 GB) parecería colgada. Se fuerzan las barras de progreso por fichero (en bytes).
+    import logging
+    try:
+        import tqdm
+        import tqdm.auto
+        import tqdm.std
+
+        def patch_tqdm(cls):
+            orig_init = cls.__init__
+            def new_init(self, *args, **kwargs):
+                kwargs['disable'] = False
+                kwargs['mininterval'] = 0.5
+                orig_init(self, *args, **kwargs)
+            cls.__init__ = new_init
+
+        patch_tqdm(tqdm.std.tqdm)
+        patch_tqdm(tqdm.auto.tqdm)
+        if hasattr(tqdm, 'tqdm'):
+            patch_tqdm(tqdm.tqdm)
+
+        from huggingface_hub.utils import enable_progress_bars
+        enable_progress_bars()
+        logging.getLogger("huggingface_hub").setLevel(logging.INFO)
+    except Exception:
+        pass
+
+    os.environ["TQDM_DISABLE"] = "0"
+    os.environ["TQDM_MININTERVAL"] = "0.5"
+
+
 def load_captioner(model_id):
     model_id = str(resolve_model_dir(model_id, "Models/Qwen-Image21-NF4"))
     path = os.path.join(model_id, "text_encoder_NF4")
     if not os.path.exists(os.path.join(path, "config.json")):
         # Instalación limpia: solo hace falta el text encoder NF4 y el processor (~5 GB), no el modelo entero.
         print(t("Downloading the captioner from Hugging Face: {repo}", repo=HF_REPO_ID), flush=True)
+        enable_hf_file_progress()
         token = read_json("settings/HF_token.json").get("token", "").strip() or None
         snapshot_download(repo_id=HF_REPO_ID, local_dir=model_id, token=token, max_workers=2,
                           allow_patterns=["text_encoder_NF4/*", "processor/*"])

@@ -233,6 +233,38 @@ def captioner_is_present(directory):
     return bool(weights)
 
 
+def enable_hf_file_progress():
+    # Lanzado desde la GUI la salida no es una terminal y tqdm se desactiva: la descarga del captioner
+    # (~5 GB) parecería colgada. Se fuerzan las barras de progreso por fichero (en bytes).
+    import logging
+    try:
+        import tqdm
+        import tqdm.auto
+        import tqdm.std
+
+        def patch_tqdm(cls):
+            orig_init = cls.__init__
+            def new_init(self, *args, **kwargs):
+                kwargs['disable'] = False
+                kwargs['mininterval'] = 0.5
+                orig_init(self, *args, **kwargs)
+            cls.__init__ = new_init
+
+        patch_tqdm(tqdm.std.tqdm)
+        patch_tqdm(tqdm.auto.tqdm)
+        if hasattr(tqdm, 'tqdm'):
+            patch_tqdm(tqdm.tqdm)
+
+        from huggingface_hub.utils import enable_progress_bars
+        enable_progress_bars()
+        logging.getLogger("huggingface_hub").setLevel(logging.INFO)
+    except Exception:
+        pass
+
+    os.environ["TQDM_DISABLE"] = "0"
+    os.environ["TQDM_MININTERVAL"] = "0.5"
+
+
 def ensure_captioner(cfg):
     """Descarga el modelo de captioning si no esta ya en disco.
 
@@ -258,6 +290,7 @@ def ensure_captioner(cfg):
     log("=" * 78)
 
     try:
+        enable_hf_file_progress()
         from huggingface_hub import snapshot_download
         snapshot_download(repo_id=cfg["captioner_repo"], local_dir=directory)
     except Exception as exc:
