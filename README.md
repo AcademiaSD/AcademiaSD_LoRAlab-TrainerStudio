@@ -788,6 +788,13 @@ Detailed measurements and the reasoning behind each design decision are in `docs
 
 `tools\` contains the scripts used to build the NF4 models from the originals (`Run_Conversor_Krea2.bat`, `Run_Conversor_LTX23.bat`, `5_conversor_QwenImage21_NF4.py`, `5_conversor_ZImage_NF4.py`, `5_conversor_Klein9B_NF4.py`, `5_conversor_Fibo2_NF4.py`) and a `.parquet` dataset extractor for Qwen-Image 2.1 (`6_extract_parquet.py`). They are not needed to train: the trainers download the ready-made NF4 models.
 
+**Before merging changes to the interfaces or servers**, `tools/smoke_test_ui.py` checks every trainer in under a minute: it starts each server and, in a headless Chrome or Edge, does what the **Pre-Cache**, **Start / Resume** and **Save JSON** (while training) buttons do, without launching anything. It fails on a button that never reaches its script, a JavaScript error or a save that does not answer `ok`, and it works on a temporary copy, so your settings are not touched. No extra packages: it needs Chrome, Edge or Chromium installed.
+
+```bash
+venv\Scripts\python tools\smoke_test_ui.py                # all trainers, current files (Linux: venv/bin/python tools/smoke_test_ui.py)
+venv\Scripts\python tools\smoke_test_ui.py --only sdxl    # one or more trainers, comma-separated
+```
+
 ## 📁 Structure
 
 ```text
