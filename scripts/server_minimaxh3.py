@@ -542,12 +542,8 @@ def save_train():
             output_dir_path.mkdir(parents=True, exist_ok=True)
             output_json_file = output_dir_path / f"train_settings_{proj}.json"
             write_json_file(output_json_file, data)
-        cache_dir_name = f"cached_data_minimaxh3_{proj}" if proj else "cached_data_minimaxh3"
-        output_dir_name = f"minimaxh3_lora_output_{proj}" if proj else "minimaxh3_lora_output"
-        data["cache_dir"] = f"./Cache_Data/{cache_dir_name}"
-        data["output_dir"] = f"./Outputs/{output_dir_name}"
-        # Lo que había antes: con el entrenamiento en marcha, la GUI avisa solo de lo que ha cambiado.
-        previous = read_json_file(TRAIN_CONFIG, {})
+            saved_files.append(f"Outputs/{output_dir_name}/{output_json_file.name}")
+        return jsonify({"status": "ok", "previous": previous, "file": saved_files[0], "all_saved": saved_files})
     except Exception as exc:
         return jsonify({"status": "error", "error": str(exc)}), 500
 

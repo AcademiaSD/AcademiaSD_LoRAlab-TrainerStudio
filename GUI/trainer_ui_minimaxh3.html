@@ -2054,10 +2054,6 @@
                     if (perfil && perfil.value) applyVramProfile(perfil.value);
                 } catch (e) {}
                 const listStr = data.all_saved ? data.all_saved.join('\n • ') : data.file;
-                // Con el entrenamiento en marcha se dice qué ha cambiado y cuándo lo aplica el trainer.
-                const running = document.getElementById('status-badge').classList.contains('badge-running');
-                const live = running ? '\n\n' + liveChangesText(data.previous || lastTrainSaved, trainData, LIVE_APPLY) : '';
-                lastTrainSaved = { ...trainData };
                 toast('✓ ' + t('Pre-Cache settings saved to:') + `\n • ${listStr}`, 'success');
             }
         }
@@ -2168,6 +2164,10 @@
             const data = await res.json();
             if (data.status === 'ok') {
                 const listStr = data.all_saved ? data.all_saved.join('\n • ') : data.file;
+                // Con el entrenamiento en marcha se dice qué ha cambiado y cuándo lo aplica el trainer.
+                const running = document.getElementById('status-badge').classList.contains('badge-running');
+                const live = running ? '\n\n' + liveChangesText(data.previous || lastTrainSaved, trainData, LIVE_APPLY) : '';
+                lastTrainSaved = { ...trainData };
                 toast('✓ ' + t('Train settings saved to:') + `\n • ${listStr}${live}`, 'success', running ? 12000 : 5000);
             }
         }
