@@ -37,6 +37,38 @@ def bucket(w, h):
 def with_trigger(text):
     return f"{TRIGGER}, {text}" if TRIGGER and TRIGGER.lower() not in text.lower() else text
 
+def enable_hf_file_progress():
+    # Lanzado desde la GUI la salida no es una terminal y tqdm se desactiva: una descarga de varios GB
+    # parecería colgada. Se fuerzan las barras de progreso por fichero (en bytes).
+    import logging
+    try:
+        import tqdm
+        import tqdm.auto
+        import tqdm.std
+
+        def patch_tqdm(cls):
+            orig_init = cls.__init__
+            def new_init(self, *args, **kwargs):
+                kwargs['disable'] = False
+                kwargs['mininterval'] = 0.5
+                orig_init(self, *args, **kwargs)
+            cls.__init__ = new_init
+
+        patch_tqdm(tqdm.std.tqdm)
+        patch_tqdm(tqdm.auto.tqdm)
+        if hasattr(tqdm, 'tqdm'):
+            patch_tqdm(tqdm.tqdm)
+
+        from huggingface_hub.utils import enable_progress_bars
+        enable_progress_bars()
+        logging.getLogger("huggingface_hub").setLevel(logging.INFO)
+    except Exception:
+        pass
+
+    os.environ["TQDM_DISABLE"] = "0"
+    os.environ["TQDM_MININTERVAL"] = "0.5"
+
+
 def ensure_nf4_model():
     converted=(os.path.join(MODEL_ID,"transformer","index.json"),
                os.path.join(MODEL_ID,"transformer","others.safetensors"),
@@ -46,6 +78,7 @@ def ensure_nf4_model():
                os.path.join(MODEL_ID,"tokenizer","tokenizer.json"))
     if all(os.path.isfile(p) for p in converted):
         return
+    enable_hf_file_progress()
     from huggingface_hub import snapshot_download
     repo_id="AcademiaSD/Ernie-NF4-for-LoRA-Training"
     print(f"Downloading the prepared ERNIE NF4 model from Hugging Face ({repo_id}).",flush=True)

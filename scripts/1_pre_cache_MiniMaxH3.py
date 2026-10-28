@@ -685,6 +685,38 @@ print("", flush=True)
 # ============================================================================
 # UTILITIES / UTILIDADES
 # ============================================================================
+def enable_hf_file_progress():
+    # Lanzado desde la GUI la salida no es una terminal y tqdm se desactiva: una descarga de varios GB
+    # parecería colgada. Se fuerzan las barras de progreso por fichero (en bytes).
+    import logging
+    try:
+        import tqdm
+        import tqdm.auto
+        import tqdm.std
+
+        def patch_tqdm(cls):
+            orig_init = cls.__init__
+            def new_init(self, *args, **kwargs):
+                kwargs['disable'] = False
+                kwargs['mininterval'] = 0.5
+                orig_init(self, *args, **kwargs)
+            cls.__init__ = new_init
+
+        patch_tqdm(tqdm.std.tqdm)
+        patch_tqdm(tqdm.auto.tqdm)
+        if hasattr(tqdm, 'tqdm'):
+            patch_tqdm(tqdm.tqdm)
+
+        from huggingface_hub.utils import enable_progress_bars
+        enable_progress_bars()
+        logging.getLogger("huggingface_hub").setLevel(logging.INFO)
+    except Exception:
+        pass
+
+    os.environ["TQDM_DISABLE"] = "0"
+    os.environ["TQDM_MININTERVAL"] = "0.5"
+
+
 def ensure_nf4_model_exists(nf4_model_id, repo_id="AcademiaSD/MiniMax-H3-NF4"):
     """Download the NF4 repo if the local folder is missing or empty.
     Descarga el repo NF4 si falta alguna de sus partes."""
@@ -733,6 +765,7 @@ def ensure_nf4_model_exists(nf4_model_id, repo_id="AcademiaSD/MiniMax-H3-NF4"):
         log_dev("=" * 90)
         os.makedirs(nf4_model_id, exist_ok=True)
         try:
+            enable_hf_file_progress()
             from huggingface_hub import snapshot_download
             snapshot_download(repo_id=repo_id, local_dir=nf4_model_id)
             log_dev(L("[DOWNLOAD] Download completed at {}",
@@ -2314,6 +2347,7 @@ def asegurar_vaes(nf4_model_id, video=True, audio=True,
           .format(nombres, os.path.abspath(nf4_model_id), total, repo_id,
                   nombres, total, repo_id))
     try:
+        enable_hf_file_progress()
         from huggingface_hub import snapshot_download
         os.makedirs(nf4_model_id, exist_ok=True)
         snapshot_download(repo_id=repo_id, local_dir=nf4_model_id,

@@ -267,6 +267,38 @@ def get_hf_token():
     return None
 
 
+def enable_hf_file_progress():
+    # Lanzado desde la GUI la salida no es una terminal y tqdm se desactiva: una descarga de varios GB
+    # parecería colgada. Se fuerzan las barras de progreso por fichero (en bytes).
+    import logging
+    try:
+        import tqdm
+        import tqdm.auto
+        import tqdm.std
+
+        def patch_tqdm(cls):
+            orig_init = cls.__init__
+            def new_init(self, *args, **kwargs):
+                kwargs['disable'] = False
+                kwargs['mininterval'] = 0.5
+                orig_init(self, *args, **kwargs)
+            cls.__init__ = new_init
+
+        patch_tqdm(tqdm.std.tqdm)
+        patch_tqdm(tqdm.auto.tqdm)
+        if hasattr(tqdm, 'tqdm'):
+            patch_tqdm(tqdm.tqdm)
+
+        from huggingface_hub.utils import enable_progress_bars
+        enable_progress_bars()
+        logging.getLogger("huggingface_hub").setLevel(logging.INFO)
+    except Exception:
+        pass
+
+    os.environ["TQDM_DISABLE"] = "0"
+    os.environ["TQDM_MININTERVAL"] = "0.5"
+
+
 def ensure_ltx23_model_downloaded(local_path):
     local_path = str(local_path or "./Models/LTX23-NF4").strip()
 
@@ -280,6 +312,7 @@ def ensure_ltx23_model_downloaded(local_path):
         print("[OK] " + t("Local model found at: {path}", path=local_path))
         if not os.path.exists(os.path.join(local_path, "text_encoder_NF4", "config.json")):
             # Instalaciones anteriores traían el text encoder en FP32 en vez del NF4 ya cuantizado.
+            enable_hf_file_progress()
             from huggingface_hub import snapshot_download
             print(t("Downloading from Hugging Face: {repo}", repo=f"{HF_NF4_REPO_ID}/text_encoder_NF4") + " (~8 GB)")
             snapshot_download(repo_id=HF_NF4_REPO_ID, local_dir=local_path, token=get_hf_token(),
@@ -309,6 +342,7 @@ def ensure_ltx23_model_downloaded(local_path):
     if token:
         print("✓ " + t("Using HF Token"))
 
+    enable_hf_file_progress()
     os.makedirs(local_path, exist_ok=True)
 
     print()

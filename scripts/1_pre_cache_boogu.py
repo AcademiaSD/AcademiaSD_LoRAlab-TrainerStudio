@@ -22,6 +22,38 @@ MODEL_ID = "Boogu-Image-0.1-Edit"
 SEQUENCE_LENGTH = 1280
 
 
+def enable_hf_file_progress():
+    # Lanzado desde la GUI la salida no es una terminal y tqdm se desactiva: una descarga de varios GB
+    # parecería colgada. Se fuerzan las barras de progreso por fichero (en bytes).
+    import logging
+    try:
+        import tqdm
+        import tqdm.auto
+        import tqdm.std
+
+        def patch_tqdm(cls):
+            orig_init = cls.__init__
+            def new_init(self, *args, **kwargs):
+                kwargs['disable'] = False
+                kwargs['mininterval'] = 0.5
+                orig_init(self, *args, **kwargs)
+            cls.__init__ = new_init
+
+        patch_tqdm(tqdm.std.tqdm)
+        patch_tqdm(tqdm.auto.tqdm)
+        if hasattr(tqdm, 'tqdm'):
+            patch_tqdm(tqdm.tqdm)
+
+        from huggingface_hub.utils import enable_progress_bars
+        enable_progress_bars()
+        logging.getLogger("huggingface_hub").setLevel(logging.INFO)
+    except Exception:
+        pass
+
+    os.environ["TQDM_DISABLE"] = "0"
+    os.environ["TQDM_MININTERVAL"] = "0.5"
+
+
 def _configure_console():
     for stream in (sys.stdout, sys.stderr):
         try:
@@ -359,6 +391,7 @@ def main():
         cache.mkdir(parents=True, exist_ok=True)
         temporary.write_text(json.dumps(incomplete, ensure_ascii=False, indent=2), encoding="utf-8")
         os.replace(temporary, cache / "cache_manifest.json")
+        enable_hf_file_progress()
         ensure_nf4_model()
         if not torch.cuda.is_available():
             raise RuntimeError("La precaché de Boogu necesita CUDA para codificar con los modelos NF4 locales.")
