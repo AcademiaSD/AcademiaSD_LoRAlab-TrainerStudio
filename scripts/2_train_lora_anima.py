@@ -75,6 +75,8 @@ DEFAULTS = {
     "preview_steps": 30,
     "preview_cfg": 4.0,
     "preview_size": 0,
+    "preview_width": 0,
+    "preview_height": 0,
     "preview_caption_mode": "first",
     "preview_custom_prompt": "",
     "project_name": "",
@@ -126,6 +128,8 @@ PREVIEW_STEPS     = cfg.get("preview_steps",     DEFAULTS["preview_steps"])
 PREVIEW_CFG       = cfg.get("preview_cfg",       DEFAULTS["preview_cfg"])
 # Lado de la preview en píxeles (área size², proporción de la muestra); 0 = tamaño de entrenamiento.
 PREVIEW_SIZE      = cfg.get("preview_size",      DEFAULTS["preview_size"])
+PREVIEW_WIDTH     = int(cfg.get("preview_width",  DEFAULTS["preview_width"]))
+PREVIEW_HEIGHT    = int(cfg.get("preview_height", DEFAULTS["preview_height"]))
 PREVIEW_CAPTION_MODE  = cfg.get("preview_caption_mode",  DEFAULTS["preview_caption_mode"])
 PREVIEW_CUSTOM_PROMPT = cfg.get("preview_custom_prompt", DEFAULTS["preview_custom_prompt"]).strip()
 
@@ -510,7 +514,7 @@ def reload_live_settings():
     carpetas se fijan al arrancar y siguen necesitando Stop -> Resume.
     """
     global _live_mtime, TOTAL_STEPS, SAVE_EVERY, LR, MAX_GRAD_NORM
-    global PREVIEW_EVERY, PREVIEW_STEPS, PREVIEW_CFG, PREVIEW_SIZE, PREVIEW_CAPTION_MODE, PREVIEW_CUSTOM_PROMPT, SEED
+    global PREVIEW_EVERY, PREVIEW_STEPS, PREVIEW_CFG, PREVIEW_SIZE, PREVIEW_WIDTH, PREVIEW_HEIGHT, PREVIEW_CAPTION_MODE, PREVIEW_CUSTOM_PROMPT, SEED
 
     try:
         mtime = os.path.getmtime(CONFIG_PATH)
@@ -549,6 +553,8 @@ def reload_live_settings():
     PREVIEW_STEPS         = fresh("preview_steps",         int,   PREVIEW_STEPS)
     PREVIEW_CFG           = fresh("preview_cfg",           float, PREVIEW_CFG)
     PREVIEW_SIZE          = fresh("preview_size",          int,   PREVIEW_SIZE)
+    PREVIEW_WIDTH         = fresh("preview_width",         int,   PREVIEW_WIDTH)
+    PREVIEW_HEIGHT        = fresh("preview_height",        int,   PREVIEW_HEIGHT)
     PREVIEW_CAPTION_MODE  = fresh("preview_caption_mode",  str,   PREVIEW_CAPTION_MODE)
     PREVIEW_CUSTOM_PROMPT = fresh("preview_custom_prompt", lambda v: str(v).strip(), PREVIEW_CUSTOM_PROMPT)
     SEED                  = fresh("seed",                  int,   SEED)  # solo previews
@@ -850,7 +856,11 @@ def train_anima():
                 ref = cache_data[p_name if p_name != "_custom" else all_preview_names[0]]["lat"]
                 print(f"\n  [Preview] {t('Mode')}: {PREVIEW_CAPTION_MODE} | {t('Sample')}: {p_name}")
                 H, W = ref.shape[2], ref.shape[3]
-                if PREVIEW_SIZE > 0:
+                if PREVIEW_WIDTH > 0 and PREVIEW_HEIGHT > 0:
+                    # Lados explícitos en píxeles: latente 8x y parches 2x2 (16 px).
+                    H = max(2, round(PREVIEW_HEIGHT / 8 / 2) * 2)
+                    W = max(2, round(PREVIEW_WIDTH / 8 / 2) * 2)
+                elif PREVIEW_SIZE > 0:
                     # Latente 8x y parches 2x2: lados múltiplos de 2 en el latente (16 px).
                     s = PREVIEW_SIZE / 8 / math.sqrt(H * W)
                     H, W = max(2, round(H * s / 2) * 2), max(2, round(W * s / 2) * 2)
