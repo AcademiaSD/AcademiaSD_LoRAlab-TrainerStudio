@@ -204,6 +204,9 @@ DEFAULTS = {
     # Every N steps renders <OUTPUT_DIR>/preview_step_N.png using the FIRST
     # dataset caption. 0 = OFF (nothing is loaded, no time is lost).
     "preview_every": 0,
+    "preview_size": 0,
+    "preview_width": 0,
+    "preview_height": 0,
     # De donde sale el prompt de cada preview:
     #   "first"  -> siempre el caption de la primera imagen. Comparable entre
     #               pasos: es el modo para ver progreso.
@@ -1029,6 +1032,9 @@ PREVIEW_CAPTION_MODE = str(
 if PREVIEW_CAPTION_MODE not in PREVIEW_CAPTION_MODES:
     PREVIEW_CAPTION_MODE = "first"
 PREVIEW_EVERY = int(cfg_get("preview_every", DEFAULTS["preview_every"]) or 0)
+PREVIEW_SIZE = int(cfg_get("preview_size", DEFAULTS["preview_size"]) or 0)
+PREVIEW_WIDTH = int(cfg_get("preview_width", DEFAULTS["preview_width"]) or 0)
+PREVIEW_HEIGHT = int(cfg_get("preview_height", DEFAULTS["preview_height"]) or 0)
 PREVIEW_STEPS = max(2, int(cfg_get("preview_steps", DEFAULTS["preview_steps"]) or 12))
 PREVIEW_CFG = float(cfg_get("preview_cfg", DEFAULTS["preview_cfg"]) or 0.0)
 PREVIEW_SHIFT = float(cfg_get("preview_shift", DEFAULTS["preview_shift"]) or 12.0)
@@ -6326,6 +6332,21 @@ def pick_preview_prompt(entries, step):
     return entry, entry["prompt"], "{}: {}".format(mode, entry.get("name", "?"))
 
 
+def preview_spatial_latent_hw(lat_h, lat_w, patch_h, patch_w):
+    if PREVIEW_WIDTH > 0 and PREVIEW_HEIGHT > 0:
+        lat_h = max(1, int(round(PREVIEW_HEIGHT / 16.0)))
+        lat_w = max(1, int(round(PREVIEW_WIDTH / 16.0)))
+    elif PREVIEW_SIZE > 0:
+        scale = float(PREVIEW_SIZE) / 16.0 / math.sqrt(max(1, lat_h * lat_w))
+        lat_h = max(1, int(round(lat_h * scale)))
+        lat_w = max(1, int(round(lat_w * scale)))
+    patch_h = max(1, int(patch_h))
+    patch_w = max(1, int(patch_w))
+    lat_h = max(patch_h, (lat_h // patch_h) * patch_h)
+    lat_w = max(patch_w, (lat_w // patch_w) * patch_w)
+    return lat_h, lat_w
+
+
 def run_training_preview(model, entries, step, output_dir, nf4_dir,
                          patch_t, patch_h, patch_w, audio_channels=32):
     """Genera <output_dir>/preview_step_<step>.png con el LoRA en su estado actual.
@@ -6366,6 +6387,7 @@ def run_training_preview(model, entries, step, output_dir, nf4_dir,
         ref = align_video_latent_to_patch(ref, patch_h, patch_w, patch_t)
         latent_shape = tuple(ref.shape)
         _, _, n_f, lat_h, lat_w = latent_shape
+        lat_h, lat_w = preview_spatial_latent_hw(lat_h, lat_w, patch_h, patch_w)
 
         # ----------------------------------------------------------------
         # CUANTOS FRAMES LATENTES GENERAR.
@@ -7164,7 +7186,8 @@ def hot_reload_live_settings():
     """Relee train_settings_minimaxh3.json si ha cambiado y aplica la lista blanca.
     Devuelve una lista de textos "clave: viejo -> nuevo".
     Re-reads train_settings_minimaxh3.json when it changed and applies the whitelist."""
-    global PREVIEW_EVERY, PREVIEW_STEPS, PREVIEW_CFG, PREVIEW_SHIFT, PREVIEW_SEED
+    global PREVIEW_EVERY, PREVIEW_SIZE, PREVIEW_WIDTH, PREVIEW_HEIGHT
+    global PREVIEW_STEPS, PREVIEW_CFG, PREVIEW_SHIFT, PREVIEW_SEED
     global PREVIEW_VAE_DEVICE, PREVIEW_FRAME_INDEX, PREVIEW_CAPTION_MODE
     global PREVIEW_NUM_FRAMES
     global SAVE_EVERY, LR, MAX_GRAD_NORM, TOTAL_STEPS, DEBUG_TRAINING
@@ -7233,6 +7256,9 @@ def hot_reload_live_settings():
 
     PREVIEW_CAPTION_MODE = _fresh("preview_caption_mode", _cast_mode, PREVIEW_CAPTION_MODE)
     PREVIEW_EVERY = _fresh("preview_every", lambda v: int(v or 0), PREVIEW_EVERY)
+    PREVIEW_SIZE = _fresh("preview_size", lambda v: int(v or 0), PREVIEW_SIZE)
+    PREVIEW_WIDTH = _fresh("preview_width", lambda v: int(v or 0), PREVIEW_WIDTH)
+    PREVIEW_HEIGHT = _fresh("preview_height", lambda v: int(v or 0), PREVIEW_HEIGHT)
     PREVIEW_STEPS = _fresh("preview_steps", lambda v: max(2, int(v or 12)), PREVIEW_STEPS)
     PREVIEW_CFG = _fresh("preview_cfg", lambda v: float(v or 0.0), PREVIEW_CFG)
     PREVIEW_SHIFT = _fresh("preview_shift", lambda v: float(v or 12.0), PREVIEW_SHIFT)
@@ -7312,7 +7338,8 @@ def reload_runtime_config():
     global VRAM_RUNTIME_MAX_BYTES
     global PROJECT_NAME, TRIGGER_WORD, NF4_CACHE_DIR, SEED
     global CACHE_DIR, OUTPUT_DIR, RESUME_DIR, OPT_FILE, STEP_FILE, LOSS_STATE_FILE
-    global PREVIEW_EVERY, PREVIEW_STEPS, PREVIEW_CFG, PREVIEW_SHIFT, PREVIEW_SEED
+    global PREVIEW_EVERY, PREVIEW_SIZE, PREVIEW_WIDTH, PREVIEW_HEIGHT
+    global PREVIEW_STEPS, PREVIEW_CFG, PREVIEW_SHIFT, PREVIEW_SEED
     global PREVIEW_CAPTION_MODE, PREVIEW_NUM_FRAMES
 
     if os.path.exists(CONFIG_PATH):
@@ -7382,6 +7409,9 @@ def reload_runtime_config():
     if PREVIEW_CAPTION_MODE not in PREVIEW_CAPTION_MODES:
         PREVIEW_CAPTION_MODE = "first"
     PREVIEW_EVERY = int(cfg_get("preview_every", DEFAULTS["preview_every"]) or 0)
+    PREVIEW_SIZE = int(cfg_get("preview_size", DEFAULTS["preview_size"]) or 0)
+    PREVIEW_WIDTH = int(cfg_get("preview_width", DEFAULTS["preview_width"]) or 0)
+    PREVIEW_HEIGHT = int(cfg_get("preview_height", DEFAULTS["preview_height"]) or 0)
     PREVIEW_STEPS = max(2, int(cfg_get("preview_steps", DEFAULTS["preview_steps"]) or 12))
     PREVIEW_CFG = float(cfg_get("preview_cfg", DEFAULTS["preview_cfg"]) or 0.0)
     PREVIEW_SHIFT = float(cfg_get("preview_shift", DEFAULTS["preview_shift"]) or 12.0)
