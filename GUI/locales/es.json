@@ -1346,5 +1346,11 @@
   "armV5 — MOSS-Image-Edit-HQ (recommended)": "armV5 — MOSS-Image-Edit-HQ (recomendado)",
   "armV4 — MOSS-Image-Edit-HQ": "armV4 — MOSS-Image-Edit-HQ",
   "An edit LoRA is trained on top of an edit base LoRA (armV5, armV4 or chinoll). Separate: your LoRA alone (small), loaded with a LoRA loader next to the edit base LoRA. Fused: both merged exactly into one LoRA (~500 MB, name ending in _FUSED), loaded alone. Either way, encode with Text Encode MOSS-Image Edit and the edit_format of the base.": "Un LoRA de edición se entrena encima de un LoRA de edición base (armV5, armV4 o chinoll). Separado: solo tu LoRA (pequeño), cargado con un cargador de LoRA junto al LoRA de edición base. Fusionado: los dos unidos de forma exacta en un solo LoRA (~500 MB, nombre terminado en _FUSED), que se carga solo. En los dos casos, codifica con Text Encode MOSS-Image Edit y el edit_format de la base.",
-  "Invalid Edit Base {name}. Using armV5.": "Base de edición {name} no válida. Se usa armV5."
+  "Invalid Edit Base {name}. Using armV5.": "Base de edición {name} no válida. Se usa armV5.",
+  "Training = the sample's own ratio. Pick a ratio and Preview Size to force a fixed output. Dimensions snap to the model's 32 px grid.": "Training = la proporción propia de la muestra. Elige una proporción y un Tamaño Preview para forzar una salida fija. Las dimensiones se ajustan a la rejilla de 32 px del modelo.",
+  "Area of the preview. A preview larger than the training resolution needs more VRAM; on video models, especially with the 12 GB low-VRAM mode, it can run out of memory. Training keeps the sample size and ratio.": "Área de la preview. Una preview más grande que la resolución de entrenamiento necesita más VRAM; en los modelos de vídeo, sobre todo con el modo de 12 GB de poca VRAM, puede quedarse sin memoria. Training mantiene el tamaño y la proporción de la muestra.",
+  "360 x 360 (area, fast)": "360 x 360 (área, rápida)",
+  "480 x 480 (area)": "480 x 480 (área)",
+  "576 x 576 (area)": "576 x 576 (área)",
+  "640 x 640 (area)": "640 x 640 (área)"
 }

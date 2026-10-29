@@ -1241,5 +1241,11 @@
   "armV5 — MOSS-Image-Edit-HQ (recommended)": "armV5 — MOSS-Image-Edit-HQ (推奨)",
   "armV4 — MOSS-Image-Edit-HQ": "armV4 — MOSS-Image-Edit-HQ",
   "An edit LoRA is trained on top of an edit base LoRA (armV5, armV4 or chinoll). Separate: your LoRA alone (small), loaded with a LoRA loader next to the edit base LoRA. Fused: both merged exactly into one LoRA (~500 MB, name ending in _FUSED), loaded alone. Either way, encode with Text Encode MOSS-Image Edit and the edit_format of the base.": "編集LoRAはベース編集LoRA (armV5、armV4 または chinoll) の上で学習します。分離: あなたのLoRAのみ (小さい)。LoRAローダーでベース編集LoRAと一緒に読み込みます。統合: 両方を正確に1つのLoRA (~500 MB、名前の末尾は _FUSED) にまとめ、単独で読み込みます。どちらの場合も Text Encode MOSS-Image Edit とベースの edit_format でエンコードしてください。",
-  "Invalid Edit Base {name}. Using armV5.": "無効な編集ベース {name}。armV5 を使用します。"
+  "Invalid Edit Base {name}. Using armV5.": "無効な編集ベース {name}。armV5 を使用します。",
+  "Training = the sample's own ratio. Pick a ratio and Preview Size to force a fixed output. Dimensions snap to the model's 32 px grid.": "学習時と同じ = サンプル画像自身の縦横比。比率とプレビューのサイズを選ぶと固定出力になります。寸法はモデルの 32 px グリッドに合わせます。",
+  "Area of the preview. A preview larger than the training resolution needs more VRAM; on video models, especially with the 12 GB low-VRAM mode, it can run out of memory. Training keeps the sample size and ratio.": "プレビューの面積。学習解像度より大きいプレビューは VRAM を多く使います。動画モデル、特に 12 GB の省 VRAM モードではメモリ不足になることがあります。「学習時と同じ」はサンプルのサイズと縦横比を保ちます。",
+  "360 x 360 (area, fast)": "360 x 360（面積・高速）",
+  "480 x 480 (area)": "480 x 480（面積）",
+  "576 x 576 (area)": "576 x 576（面積）",
+  "640 x 640 (area)": "640 x 640（面積）"
 }
