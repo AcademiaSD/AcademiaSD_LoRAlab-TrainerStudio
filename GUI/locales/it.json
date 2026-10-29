@@ -1241,5 +1241,11 @@
   "armV5 — MOSS-Image-Edit-HQ (recommended)": "armV5 — MOSS-Image-Edit-HQ (consigliato)",
   "armV4 — MOSS-Image-Edit-HQ": "armV4 — MOSS-Image-Edit-HQ",
   "An edit LoRA is trained on top of an edit base LoRA (armV5, armV4 or chinoll). Separate: your LoRA alone (small), loaded with a LoRA loader next to the edit base LoRA. Fused: both merged exactly into one LoRA (~500 MB, name ending in _FUSED), loaded alone. Either way, encode with Text Encode MOSS-Image Edit and the edit_format of the base.": "Un LoRA di modifica si addestra sopra un LoRA di modifica base (armV5, armV4 o chinoll). Separato: solo il tuo LoRA (piccolo), caricato con un caricatore di LoRA accanto al LoRA di modifica base. Unito: i due fusi in modo esatto in un solo LoRA (~500 MB, nome che termina con _FUSED), da caricare da solo. In entrambi i casi codifica con Text Encode MOSS-Image Edit e l'edit_format della base.",
-  "Invalid Edit Base {name}. Using armV5.": "Base di modifica {name} non valida. Uso armV5."
+  "Invalid Edit Base {name}. Using armV5.": "Base di modifica {name} non valida. Uso armV5.",
+  "Training = the sample's own ratio. Pick a ratio and Preview Size to force a fixed output. Dimensions snap to the model's 32 px grid.": "Addestramento = il rapporto dell'immagine di esempio. Scegli un rapporto e una Dimensione dell'anteprima per forzare un output fisso. Le dimensioni si allineano alla griglia di 32 px del modello.",
+  "Area of the preview. A preview larger than the training resolution needs more VRAM; on video models, especially with the 12 GB low-VRAM mode, it can run out of memory. Training keeps the sample size and ratio.": "Area dell'anteprima. Un'anteprima più grande della risoluzione di addestramento richiede più VRAM; sui modelli video, soprattutto con la modalità 12 GB a bassa VRAM, può esaurire la memoria. Addestramento mantiene dimensione e proporzioni dell'immagine di esempio.",
+  "360 x 360 (area, fast)": "360 x 360 (area, veloce)",
+  "480 x 480 (area)": "480 x 480 (area)",
+  "576 x 576 (area)": "576 x 576 (area)",
+  "640 x 640 (area)": "640 x 640 (area)"
 }

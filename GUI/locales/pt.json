@@ -1241,5 +1241,11 @@
   "armV5 — MOSS-Image-Edit-HQ (recommended)": "armV5 — MOSS-Image-Edit-HQ (recomendado)",
   "armV4 — MOSS-Image-Edit-HQ": "armV4 — MOSS-Image-Edit-HQ",
   "An edit LoRA is trained on top of an edit base LoRA (armV5, armV4 or chinoll). Separate: your LoRA alone (small), loaded with a LoRA loader next to the edit base LoRA. Fused: both merged exactly into one LoRA (~500 MB, name ending in _FUSED), loaded alone. Either way, encode with Text Encode MOSS-Image Edit and the edit_format of the base.": "Um LoRA de edição é treinado sobre um LoRA de edição base (armV5, armV4 ou chinoll). Separado: só o seu LoRA (pequeno), carregado com um carregador de LoRA junto ao LoRA de edição base. Fundido: os dois unidos de forma exata num só LoRA (~500 MB, nome terminado em _FUSED), carregado sozinho. Nos dois casos, codifique com Text Encode MOSS-Image Edit e o edit_format da base.",
-  "Invalid Edit Base {name}. Using armV5.": "Base de edição {name} inválida. Usando armV5."
+  "Invalid Edit Base {name}. Using armV5.": "Base de edição {name} inválida. Usando armV5.",
+  "Training = the sample's own ratio. Pick a ratio and Preview Size to force a fixed output. Dimensions snap to the model's 32 px grid.": "Treinamento = a proporção da imagem de exemplo. Escolha uma proporção e um Tamanho da preview para forçar uma saída fixa. As dimensões se alinham à grade de 32 px do modelo.",
+  "Area of the preview. A preview larger than the training resolution needs more VRAM; on video models, especially with the 12 GB low-VRAM mode, it can run out of memory. Training keeps the sample size and ratio.": "Área da preview. Uma preview maior que a resolução de treinamento precisa de mais VRAM; nos modelos de vídeo, sobretudo com o modo de 12 GB de pouca VRAM, a memória pode acabar. Treinamento mantém o tamanho e a proporção da amostra.",
+  "360 x 360 (area, fast)": "360 x 360 (área, rápida)",
+  "480 x 480 (area)": "480 x 480 (área)",
+  "576 x 576 (area)": "576 x 576 (área)",
+  "640 x 640 (area)": "640 x 640 (área)"
 }
