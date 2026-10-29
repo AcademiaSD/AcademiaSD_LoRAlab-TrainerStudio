@@ -6,6 +6,8 @@
     <title>AcademiaSD MiniMax-H3 LoRAlab</title>
     <script src="/i18n.js"></script>
     <script src="/notify.js"></script>
+    <script src="/preview_size.js"></script>
+    <script>if (window.PreviewSize) PreviewSize.configure({ step: 32, maxSide: 1024 });</script>
     <script src="/loss_chart.js"></script>
 
     <!-- Favicon de la pestaña del navegador -->
@@ -945,6 +947,32 @@
                         </select>
                     </div>
 
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label title="Training = the sample's own ratio. Pick a ratio and Preview Size to force a fixed output. Dimensions snap to the model's 32 px grid.">Aspect Ratio:</label>
+                            <select id="train_preview_aspect" onchange="syncVideoPreviewSize()">
+                                <option value="auto" selected>Training</option>
+                                <option value="1:1">1:1</option>
+                                <option value="2:3">2:3</option>
+                                <option value="3:4">3:4</option>
+                                <option value="4:3">4:3</option>
+                                <option value="16:9">16:9</option>
+                                <option value="9:16">9:16</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label title="Area of the preview. A preview larger than the training resolution needs more VRAM; on video models, especially with the 12 GB low-VRAM mode, it can run out of memory. Training keeps the sample size and ratio.">Preview Size:</label>
+                            <select id="train_preview_size" onchange="syncVideoPreviewSize()">
+                                <option value="0" selected>Training</option>
+                                <option value="360">360 x 360 (area, fast)</option>
+                                <option value="480">480 x 480 (area)</option>
+                                <option value="576">576 x 576 (area)</option>
+                                <option value="640">640 x 640 (area)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="preview_size_hint" style="font-size:0.72rem; color:var(--text-muted); margin-top:-2px; line-height:1.35;"></div>
+
                     <!-- Mismo guardado que Training: durante el entrenamiento se aplica en el siguiente paso -->
                     <button type="button" class="btn btn-secondary btn-tall btn-full" onclick="saveTrainSettings()" style="margin-top:12px;"
                             title="Saves the training settings, previews included. While training, they apply on the next step.">
@@ -1282,6 +1310,15 @@
             } else {
                 container.style.display = 'none';
             }
+        }
+
+        function syncVideoPreviewSize() {
+            const aspect = document.getElementById('train_preview_aspect');
+            const size = document.getElementById('train_preview_size');
+            if (aspect && size && aspect.value !== 'auto' && !(parseInt(size.value, 10) > 0)) {
+                size.value = '480';
+            }
+            syncPreviewSize();
         }
 
         async function updateSystemStats() {
@@ -1846,6 +1883,8 @@
                     if (t.preview_shift !== undefined) setPreviewShift(t.preview_shift);
                     if (t.preview_vae_device !== undefined) document.getElementById('train_preview_vae_device').value = t.preview_vae_device;
                     if (t.preview_seed !== undefined) document.getElementById('train_preview_seed').value = t.preview_seed;
+                    PreviewSize.apply(t);
+                    syncVideoPreviewSize();
 
                     if (t.vram_budget_gb !== undefined) document.getElementById('train_vram_budget_gb').value = t.vram_budget_gb;
                     if (t.ram_limit_gb !== undefined) document.getElementById('train_ram_limit_gb').value = t.ram_limit_gb;
@@ -1953,6 +1992,8 @@
                     if (data.preview_shift !== undefined) setPreviewShift(data.preview_shift);
                     if (data.preview_vae_device !== undefined) document.getElementById('train_preview_vae_device').value = data.preview_vae_device;
                     if (data.preview_seed !== undefined) document.getElementById('train_preview_seed').value = data.preview_seed;
+                    PreviewSize.apply(data);
+                    syncVideoPreviewSize();
 
                     if (data.vram_budget_gb !== undefined) document.getElementById('train_vram_budget_gb').value = data.vram_budget_gb;
                     if (data.ram_limit_gb !== undefined) document.getElementById('train_ram_limit_gb').value = data.ram_limit_gb;
@@ -2092,7 +2133,8 @@
                     preview_caption_mode: 'train_preview_caption_mode', preview_every: 'train_preview_every',
                     preview_steps: 'train_preview_steps', preview_cfg: 'train_preview_cfg',
                     preview_shift: 'train_preview_shift', preview_vae_device: 'train_preview_vae_device',
-                    preview_seed: 'train_preview_seed', debug_training: 'train_debug_training' },
+                    preview_seed: 'train_preview_seed', debug_training: 'train_debug_training',
+                    preview_aspect_ratio: 'train_preview_aspect', preview_size: 'train_preview_size' },
             resume: { trigger_word: 'trigger_word', total_steps: 'train_total_steps',
                       lr_scheduler: 'train_lr_scheduler', warmup_steps: 'train_warmup_steps',
                       lr_cycles: 'train_lr_cycles', lora_alpha: 'train_lora_alpha', batch_size: 'train_batch_size',
@@ -2137,6 +2179,7 @@
                 preview_shift: parseFloat(document.getElementById('train_preview_shift').value) || 6.0,
                 preview_vae_device: document.getElementById('train_preview_vae_device').value,
                 preview_seed: parseInt(document.getElementById('train_preview_seed').value),
+                ...PreviewSize.values(),
 
                 vram_budget_gb: parseFloat(document.getElementById('train_vram_budget_gb').value),
                 ram_limit_gb: parseFloat(document.getElementById('train_ram_limit_gb').value) || 0,
