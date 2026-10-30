@@ -78,7 +78,9 @@ def _http(port, path, payload=None, timeout=3):
     """GET (payload None) o POST JSON a un servidor local. Devuelve (código, json) o (None, None)."""
     url = f"http://127.0.0.1:{port}{path}"
     data = None if payload is None else json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"} if data else {})
+    # X-LoRAlab-Queue: el servidor de un trabajo solo arranca cuando se lo pide la cola (queue_link.py).
+    headers = {"X-LoRAlab-Queue": "1", **({"Content-Type": "application/json"} if data else {})}
+    req = urllib.request.Request(url, data=data, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return resp.status, json.loads(resp.read().decode("utf-8", "replace") or "{}")
