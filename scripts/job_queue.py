@@ -535,5 +535,24 @@ def register(app, load_trainers):
         jq.clear_history()
         return reply(None)
 
+    @app.route("/queue")
+    def queue_page():
+        from flask import send_from_directory
+        return send_from_directory(str(BASE_DIR / "GUI"), "queue.html")
+
+    @app.route("/api/queue/<jid>/metrics")
+    def queue_metrics(jid):
+        """La curva de loss del trabajo en curso, pedida a su entrenador (otro puerto) desde aquí."""
+        with jq._lock:
+            job = jq._job(jid)
+            port = job and job.get("port")
+        if not port:
+            return jsonify({"points": [], "run": None})
+        code, res = _http(port, f"/api/metrics?since={request.args.get('since', 0, type=int)}", timeout=4)
+        if code != 200 or not res:
+            return jsonify({"points": [], "run": None})
+        return jsonify({"run": res.get("run"), "points": [{"s": p["s"], "l": p["l"], "dt": p.get("dt")}
+                                                          for p in res.get("points", [])]})
+
     jq.start()
     return jq
