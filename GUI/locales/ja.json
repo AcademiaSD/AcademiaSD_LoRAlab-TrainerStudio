@@ -1303,6 +1303,8 @@
   "started from its trainer": "トレーナーから開始",
   "Pausing…": "一時停止中…",
   "Removing…": "削除中…",
+  "It is not answering the stop: close it now? What it trained since its last checkpoint is lost.": "停止に応答していません。今すぐ閉じますか?最後のチェックポイント以降の学習は失われます。",
+  "Close it now": "今すぐ閉じる",
   "Starting…": "起動中…",
   "Move up": "上へ",
   "Move down": "下へ",
@@ -1353,5 +1355,17 @@
   "Opens this same trainer on another port with its own copy of the settings, to prepare another training and add it to the queue without touching the one in progress.": "同じトレーナーを設定のコピー付きで別のポートで開き、実行中の学習に影響を与えずに別の学習を準備してキューに追加できます。",
   "Could not open it.": "開けませんでした。",
   "Opening a new {trainer} on port {port}...": "新しい {trainer} をポート {port} で開いています...",
-  "It did not start in time. Open it at {url}.": "時間内に起動しませんでした。{url} で開いてください。"
+  "It did not start in time. Open it at {url}.": "時間内に起動しませんでした。{url} で開いてください。",
+  "Not enough GPU memory (VRAM): lower the resolution, batch or rank, or close other programs that use the GPU.": "GPUメモリ(VRAM)が足りません。解像度・バッチ・rankを下げるか、GPUを使う他のプログラムを閉じてください。",
+  "The pre-cache of this project was not found: run its Pre-Cache first, or put a Pre-Cache job before this one, and try again.": "このプロジェクトのプリキャッシュが見つかりません。先にプリキャッシュを実行するか、このジョブの前にプリキャッシュのジョブを置いてから、もう一度試してください。",
+  "The pre-cache is outdated or does not match these settings: run the Pre-Cache again.": "プリキャッシュが古いか、この設定と合っていません。プリキャッシュをやり直してください。",
+  "The dataset folder was not found: check the dataset path.": "データセットのフォルダが見つかりません。データセットのパスを確認してください。",
+  "The dataset has no images: add them to its folder.": "データセットに画像がありません。フォルダに追加してください。",
+  "This is an edit LoRA but the dataset has no before/after pairs (name_before / name_after).": "編集LoRAですが、データセットに編集前/編集後のペア(name_before / name_after)がありません。",
+  "Some dataset files could not be processed: review them in the Dataset Manager.": "データセットの一部のファイルを処理できませんでした。Dataset Managerで確認してください。",
+  "The model was not found or is incomplete: download it again or check its path.": "モデルが見つからないか不完全です。再ダウンロードするか、パスを確認してください。",
+  "The GPU (CUDA) is not available.": "GPU(CUDA)が使えません。",
+  "It was stopped from outside: its console was closed or Ctrl+C was pressed.": "外部から停止されました。コンソールが閉じられたか、Ctrl+Cが押されました。",
+  "It stopped with an error:": "エラーで停止しました:",
+  "It stopped with an error. Open its trainer to see the console.": "エラーで停止しました。トレーナーを開いてコンソールを確認してください。"
 }

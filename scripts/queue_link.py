@@ -143,7 +143,7 @@ def register(app, trainer_id, runtime, train_config, precache_config):
         st = queue_state()
         if st is None:
             return jsonify({"launcher": False, "job_id": JOB_ID, "draft": DRAFT})
-        pending = st.get("pending", [])
+        pending = [j for j in st.get("pending", []) if j.get("state") != "failed"]
         return jsonify({"launcher": True, "job_id": JOB_ID, "draft": DRAFT, "job": own_job(st), "port": my_port,
                         "running": st.get("running"), "queued": len(pending)})
 

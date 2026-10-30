@@ -23,6 +23,7 @@ Un trabajo externo detenido a medias pasa a stopped: se reanuda desde su entrena
 """
 import json
 import os
+import re
 import shutil
 import signal
 import socket
@@ -46,13 +47,88 @@ QUEUE_FILE = SETTINGS_DIR / "queue.json"
 JOBS_DIR = SETTINGS_DIR / "queue"
 
 KINDS = ("precache", "train")
-ACTIVE = ("queued", "running", "paused")
+# Un fallido se queda entre los pendientes, con el motivo, hasta que se reintenta o se quita.
+WAITING = ("queued", "paused", "failed")
+ACTIVE = ("running",) + WAITING
 HISTORY_MAX = 50
 POLL = 2.0
 SAVE_EVERY = 10.0        # mientras entrena, el progreso se guarda en disco como mucho cada 10 s
 START_TIMEOUT = 120      # segundos que se espera a que el servidor de un trabajo conteste
 LOST_TICKS = 5           # sondeos sin respuesta antes de dar el trabajo por interrumpido
 PORT_SPAN = 100          # puertos para trabajos: trainer_port + 1 ... + PORT_SPAN
+# Si un trabajo no atiende la parada (colgado en código nativo, donde CTRL_BREAK no llega), se cierra a la
+# fuerza pasados estos segundos. Pausar da más margen: guardar el checkpoint puede tardar.
+FORCE_AFTER = {"remove": 30, "pause": 180}
+LOCALES_DIR = BASE_DIR / "GUI" / "locales"
+
+# Por qué falló un trabajo, dicho con palabras: (causa que se muestra, mensajes de los scripts que la
+# delatan). Los scripts escriben esos mensajes traducidos, así que se buscan en todos los idiomas; "re:"
+# es una expresión regular tal cual (excepciones de Python, siempre en inglés). Va la primera que encaja.
+CAUSES = [
+    ("Not enough GPU memory (VRAM): lower the resolution, batch or rank, or close other programs that use the GPU.",
+     ["re:out of memory|OutOfMemoryError|CUBLAS_STATUS_ALLOC_FAILED"]),
+    ("The pre-cache of this project was not found: run its Pre-Cache first, or put a Pre-Cache job before this one, and try again.",
+     ["Please run Pre-Cache first!", "Cache directory '{path}' is empty or does not exist.",
+      "No latents in '{path}': run Pre-Cache first!", "Checkpoint not found: {path}. Run Pre-Cache.",
+      "Cache directory '{path}' has not been pre-cached "]),
+    ("The pre-cache is outdated or does not match these settings: run the Pre-Cache again.",
+     ["Cache format {v} is older than this trainer (v1). Re-run Pre-Cache.",
+      "Unknown edit base in the cache: {name}. Run Pre-Cache again.",
+      "The cache mixes edit pairs and single images: run Pre-Cache again."]),
+    ("The dataset folder was not found: check the dataset path.",
+     ["Dataset folder does not exist: {path}"]),
+    ("The dataset has no images: add them to its folder.",
+     ["No images found in '{path}'. Please add images.",
+      "No audio clips found in '{path}'. Run 0_prepare_yue2.py first."]),
+    ("This is an edit LoRA but the dataset has no before/after pairs (name_before / name_after).",
+     ["Edit LoRA but there are no name_before / name_after pairs in '{path}'.",
+      "No pairs found. Name them name_before.ext and name_after.ext."]),
+    ("Some dataset files could not be processed: review them in the Dataset Manager.",
+     ["Review them in the Dataset Manager before pre-caching."]),
+    ("The model was not found or is incomplete: download it again or check its path.",
+     ["Custom checkpoint not found: {path}", "NF4 cache incomplete: {names}",
+      "index.json not found in the NF4 cache: {path}"]),
+    ("The GPU (CUDA) is not available.",
+     ["CUDA is required for YuE2 training.", "CUDA is not available and force_gpu is on: this phase needs the GPU.",
+      "re:Torch not compiled with CUDA|no CUDA GPUs are available"]),
+]
+STOPPED_OUTSIDE = (3221225786, -1073741510, 130, -2)   # consola cerrada o Ctrl+C (Windows / Linux)
+_cause_patterns = None
+
+
+def _patterns():
+    """[(causa, regex)] con cada mensaje en inglés y en todas sus traducciones ({path} -> lo que sea)."""
+    global _cause_patterns
+    if _cause_patterns is None:
+        locales = [_read_json(p) for p in sorted(LOCALES_DIR.glob("*.json"))]
+        _cause_patterns = []
+        for cause, messages in CAUSES:
+            for msg in messages:
+                if msg.startswith("re:"):
+                    _cause_patterns.append((cause, re.compile(msg[3:], re.I)))
+                    continue
+                for text in {msg, *(loc[msg] for loc in locales if isinstance(loc.get(msg), str))}:
+                    body = re.sub(r"\\\{\w*\\\}", ".*?", re.escape(text.strip()))
+                    _cause_patterns.append((cause, re.compile(body)))
+    return _cause_patterns
+
+
+def failure_reason(kind, code, errors):
+    """(causa, detalle) de un trabajo que acabó con error: la causa es una frase traducible y el detalle,
+    la línea de su consola que la explica. Nunca "código N": el usuario no tiene por qué saber qué es."""
+    detail = " ".join(errors[-2:])
+    for line in reversed(errors):
+        for cause, rx in _patterns():
+            if rx.search(line):
+                return cause, line
+    if kind == "train" and code == 2:
+        # Convenio de los scripts de entrenamiento: salen con 2 cuando falta la pre-caché.
+        return CAUSES[1][0], detail
+    if code in STOPPED_OUTSIDE:
+        return "It was stopped from outside: its console was closed or Ctrl+C was pressed.", detail
+    if detail:
+        return "It stopped with an error:", detail
+    return "It stopped with an error. Open its trainer to see the console.", ""
 
 
 def _settings_names(trainer_id):
@@ -164,7 +240,7 @@ class JobQueue:
         """La cola para la interfaz: el trabajo en curso, los pendientes en orden y el historial."""
         with self._lock:
             jobs = self.data["jobs"]
-            pending = [j for j in jobs if j["state"] in ("queued", "paused")]
+            pending = [j for j in jobs if j["state"] in WAITING]
             history = sorted((j for j in jobs if j["state"] not in ACTIVE),
                              key=lambda j: j.get("finished") or 0, reverse=True)
             return {"paused": self.data["paused"], "stop_on_failure": self.data["stop_on_failure"],
@@ -188,9 +264,12 @@ class JobQueue:
         train, pre = copies["train"], copies["pre_cache"]
         project = (train.get("project_name") or pre.get("project_name") or "").strip()
         with self._lock:
-            for j in self.data["jobs"]:
+            for j in list(self.data["jobs"]):
                 if (j["state"] in ACTIVE and j["trainer"] == trainer_id and j["project"] == project
                         and j["kind"] == kind):
+                    if j["state"] == "failed":
+                        self._drop(j)             # el nuevo, ya corregido, sustituye al que falló
+                        continue
                     return None, t("{trainer} / {project} is already in the queue.",
                                    trainer=trainer["name"], project=project or "-")
             jid = time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:6]
@@ -238,7 +317,7 @@ class JobQueue:
             if job["state"] == "queued":
                 job["state"] = "paused"
             elif job["state"] == "running":
-                job["requested"] = "pause"
+                job.update(requested="pause", requested_at=time.time())
                 port = job["port"]
             self._save()
         if job["state"] == "running":
@@ -265,7 +344,12 @@ class JobQueue:
             if job is None:
                 return t("Job not found.")
             if job["state"] == "running":
-                job["requested"] = "remove"
+                if job.get("requested") == "remove":
+                    # Quitar otra vez un trabajo que no atiende la parada: se cierra ya.
+                    job["requested_at"] = 0
+                    self._save()
+                    return None
+                job.update(requested="remove", requested_at=time.time())
                 self._save()
                 port = job["port"]
             else:
@@ -279,13 +363,13 @@ class JobQueue:
         """Coloca un pendiente en la posición index de la lista de pendientes (0 = el siguiente)."""
         with self._lock:
             job = self._job(jid)
-            if job is None or job["state"] not in ("queued", "paused"):
+            if job is None or job["state"] not in WAITING:
                 return t("Job not found.")
-            pending = [j for j in self.data["jobs"] if j["state"] in ("queued", "paused")]
+            pending = [j for j in self.data["jobs"] if j["state"] in WAITING]
             pending.remove(job)
             index = max(0, min(int(index), len(pending)))
             pending.insert(index, job)
-            others = [j for j in self.data["jobs"] if j["state"] not in ("queued", "paused")]
+            others = [j for j in self.data["jobs"] if j["state"] not in WAITING]
             self.data["jobs"] = others + pending
             self._save()
             return None
@@ -305,6 +389,7 @@ class JobQueue:
             self._save()
 
     def _drop(self, job):
+        self._stop_server(job)                # su servidor, si sigue abierto, ya no lo recogería nadie
         if job in self.data["jobs"]:
             self.data["jobs"].remove(job)
         shutil.rmtree(JOBS_DIR / job["id"], ignore_errors=True)
@@ -421,6 +506,11 @@ class JobQueue:
                 self._finish(job, "failed", note=(res or {}).get("error") or t("The trainer did not start the job."))
             return
         if st.get("running"):
+            if requested in FORCE_AFTER and time.time() - (job.get("requested_at") or 0) >= FORCE_AFTER[requested]:
+                # No ha atendido la parada: se cierra su proceso de entrenamiento (no su servidor) y el
+                # siguiente sondeo lo concluye como pausado o quitado.
+                _kill_tree(st.get("pid"))
+                return
             with self._lock:
                 if time.time() - self._saved_at >= SAVE_EVERY:
                     self._save()
@@ -428,7 +518,7 @@ class JobQueue:
         last = st.get("last")
         if last is None:
             return                            # el proceso acaba de salir: el código llega en el siguiente sondeo
-        self._conclude(job, int(last.get("code") or 0), st.get("progress"))
+        self._conclude(job, int(last.get("code") or 0), st.get("progress"), list(last.get("errors") or []))
 
     def _end_without_run(self, job, requested):
         with self._lock:
@@ -439,7 +529,7 @@ class JobQueue:
                 self._finish(job, "paused")
         self._stop_server(job)
 
-    def _conclude(self, job, code, progress):
+    def _conclude(self, job, code, progress, errors=()):
         requested = job.get("requested")
         if requested == "remove":
             with self._lock:
@@ -449,7 +539,8 @@ class JobQueue:
         if requested == "pause":
             self._finish(job, "paused", code=code)
         elif code != 0:
-            self._finish(job, "failed", code=code, note=t("Exited with code {code}.", code=code))
+            cause, detail = failure_reason(job["kind"], code, list(errors))
+            self._finish(job, "failed", code=code, note=cause, detail=detail)
             if self.data["stop_on_failure"]:
                 self.set_options(paused=True)
         elif job["kind"] == "train" and progress and progress["step"] < progress["total"]:
@@ -458,17 +549,18 @@ class JobQueue:
         else:
             self._finish(job, "done", code=code)
 
-    def _finish(self, job, state, code=None, note=""):
+    def _finish(self, job, state, code=None, note="", detail=""):
         with self._lock:
-            if state == "paused" and job["external"]:
+            if state in ("paused", "failed") and job["external"]:
                 if (JOBS_DIR / job["id"] / _settings_names(job["trainer"])["train"]).exists():
                     # Con su copia de ajustes pasa a ser un trabajo más de la cola: pausado, en su sitio, y
                     # al continuar se relanza en su propio servidor y reanuda desde el checkpoint.
                     job.update(external=False, port=None, pid=None)
-                else:
+                elif state == "paused":
                     state = "stopped"         # sin copia (versión anterior): se reanuda desde su entrenador
             job.update(state=state, finished=None if state == "paused" else time.time(), code=code,
-                       requested=None, phase=None, note=note or job.get("note", ""))
+                       requested=None, requested_at=None, phase=None, note=note or job.get("note", ""),
+                       detail=detail)
             history = sorted((j for j in self.data["jobs"] if j["state"] not in ACTIVE),
                              key=lambda j: j.get("finished") or 0)
             while len(history) > HISTORY_MAX:

@@ -1303,6 +1303,8 @@
   "started from its trainer": "lancé depuis son entraîneur",
   "Pausing…": "Mise en pause…",
   "Removing…": "Retrait…",
+  "It is not answering the stop: close it now? What it trained since its last checkpoint is lost.": "Il ne répond pas à l'arrêt : le fermer maintenant ? Ce qui a été entraîné depuis son dernier checkpoint est perdu.",
+  "Close it now": "Le fermer maintenant",
   "Starting…": "Démarrage…",
   "Move up": "Monter",
   "Move down": "Descendre",
@@ -1353,5 +1355,17 @@
   "Opens this same trainer on another port with its own copy of the settings, to prepare another training and add it to the queue without touching the one in progress.": "Ouvre ce même entraîneur sur un autre port avec sa propre copie des réglages, pour préparer un autre entraînement et l'ajouter à la file sans toucher à celui en cours.",
   "Could not open it.": "Impossible de l'ouvrir.",
   "Opening a new {trainer} on port {port}...": "Ouverture d'un nouveau {trainer} sur le port {port}...",
-  "It did not start in time. Open it at {url}.": "Il n'a pas démarré à temps. Ouvrez-le sur {url}."
+  "It did not start in time. Open it at {url}.": "Il n'a pas démarré à temps. Ouvrez-le sur {url}.",
+  "Not enough GPU memory (VRAM): lower the resolution, batch or rank, or close other programs that use the GPU.": "Pas assez de mémoire GPU (VRAM) : baisse la résolution, le batch ou le rank, ou ferme les autres programmes qui utilisent le GPU.",
+  "The pre-cache of this project was not found: run its Pre-Cache first, or put a Pre-Cache job before this one, and try again.": "Le pré-cache de ce projet est introuvable : lance d'abord son Pré-cache, ou place un job de Pré-cache avant celui-ci, puis réessaie.",
+  "The pre-cache is outdated or does not match these settings: run the Pre-Cache again.": "Le pré-cache est obsolète ou ne correspond pas à ces réglages : relance le Pré-cache.",
+  "The dataset folder was not found: check the dataset path.": "Le dossier du dataset est introuvable : vérifie le chemin du dataset.",
+  "The dataset has no images: add them to its folder.": "Le dataset n'a pas d'images : ajoute-les à son dossier.",
+  "This is an edit LoRA but the dataset has no before/after pairs (name_before / name_after).": "C'est un LoRA d'édition, mais le dataset n'a pas de paires avant/après (nom_before / nom_after).",
+  "Some dataset files could not be processed: review them in the Dataset Manager.": "Certains fichiers du dataset n'ont pas pu être traités : vérifie-les dans le Dataset Manager.",
+  "The model was not found or is incomplete: download it again or check its path.": "Le modèle est introuvable ou incomplet : télécharge-le à nouveau ou vérifie son chemin.",
+  "The GPU (CUDA) is not available.": "Le GPU (CUDA) n'est pas disponible.",
+  "It was stopped from outside: its console was closed or Ctrl+C was pressed.": "Arrêté de l'extérieur : sa console a été fermée ou Ctrl+C a été pressé.",
+  "It stopped with an error:": "Arrêté avec une erreur :",
+  "It stopped with an error. Open its trainer to see the console.": "Arrêté avec une erreur. Ouvre son entraîneur pour voir la console."
 }

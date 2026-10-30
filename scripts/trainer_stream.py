@@ -33,6 +33,19 @@ PING_SECONDS = 15.0     # keep-alive del SSE a través de proxies
 # Progreso de la consola: "<Paso> 120/1000 [██░░]" al entrenar, "[12/161] ..." en la pre-caché.
 STEP_RE = re.compile(r"(\d+)/(\d+) \[")
 ITEM_RE = re.compile(r"^\[(\d+)/(\d+)\]")
+# Líneas que explican un fallo: los avisos "[!] ..." de los scripts y la última línea de un traceback.
+ERROR_RE = re.compile(r"^\s*\[!\]|(?:ERROR|Error|Exception)")
+
+
+def _error_lines(lines):
+    """Las (hasta seis) últimas líneas de error de las 120 finales de la consola: la cola las usa para
+    decir con palabras por qué falló (job_queue.failure_reason)."""
+    found = []
+    for _, text, _ in list(lines)[-120:]:
+        text = text.strip()
+        if text and ERROR_RE.search(text) and not text.startswith("Traceback (most recent"):
+            found.append(re.sub(r"^\[!\]\s*(?:ERROR:\s*)?", "", text)[:240])
+    return found[-6:]
 
 
 def _sse(kind, payload):
@@ -62,7 +75,7 @@ class TrainerStream:
         with self._lock:
             proc, script, progress, done = self._proc, self._script, self._progress, self._done
             # last: cómo acabó la última ejecución (la cola lo usa para saber si terminó, falló o se paró).
-            last = {"script": done[1], "code": done[2]} if done is not None else None
+            last = {"script": done[1], "code": done[2], "errors": done[3]} if done is not None else None
             if proc is None or proc.poll() is not None:
                 return {"running": False, "script": None, "pid": None, "progress": progress, "last": last}
             return {"running": True, "script": script, "pid": proc.pid, "progress": progress, "last": last}
@@ -166,7 +179,7 @@ class TrainerStream:
     def _emit_done(self, script_name, code):
         with self._lock:
             self._seq += 1
-            self._done = (self._seq, script_name, code)
+            self._done = (self._seq, script_name, code, _error_lines(self._lines) if code else [])
             subs = list(self._subs)
             done = self._done
         for q in subs:

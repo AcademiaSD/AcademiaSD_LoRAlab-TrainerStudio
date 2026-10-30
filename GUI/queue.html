@@ -128,6 +128,10 @@
         .row .title .proj { color: var(--text-muted); font-weight: 600; }
         .row .sub { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px; font-size: 0.75rem; color: var(--text-muted); }
         .row .note { color: #fcd34d; }
+        .row.failed { border-color: rgba(239, 68, 68, 0.45); }
+        .row.failed .note { color: #fca5a5; font-weight: 600; }
+        .row .detail { flex-basis: 100%; color: #94a3b8; font-family: Consolas, monospace; font-size: 0.7rem;
+                       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .state { font-size: 0.72rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
         .state.queued { background: rgba(99, 102, 241, 0.16); color: #c7d2fe; }
         .state.paused { background: rgba(245, 158, 11, 0.16); color: #fcd34d; }
@@ -381,11 +385,15 @@
     }
 
     function rowActions(job, i, n) {
-        const paused = job.state === 'paused';
+        const paused = job.state === 'paused', failed = job.state === 'failed';
+        // Fallido: ↻ lo vuelve a poner en cola (al final, para que antes pueda ir, por ejemplo, su pre-caché).
+        const main = failed
+            ? (job.external ? '' : `<button type="button" class="ib" title="${esc(t('Try again'))}" onclick="resumeJob('${job.id}')">↻</button>`)
+            : `<button type="button" class="ib" title="${esc(paused ? t('Resume') : t('Pause'))}" onclick="${paused ? 'resumeJob' : 'pauseJobId'}('${job.id}')">${paused ? '▶' : '⏸'}</button>`;
         return `<div class="icons">
             <button type="button" class="ib" title="${esc(t('Move up'))}" ${i === 0 ? 'disabled' : ''} onclick="moveJob('${job.id}', ${i - 1})">▲</button>
             <button type="button" class="ib" title="${esc(t('Move down'))}" ${i === n - 1 ? 'disabled' : ''} onclick="moveJob('${job.id}', ${i + 1})">▼</button>
-            <button type="button" class="ib" title="${esc(paused ? t('Resume') : t('Pause'))}" onclick="${paused ? 'resumeJob' : 'pauseJobId'}('${job.id}')">${paused ? '▶' : '⏸'}</button>
+            ${main}
             <button type="button" class="ib del" title="${esc(t('Remove'))}" onclick="removeJobId('${job.id}')">✕</button>
         </div>`;
     }
@@ -399,7 +407,7 @@
         }
         box.innerHTML = list.map((job, i) => {
             const total = job.progress && job.progress.total ? `${job.progress.total} ${t('steps')}` : '';
-            return `<div class="row ${job.state === 'paused' ? 'paused' : ''}" draggable="true" data-id="${job.id}" data-index="${i}">
+            return `<div class="row ${job.state === 'paused' || job.state === 'failed' ? job.state : ''}" draggable="true" data-id="${job.id}" data-index="${i}">
                 <span class="handle" title="${esc(t('Drag to change the order'))}">⋮⋮</span>
                 <span class="pos">${i + 1}</span>
                 <img src="${cover(job)}" alt="">
@@ -407,7 +415,8 @@
                     <div class="title">${esc(job.trainer_name)} <span class="proj">· ${esc(job.project || '-')}</span></div>
                     <div class="sub"><span class="chip kind-${job.kind}">${esc(KIND[job.kind] ? KIND[job.kind]() : job.kind)}</span>
                         ${total ? `<span>${esc(total)}</span>` : ''}
-                        ${job.note ? `<span class="note">${esc(t(job.note))}</span>` : ''}</div>
+                        ${job.note ? `<span class="note">${esc(t(job.note))}</span>` : ''}
+                        ${job.detail ? `<span class="detail" title="${esc(job.detail)}">${esc(job.detail)}</span>` : ''}</div>
                 </div>
                 <span class="state ${job.state}">${esc(STATE[job.state] ? STATE[job.state]() : job.state)}</span>
                 ${rowActions(job, i, list.length)}
@@ -435,7 +444,8 @@
                         ${p.total ? `<span>${p.step}/${p.total}</span>` : ''}
                         ${dur ? `<span>⏱ ${esc(dur)}</span>` : ''}
                         <span>${esc(when(job.finished))}</span>
-                        ${job.note ? `<span class="note">${esc(t(job.note))}</span>` : ''}</div>
+                        ${job.note ? `<span class="note">${esc(t(job.note))}</span>` : ''}
+                        ${job.detail ? `<span class="detail" title="${esc(job.detail)}">${esc(job.detail)}</span>` : ''}</div>
                 </div>
                 <span class="state ${job.state}">${esc(STATE[job.state] ? STATE[job.state]() : job.state)}</span>
                 <div class="icons">
@@ -518,9 +528,11 @@
     }
     async function removeJob(job) {
         if (!job) return;
+        const forcing = job.requested === 'remove';
         const ok = await ask(t('Remove {name}?', { name: `${job.trainer_name} · ${job.project || '-'}` }),
-            t('It stops saving a checkpoint and leaves the queue. Its LoRAs, cache and previews are kept.'),
-            t('Remove'));
+            forcing ? t('It is not answering the stop: close it now? What it trained since its last checkpoint is lost.')
+                    : t('It stops saving a checkpoint and leaves the queue. Its LoRAs, cache and previews are kept.'),
+            forcing ? t('Close it now') : t('Remove'));
         if (ok) {
             const d = await api(`/api/queue/${job.id}/remove`, {});
             if (d) { state = d; render(); }

@@ -528,14 +528,15 @@ def status():
     q = QUEUE.snapshot()
     job = q["running"]
     by_trainer = {}
-    for j in q["pending"]:
+    waiting = [j for j in q["pending"] if j["state"] != "failed"]   # un fallido no arranca solo
+    for j in waiting:
         by_trainer[j["trainer"]] = by_trainer.get(j["trainer"], 0) + 1
     return jsonify({"trainer": running, "active": active_running() if running else None,
                     "url": trainer_url(),
                     "instances": [{"id": i["id"], "port": i["port"]} for i in extra_instances()],
                     "queue": {"running": {k: job.get(k) for k in ("id", "trainer", "trainer_name", "project", "kind",
                                                                   "progress", "port")} if job else None,
-                              "pending": len(q["pending"]), "by_trainer": by_trainer, "paused": q["paused"]}})
+                              "pending": len(waiting), "by_trainer": by_trainer, "paused": q["paused"]}})
 
 
 # ------------------------------------------------------------------ pausar todo y salir
