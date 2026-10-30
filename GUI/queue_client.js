@@ -2,7 +2,8 @@
 // The job queue in every trainer page.
 //
 // - Botón «Cola» junto a «Back»: cuántos trabajos esperan y un punto que late si hay uno en curso.
-//   Lleva a la página de la cola del lanzador. Sin lanzador no aparece.
+//   Lleva a la página de la cola del lanzador en la misma pestaña (sin ir abriendo pestañas nuevas;
+//   «Back» vuelve). Sin lanzador no aparece.
 // - Envuelve startScript(): con la GPU ocupada por otro trabajo, pre-caché y entrenamiento preguntan
 //   «¿Añadir a la cola?» en vez de arrancar; los subtítulos avisan de que compartirán la GPU.
 // - En un entrenador abierto por la cola para un trabajo, un aviso arriba lo dice: lo que se guarde
@@ -39,7 +40,7 @@
 
     function openQueue() {
         const url = queueUrl();
-        if (url) window.open(url, '_blank');
+        if (url) window.location.href = url;
     }
 
     async function post(url, body) {
@@ -83,7 +84,7 @@
             banner.innerHTML = `<span>▶ ${tr('Queue job')}: <b>${escapeHtml(job.project || '-')}</b> · ${escapeHtml(KIND[job.kind] ? KIND[job.kind]() : '')}</span>`
                 + (state ? `<span class="qc-state">${escapeHtml(state)}</span>` : '')
                 + `<span class="qc-note">${escapeHtml(tr('What you save here applies only to this job, not to your trainer settings. Pause or resume it from the queue.'))}</span>`
-                + (queueUrl() ? `<a href="${queueUrl()}" target="_blank">${escapeHtml(tr('Open the queue'))}</a>` : '');
+                + (queueUrl() ? `<a href="${queueUrl()}">${escapeHtml(tr('Open the queue'))}</a>` : '');
         }
     }
 
