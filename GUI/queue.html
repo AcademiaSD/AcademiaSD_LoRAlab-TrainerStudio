@@ -237,7 +237,7 @@
     const metrics = {};          // id -> {run, points[]}
     let lastRunningId = null;
 
-    const KIND = { train: () => t('Training'), precache: () => t('Pre-cache') };
+    const KIND = { train: () => t('LoRA training'), precache: () => t('Pre-cache') };
     const STATE = {
         queued: () => t('Waiting'), paused: () => t('Paused'), done: () => t('Done'),
         failed: () => t('Failed'), stopped: () => t('Stopped')
@@ -331,8 +331,9 @@
         const eta = sit && p.total ? (p.total - p.step) * sit : null;
         const elapsed = job.started ? Date.now() / 1000 - job.started : null;
         const url = trainerUrl(job);
-        if (lastRunningId !== job.id) {
-            lastRunningId = job.id;
+        // Se reconstruye al cambiar de trabajo o de idioma; el resto de vueltas solo cambia los números.
+        if (lastRunningId !== job.id + '|' + I18N.lang) {
+            lastRunningId = job.id + '|' + I18N.lang;
             hero.innerHTML = `
                 <div class="hero-grid">
                     <img class="hero-cover" src="${cover(job)}" alt="">

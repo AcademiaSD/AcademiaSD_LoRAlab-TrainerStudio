@@ -494,7 +494,7 @@
                 if (training) {
                     const p = job.progress || {};
                     const pct = p.total ? Math.round(100 * p.step / p.total) : 0;
-                    box.querySelector('.q-what').textContent = (job.kind === 'precache' ? t('Pre-caching') : t('Training'))
+                    box.querySelector('.q-what').textContent = (job.kind === 'precache' ? t('Pre-caching') : t('LoRA training'))
                         + (job.project ? ` · ${job.project}` : '');
                     box.querySelector('.q-pct').textContent = p.total ? `${p.step}/${p.total} · ${pct}%` : '…';
                     box.querySelector('.q-bar i').style.width = pct + '%';
@@ -516,7 +516,7 @@
             if (job) {
                 const p = job.progress || {};
                 const pct = p.total ? ` · ${Math.round(100 * p.step / p.total)}%` : '';
-                text.innerHTML = `${escapeHtml(job.kind === 'precache' ? t('Pre-caching') : t('Training'))} <b>${escapeHtml(job.trainer_name || '')}</b>`
+                text.innerHTML = `${escapeHtml(job.kind === 'precache' ? t('Pre-caching') : t('LoRA training'))} <b>${escapeHtml(job.trainer_name || '')}</b>`
                     + (job.project ? ` · ${escapeHtml(job.project)}` : '') + pct;
             } else {
                 text.textContent = q.paused ? t('Paused') : t('Nothing training');
