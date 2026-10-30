@@ -121,6 +121,9 @@ DEFAULTS = {
 
     # Preview.
     "preview_every": 0,
+    "preview_size": 0,
+    "preview_width": 0,
+    "preview_height": 0,
     "preview_steps": 30,
     "preview_cfg": 3.0,
     "preview_sampler": "euler",
@@ -223,6 +226,9 @@ CAST_FROZEN_BF16 = _cfg_bool("cast_frozen_bf16", DEFAULTS["cast_frozen_bf16"])
 USE_AUDIO_LOSS = _cfg_bool("use_audio_loss", DEFAULTS["use_audio_loss"])
 
 PREVIEW_EVERY = int(cfg_get("preview_every", DEFAULTS["preview_every"]))
+PREVIEW_SIZE = int(cfg_get("preview_size", DEFAULTS["preview_size"]) or 0)
+PREVIEW_WIDTH = int(cfg_get("preview_width", DEFAULTS["preview_width"]) or 0)
+PREVIEW_HEIGHT = int(cfg_get("preview_height", DEFAULTS["preview_height"]) or 0)
 PREVIEW_STEPS = int(cfg_get("preview_steps", DEFAULTS["preview_steps"]))
 PREVIEW_CFG = float(cfg_get("preview_cfg", DEFAULTS["preview_cfg"]))
 PREVIEW_SAMPLER = str(cfg_get("preview_sampler", DEFAULTS["preview_sampler"])).strip().lower()
@@ -1966,15 +1972,37 @@ def run_fullgen_flow_preview(
     cfg_audio,
     shift,
     seed,
+    preview_width=0,
+    preview_height=0,
+    preview_area=0,
 ):
-    latent_shape = tuple(video_ref.shape)
+    B, C, Fm, H, W = tuple(video_ref.shape)
+    # El VAE de LTX-2 comprime 32x en espacio (192x320 px -> latente 6x10), no 16x como MiniMax-H3.
+    # The LTX-2 VAE compresses 32x spatially, not 16x like MiniMax-H3.
+    vae_scale = 32.0
+    if preview_width > 0 and preview_height > 0:
+        H = max(1, int(round(preview_height / vae_scale)))
+        W = max(1, int(round(preview_width / vae_scale)))
+    elif preview_area > 0:
+        scale = float(preview_area) / vae_scale / math.sqrt(max(1, H * W))
+        H = max(1, int(round(H * scale)))
+        W = max(1, int(round(W * scale)))
+    patch_size = max(1, int(patch_size))
+    patch_size_t = max(1, int(patch_size_t))
+    H = max(patch_size, (H // patch_size) * patch_size)
+    W = max(patch_size, (W // patch_size) * patch_size)
+    latent_shape = (B, C, Fm, H, W)
+    token_shape = (
+        B,
+        (Fm // patch_size_t) * (H // patch_size) * (W // patch_size),
+        C * patch_size_t * patch_size * patch_size,
+    )
 
-    v_ref = patch_video_latent(video_ref, patch_size, patch_size_t)
     a_ref = patch_audio_latent(audio_ref)
 
     g = torch.Generator(device=device).manual_seed(int(seed))
 
-    vx = torch.randn(v_ref.shape, generator=g, device=device, dtype=v_ref.dtype)
+    vx = torch.randn(token_shape, generator=g, device=device, dtype=video_ref.dtype)
     ax = torch.randn(a_ref.shape, generator=g, device=device, dtype=a_ref.dtype)
 
     sigmas = make_preview_sigmas(
@@ -2026,7 +2054,8 @@ def run_fullgen_flow_preview(
 
 
 def reload_preview_settings():
-    global PREVIEW_EVERY, PREVIEW_STEPS, PREVIEW_CFG, PREVIEW_SAMPLER
+    global PREVIEW_EVERY, PREVIEW_SIZE, PREVIEW_WIDTH, PREVIEW_HEIGHT
+    global PREVIEW_STEPS, PREVIEW_CFG, PREVIEW_SAMPLER
     global PREVIEW_LORA_SCALE, PREVIEW_CFG_MAX, PREVIEW_CFG_RESCALE
     global PREVIEW_CAPTION_MODE, PREVIEW_CUSTOM_PROMPT
     global PREVIEW_MODE, PREVIEW_RECON_SIGMA, PREVIEW_FRAME_INDEX
@@ -2067,6 +2096,9 @@ def reload_preview_settings():
             return bool(v)
 
         PREVIEW_EVERY = int(g("preview_every", PREVIEW_EVERY))
+        PREVIEW_SIZE = int(g("preview_size", PREVIEW_SIZE) or 0)
+        PREVIEW_WIDTH = int(g("preview_width", PREVIEW_WIDTH) or 0)
+        PREVIEW_HEIGHT = int(g("preview_height", PREVIEW_HEIGHT) or 0)
         PREVIEW_STEPS = int(g("preview_steps", PREVIEW_STEPS))
         PREVIEW_CFG = float(g("preview_cfg", PREVIEW_CFG))
         PREVIEW_SAMPLER = str(g("preview_sampler", PREVIEW_SAMPLER)).strip().lower()
@@ -2359,6 +2391,9 @@ def run_preview_diagnostic(
                         cfg_audio=eff_audio_cfg,
                         shift=shift,
                         seed=preview_seed,
+                        preview_width=PREVIEW_WIDTH,
+                        preview_height=PREVIEW_HEIGHT,
+                        preview_area=PREVIEW_SIZE,
                     )
 
             finally:
