@@ -60,10 +60,12 @@ class TrainerStream:
     # ------------------------------------------------------------------ estado
     def status(self):
         with self._lock:
-            proc, script, progress = self._proc, self._script, self._progress
+            proc, script, progress, done = self._proc, self._script, self._progress, self._done
+            # last: cómo acabó la última ejecución (la cola lo usa para saber si terminó, falló o se paró).
+            last = {"script": done[1], "code": done[2]} if done is not None else None
             if proc is None or proc.poll() is not None:
-                return {"running": False, "script": None, "pid": None, "progress": progress}
-            return {"running": True, "script": script, "pid": proc.pid, "progress": progress}
+                return {"running": False, "script": None, "pid": None, "progress": progress, "last": last}
+            return {"running": True, "script": script, "pid": proc.pid, "progress": progress, "last": last}
 
     def last_code(self):
         """Código de salida de la última ejecución terminada (0 si aún no hubo ninguna)."""

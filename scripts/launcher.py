@@ -35,6 +35,7 @@ from flask import Flask, abort, jsonify, request, send_from_directory
 
 import gpu_stats
 import i18n
+import job_queue
 import project_layout
 import remote_access
 from i18n import t
@@ -55,6 +56,10 @@ i18n.register(app)
 def load_config():
     with CONFIG_FILE.open("r", encoding="utf-8") as f:
         return json.load(f)
+
+
+# Cola de trabajos de todos los entrenadores (ver job_queue.py): rutas /api/queue... y su hilo.
+QUEUE = job_queue.register(app, lambda: load_config()["trainers"])
 
 
 def trainer_running():
