@@ -97,7 +97,9 @@ def register(app, trainer_id, runtime, train_config, precache_config):
             _launcher("/api/queue/register", {
                 "trainer": trainer_id, "kind": script, "port": my_port,
                 "project": (train.get("project_name") or pre.get("project_name") or "").strip(),
-                "total": int(train.get("total_steps") or 0) if script == "train" else 0})
+                "total": int(train.get("total_steps") or 0) if script == "train" else 0,
+                # Copia de los ajustes: pausado desde la cola, se queda en ella y se puede continuar.
+                "settings": {"train": train, "pre_cache": pre}})
         return resp
 
     app.view_functions[endpoint] = gated_run

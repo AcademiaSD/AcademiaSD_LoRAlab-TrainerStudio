@@ -139,7 +139,12 @@ class TrainerStream:
                 self._log = None
 
     def _emit(self, text, replace=False):
-        print(text, end="\r" if replace else "\n", flush=True)
+        # La copia en la consola del servidor es secundaria: sin consola (servidor de un trabajo de la
+        # cola, salida a un archivo) puede no admitir "█░" y no debe tumbar el entrenamiento.
+        try:
+            print(text, end="\r" if replace else "\n", flush=True)
+        except (UnicodeEncodeError, OSError, ValueError):
+            pass
         m = STEP_RE.search(text) or ITEM_RE.match(text)
         with self._lock:
             if m:

@@ -509,6 +509,94 @@ def status():
                               "pending": len(q["pending"]), "by_trainer": by_trainer, "paused": q["paused"]}})
 
 
+# ------------------------------------------------------------------ pausar todo y salir
+# Desde la interfaz, sin tocar ventanas: pausa la cola y el trabajo en curso (con checkpoint), detiene lo
+# que siga ejecutándose, cierra todos los entrenadores con sus consolas y, en este PC, también el lanzador.
+# En la nube (RunPod...) o desde otro equipo el lanzador se queda abierto: cerrado ya no se podría volver.
+# Pause all and exit, from the UI: pauses the queue and the running job, closes every trainer and, on
+# this PC, the launcher too. In the cloud or from another device the launcher stays open.
+SHUTDOWN = {"state": None, "step": "", "keep_launcher": False}
+PAUSE_TIMEOUT = 300   # segundos para que el trabajo en curso guarde su checkpoint
+STOP_TIMEOUT = 60
+
+
+def in_cloud():
+    return bool(os.environ.get("RUNPOD_POD_ID") or os.environ.get("LORALAB_CLOUD"))
+
+
+def _trainer_ports():
+    """Puertos de todos los entrenadores abiertos: el principal, los de otros puertos y los de trabajos."""
+    ports = {int(remote_access.load()["trainer_port"])}
+    ports |= {int(i["port"]) for i in extra_instances()}
+    with QUEUE._lock:
+        ports |= {int(j["port"]) for j in QUEUE.data["jobs"] if j.get("port")}
+    return sorted(p for p in ports if _port_open(p))
+
+
+def _shutdown(keep_launcher):
+    def step(text):
+        SHUTDOWN["step"] = text
+        print(f"[SHUTDOWN] {text}", flush=True)
+
+    step(t("Pausing the queue..."))
+    QUEUE.set_options(paused=True)
+    job = QUEUE.running()
+    if job:
+        step(t("Pausing {name} and saving its checkpoint...", name=f"{job['trainer_name']} · {job['project'] or '-'}"))
+        QUEUE.pause(job["id"])
+        end = time.time() + PAUSE_TIMEOUT
+        while QUEUE.running() and time.time() < end:
+            time.sleep(1)
+    # Lo que aún se ejecute fuera de la cola (unos subtítulos, por ejemplo) se detiene igual que con Stop.
+    busy = [p for p in _trainer_ports() if (job_queue._http(p, "/api/status")[1] or {}).get("running")]
+    if busy:
+        step(t("Stopping what is still running..."))
+        for p in busy:
+            job_queue._http(p, "/api/stop", {})
+        end = time.time() + STOP_TIMEOUT
+        while time.time() < end and any((job_queue._http(p, "/api/status")[1] or {}).get("running") for p in busy):
+            time.sleep(1)
+
+    step(t("Closing the trainers..."))
+    QUEUE._reap_idle_servers()                         # servidores de los trabajos (sin ventana)
+    for inst in extra_instances():                     # abiertos en otros puertos, con su consola
+        _kill_pid(int(inst["pid"]))
+    _save_instances([])
+    if trainer_running():
+        kill_trainer()                                 # el del puerto principal, con su consola
+
+    if keep_launcher:
+        SHUTDOWN.update(state="done", step=t("Everything is paused and closed. The launcher stays available."))
+        return
+    SHUTDOWN.update(state="done", step=t("Everything is closed. You can close this tab."))
+    time.sleep(2.5)                                    # la página llega a leer el último paso
+    _close_own_console()
+
+
+def _close_own_console():
+    """Cierra el lanzador y, en Windows, la consola de Start_LoRAlab (si no, se quedaría en «pause»)."""
+    if os.name == "nt":
+        try:
+            import psutil
+            proc = psutil.Process(os.getpid())
+            for parent in proc.parents():
+                if parent.name().lower() == "cmd.exe":
+                    subprocess.run(["taskkill", "/PID", str(parent.pid), "/T", "/F"], capture_output=True)
+                    break
+        except Exception:
+            pass
+    os._exit(0)
+
+
+@app.route("/api/shutdown", methods=["GET", "POST"])
+def shutdown():
+    if request.method == "POST" and SHUTDOWN["state"] != "running":
+        keep = in_cloud() or not remote_access.is_local()
+        SHUTDOWN.update(state="running", step="", keep_launcher=keep)
+        threading.Thread(target=_shutdown, args=(keep,), daemon=True).start()
+    return jsonify({"status": "ok", **SHUTDOWN, "cloud": in_cloud(), "local": remote_access.is_local()})
+
+
 # La configuración de red solo se cambia desde este PC: un equipo remoto no puede abrir más el acceso.
 @app.route("/api/gpu", methods=["GET", "POST"])
 def gpu():

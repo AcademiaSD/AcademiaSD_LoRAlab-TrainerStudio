@@ -1337,5 +1337,15 @@
   "Could not add it to the queue.": "Konnte nicht zur Warteschlange hinzugefügt werden.",
   "Added to the queue: position {n}.": "Zur Warteschlange hinzugefügt: Position {n}.",
   "Up next": "Als Nächstes",
-  "History": "Verlauf"
+  "History": "Verlauf",
+  "Pause all and exit": "Alles pausieren und beenden",
+  "⏻ Pause all and exit": "⏻ Alles pausieren und beenden",
+  "Pauses the queue and the training in progress (saving its checkpoint), closes every trainer and their windows, and closes the launcher. Your queue is kept.": "Pausiert die Warteschlange und das laufende Training (mit Checkpoint), schließt alle Trainer samt Fenstern und beendet den Launcher. Deine Warteschlange bleibt erhalten.",
+  "The training in progress is paused saving its checkpoint, the queue is paused and every trainer is closed with its window. On this PC the launcher closes too; in the cloud or from another device it stays open. Your queue is kept: resume it next time.": "Das laufende Training wird mit Checkpoint pausiert, die Warteschlange pausiert und jeder Trainer samt Fenster geschlossen. Auf diesem PC schließt sich auch der Launcher; in der Cloud oder von einem anderen Gerät bleibt er offen. Deine Warteschlange bleibt erhalten: setze sie beim nächsten Mal fort.",
+  "Pausing the queue...": "Warteschlange wird pausiert...",
+  "Pausing {name} and saving its checkpoint...": "{name} wird pausiert und sein Checkpoint gespeichert...",
+  "Stopping what is still running...": "Laufende Prozesse werden gestoppt...",
+  "Closing the trainers...": "Trainer werden geschlossen...",
+  "Everything is paused and closed. The launcher stays available.": "Alles ist pausiert und geschlossen. Der Launcher bleibt verfügbar.",
+  "Everything is closed. You can close this tab.": "Alles ist geschlossen. Du kannst diesen Tab schließen."
 }

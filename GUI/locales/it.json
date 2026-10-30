@@ -1337,5 +1337,15 @@
   "Could not add it to the queue.": "Impossibile aggiungerlo alla coda.",
   "Added to the queue: position {n}.": "Aggiunto alla coda: posizione {n}.",
   "Up next": "Prossimi",
-  "History": "Cronologia"
+  "History": "Cronologia",
+  "Pause all and exit": "Metti tutto in pausa ed esci",
+  "⏻ Pause all and exit": "⏻ Metti tutto in pausa ed esci",
+  "Pauses the queue and the training in progress (saving its checkpoint), closes every trainer and their windows, and closes the launcher. Your queue is kept.": "Mette in pausa la coda e l'addestramento in corso (salvando il checkpoint), chiude tutti i trainer e le loro finestre e chiude il launcher. La coda viene conservata.",
+  "The training in progress is paused saving its checkpoint, the queue is paused and every trainer is closed with its window. On this PC the launcher closes too; in the cloud or from another device it stays open. Your queue is kept: resume it next time.": "L'addestramento in corso viene messo in pausa salvando il checkpoint, la coda va in pausa e ogni trainer si chiude con la sua finestra. Su questo PC si chiude anche il launcher; nel cloud o da un altro dispositivo resta aperto. La coda viene conservata: riprendila la prossima volta.",
+  "Pausing the queue...": "Messa in pausa della coda...",
+  "Pausing {name} and saving its checkpoint...": "Messa in pausa di {name} e salvataggio del checkpoint...",
+  "Stopping what is still running...": "Arresto di ciò che è ancora in esecuzione...",
+  "Closing the trainers...": "Chiusura dei trainer...",
+  "Everything is paused and closed. The launcher stays available.": "Tutto è in pausa e chiuso. Il launcher resta disponibile.",
+  "Everything is closed. You can close this tab.": "Tutto è chiuso. Puoi chiudere questa scheda."
 }

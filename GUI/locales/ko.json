@@ -1337,5 +1337,15 @@
   "Could not add it to the queue.": "대기열에 추가할 수 없습니다.",
   "Added to the queue: position {n}.": "대기열에 추가됨: {n}번째.",
   "Up next": "다음 작업",
-  "History": "기록"
+  "History": "기록",
+  "Pause all and exit": "모두 일시정지하고 종료",
+  "⏻ Pause all and exit": "⏻ 모두 일시정지하고 종료",
+  "Pauses the queue and the training in progress (saving its checkpoint), closes every trainer and their windows, and closes the launcher. Your queue is kept.": "대기열과 진행 중인 학습을 일시정지하고(체크포인트 저장) 모든 트레이너와 창, 런처를 닫습니다. 대기열은 유지됩니다.",
+  "The training in progress is paused saving its checkpoint, the queue is paused and every trainer is closed with its window. On this PC the launcher closes too; in the cloud or from another device it stays open. Your queue is kept: resume it next time.": "진행 중인 학습은 체크포인트를 저장하고 일시정지되며, 대기열도 일시정지되고 모든 트레이너가 창과 함께 닫힙니다. 이 PC에서는 런처도 닫히고, 클라우드나 다른 기기에서는 열린 채로 유지됩니다. 대기열은 유지되니 다음에 재개하세요.",
+  "Pausing the queue...": "대기열 일시정지 중...",
+  "Pausing {name} and saving its checkpoint...": "{name} 일시정지 및 체크포인트 저장 중...",
+  "Stopping what is still running...": "실행 중인 작업 중지 중...",
+  "Closing the trainers...": "트레이너를 닫는 중...",
+  "Everything is paused and closed. The launcher stays available.": "모두 일시정지되고 닫혔습니다. 런처는 계속 사용할 수 있습니다.",
+  "Everything is closed. You can close this tab.": "모두 닫혔습니다. 이 탭을 닫아도 됩니다."
 }

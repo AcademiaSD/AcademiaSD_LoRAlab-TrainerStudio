@@ -207,8 +207,9 @@ class JobQueue:
             self._save()
             return dict(job), None
 
-    def register_external(self, trainer_id, kind, port, project="", total=0):
-        """Un entrenador lanzó un trabajo directamente (GPU libre): la cola lo sigue como uno más."""
+    def register_external(self, trainer_id, kind, port, project="", total=0, settings=None):
+        """Un entrenador lanzó un trabajo directamente (GPU libre): la cola lo sigue como uno más. Con la
+        copia de sus ajustes (settings), al pausarlo se queda en la cola y se puede continuar desde ella."""
         trainer = self._trainer(trainer_id)
         if trainer is None or kind not in KINDS:
             return None, t("Not found: {name}", name=trainer_id)
@@ -216,6 +217,10 @@ class JobQueue:
             if self.running():
                 return None, t("The GPU is busy with another job.")
             jid = time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:6]
+            if isinstance(settings, dict):
+                for key, name in _settings_names(trainer_id).items():
+                    if isinstance(settings.get(key), dict):
+                        _write_json(JOBS_DIR / jid / name, settings[key])
             job = {"id": jid, "trainer": trainer_id, "trainer_name": trainer["name"], "kind": kind,
                    "project": project, "state": "running", "external": True, "created": time.time(),
                    "started": time.time(), "finished": None, "port": int(port), "pid": None, "code": None,
@@ -352,9 +357,12 @@ class JobQueue:
         job_dir = JOBS_DIR / job["id"]
         names = _settings_names(job["trainer"])
         env = dict(os.environ)
+        # PYTHONIOENCODING / PYTHONUTF8: sin consola, la salida a archivo sería cp1252 en Windows y la barra
+        # de progreso ("█░") rompería el servidor del trabajo al primer paso.
         env.update(LORALAB_SKIP_BROWSER="1", LORALAB_TRAINER_PORT=str(port), LORALAB_JOB_ID=job["id"],
                    LORALAB_TRAIN_CONFIG=str(job_dir / names["train"]),
-                   LORALAB_PRECACHE_CONFIG=str(job_dir / names["pre_cache"]))
+                   LORALAB_PRECACHE_CONFIG=str(job_dir / names["pre_cache"]),
+                   PYTHONIOENCODING="utf-8", PYTHONUTF8="1")
         gpu_stats.apply_saved_gpu(env)
         log = open(job_dir / "server.log", "a", encoding="utf-8")
         flags = (subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP) if os.name == "nt" else 0
@@ -453,7 +461,12 @@ class JobQueue:
     def _finish(self, job, state, code=None, note=""):
         with self._lock:
             if state == "paused" and job["external"]:
-                state = "stopped"             # se reanuda desde su entrenador, no desde la cola
+                if (JOBS_DIR / job["id"] / _settings_names(job["trainer"])["train"]).exists():
+                    # Con su copia de ajustes pasa a ser un trabajo más de la cola: pausado, en su sitio, y
+                    # al continuar se relanza en su propio servidor y reanuda desde el checkpoint.
+                    job.update(external=False, port=None, pid=None)
+                else:
+                    state = "stopped"         # sin copia (versión anterior): se reanuda desde su entrenador
             job.update(state=state, finished=None if state == "paused" else time.time(), code=code,
                        requested=None, phase=None, note=note or job.get("note", ""))
             history = sorted((j for j in self.data["jobs"] if j["state"] not in ACTIVE),
@@ -510,7 +523,7 @@ def register(app, load_trainers):
         req = request.get_json(force=True) or {}
         job, err = jq.register_external(str(req.get("trainer", "")), str(req.get("kind", "")),
                                         int(req.get("port") or 0), str(req.get("project", "")),
-                                        int(req.get("total") or 0))
+                                        int(req.get("total") or 0), req.get("settings"))
         if err:
             return jsonify({"status": "error", "error": err}), 409
         return jsonify({"status": "ok", "job": job})

@@ -1337,5 +1337,15 @@
   "Could not add it to the queue.": "キューに追加できませんでした。",
   "Added to the queue: position {n}.": "キューに追加しました：{n} 番目。",
   "Up next": "次のジョブ",
-  "History": "履歴"
+  "History": "履歴",
+  "Pause all and exit": "すべて一時停止して終了",
+  "⏻ Pause all and exit": "⏻ すべて一時停止して終了",
+  "Pauses the queue and the training in progress (saving its checkpoint), closes every trainer and their windows, and closes the launcher. Your queue is kept.": "キューと実行中の学習を一時停止し（チェックポイントを保存）、すべてのトレーナーとそのウィンドウ、ランチャーを閉じます。キューは保持されます。",
+  "The training in progress is paused saving its checkpoint, the queue is paused and every trainer is closed with its window. On this PC the launcher closes too; in the cloud or from another device it stays open. Your queue is kept: resume it next time.": "実行中の学習はチェックポイントを保存して一時停止し、キューも一時停止して、すべてのトレーナーをウィンドウごと閉じます。この PC ではランチャーも閉じますが、クラウドや別の端末からの場合は開いたままです。キューは保持されるので、次回再開してください。",
+  "Pausing the queue...": "キューを一時停止中...",
+  "Pausing {name} and saving its checkpoint...": "{name} を一時停止し、チェックポイントを保存中...",
+  "Stopping what is still running...": "実行中の処理を停止中...",
+  "Closing the trainers...": "トレーナーを閉じています...",
+  "Everything is paused and closed. The launcher stays available.": "すべて一時停止して閉じました。ランチャーは引き続き利用できます。",
+  "Everything is closed. You can close this tab.": "すべて閉じました。このタブを閉じてかまいません。"
 }

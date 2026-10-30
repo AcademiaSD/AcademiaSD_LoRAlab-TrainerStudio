@@ -510,11 +510,9 @@
     }
     async function pauseJob(job) {
         if (!job) return;
-        // Uno lanzado desde su entrenador no vuelve a la cola: se reanuda desde ese entrenador.
+        // También uno lanzado desde su entrenador: la cola guarda su copia de ajustes y lo puede continuar.
         const ok = await ask(t('Pause {name}?', { name: `${job.trainer_name} · ${job.project || '-'}` }),
-            job.external
-                ? t('It stops saving a checkpoint. It was started from its trainer, so resume it from there with Start / Resume. The next job starts meanwhile.')
-                : t('It stops saving a checkpoint and stays in the queue as paused; resuming it continues from that step. The next job starts meanwhile.'),
+            t('It stops saving a checkpoint and stays in the queue as paused; resuming it continues from that step. The next job starts meanwhile.'),
             t('Pause'));
         if (ok) await pauseJobId(job.id);
     }
