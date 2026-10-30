@@ -11,7 +11,9 @@ pulsante mientras siga abierto (el brillo exige que el proceso guardado siga viv
 entrada vieja en active_trainer.json no lo enciende). Elegir otro entrenador avisa de que el
 activo se cerrará y, al aceptar, lo cierra antes de abrir el nuevo (se guarda su PID; sin PID
 guardado, solo se cierra un server_*.py de esta carpeta scripts). Si el activo está entrenando
-no se cierra: se avisa de que hay que detener el entrenamiento antes de cambiar.
+no se cierra: se ofrece abrir el otro en un puerto libre (trainer_port + 1...) para preparar un
+trabajo y añadirlo a la cola (job_queue.py); esos se recuerdan en trainer_instances.json y su
+tarjeta lleva a ellos. /api/status incluye la cola: el trabajo en curso y los pendientes.
 Para añadir un LoRAlab basta con una entrada más en GUI/launcher.json
 (id, name, description, image, run). Las tarjetas se colocan solas: hasta 3 en una fila y, a partir
 de ahí, dos filas con la sobrante arriba (4 -> 2+2, 5 -> 3+2, 6 -> 3+3). image_scale fija el tamaño
@@ -127,6 +129,39 @@ def save_active(trainer_id, pid=None):
     # The console PID allows closing the trainer when switching to another one.
     ACTIVE_FILE.parent.mkdir(exist_ok=True)
     ACTIVE_FILE.write_text(json.dumps({"id": trainer_id, "pid": pid}), encoding="utf-8")
+
+
+# Entrenadores abiertos en otro puerto mientras el del puerto principal entrena, para preparar
+# trabajos de la cola: [{"id", "port", "pid"}]. Solo cuentan los que siguen vivos y contestan.
+# Trainers opened on another port while the main one trains, to prepare queue jobs.
+INSTANCES_FILE = BASE_DIR / "settings" / "trainer_instances.json"
+
+
+def _port_open(port):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.3)
+        return s.connect_ex(("127.0.0.1", int(port))) == 0
+
+
+def extra_instances():
+    try:
+        data = json.loads(INSTANCES_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        data = []
+    alive = [i for i in data if isinstance(i, dict) and _pid_alive(int(i.get("pid") or 0)) and _port_open(i.get("port") or 0)]
+    if len(alive) != len(data):
+        _save_instances(alive)
+    return alive
+
+
+def _save_instances(items):
+    INSTANCES_FILE.parent.mkdir(exist_ok=True)
+    INSTANCES_FILE.write_text(json.dumps(items), encoding="utf-8")
+
+
+def url_for_port(port):
+    # Sin proxy delante: la misma dirección con la que se abrió el lanzador, con otro puerto.
+    return f"http://{request.host.rsplit(':', 1)[0]}:{port}"
 
 
 def _pids_on_port(port: int):
@@ -380,6 +415,14 @@ def launch():
         if run.parent != CODE_DIR or run.suffix.lower() != ".sh" or not run.is_file():
             return jsonify({"status": "error", "error": t("Not found: {name}", name=run.name)}), 404
 
+    # Ya abierto en otro puerto (para preparar un trabajo de la cola): volver a él.
+    # Already open on another port (to prepare a queue job): jump back to it.
+    extra = next((i for i in extra_instances() if i["id"] == trainer_id), None)
+    if extra:
+        return jsonify({"status": "ok", "url": url_for_port(extra["port"]), "already": True})
+    if req.get("second"):
+        return launch_second(trainer_id, run)
+
     if trainer_running():
         active = active_running()
         # Tarjeta con brillo: el entrenador activo ya va corriendo, volver a él.
@@ -394,12 +437,11 @@ def launch():
                                        current=current)}), 409
         if training:
             # El script de entrenamiento es hijo del servidor: cerrarlo ahora cortaría el
-            # entrenamiento, y lo avanzado desde el último checkpoint.
+            # entrenamiento, y lo avanzado desde el último checkpoint. Se ofrece abrir el otro en
+            # un puerto distinto, para preparar un trabajo y añadirlo a la cola.
             # The training script is a child of the server: closing it now would cut the
-            # training, and everything since the last checkpoint.
-            return jsonify({"status": "training", "url": trainer_url(),
-                            "error": t("{current} is training. Stop the training first, then switch.",
-                                       current=current)}), 409
+            # training. Offer to open the other one on another port, to prepare a queue job.
+            return jsonify({"status": "queue_offer", "current": current, "url": trainer_url()})
         if not force:
             return jsonify({"status": "busy", "url": trainer_url()})
         # Cambiar de entrenador: cerrar el activo antes de abrir el nuevo.
@@ -428,11 +470,43 @@ def launch():
     return jsonify({"status": "ok", "url": trainer_url(), "remote": not remote_access.is_local()})
 
 
+def launch_second(trainer_id, run):
+    """Abre el entrenador en un puerto libre (trainer_port + 1...), con su consola, sin cerrar el del
+    puerto principal, que está entrenando. Lo que se prepare ahí va a la cola."""
+    port = QUEUE._free_port(exclude={i["port"] for i in extra_instances()})
+    if port is None:
+        return jsonify({"status": "error", "error": t("No free port for the job.")}), 409
+    gpu_stats.apply_saved_gpu(os.environ)
+    env = dict(os.environ)
+    env.update(LORALAB_SKIP_BROWSER="1", LORALAB_TRAINER_PORT=str(port))
+    if os.name == "nt":
+        proc = subprocess.Popen(["cmd", "/c", str(run)], cwd=str(BASE_DIR), env=env,
+                                creationflags=subprocess.CREATE_NEW_CONSOLE)
+        pid = proc.pid
+    else:
+        pid = _launch_linux(run, env)
+    _save_instances(extra_instances() + [{"id": trainer_id, "port": port, "pid": pid}])
+    return jsonify({"status": "ok", "url": url_for_port(port), "port": port, "second": True})
+
+
 @app.route("/api/status")
 def status():
+    # ?port=N: ¿contesta ya el entrenador abierto en ese puerto? (espera tras abrir uno en otro puerto)
+    port = request.args.get("port", type=int)
+    if port:
+        return jsonify({"trainer": _port_open(port)})
     running = trainer_running()
+    q = QUEUE.snapshot()
+    job = q["running"]
+    by_trainer = {}
+    for j in q["pending"]:
+        by_trainer[j["trainer"]] = by_trainer.get(j["trainer"], 0) + 1
     return jsonify({"trainer": running, "active": active_running() if running else None,
-                    "url": trainer_url()})
+                    "url": trainer_url(),
+                    "instances": [{"id": i["id"], "port": i["port"]} for i in extra_instances()],
+                    "queue": {"running": {k: job.get(k) for k in ("id", "trainer", "trainer_name", "project", "kind",
+                                                                  "progress", "port")} if job else None,
+                              "pending": len(q["pending"]), "by_trainer": by_trainer, "paused": q["paused"]}})
 
 
 # La configuración de red solo se cambia desde este PC: un equipo remoto no puede abrir más el acceso.

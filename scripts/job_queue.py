@@ -331,10 +331,11 @@ class JobQueue:
         if nxt is not None:
             self._launch(nxt)
 
-    def _free_port(self):
+    def _free_port(self, exclude=()):
+        """Primer puerto libre desde trainer_port + 1, sin los de otros trabajos ni los de exclude."""
         base = int(remote_access.load()["trainer_port"])
         with self._lock:
-            taken = {j["port"] for j in self.data["jobs"] if j.get("port")}
+            taken = {j["port"] for j in self.data["jobs"] if j.get("port")} | set(exclude)
         for port in range(base + 1, base + 1 + PORT_SPAN):
             if port not in taken and not _port_in_use(port):
                 return port
