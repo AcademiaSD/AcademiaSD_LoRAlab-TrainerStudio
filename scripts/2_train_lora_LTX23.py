@@ -1977,11 +1977,14 @@ def run_fullgen_flow_preview(
     preview_area=0,
 ):
     B, C, Fm, H, W = tuple(video_ref.shape)
+    # El VAE de LTX-2 comprime 32x en espacio (192x320 px -> latente 6x10), no 16x como MiniMax-H3.
+    # The LTX-2 VAE compresses 32x spatially, not 16x like MiniMax-H3.
+    vae_scale = 32.0
     if preview_width > 0 and preview_height > 0:
-        H = max(1, int(round(preview_height / 16.0)))
-        W = max(1, int(round(preview_width / 16.0)))
+        H = max(1, int(round(preview_height / vae_scale)))
+        W = max(1, int(round(preview_width / vae_scale)))
     elif preview_area > 0:
-        scale = float(preview_area) / 16.0 / math.sqrt(max(1, H * W))
+        scale = float(preview_area) / vae_scale / math.sqrt(max(1, H * W))
         H = max(1, int(round(H * scale)))
         W = max(1, int(round(W * scale)))
     patch_size = max(1, int(patch_size))
