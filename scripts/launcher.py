@@ -150,6 +150,9 @@ def extra_instances():
         data = []
     alive = [i for i in data if isinstance(i, dict) and _pid_alive(int(i.get("pid") or 0)) and _port_open(i.get("port") or 0)]
     if len(alive) != len(data):
+        # Un borrador cerrado ya no necesita su copia de ajustes (lo que se añadió a la cola tiene la suya).
+        for gone in (i for i in data if isinstance(i, dict) and i not in alive and i.get("draft")):
+            shutil.rmtree(DRAFTS_DIR / f"{gone.get('id')}-{gone.get('port')}", ignore_errors=True)
         _save_instances(alive)
     return alive
 
@@ -415,6 +418,15 @@ def launch():
         if run.parent != CODE_DIR or run.suffix.lower() != ".sh" or not run.is_file():
             return jsonify({"status": "error", "error": t("Not found: {name}", name=run.name)}), 404
 
+    # Borrador: el mismo entrenador en otro puerto con su propia copia de los ajustes, para preparar otro
+    # entrenamiento del mismo modelo mientras este entrena (el que entrena relee los ajustes normales).
+    # Draft: the same trainer on another port with its own settings copy, to prepare another training.
+    if req.get("draft"):
+        extra = next((i for i in extra_instances() if i["id"] == trainer_id and i.get("draft")), None)
+        if extra:
+            return jsonify({"status": "ok", "url": url_for_port(extra["port"]), "port": extra["port"], "already": True})
+        return launch_second(trainer_id, run, draft=req.get("settings") or {})
+
     # Ya abierto en otro puerto (para preparar un trabajo de la cola): volver a él.
     # Already open on another port (to prepare a queue job): jump back to it.
     extra = next((i for i in extra_instances() if i["id"] == trainer_id), None)
@@ -470,22 +482,39 @@ def launch():
     return jsonify({"status": "ok", "url": trainer_url(), "remote": not remote_access.is_local()})
 
 
-def launch_second(trainer_id, run):
+DRAFTS_DIR = BASE_DIR / "settings" / "queue" / "drafts"
+
+
+def launch_second(trainer_id, run, draft=None):
     """Abre el entrenador en un puerto libre (trainer_port + 1...), con su consola, sin cerrar el del
-    puerto principal, que está entrenando. Lo que se prepare ahí va a la cola."""
+    puerto principal, que está entrenando. Lo que se prepare ahí va a la cola.
+    draft (dict con "train" / "pre_cache"): borrador con su propia copia de los ajustes, que parte de esos
+    valores; lo que se guarde en él no toca los ajustes normales del entrenador."""
     port = QUEUE._free_port(exclude={i["port"] for i in extra_instances()})
     if port is None:
         return jsonify({"status": "error", "error": t("No free port for the job.")}), 409
     gpu_stats.apply_saved_gpu(os.environ)
     env = dict(os.environ)
     env.update(LORALAB_SKIP_BROWSER="1", LORALAB_TRAINER_PORT=str(port))
+    if draft is not None:
+        folder = DRAFTS_DIR / f"{trainer_id}-{port}"
+        folder.mkdir(parents=True, exist_ok=True)
+        for key, name in (("train", f"train_settings_{trainer_id}.json"), ("pre_cache", f"pre_cache_settings_{trainer_id}.json")):
+            data = draft.get(key) if isinstance(draft.get(key), dict) else None
+            if data is None:
+                src = BASE_DIR / "settings" / name
+                data = json.loads(src.read_text(encoding="utf-8")) if src.exists() else {}
+            (folder / name).write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        env.update(LORALAB_DRAFT="1",
+                   LORALAB_TRAIN_CONFIG=str(folder / f"train_settings_{trainer_id}.json"),
+                   LORALAB_PRECACHE_CONFIG=str(folder / f"pre_cache_settings_{trainer_id}.json"))
     if os.name == "nt":
         proc = subprocess.Popen(["cmd", "/c", str(run)], cwd=str(BASE_DIR), env=env,
                                 creationflags=subprocess.CREATE_NEW_CONSOLE)
         pid = proc.pid
     else:
         pid = _launch_linux(run, env)
-    _save_instances(extra_instances() + [{"id": trainer_id, "port": port, "pid": pid}])
+    _save_instances(extra_instances() + [{"id": trainer_id, "port": port, "pid": pid, "draft": draft is not None}])
     return jsonify({"status": "ok", "url": url_for_port(port), "port": port, "second": True})
 
 
@@ -562,6 +591,7 @@ def _shutdown(keep_launcher):
     for inst in extra_instances():                     # abiertos en otros puertos, con su consola
         _kill_pid(int(inst["pid"]))
     _save_instances([])
+    shutil.rmtree(DRAFTS_DIR, ignore_errors=True)      # borradores: lo añadido a la cola tiene su copia
     if trainer_running():
         kill_trainer()                                 # el del puerto principal, con su consola
 

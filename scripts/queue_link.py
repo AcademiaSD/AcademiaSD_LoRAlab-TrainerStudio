@@ -29,6 +29,8 @@ from i18n import t
 GUI_DIR = Path(__file__).resolve().parent.parent / "GUI"
 KINDS = ("precache", "train")
 JOB_ID = os.environ.get("LORALAB_JOB_ID") or None
+# Borrador abierto con «Nuevo entrenamiento en cola»: guarda en su propia copia de los ajustes.
+DRAFT = os.environ.get("LORALAB_DRAFT") == "1"
 
 
 def _launcher(path, payload=None, timeout=2):
@@ -140,7 +142,26 @@ def register(app, trainer_id, runtime, train_config, precache_config):
     def queue_info():
         st = queue_state()
         if st is None:
-            return jsonify({"launcher": False, "job_id": JOB_ID})
+            return jsonify({"launcher": False, "job_id": JOB_ID, "draft": DRAFT})
         pending = st.get("pending", [])
-        return jsonify({"launcher": True, "job_id": JOB_ID, "job": own_job(st), "port": my_port,
+        return jsonify({"launcher": True, "job_id": JOB_ID, "draft": DRAFT, "job": own_job(st), "port": my_port,
                         "running": st.get("running"), "queued": len(pending)})
+
+    @app.route("/api/queue-draft", methods=["POST"])
+    def queue_draft():
+        """Nuevo entrenamiento del mismo modelo para la cola mientras este entrena: el lanzador abre un
+        borrador en otro puerto que parte de los ajustes de aquí, con su propia copia."""
+        code, res = _launcher("/api/launch", {"id": trainer_id, "draft": True,
+                                              "settings": {"train": _read(train_config), "pre_cache": _read(precache_config)}},
+                              timeout=15)
+        if code is None:
+            return jsonify({"status": "error", "error": t("The launcher is not running: the queue needs it.")}), 503
+        return jsonify(res), code
+
+    @app.route("/api/queue-draft-ready")
+    def queue_draft_ready():
+        import socket
+        port = request.args.get("port", type=int) or 0
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.3)
+            return jsonify({"ready": bool(port) and s.connect_ex(("127.0.0.1", port)) == 0})

@@ -1347,5 +1347,11 @@
   "Stopping what is still running...": "실행 중인 작업 중지 중...",
   "Closing the trainers...": "트레이너를 닫는 중...",
   "Everything is paused and closed. The launcher stays available.": "모두 일시정지되고 닫혔습니다. 런처는 계속 사용할 수 있습니다.",
-  "Everything is closed. You can close this tab.": "모두 닫혔습니다. 이 탭을 닫아도 됩니다."
+  "Everything is closed. You can close this tab.": "모두 닫혔습니다. 이 탭을 닫아도 됩니다.",
+  "New training for the queue": "대기열에 새 학습",
+  "What you save here applies only to this new job, not to the training in progress nor to your trainer settings. Press Start / Resume to add it to the queue.": "여기서 저장한 내용은 이 새 작업에만 적용되며, 진행 중인 학습이나 트레이너 설정에는 영향을 주지 않습니다. Start / Resume을 누르면 대기열에 추가됩니다.",
+  "Opens this same trainer on another port with its own copy of the settings, to prepare another training and add it to the queue without touching the one in progress.": "같은 트레이너를 설정 사본과 함께 다른 포트에서 열어, 진행 중인 학습을 건드리지 않고 다른 학습을 준비해 대기열에 추가합니다.",
+  "Could not open it.": "열 수 없습니다.",
+  "Opening a new {trainer} on port {port}...": "포트 {port}에서 새 {trainer}을(를) 여는 중...",
+  "It did not start in time. Open it at {url}.": "제시간에 시작되지 않았습니다. {url}에서 여세요."
 }

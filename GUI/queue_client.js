@@ -32,6 +32,9 @@
     .qc-banner .qc-note { color: #94a3b8; font-size: 0.78rem; flex: 1 1 260px; }
     .qc-banner a { margin-left: auto; color: #fff; text-decoration: none; font-weight: 700; font-size: 0.8rem; padding: 6px 12px;
         border-radius: 7px; background: linear-gradient(90deg, #0e7490, #6d28d9); white-space: nowrap; }
+    .qc-newjob { margin-top: 10px; color: #fff !important; border: none; background: linear-gradient(90deg, #0e7490, #6d28d9) !important;
+        box-shadow: 0 4px 16px rgba(109, 40, 217, 0.35); }
+    .qc-newjob:hover { box-shadow: 0 0 0 1px #a78bfa, 0 6px 22px rgba(139, 92, 246, 0.55); }
     `;
 
     function queueUrl() {
@@ -69,7 +72,8 @@
                     : tr('Job queue');
             }
         }
-        if (info && info.job_id) {
+        updateNewJob();
+        if (info && (info.job_id || info.draft)) {
             let banner = document.getElementById('qc-banner');
             if (!banner) {
                 banner = document.createElement('div');
@@ -78,6 +82,13 @@
                 const header = document.querySelector('header');
                 if (header) header.insertAdjacentElement('afterend', banner);
                 else document.body.prepend(banner);
+            }
+            if (!info.job_id) {
+                // Borrador: otro entrenamiento del mismo modelo, preparado mientras el primero entrena.
+                banner.innerHTML = `<span>➕ <b>${escapeHtml(tr('New training for the queue'))}</b></span>`
+                    + `<span class="qc-note">${escapeHtml(tr('What you save here applies only to this new job, not to the training in progress nor to your trainer settings. Press Start / Resume to add it to the queue.'))}</span>`
+                    + (queueUrl() ? `<a href="${queueUrl()}">${escapeHtml(tr('Open the queue'))}</a>` : '');
+                return;
             }
             const job = info.job || {};
             const state = STATE[job.state] ? STATE[job.state]() : '';
@@ -90,6 +101,56 @@
 
     function escapeHtml(s) {
         return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    }
+
+    // «Nuevo entrenamiento en cola»: mientras este entrena (Stop activo), abre un borrador del mismo
+    // entrenador en otro puerto, con su propia copia de los ajustes, y navega a él en esta pestaña.
+    function addNewJobButton() {
+        const stop = document.getElementById('btn-stop');
+        if (!stop || document.getElementById('qc-newjob')) return;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.id = 'qc-newjob';
+        btn.className = 'btn btn-tall btn-full qc-newjob';
+        btn.style.display = 'none';
+        btn.title = tr('Opens this same trainer on another port with its own copy of the settings, to prepare another training and add it to the queue without touching the one in progress.');
+        btn.innerHTML = `<span class="main-text">➕ <span>${escapeHtml(tr('New training for the queue'))}</span></span>`;
+        btn.addEventListener('click', newJob);
+        const row = stop.parentElement;
+        row.insertAdjacentElement('afterend', btn);
+        new MutationObserver(updateNewJob).observe(stop, { attributes: true, attributeFilter: ['disabled'] });
+    }
+
+    function updateNewJob() {
+        const btn = document.getElementById('qc-newjob');
+        const stop = document.getElementById('btn-stop');
+        if (!btn || !stop) return;
+        btn.style.display = !stop.disabled && info && info.launcher ? '' : 'none';
+    }
+
+    async function newJob() {
+        const btn = document.getElementById('qc-newjob');
+        btn.disabled = true;
+        try {
+            const res = await post('/api/queue-draft', {});
+            if (!res.ok || res.data.status !== 'ok') {
+                toast(`[!] ${res.data.error || tr('Could not open it.')}`, 'error');
+                return;
+            }
+            const port = res.data.port;
+            const url = `${location.protocol}//${location.hostname}:${port}`;
+            const note = toast(tr('Opening a new {trainer} on port {port}...', { trainer: document.title.replace(/^AcademiaSD\s*/, '').replace(/\s*LoRAlab$/, ''), port }), 'info', 0);
+            const end = Date.now() + 120000;
+            while (Date.now() < end) {
+                const r = await (await fetch(`/api/queue-draft-ready?port=${port}`, { cache: 'no-store' })).json().catch(() => ({}));
+                if (r.ready) { window.location.href = url; return; }
+                await new Promise(r2 => setTimeout(r2, 700));
+            }
+            note.remove();
+            toast(`[!] ${tr('It did not start in time. Open it at {url}.', { url })}`, 'error');
+        } finally {
+            btn.disabled = false;
+        }
     }
 
     async function refresh() {
@@ -160,6 +221,7 @@
         style.textContent = CSS;
         document.head.appendChild(style);
         addChip();
+        addNewJobButton();
         wrapStart();
         fetch('/api/launcher-url').then(r => r.json()).then(d => { launcherUrl = d.url || ''; render(); }).catch(() => {});
         refresh();

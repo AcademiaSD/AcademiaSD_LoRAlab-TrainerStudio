@@ -1452,5 +1452,11 @@
   "Stopping what is still running...": "Deteniendo lo que sigue en marcha...",
   "Closing the trainers...": "Cerrando los entrenadores...",
   "Everything is paused and closed. The launcher stays available.": "Todo está pausado y cerrado. El lanzador sigue disponible.",
-  "Everything is closed. You can close this tab.": "Todo está cerrado. Ya puedes cerrar esta pestaña."
+  "Everything is closed. You can close this tab.": "Todo está cerrado. Ya puedes cerrar esta pestaña.",
+  "New training for the queue": "Nuevo entrenamiento en cola",
+  "What you save here applies only to this new job, not to the training in progress nor to your trainer settings. Press Start / Resume to add it to the queue.": "Lo que guardes aquí se aplica solo a este nuevo trabajo, no al entrenamiento en curso ni a los ajustes de tu entrenador. Pulsa Start / Resume para añadirlo a la cola.",
+  "Opens this same trainer on another port with its own copy of the settings, to prepare another training and add it to the queue without touching the one in progress.": "Abre este mismo entrenador en otro puerto con su propia copia de los ajustes, para preparar otro entrenamiento y añadirlo a la cola sin tocar el que está en curso.",
+  "Could not open it.": "No se pudo abrir.",
+  "Opening a new {trainer} on port {port}...": "Abriendo un nuevo {trainer} en el puerto {port}...",
+  "It did not start in time. Open it at {url}.": "No arrancó a tiempo. Ábrelo en {url}."
 }
