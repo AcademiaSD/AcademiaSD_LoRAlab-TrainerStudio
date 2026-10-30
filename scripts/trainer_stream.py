@@ -7,10 +7,14 @@ El script de entrenamiento y la lectura de su consola viven en un hilo del servi
 petición HTTP que abre la pestaña: cerrarla ya no cierra la tubería (el proceso hijo moría al
 cerrarse el pipe) y la salida queda accesible para cualquier navegador (backlog en memoria +
 settings/trainer_console_<id>.log en disco).
+
+Un entrenador abierto por la cola en otro puerto (LORALAB_TRAINER_PORT) escribe su propio
+trainer_console_<id>_<puerto>.log, y status() dice por qué paso va (Step N/M o [N/M] de la pre-caché).
 """
 import json
 import os
 import queue
+import re
 import signal
 import subprocess
 import sys
@@ -26,6 +30,10 @@ from i18n import t
 MAX_LINES = 4000        # backlog en memoria para reengancharse
 PING_SECONDS = 15.0     # keep-alive del SSE a través de proxies
 
+# Progreso de la consola: "<Paso> 120/1000 [██░░]" al entrenar, "[12/161] ..." en la pre-caché.
+STEP_RE = re.compile(r"(\d+)/(\d+) \[")
+ITEM_RE = re.compile(r"^\[(\d+)/(\d+)\]")
+
 
 def _sse(kind, payload):
     return f"data: {json.dumps({'type': kind, **payload}, ensure_ascii=False)}\n\n"
@@ -36,7 +44,10 @@ class TrainerStream:
 
     def __init__(self, base_dir, settings_dir, trainer_id):
         self.base_dir = Path(base_dir)
-        self.log_path = Path(settings_dir) / f"trainer_console_{trainer_id}.log"
+        port = os.environ.get("LORALAB_TRAINER_PORT")
+        self.log_path = Path(settings_dir) / (f"trainer_console_{trainer_id}_{port}.log" if port
+                                              else f"trainer_console_{trainer_id}.log")
+        self._progress = None                  # {"step", "total"} del último proceso
         self._proc = None
         self._script = None
         self._lines = deque(maxlen=MAX_LINES)  # (seq, texto, reemplaza)
@@ -49,10 +60,10 @@ class TrainerStream:
     # ------------------------------------------------------------------ estado
     def status(self):
         with self._lock:
-            proc, script = self._proc, self._script
+            proc, script, progress = self._proc, self._script, self._progress
             if proc is None or proc.poll() is not None:
-                return {"running": False, "script": None, "pid": None}
-            return {"running": True, "script": script, "pid": proc.pid}
+                return {"running": False, "script": None, "pid": None, "progress": progress}
+            return {"running": True, "script": script, "pid": proc.pid, "progress": progress}
 
     def last_code(self):
         """Código de salida de la última ejecución terminada (0 si aún no hubo ninguna)."""
@@ -67,6 +78,7 @@ class TrainerStream:
                 return False, t("Process already running: {name}", name=self._script)
             self._lines.clear()
             self._done = None
+            self._progress = None
             self._script = script_name
             self._proc = subprocess.Popen(
                 [sys.executable, "-u", str(script_path)],
@@ -126,7 +138,10 @@ class TrainerStream:
 
     def _emit(self, text, replace=False):
         print(text, end="\r" if replace else "\n", flush=True)
+        m = STEP_RE.search(text) or ITEM_RE.match(text)
         with self._lock:
+            if m:
+                self._progress = {"step": int(m.group(1)), "total": int(m.group(2))}
             self._seq += 1
             seq = self._seq
             self._lines.append((seq, text, replace))

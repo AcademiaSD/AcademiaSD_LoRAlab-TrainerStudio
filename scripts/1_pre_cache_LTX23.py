@@ -129,7 +129,7 @@ DEFAULTS = {
     "low_ram_allow_cpu_fallback": False,
 }
 
-CONFIG_PATH = "settings/pre_cache_settings_ltx23.json"
+CONFIG_PATH = os.environ.get("LORALAB_PRECACHE_CONFIG") or "settings/pre_cache_settings_ltx23.json"
 
 HF_BASE_REPO_ID = "diffusers/LTX-2.3-Diffusers"
 HF_NF4_REPO_ID = "AcademiaSD/LTX23_NF4"

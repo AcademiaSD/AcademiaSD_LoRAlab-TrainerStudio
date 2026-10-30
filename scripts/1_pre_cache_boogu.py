@@ -17,7 +17,7 @@ from boogu_model import (
 from project_layout import resolve_cache_dir
 
 BASE_DIR = Path(__file__).resolve().parents[1]
-CONFIG = BASE_DIR / "settings" / "pre_cache_settings_boogu.json"
+CONFIG = Path(os.environ.get("LORALAB_PRECACHE_CONFIG") or BASE_DIR / "settings" / "pre_cache_settings_boogu.json")
 MODEL_ID = "Boogu-Image-0.1-Edit"
 SEQUENCE_LENGTH = 1280
 

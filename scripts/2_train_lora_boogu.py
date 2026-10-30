@@ -16,6 +16,9 @@ import lora_options
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 SETTINGS_DIR = BASE_DIR / "settings"
+# Un trabajo de la cola trae su propia copia de los ajustes. / A queue job brings its own settings copy.
+PRECACHE_CONFIG = Path(os.environ.get("LORALAB_PRECACHE_CONFIG") or SETTINGS_DIR / "pre_cache_settings_boogu.json")
+TRAIN_CONFIG = Path(os.environ.get("LORALAB_TRAIN_CONFIG") or SETTINGS_DIR / "train_settings_boogu.json")
 OUTPUT_DEFAULT = "./Outputs/boogu_lora_output"
 MODEL_ID = "Boogu/Boogu-Image-0.1-Edit"
 TARGET_MODULES = "to_q,to_k,to_v,to_out.0,img_to_q,img_to_k,img_to_v,img_out,instruct_to_q,instruct_to_k,instruct_to_v,instruct_out"
@@ -53,8 +56,8 @@ def configure_console_encoding():
 def main():
     configure_console_encoding()
     try:
-        precache_cfg = read_json(SETTINGS_DIR / "pre_cache_settings_boogu.json")
-        train_cfg = read_json(SETTINGS_DIR / "train_settings_boogu.json")
+        precache_cfg = read_json(PRECACHE_CONFIG)
+        train_cfg = read_json(TRAIN_CONFIG)
         dataset_dir = resolve_path(precache_cfg.get("dataset_path", train_cfg.get("dataset_path", "./dataset")), BASE_DIR)
         cache_dir = resolve_cache_dir(precache_cfg.get("cache_dir", train_cfg.get("cache_dir")), "./Cache_Data/cached_data_boogu", BASE_DIR)
         output_dir = resolve_output_dir(train_cfg.get("output_dir"), OUTPUT_DEFAULT, BASE_DIR)
@@ -134,7 +137,7 @@ def main():
             "--preview_edit_image", str(train_cfg.get("preview_edit_image", "")),
             "--lora_type", lora_type,
             "--trigger_word", str(train_cfg.get("trigger_word", precache_cfg.get("trigger_word", ""))),
-            "--live_settings", str(SETTINGS_DIR / "train_settings_boogu.json"),
+            "--live_settings", str(TRAIN_CONFIG),
             "--gradient_accumulation_steps", str(grad_accum),
             "--use_gradient_checkpointing",
             "--find_unused_parameters",

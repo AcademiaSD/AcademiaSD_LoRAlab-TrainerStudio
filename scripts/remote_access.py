@@ -14,12 +14,16 @@ settings/network.json (se edita desde el lanzador / edited from the launcher):
 En los entrenadores, serve() publica además GET /api/launcher-url con la dirección del lanzador
 (este PC, su puerto), que es el destino del botón «← Back» de la interfaz.
 
+LORALAB_TRAINER_PORT (variable de entorno) abre un entrenador en otro puerto que trainer_port: la cola
+de trabajos lo usa para tener varios entrenadores abiertos a la vez.
+
 Las peticiones desde este mismo PC nunca piden contraseña. Las remotas la piden siempre, y sin
 contraseña configurada se rechazan, salvo con external_auth: la interfaz lanza procesos y escribe
 archivos, así que solo se abre sin contraseña si hay otra autenticación delante. Es HTTP sin cifrar,
 pensado para la red de casa; para entrar desde Internet, Tailscale, un túnel SSH o un proxy con HTTPS.
 """
 import json
+import os
 import socket
 from pathlib import Path
 
@@ -97,7 +101,7 @@ def serve(app, port_key):
             return jsonify({"url": f"http://{request.host.rsplit(':', 1)[0]}:{cfg['launcher_port']}"})
         app.add_url_rule("/api/launcher-url", "launcher_url", launcher_url)
     host = "0.0.0.0" if cfg["listen"] else "127.0.0.1"
-    port = cfg[port_key]
+    port = port_of(port_key, cfg)
     if cfg["listen"]:
         if cfg["external_auth"]:
             note = "  [!] " + t("No login: external authentication")
@@ -109,5 +113,13 @@ def serve(app, port_key):
     app.run(host=host, port=port, debug=False, threaded=True)
 
 
+def port_of(port_key, cfg=None):
+    """Puerto de port_key; un entrenador abierto por la cola trae el suyo en LORALAB_TRAINER_PORT."""
+    cfg = cfg or load()
+    if port_key == "trainer_port" and os.environ.get("LORALAB_TRAINER_PORT"):
+        return int(os.environ["LORALAB_TRAINER_PORT"])
+    return cfg[port_key]
+
+
 def local_url(port_key):
-    return f"http://127.0.0.1:{load()[port_key]}"
+    return f"http://127.0.0.1:{port_of(port_key)}"

@@ -88,8 +88,8 @@ ASSETS_DIR = BASE_DIR / "assets" / "yue2"
 UI_FILE = BASE_DIR / "GUI" / "trainer_ui_yue2.html"
 LOGO_FILE = ASSETS_DIR / "logo.png" if (ASSETS_DIR / "logo.png").exists() else BASE_DIR / "logo.png"
 
-PRECACHE_CONFIG = SETTINGS_DIR / "pre_cache_settings_yue2.json"
-TRAIN_CONFIG = SETTINGS_DIR / "train_settings_yue2.json"
+PRECACHE_CONFIG = Path(os.environ.get("LORALAB_PRECACHE_CONFIG") or SETTINGS_DIR / "pre_cache_settings_yue2.json")
+TRAIN_CONFIG = Path(os.environ.get("LORALAB_TRAIN_CONFIG") or SETTINGS_DIR / "train_settings_yue2.json")
 HF_TOKEN_CONFIG = SETTINGS_DIR / "HF_token.json"
 EXPORT_CONFIG = SETTINGS_DIR / "export_settings.json"  # compartido / shared by every trainer
 CAPTION_CONFIG = SETTINGS_DIR / "caption_settings_yue2.json"
