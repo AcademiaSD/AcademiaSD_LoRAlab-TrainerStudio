@@ -72,7 +72,7 @@ RAW_REPO_ID = "m-a-p/YuE2-3B"
 RAW_VAE_DIR = str(resolve_model_dir(None, "Models/YuE2-Vae", STUDIO_ROOT))
 RAW_VAE_REPO_ID = "m-a-p/YuE2-Vae"
 NF4_REPO_ID = "AcademiaSD/YuE2-3B-NF4-for-LoRA-Training"
-TRAIN_CONFIG_PATH = os.path.join(STUDIO_ROOT, "settings", "train_settings_yue2.json")
+TRAIN_CONFIG_PATH = os.environ.get("LORALAB_TRAIN_CONFIG") or os.path.join(STUDIO_ROOT, "settings", "train_settings_yue2.json")
 try:
     with open(TRAIN_CONFIG_PATH, "r", encoding="utf-8") as _f:
         _precision_cfg = json.load(_f)
@@ -103,7 +103,7 @@ DEFAULTS = {
 }
 
 AUDIO_EXTS = (".wav", ".flac", ".mp3", ".ogg", ".m4a", ".opus", ".wma", ".aiff", ".aif", ".mp2")
-CONFIG_PATH = "settings/pre_cache_settings_yue2.json"
+CONFIG_PATH = os.environ.get("LORALAB_PRECACHE_CONFIG") or "settings/pre_cache_settings_yue2.json"
 
 
 def read_json(path):

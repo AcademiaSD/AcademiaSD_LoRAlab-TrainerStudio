@@ -11,7 +11,9 @@ pulsante mientras siga abierto (el brillo exige que el proceso guardado siga viv
 entrada vieja en active_trainer.json no lo enciende). Elegir otro entrenador avisa de que el
 activo se cerrará y, al aceptar, lo cierra antes de abrir el nuevo (se guarda su PID; sin PID
 guardado, solo se cierra un server_*.py de esta carpeta scripts). Si el activo está entrenando
-no se cierra: se avisa de que hay que detener el entrenamiento antes de cambiar.
+no se cierra: se ofrece abrir el otro en un puerto libre (trainer_port + 1...) para preparar un
+trabajo y añadirlo a la cola (job_queue.py); esos se recuerdan en trainer_instances.json y su
+tarjeta lleva a ellos. /api/status incluye la cola: el trabajo en curso y los pendientes.
 Para añadir un LoRAlab basta con una entrada más en GUI/launcher.json
 (id, name, description, image, run). Las tarjetas se colocan solas: hasta 3 en una fila y, a partir
 de ahí, dos filas con la sobrante arriba (4 -> 2+2, 5 -> 3+2, 6 -> 3+3). image_scale fija el tamaño
@@ -35,6 +37,7 @@ from flask import Flask, abort, jsonify, request, send_from_directory
 
 import gpu_stats
 import i18n
+import job_queue
 import project_layout
 import remote_access
 from i18n import t
@@ -55,6 +58,10 @@ i18n.register(app)
 def load_config():
     with CONFIG_FILE.open("r", encoding="utf-8") as f:
         return json.load(f)
+
+
+# Cola de trabajos de todos los entrenadores (ver job_queue.py): rutas /api/queue... y su hilo.
+QUEUE = job_queue.register(app, lambda: load_config()["trainers"])
 
 
 def trainer_running():
@@ -122,6 +129,45 @@ def save_active(trainer_id, pid=None):
     # The console PID allows closing the trainer when switching to another one.
     ACTIVE_FILE.parent.mkdir(exist_ok=True)
     ACTIVE_FILE.write_text(json.dumps({"id": trainer_id, "pid": pid}), encoding="utf-8")
+
+
+# Entrenadores abiertos en otro puerto mientras el del puerto principal entrena, para preparar
+# trabajos de la cola: [{"id", "port", "pid"}]. Solo cuentan los que siguen vivos y contestan.
+# Trainers opened on another port while the main one trains, to prepare queue jobs.
+INSTANCES_FILE = BASE_DIR / "settings" / "trainer_instances.json"
+
+
+def _port_open(port):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.3)
+        return s.connect_ex(("127.0.0.1", int(port))) == 0
+
+
+def extra_instances():
+    try:
+        data = json.loads(INSTANCES_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        data = []
+    alive = [i for i in data if isinstance(i, dict) and _pid_alive(int(i.get("pid") or 0)) and _port_open(i.get("port") or 0)]
+    if len(alive) != len(data):
+        # Un borrador cerrado ya no necesita su copia de ajustes (lo que se añadió a la cola tiene la suya).
+        for gone in (i for i in data if isinstance(i, dict) and i not in alive and i.get("draft")):
+            shutil.rmtree(DRAFTS_DIR / f"{gone.get('id')}-{gone.get('port')}", ignore_errors=True)
+        # Editor de un trabajo cerrado sin guardar: el trabajo vuelve a como estaba y puede arrancar.
+        for gone in (i for i in data if isinstance(i, dict) and i not in alive and i.get("edit")):
+            QUEUE.end_edit(gone["edit"], save=False)
+        _save_instances(alive)
+    return alive
+
+
+def _save_instances(items):
+    INSTANCES_FILE.parent.mkdir(exist_ok=True)
+    INSTANCES_FILE.write_text(json.dumps(items), encoding="utf-8")
+
+
+def url_for_port(port):
+    # Sin proxy delante: la misma dirección con la que se abrió el lanzador, con otro puerto.
+    return f"http://{request.host.rsplit(':', 1)[0]}:{port}"
 
 
 def _pids_on_port(port: int):
@@ -341,6 +387,19 @@ def _launch_linux(run: Path, env: dict):
     return proc.pid
 
 
+def _launch_windows(run, env):
+    """Consola propia para el .bat, con su PID a mano para poder cerrarla luego. Se abre minimizada y sin
+    quitar el foco (SW_SHOWMINNOACTIVE): el usuario trabaja en el navegador, que se queda delante; la consola
+    queda en la barra de tareas. Funciona también con Windows Terminal, la terminal por defecto en Windows 11.
+    Own console for the .bat, minimized and without taking the focus: the browser stays in front."""
+    si = subprocess.STARTUPINFO()
+    si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    si.wShowWindow = 7                                  # SW_SHOWMINNOACTIVE
+    proc = subprocess.Popen(["cmd", "/c", str(run)], cwd=str(BASE_DIR), env=env,
+                            creationflags=subprocess.CREATE_NEW_CONSOLE, startupinfo=si)
+    return proc.pid
+
+
 @app.route("/")
 def index():
     return send_from_directory(str(GUI_DIR), "launcher.html")
@@ -356,6 +415,20 @@ def assets(filename):
     return send_from_directory(str(BASE_DIR / "assets"), filename)
 
 
+def _run_script(trainer):
+    """(ruta del .bat / .sh que abre el entrenador, None) o (None, error)."""
+    if os.name == "nt":
+        run = (CODE_DIR / trainer["run"]).resolve()
+        if run.parent != CODE_DIR or run.suffix.lower() != ".bat" or not run.is_file():
+            return None, t("Not found: {name}", name=trainer["run"])
+    else:
+        # En Linux se usa el .sh con el mismo nombre / On Linux use the same-named .sh
+        run = (CODE_DIR / Path(trainer["run"]).with_suffix(".sh")).resolve()
+        if run.parent != CODE_DIR or run.suffix.lower() != ".sh" or not run.is_file():
+            return None, t("Not found: {name}", name=run.name)
+    return run, None
+
+
 @app.route("/api/launch", methods=["POST"])
 def launch():
     req = request.get_json(force=True) or {}
@@ -365,15 +438,26 @@ def launch():
     if trainer is None:
         abort(404)
 
-    if os.name == "nt":
-        run = (CODE_DIR / trainer["run"]).resolve()
-        if run.parent != CODE_DIR or run.suffix.lower() != ".bat" or not run.is_file():
-            return jsonify({"status": "error", "error": t("Not found: {name}", name=trainer["run"])}), 404
-    else:
-        # En Linux se usa el .sh con el mismo nombre / On Linux use the same-named .sh
-        run = (CODE_DIR / Path(trainer["run"]).with_suffix(".sh")).resolve()
-        if run.parent != CODE_DIR or run.suffix.lower() != ".sh" or not run.is_file():
-            return jsonify({"status": "error", "error": t("Not found: {name}", name=run.name)}), 404
+    run, error = _run_script(trainer)
+    if error:
+        return jsonify({"status": "error", "error": error}), 404
+
+    # Borrador: el mismo entrenador en otro puerto con su propia copia de los ajustes, para preparar otro
+    # entrenamiento del mismo modelo mientras este entrena (el que entrena relee los ajustes normales).
+    # Draft: the same trainer on another port with its own settings copy, to prepare another training.
+    if req.get("draft"):
+        extra = next((i for i in extra_instances() if i["id"] == trainer_id and i.get("draft")), None)
+        if extra:
+            return jsonify({"status": "ok", "url": url_for_port(extra["port"]), "port": extra["port"], "already": True})
+        return launch_second(trainer_id, run, draft=req.get("settings") or {})
+
+    # Ya abierto en otro puerto (para preparar un trabajo de la cola): volver a él.
+    # Already open on another port (to prepare a queue job): jump back to it.
+    extra = next((i for i in extra_instances() if i["id"] == trainer_id and not i.get("edit")), None)
+    if extra:
+        return jsonify({"status": "ok", "url": url_for_port(extra["port"]), "already": True})
+    if req.get("second"):
+        return launch_second(trainer_id, run)
 
     if trainer_running():
         active = active_running()
@@ -387,14 +471,18 @@ def launch():
             return jsonify({"status": "training", "url": trainer_url(),
                             "error": t("Could not check whether {current} is training. Close it from its console window, then try again.",
                                        current=current)}), 409
-        if training:
+        job = QUEUE.running()
+        if training or job:
             # El script de entrenamiento es hijo del servidor: cerrarlo ahora cortaría el
-            # entrenamiento, y lo avanzado desde el último checkpoint.
+            # entrenamiento, y lo avanzado desde el último checkpoint. Se ofrece abrir el otro en
+            # un puerto distinto, para preparar un trabajo y añadirlo a la cola. Igual si entrena un
+            # trabajo de la cola en su propio servidor (p. ej. tras la pre-caché hecha en este): la GPU
+            # está ocupada y el usuario lo ve como «estoy entrenando».
             # The training script is a child of the server: closing it now would cut the
-            # training, and everything since the last checkpoint.
-            return jsonify({"status": "training", "url": trainer_url(),
-                            "error": t("{current} is training. Stop the training first, then switch.",
-                                       current=current)}), 409
+            # training. Offer to open the other one on another port, to prepare a queue job.
+            # Same while a queue job trains in its own server.
+            name = current if training or not job else job.get("trainer_name") or current
+            return jsonify({"status": "queue_offer", "current": name, "url": trainer_url()})
         if not force:
             return jsonify({"status": "busy", "url": trainer_url()})
         # Cambiar de entrenador: cerrar el activo antes de abrir el nuevo.
@@ -412,22 +500,202 @@ def launch():
     env["LORALAB_SKIP_BROWSER"] = "1"
 
     if os.name == "nt":
-        # Consola propia para el .bat, con su PID a mano para poder cerrarla luego.
-        # Own console for the .bat, PID at hand so it can be closed later.
-        proc = subprocess.Popen(["cmd", "/c", str(run)], cwd=str(BASE_DIR), env=env,
-                                creationflags=subprocess.CREATE_NEW_CONSOLE)
-        pid = proc.pid
+        pid = _launch_windows(run, env)
     else:
         pid = _launch_linux(run, env)
     save_active(trainer_id, pid)
     return jsonify({"status": "ok", "url": trainer_url(), "remote": not remote_access.is_local()})
 
 
+DRAFTS_DIR = BASE_DIR / "settings" / "queue" / "drafts"
+
+
+@app.route("/api/queue-edit/<jid>", methods=["POST"])
+def queue_edit(jid):
+    """Editar un trabajo en espera: su entrenador en otro puerto, con los ajustes del trabajo."""
+    extra = next((i for i in extra_instances() if i.get("edit") == jid), None)
+    if extra:
+        return jsonify({"status": "ok", "url": url_for_port(extra["port"]), "port": extra["port"], "already": True})
+    job, error = QUEUE.begin_edit(jid)
+    if error:
+        return jsonify({"status": "error", "error": error}), 409
+    trainer = next((x for x in load_config()["trainers"] if x["id"] == job["trainer"]), None)
+    run, error = _run_script(trainer) if trainer else (None, t("Not found: {name}", name=job["trainer"]))
+    if error:
+        QUEUE.end_edit(jid, save=False)
+        return jsonify({"status": "error", "error": error}), 404
+    resp = launch_second(job["trainer"], run, edit=jid)
+    if resp.get_json().get("status") != "ok":
+        QUEUE.end_edit(jid, save=False)
+    return resp
+
+
+@app.route("/api/queue-edit/<jid>/done", methods=["POST"])
+def queue_edit_done(jid):
+    """Guardar o cancelar la edición: el trabajo vuelve a poder arrancar y su editor se cierra."""
+    error = QUEUE.end_edit(jid, save=bool((request.get_json(silent=True) or {}).get("save")))
+    editor = next((i for i in extra_instances() if i.get("edit") == jid), None)
+    if editor:
+        _save_instances([i for i in extra_instances() if i is not editor and i.get("port") != editor["port"]])
+        # Después de contestar: la petición llega a través del propio editor.
+        threading.Timer(1.5, _kill_pid, args=(int(editor["pid"]),)).start()
+    if error:
+        return jsonify({"status": "error", "error": error}), 404
+    return jsonify({"status": "ok"})
+
+
+def launch_second(trainer_id, run, draft=None, edit=None):
+    """Abre el entrenador en un puerto libre (trainer_port + 1...), con su consola, sin cerrar el del
+    puerto principal, que está entrenando. Lo que se prepare ahí va a la cola.
+    draft (dict con "train" / "pre_cache"): borrador con su propia copia de los ajustes, que parte de esos
+    valores; lo que se guarde en él no toca los ajustes normales del entrenador.
+    edit (id de un trabajo en espera): editor de ese trabajo, que guarda en su copia de los ajustes."""
+    port = QUEUE._free_port(exclude={i["port"] for i in extra_instances()})
+    if port is None:
+        return jsonify({"status": "error", "error": t("No free port for the job.")}), 409
+    gpu_stats.apply_saved_gpu(os.environ)
+    env = dict(os.environ)
+    env.update(LORALAB_SKIP_BROWSER="1", LORALAB_TRAINER_PORT=str(port))
+    if draft is not None:
+        folder = DRAFTS_DIR / f"{trainer_id}-{port}"
+        folder.mkdir(parents=True, exist_ok=True)
+        for key, name in (("train", f"train_settings_{trainer_id}.json"), ("pre_cache", f"pre_cache_settings_{trainer_id}.json")):
+            data = draft.get(key) if isinstance(draft.get(key), dict) else None
+            if data is None:
+                src = BASE_DIR / "settings" / name
+                data = json.loads(src.read_text(encoding="utf-8")) if src.exists() else {}
+            (folder / name).write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        env.update(LORALAB_DRAFT="1",
+                   LORALAB_TRAIN_CONFIG=str(folder / f"train_settings_{trainer_id}.json"),
+                   LORALAB_PRECACHE_CONFIG=str(folder / f"pre_cache_settings_{trainer_id}.json"))
+    elif edit is not None:
+        folder = job_queue.JOBS_DIR / edit
+        env.update(LORALAB_EDIT_JOB=edit,
+                   LORALAB_TRAIN_CONFIG=str(folder / f"train_settings_{trainer_id}.json"),
+                   LORALAB_PRECACHE_CONFIG=str(folder / f"pre_cache_settings_{trainer_id}.json"))
+    if os.name == "nt":
+        pid = _launch_windows(run, env)
+    else:
+        pid = _launch_linux(run, env)
+    _save_instances(extra_instances() + [{"id": trainer_id, "port": port, "pid": pid, "draft": draft is not None,
+                                          **({"edit": edit} if edit else {})}])
+    if edit:
+        QUEUE.begin_edit(edit, port)
+    return jsonify({"status": "ok", "url": url_for_port(port), "port": port, "second": True})
+
+
 @app.route("/api/status")
 def status():
+    # ?port=N: ¿contesta ya el entrenador abierto en ese puerto? (espera tras abrir uno en otro puerto)
+    port = request.args.get("port", type=int)
+    if port:
+        return jsonify({"trainer": _port_open(port)})
     running = trainer_running()
+    q = QUEUE.snapshot()
+    job = q["running"]
+    by_trainer = {}
+    waiting = [j for j in q["pending"] if j["state"] != "failed"]   # un fallido no arranca solo
+    for j in waiting:
+        by_trainer[j["trainer"]] = by_trainer.get(j["trainer"], 0) + 1
     return jsonify({"trainer": running, "active": active_running() if running else None,
-                    "url": trainer_url()})
+                    "url": trainer_url(),
+                    "instances": [{"id": i["id"], "port": i["port"]} for i in extra_instances()],
+                    "queue": {"running": {k: job.get(k) for k in ("id", "trainer", "trainer_name", "project", "kind",
+                                                                  "progress", "port")} if job else None,
+                              "pending": len(waiting), "by_trainer": by_trainer, "paused": q["paused"]}})
+
+
+# ------------------------------------------------------------------ pausar todo y salir
+# Desde la interfaz, sin tocar ventanas: pausa la cola y el trabajo en curso (con checkpoint), detiene lo
+# que siga ejecutándose, cierra todos los entrenadores con sus consolas y, en este PC, también el lanzador.
+# En la nube (RunPod...) o desde otro equipo el lanzador se queda abierto: cerrado ya no se podría volver.
+# Pause all and exit, from the UI: pauses the queue and the running job, closes every trainer and, on
+# this PC, the launcher too. In the cloud or from another device the launcher stays open.
+SHUTDOWN = {"state": None, "step": "", "keep_launcher": False}
+PAUSE_TIMEOUT = 300   # segundos para que el trabajo en curso guarde su checkpoint
+STOP_TIMEOUT = 60
+
+
+def in_cloud():
+    return bool(os.environ.get("RUNPOD_POD_ID") or os.environ.get("LORALAB_CLOUD"))
+
+
+def _trainer_ports():
+    """Puertos de todos los entrenadores abiertos: el principal, los de otros puertos y los de trabajos."""
+    ports = {int(remote_access.load()["trainer_port"])}
+    ports |= {int(i["port"]) for i in extra_instances()}
+    with QUEUE._lock:
+        ports |= {int(j["port"]) for j in QUEUE.data["jobs"] if j.get("port")}
+    return sorted(p for p in ports if _port_open(p))
+
+
+def _shutdown(keep_launcher):
+    def step(text):
+        SHUTDOWN["step"] = text
+        print(f"[SHUTDOWN] {text}", flush=True)
+
+    step(t("Pausing the queue..."))
+    if keep_launcher:
+        QUEUE.set_options(paused=True)                 # la sesión sigue abierta: pausa visible, con su interruptor
+    else:
+        QUEUE.hold = True                              # solo hasta cerrar: al volver a abrir, la cola sigue sola
+    job = QUEUE.running()
+    if job:
+        step(t("Pausing {name} and saving its checkpoint...", name=f"{job['trainer_name']} · {job['project'] or '-'}"))
+        QUEUE.pause(job["id"])
+        end = time.time() + PAUSE_TIMEOUT
+        while QUEUE.running() and time.time() < end:
+            time.sleep(1)
+        QUEUE.requeue_interrupted(job["id"])           # el primero de la cola, desde su checkpoint
+    # Lo que aún se ejecute fuera de la cola (unos subtítulos, por ejemplo) se detiene igual que con Stop.
+    busy = [p for p in _trainer_ports() if (job_queue._http(p, "/api/status")[1] or {}).get("running")]
+    if busy:
+        step(t("Stopping what is still running..."))
+        for p in busy:
+            job_queue._http(p, "/api/stop", {})
+        end = time.time() + STOP_TIMEOUT
+        while time.time() < end and any((job_queue._http(p, "/api/status")[1] or {}).get("running") for p in busy):
+            time.sleep(1)
+
+    step(t("Closing the trainers..."))
+    QUEUE._reap_idle_servers()                         # servidores de los trabajos (sin ventana)
+    for inst in extra_instances():                     # abiertos en otros puertos, con su consola
+        _kill_pid(int(inst["pid"]))
+    _save_instances([])
+    shutil.rmtree(DRAFTS_DIR, ignore_errors=True)      # borradores: lo añadido a la cola tiene su copia
+    if trainer_running():
+        kill_trainer()                                 # el del puerto principal, con su consola
+
+    if keep_launcher:
+        SHUTDOWN.update(state="done", step=t("Everything is paused and closed. The launcher stays available."))
+        return
+    SHUTDOWN.update(state="done", step=t("Everything is closed. You can close this tab."))
+    time.sleep(2.5)                                    # la página llega a leer el último paso
+    _close_own_console()
+
+
+def _close_own_console():
+    """Cierra el lanzador y, en Windows, la consola de Start_LoRAlab (si no, se quedaría en «pause»)."""
+    if os.name == "nt":
+        try:
+            import psutil
+            proc = psutil.Process(os.getpid())
+            for parent in proc.parents():
+                if parent.name().lower() == "cmd.exe":
+                    subprocess.run(["taskkill", "/PID", str(parent.pid), "/T", "/F"], capture_output=True)
+                    break
+        except Exception:
+            pass
+    os._exit(0)
+
+
+@app.route("/api/shutdown", methods=["GET", "POST"])
+def shutdown():
+    if request.method == "POST" and SHUTDOWN["state"] != "running":
+        keep = in_cloud() or not remote_access.is_local()
+        SHUTDOWN.update(state="running", step="", keep_launcher=keep)
+        threading.Thread(target=_shutdown, args=(keep,), daemon=True).start()
+    return jsonify({"status": "ok", **SHUTDOWN, "cloud": in_cloud(), "local": remote_access.is_local()})
 
 
 # La configuración de red solo se cambia desde este PC: un equipo remoto no puede abrir más el acceso.

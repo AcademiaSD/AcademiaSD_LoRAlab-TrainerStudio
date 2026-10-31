@@ -8,6 +8,10 @@
 
 What was added, newest first. Each entry links to its commit.
 
+**2026-10-31**
+
+- <img src="https://img.shields.io/badge/MAJOR%20UPDATE-7c3aed?style=for-the-badge" alt="MAJOR UPDATE" height="22"> **Job queue: queue trainings and pre-caches of any trainer, even several of the same model, and they run one after another on the GPU** — a queue page to reorder, pause, resume or remove jobs and jump to the one training; Start asks *Add to queue?* while something trains; *New training for the queue* prepares the next one while the current one trains; *Pause all and exit* in the launcher, also on RunPod and other clouds; a failed job stays in the list saying why; **✎** edits a waiting job ([how it works](#-job-queue)) [`d7bc99e`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/d7bc99e) [`e0089ae`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/e0089ae) [`94ecc4f`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/94ecc4f) [`9bf31bf`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/9bf31bf) [`2468e99`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/2468e99)
+
 **2026-10-25**
 
 - **MOSS-Image edit LoRAs on armV5**: the latest [MOSS-Image-Edit-HQ](https://huggingface.co/akhaliq/MOSS-Image-Edit-HQ) is the default edit base now, with armV4 and chinoll's as options [`ab231b1`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/ab231b1)
@@ -68,13 +72,13 @@ What was added, newest first. Each entry links to its commit.
 
 - Launcher: a running training is never cut when switching trainers, and going back works behind a proxy [`43da9a8`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/43da9a8) [`4ea74e2`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/4ea74e2)
 
+<details>
+<summary><b>Earlier changes (2026-09-28 to 2026-10-14)</b></summary>
+
 **2026-10-14**
 
 - Trainers open in the launcher tab, with a back button, a glow on the one that is training and trainer switching [`4ed40ad`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/4ed40ad)
 - Windows 11 24H2: trainers are detected without `wmic` [`5432f33`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/5432f33)
-
-<details>
-<summary><b>Earlier changes (2026-09-28 to 2026-10-12)</b></summary>
 
 **2026-10-12**
 
@@ -195,13 +199,15 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 1. **Instalar:** en la carpeta donde quieras instalarlo, escribe `cmd` en la barra de direcciones del explorador y ejecuta
    `git clone https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio.git`
    (o descarga el ZIP desde el botón verde **Code → Download ZIP** y descomprímelo). Después, doble clic en **`Install_LoRAlab-TrainerStudio.bat`**: instala Git si no lo tienes, Python 3.13.1 y un único entorno `venv` para todos los entrenadores. Con GPU AMD usa **`Install_LoRAlab-TrainerStudio_AMD.bat`** (experimental; confirmado con una RX 7800 XT en Windows y MiniMax-H3).
-2. **Abrir:** doble clic en **`Start_LoRAlab-TrainerStudio.bat`** y pulsa la tarjeta del entrenador que quieras. Solo puede haber uno abierto a la vez.
+2. **Abrir:** doble clic en **`Start_LoRAlab-TrainerStudio.bat`** y pulsa la tarjeta del entrenador que quieras. Mientras uno entrena, pulsar otra tarjeta la abre en otro puerto para preparar un trabajo de la cola.
 3. **Entrenar:** nombre del proyecto → carpeta del dataset → *Crear Captions* (opcional) → *Iniciar Pre-Caché* → *Iniciar / Reanudar* → *Send to Models*. El modelo se descarga solo la primera vez.
 4. **Actualizar:** doble clic en **`Update_LoRAlab-TrainerStudio.bat`**. Se conservan tus modelos, proyectos y ajustes, los nuevos entrenadores aparecen en el lanzador y se instalan las librerías nuevas que hagan falta.
 5. **Desde otro equipo:** el botón **🌐 Remote access** del lanzador abre el entrenador a tu red con usuario y contraseña. Con **⬆ Subir** (o arrastrando archivos o un `.zip` al Dataset Manager) mandas el dataset desde ese equipo, y con **⬇ Descargar LoRA** te bajas el resultado.
 6. **Previsualizaciones nítidas en ComfyUI:** algunos de estos modelos son lentos al generar, y conviene ver el resultado de forma anticipada, mientras se genera, para cancelar si no va bien. Para eso hace falta una buena previsualización. Mi recomendación: al usar tus LoRAs de Qwen-Image 2.1, Krea 2 o FLUX.2 / Klein 9B, pon el nodo **Model Preview Override** de [KJNodes](https://github.com/kijai/ComfyUI-KJNodes) con el TAE de AcademiaSD correspondiente ([Qwen-Image 2.1](https://huggingface.co/AcademiaSD/TAE-Qwen-Image-2.1) · [Krea 2](https://huggingface.co/AcademiaSD/TAE-Krea-2) · [FLUX.2](https://huggingface.co/AcademiaSD/TAE_Flux2_AcademiaSD)) en `ComfyUI/models/vae_approx/`. Detalles en la sección *Sharp previews in ComfyUI*.
 7. **Sin GPU potente:** entrena en la nube con **[RunPod](https://console.runpod.io/deploy?template=lfxvtg5rrb&ref=jbvdshm0)**. Es una plantilla ya preparada: eliges una GPU con CUDA 13, entras con el usuario `loralab` y la contraseña que aparece en *Logs → Container*, y al terminar paras y borras el pod. Detalles en la sección *RunPod*.
 8. **Requisitos:** Windows 10/11, GPU NVIDIA **RTX 20xx / GTX 16xx o posterior** con driver **580 o superior** (o AMD **RX 7000 / RX 9000** de 16 GB, experimental), 8 GB de VRAM (4 GB para Anima y SDXL en NF4, 12 GB para LTX-2.3, FLUX.2 Klein 9B, Ideogram 4 y SDXL en BF16) y 16 GB de RAM (32 GB recomendados).
+
+**Cola de trabajos:** con un entrenamiento en marcha, *Iniciar / Reanudar* o *Iniciar Pre-Caché* en cualquier entrenador pregunta si añadirlo a la cola, con una copia de los ajustes de ese momento. Los trabajos se ejecutan uno tras otro en la GPU. El botón **Cola** del lanzador y de cada entrenador abre la página de la cola: lo que entrena ahora (progreso, tiempo restante y curva de loss) y lo que espera, que puedes reordenar arrastrando, pausar, continuar o quitar. Pausar guarda un checkpoint y deja el trabajo pausado en la cola; continuar sigue desde ese paso. Mientras un entrenador entrena, **➕ Nuevo entrenamiento en cola** abre un borrador del mismo entrenador en otro puerto para preparar el siguiente sin tocar el que entrena (ponle otro nombre de proyecto). Si un trabajo falla, se queda en la lista en rojo diciendo por qué (no se encuentra la pre-caché o el dataset, falta VRAM…); corrígelo y pulsa **↻** para reintentarlo. **✎** en un trabajo de la cola abre su entrenador con sus ajustes para cambiarlos: el botón de empezar pasa a ser **💾 Guardar cambios en la cola**. Mientras se hace la pre-caché, *Iniciar / Reanudar* sigue disponible y manda el entrenamiento a la cola. **⏻ Pausar todo y salir**, abajo en el lanzador, pausa el entrenamiento en curso guardando su checkpoint y cierra todo desde el navegador; al volver a abrir el lanzador la cola sigue sola donde estaba, empezando por ese entrenamiento. En RunPod y otras nubes el lanzador sigue abierto, con la cola pausada.
 
 **Linux:** ya tiene soporte para Linux. Cada `.bat` tiene su `.sh` equivalente; la instalación y el uso están en [docs/Linux.md](docs/Linux.md). Gracias a **[Jonathan Hecl (@jonathanhecl)](https://github.com/jonathanhecl)** por aportarlo.
 
@@ -293,7 +299,7 @@ Double-click **`Update_LoRAlab-TrainerStudio.bat`**. It brings the latest versio
 
 ## 🚀 Using it
 
-**`Start_LoRAlab-TrainerStudio.bat`** opens the launcher in your browser (`http://127.0.0.1:4990`). Click a trainer: its console window and its web interface (`http://127.0.0.1:5000`) open on their own. All trainers use port 5000, so only one can be open at a time; the launcher warns you if one is already running. Each trainer can also be started directly with its `code\Run_LoRAlab-<Model>.bat`.
+**`Start_LoRAlab-TrainerStudio.bat`** opens the launcher in your browser (`http://127.0.0.1:4990`). Click a trainer: its console window and its web interface (`http://127.0.0.1:5000`) open on their own. The trainer opened from a card uses port 5000. While one is training, clicking another card opens it on the next free port (5001, 5002…) so you can prepare a job for the [job queue](#-job-queue) without stopping the one that trains. Each trainer can also be started directly with its `code\Run_LoRAlab-<Model>.bat`.
 
 Every trainer follows the same five steps:
 
@@ -311,6 +317,24 @@ Also in every trainer:
 - **Several NVIDIA GPUs?** Pick the one to train with in **🎮 GPU**, next to the language at the bottom of the launcher, and press **💾 Save settings**. It applies to the trainers opened from then on, and the VRAM panel shows that card. *Automatic* keeps CUDA's choice, which puts the card it considers fastest first, not always the one with more VRAM. The selector only appears with two or more NVIDIA cards.
 - Optional **Hugging Face token** for faster downloads. Your settings and token are stored in `settings\`, which is never uploaded.
 - Models live under `Models/`. Each project uses `Cache_Data/cached_data_<model>_<project>` for the pre-cache and `Outputs/<model>_lora_output_<project>` for checkpoints, previews and LoRAs. Legacy root folders are moved automatically on first start. Migration is skipped while a training or captioning process is running.
+
+---
+
+## 🧾 Job queue
+
+Queue trainings and pre-caches, from one trainer or several, and they run one after another on the GPU.
+
+- **Adding jobs.** While something is training, **Start / Resume** or **Start Pre-Cache** in any trainer asks *Add to queue?* instead of starting. The job keeps a copy of the settings saved at that moment, so you can go on changing that trainer for the next one. With the GPU free, a training starts at once as before, and it shows in the queue too.
+- **Training after its pre-cache.** While a trainer runs its pre-cache, its **Start / Resume** stays available: the training goes to the queue and starts as soon as the pre-cache finishes.
+- **Editing a waiting job.** **✎** on a job of the queue opens its trainer with that job's settings, and its start button becomes **💾 Save changes to the queue**. The job does not start while you edit it; **Cancel** leaves it as it was.
+- **Another trainer while one trains.** Click its card in the launcher: it opens on another port without closing the one that trains.
+- **Another training of the same model.** While a trainer trains, **➕ New training for the queue** appears under Start / Stop. It opens a draft of that trainer on another port, starting from the current settings but saving to its own copy: change the project, dataset or anything else without touching the training in progress, and its Start adds it to the queue. Give the draft its own project name, so it does not overwrite the project folder of the one training.
+- **The queue page.** The **Queue** button, in the launcher and in every trainer, opens it in the same tab: the job training now, with its progress, time left and loss curve; the jobs waiting, which you drag to change their order, pause, resume or remove; and the history. **Go to the training** opens that job's trainer, with its console, chart and previews, also in the same tab.
+- **Pause and resume.** Pausing a job, the one training or one waiting, keeps it in the queue as paused: the one training saves a checkpoint and stops, and the next one starts. Resuming it continues from that step. This also works for a training started directly from its trainer. **Pause the queue** lets the current job finish and starts nothing new; **Stop if a job fails** pauses the queue when a job fails.
+- **When a job fails** it stays in the list, in red, saying why in plain words (the pre-cache or the dataset was not found, not enough VRAM…) with the console line below. The next job starts meanwhile. Fix the cause and press **↻** to queue it again (at the end, so a Pre-Cache added for it runs first), or add the job again and it replaces the failed one. A job that hangs and does not answer **Remove** or **Pause** is closed after 30 s (3 min when pausing); pressing **Remove** again closes it at once.
+- **Each job runs in its own trainer,** opened without a window on a free port (5001, 5002…). What you save in that trainer applies only to that job, never to your trainer settings. If the launcher is closed while a job trains, the job shows as paused (interrupted) and can be resumed.
+- **⏻ Pause all and exit,** at the bottom of the launcher, pauses the job training (with its checkpoint), closes every trainer and job and then the launcher itself, all from the browser. Next time you open the launcher, the queue continues on its own where it was, starting with that training from its checkpoint. On RunPod and other clouds, or when used remotely, the launcher stays open so the page keeps working, with the queue paused: turn off **Pause the queue** to carry on.
+- Behind a reverse proxy or on RunPod only ports 4990 and 5000 are published: the queue works, but **Go to the training** needs the job's port to be reachable.
 
 ---
 

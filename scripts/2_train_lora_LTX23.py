@@ -157,7 +157,7 @@ DEFAULTS = {
     "loss_chunk_elements": 2000000,
 }
 
-CONFIG_PATH = "settings/train_settings_ltx23.json"
+CONFIG_PATH = os.environ.get("LORALAB_TRAIN_CONFIG") or "settings/train_settings_ltx23.json"
 
 HF_BASE_REPO_ID = "diffusers/LTX-2.3-Diffusers"
 HF_NF4_REPO_ID = "AcademiaSD/LTX23_NF4"

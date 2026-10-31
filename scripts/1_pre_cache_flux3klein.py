@@ -71,7 +71,7 @@ def config_preview_images(cfg):
 
 
 # ── CARGAR CONFIGURACIÓN / LOAD CONFIG ──────────────────────────────────────
-CONFIG_PATH = "settings/pre_cache_settings_flux3klein.json"
+CONFIG_PATH = os.environ.get("LORALAB_PRECACHE_CONFIG") or "settings/pre_cache_settings_flux3klein.json"
 
 if os.path.exists(CONFIG_PATH):
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:

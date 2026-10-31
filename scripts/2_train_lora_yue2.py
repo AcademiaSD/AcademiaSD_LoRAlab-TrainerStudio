@@ -84,7 +84,7 @@ NF4_DIR = str(resolve_model_dir(None, "Models/YuE2-3B_NF4", STUDIO_ROOT))
 RAW_DIR = str(resolve_model_dir(None, "Models/YuE2-3B_Raw", STUDIO_ROOT))
 RAW_VAE_DIR = str(resolve_model_dir(None, "Models/YuE2-Vae", STUDIO_ROOT))
 try:
-    with open(os.path.join(STUDIO_ROOT, "settings", "train_settings_yue2.json"), "r", encoding="utf-8") as _f:
+    with open(os.environ.get("LORALAB_TRAIN_CONFIG") or os.path.join(STUDIO_ROOT, "settings", "train_settings_yue2.json"), "r", encoding="utf-8") as _f:
         _precision_hint = str(json.load(_f).get("precision", "bf16")).lower()
 except (OSError, ValueError):
     _precision_hint = "bf16"
@@ -139,7 +139,7 @@ DEFAULTS = {
     "project_name": "",
 }
 
-CONFIG_PATH = "settings/train_settings_yue2.json"
+CONFIG_PATH = os.environ.get("LORALAB_TRAIN_CONFIG") or "settings/train_settings_yue2.json"
 
 if os.path.exists(CONFIG_PATH):
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
@@ -781,9 +781,10 @@ def load_cache():
 
 TOKENIZER = None
 DATASET_PATH = "./dataset"
-if os.path.exists("settings/pre_cache_settings_yue2.json"):
+_PRECACHE_CONFIG = os.environ.get("LORALAB_PRECACHE_CONFIG") or "settings/pre_cache_settings_yue2.json"
+if os.path.exists(_PRECACHE_CONFIG):
     try:
-        with open("settings/pre_cache_settings_yue2.json", "r", encoding="utf-8") as _f:
+        with open(_PRECACHE_CONFIG, "r", encoding="utf-8") as _f:
             DATASET_PATH = str(json.load(_f).get("dataset_path", DATASET_PATH))
     except (OSError, ValueError):
         pass

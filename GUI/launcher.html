@@ -82,6 +82,55 @@
         }
         .card.active-glow { border-color: #10b981; animation: card-pulse 2.4s ease-in-out infinite; }
 
+        /* Cola de trabajos: el que entrena brilla en violeta y lleva su progreso; cada tarjeta dice
+           cuántos trabajos suyos esperan. Job queue: the training one glows violet with its progress. */
+        .card { position: relative; }
+        @keyframes card-train {
+            0%, 100% { box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.5), 0 0 16px rgba(139, 92, 246, 0.35); }
+            50%      { box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.9), 0 0 36px rgba(139, 92, 246, 0.65); }
+        }
+        .card.train-glow { border-color: #a78bfa; animation: card-train 2.4s ease-in-out infinite; }
+        .card .q-badge { position: absolute; top: 8px; right: 8px; min-width: 22px; height: 22px; padding: 0 7px; border-radius: 11px;
+                         display: none; align-items: center; justify-content: center; font-size: 0.72rem; font-weight: 700; color: #fff;
+                         background: linear-gradient(90deg, #0e7490, #6d28d9); box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45); }
+        .card .q-badge.on { display: inline-flex; }
+        .card .q-train { display: none; width: 100%; flex-direction: column; gap: 5px; }
+        .card .q-train.on { display: flex; }
+        .card .q-train .q-label { display: flex; justify-content: space-between; gap: 8px; font-size: 0.72rem; color: #c4b5fd; }
+        .card .q-train .q-label b { color: #fff; font-variant-numeric: tabular-nums; }
+        .card .q-bar { height: 5px; border-radius: 3px; background: #0f172a; overflow: hidden; }
+        .card .q-bar i { display: block; height: 100%; width: 0; border-radius: 3px; transition: width 0.6s ease;
+                         background: linear-gradient(90deg, #22d3ee, #a78bfa); box-shadow: 0 0 10px rgba(167, 139, 250, 0.7); }
+        .card .q-extra { display: none; font-size: 0.7rem; color: #67e8f9; }
+        .card .q-extra.on { display: block; }
+
+        footer .bye-btn:hover { border-color: #ef4444; color: #fecaca; }
+        #bye { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; z-index: 20;
+               background: rgba(2, 6, 23, 0.88); backdrop-filter: blur(4px); }
+        #bye.open { display: flex; }
+        #bye .bye-box { width: min(460px, 92vw); display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center;
+                        padding: 30px 26px; background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 16px;
+                        box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.35), 0 20px 50px rgba(0, 0, 0, 0.6); }
+        #bye h2 { font-size: 1.15rem; }
+        #bye p { color: var(--text-muted); font-size: 0.92rem; line-height: 1.5; min-height: 2.8em; }
+        .bye-spin { width: 42px; height: 42px; border-radius: 50%; border: 3px solid #334155; border-top-color: #a78bfa;
+                    border-right-color: #22d3ee; animation: bye-rot 0.9s linear infinite; }
+        .bye-spin.done { animation: none; border-color: #10b981; }
+        @keyframes bye-rot { to { transform: rotate(360deg); } }
+
+        .queue-pill { display: inline-flex; align-items: center; gap: 10px; padding: 9px 16px; border-radius: 999px; text-decoration: none;
+                      color: var(--text-main); font-size: 0.88rem; background: rgba(30, 41, 59, 0.85); border: 1px solid var(--panel-border);
+                      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35); transition: border-color 0.2s, box-shadow 0.2s; max-width: 92vw; }
+        .queue-pill:hover { border-color: #a78bfa; box-shadow: 0 0 0 1px #a78bfa, 0 0 24px rgba(139, 92, 246, 0.45); }
+        .queue-pill .qp-title { font-weight: 700; display: inline-flex; align-items: center; gap: 7px; }
+        .queue-pill .qp-dot { width: 8px; height: 8px; border-radius: 50%; background: #a78bfa; box-shadow: 0 0 10px #a78bfa;
+                              animation: qp-pulse 1.6s ease-in-out infinite; }
+        @keyframes qp-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .queue-pill .qp-text { color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .queue-pill .qp-text b { color: #fff; }
+        .queue-pill .qp-wait { padding: 2px 9px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; color: #fff;
+                               background: linear-gradient(90deg, #0e7490, #6d28d9); white-space: nowrap; }
+
         .card .name { font-size: 1.1rem; font-weight: 700; }
         .card .desc { font-size: 0.8rem; color: var(--text-muted); text-align: center; max-width: 250px; }
 
@@ -139,6 +188,14 @@
         <p id="subtitle"></p>
     </header>
 
+    <!-- Cola de trabajos: lo que entrena y lo que espera; lleva a la página de la cola. -->
+    <a class="queue-pill" id="queue-pill" href="/queue" title="Job queue">
+        <span class="qp-title"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Queue</span></span>
+        <span class="qp-dot" id="qp-dot" hidden></span>
+        <span class="qp-text no-i18n" id="qp-text"></span>
+        <span class="qp-wait no-i18n" id="qp-wait" hidden></span>
+    </a>
+
     <div class="grid" id="grid"></div>
     <div id="ui-settings">
         <label for="ui-lang">🌍 <span>Language</span></label>
@@ -157,6 +214,8 @@
         <a href="https://discord.gg/Syuaduy678" target="_blank">💬 Discord</a>
         <a href="https://ko-fi.com/academiasd" target="_blank">☕ Ko-Fi</a>
         <button type="button" id="net-open" onclick="openNetwork()" hidden>🌐 Remote access</button>
+        <button type="button" id="bye-open" class="bye-btn" onclick="pauseAllAndExit()"
+                title="Pauses the training in progress (saving its checkpoint), closes every trainer and their windows, and closes the launcher. Next time, the queue continues where it was.">⏻ Pause all and exit</button>
     </footer>
 
     <!-- Acceso desde otros equipos de la red. Solo se edita desde este PC (/api/network). -->
@@ -188,6 +247,15 @@
         </form>
     </div>
 
+    <!-- Pausar todo y salir: lo que va haciendo el lanzador hasta cerrarse. -->
+    <div id="bye">
+        <div class="bye-box">
+            <div class="bye-spin" id="bye-spin"></div>
+            <h2 id="bye-title">Pause all and exit</h2>
+            <p class="no-i18n" id="bye-step"></p>
+        </div>
+    </div>
+
     <!-- Cambiar de entrenador: aviso antes de cerrar el activo. -->
     <div id="confirm" onclick="if (event.target === this && window.resolveConfirm) resolveConfirm(false)">
         <form onsubmit="event.preventDefault(); resolveConfirm(true)">
@@ -195,6 +263,7 @@
             <p class="note" id="confirm-text"></p>
             <div class="actions">
                 <button type="button" onclick="resolveConfirm(false)">Cancel</button>
+                <button type="button" id="confirm-alt" class="no-i18n" onclick="resolveConfirm('alt')" hidden></button>
                 <button type="submit" class="primary" id="confirm-ok"></button>
             </div>
         </form>
@@ -258,7 +327,15 @@
             name.innerText = tr.name;
             const desc = document.createElement('div');
             desc.className = 'desc';
-            card.append(img, name, desc);
+            // Cola: trabajos suyos esperando, su progreso si entrena, y si está abierto en otro puerto.
+            const badge = document.createElement('span');
+            badge.className = 'q-badge no-i18n';
+            const train = document.createElement('div');
+            train.className = 'q-train no-i18n';
+            train.innerHTML = '<div class="q-label"><span class="q-what"></span><b class="q-pct"></b></div><div class="q-bar"><i></i></div>';
+            const extra = document.createElement('div');
+            extra.className = 'q-extra no-i18n';
+            card.append(img, name, desc, train, extra, badge);
             card.onclick = () => launch(tr, card);
             return card;
         }
@@ -320,12 +397,16 @@
 
         // Confirmación propia, mismo estilo que el resto del lanzador.
         // Own confirm box, in the launcher's own style.
-        function askConfirm(title, text, okLabel) {
+        // altLabel: un tercer botón opcional, que resuelve 'alt' (true = el principal, false = cancelar).
+        function askConfirm(title, text, okLabel, altLabel) {
             return new Promise(resolve => {
                 const modal = document.getElementById('confirm');
                 document.getElementById('confirm-title').innerText = title;
                 document.getElementById('confirm-text').innerText = text;
                 document.getElementById('confirm-ok').innerText = okLabel;
+                const alt = document.getElementById('confirm-alt');
+                alt.hidden = !altLabel;
+                alt.innerText = altLabel || '';
                 const onKey = e => { if (e.key === 'Escape') finish(false); };
                 const finish = value => {
                     modal.classList.remove('open');
@@ -339,11 +420,11 @@
             });
         }
 
-        async function apiLaunch(id, force) {
+        async function apiLaunch(id, force, second) {
             const res = await fetch('/api/launch', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id, force: !!force })
+                body: JSON.stringify({ id, force: !!force, second: !!second })
             });
             return res.json();
         }
@@ -357,15 +438,43 @@
                     // Otro entrenador en marcha: avisar antes de cerrarlo.
                     // Another trainer running: warn before closing it.
                     const current = (cfg.trainers.find(x => x.id === live.active) || {}).name || t('Another trainer');
-                    const ok = await askConfirm(
+                    // Con la cola, varios entrenadores pueden estar abiertos: al lado (otro puerto) o en su lugar.
+                    const choice = await askConfirm(
                         t('Switch trainer'),
-                        t('{current} is open. Opening {next} will close the current trainer and its console window. Continue?',
+                        t('{current} is open. You can open {next} alongside it on another port, or close {current} and its console window and open {next} in its place.',
                           { current, next: trainer.name }),
-                        t('Close and open'));
+                        t('Open alongside'), t('Close and open'));
+                    setStatus('');
+                    if (!choice) { card.classList.remove('launching'); return; }
+                    if (choice === 'alt') {
+                        setStatus(t('Closing {current}...', { current }));
+                        data = await apiLaunch(trainer.id, true);
+                    } else {
+                        data = await apiLaunch(trainer.id, false, true);
+                        if (data.status === 'ok' && data.port) {
+                            await waitForTrainer(data.url, trainer.name, data.port);
+                            card.classList.remove('launching');
+                            return;
+                        }
+                    }
+                }
+                if (data.status === 'queue_offer') {
+                    // El activo está entrenando: no se cierra. El nuevo se abre en otro puerto para
+                    // preparar un trabajo y añadirlo a la cola.
+                    // The active one is training: it is not closed. The new one opens on another port.
+                    const ok = await askConfirm(
+                        t('{current} is training', { current: data.current }),
+                        t('{current} keeps training. {next} will open on another port so you can prepare a job and add it to the queue: it starts as soon as the GPU is free.',
+                          { current: data.current, next: trainer.name }),
+                        t('Open on another port'));
                     setStatus('');
                     if (!ok) { card.classList.remove('launching'); return; }
-                    setStatus(t('Closing {current}...', { current }));
-                    data = await apiLaunch(trainer.id, true);
+                    data = await apiLaunch(trainer.id, false, true);
+                    if (data.status === 'ok') {
+                        await waitForTrainer(data.url, trainer.name, data.port);
+                        card.classList.remove('launching');
+                        return;
+                    }
                 }
                 if (data.status === 'training') {
                     // Entrenamiento en curso: no se cierra; se explica y se enlaza al entrenador.
@@ -388,12 +497,13 @@
 
         // Misma pestaña: espera a que el puerto del entrenador responda y navega aquí.
         // Same tab: wait for the trainer port to answer, then navigate in place.
-        async function waitForTrainer(url, name) {
+        async function waitForTrainer(url, name, port) {
             const deadline = Date.now() + 120000;
             while (Date.now() < deadline) {
                 setStatus(t('Waiting for {name} to start...', { name }));
                 try {
-                    const s = await (await fetch('/api/status')).json();
+                    // port: abierto en otro puerto para la cola; se espera a que conteste ese.
+                    const s = await (await fetch('/api/status' + (port ? `?port=${port}` : ''))).json();
                     if (s.trainer) { window.location.href = url; return; }
                 } catch (e) { /* el lanzador está ocupado / the launcher is busy */ }
                 await new Promise(r => setTimeout(r, 750));
@@ -406,8 +516,89 @@
             try {
                 live = await (await fetch('/api/status')).json();
             } catch (e) { return; }
-            document.querySelectorAll('.card').forEach(c =>
-                c.classList.toggle('active-glow', live.trainer && live.active === c.dataset.id));
+            const q = live.queue || {};
+            const job = q.running;
+            const extras = live.instances || [];
+            document.querySelectorAll('.card').forEach(c => {
+                const id = c.dataset.id;
+                const training = !!(job && job.trainer === id);
+                c.classList.toggle('train-glow', training);
+                c.classList.toggle('active-glow', !training && live.trainer && live.active === id);
+                const n = (q.by_trainer || {})[id] || 0;
+                const badge = c.querySelector('.q-badge');
+                badge.classList.toggle('on', n > 0);
+                badge.textContent = String(n);
+                badge.title = t('{n} job(s) of this trainer waiting in the queue', { n });
+                const box = c.querySelector('.q-train');
+                box.classList.toggle('on', training);
+                if (training) {
+                    const p = job.progress || {};
+                    const pct = p.total ? Math.round(100 * p.step / p.total) : 0;
+                    box.querySelector('.q-what').textContent = (job.kind === 'precache' ? t('Pre-caching') : t('LoRA training'))
+                        + (job.project ? ` · ${job.project}` : '');
+                    box.querySelector('.q-pct').textContent = p.total ? `${p.step}/${p.total} · ${pct}%` : '…';
+                    box.querySelector('.q-bar i').style.width = pct + '%';
+                }
+                const ex = extras.find(i => i.id === id);
+                const exEl = c.querySelector('.q-extra');
+                exEl.classList.toggle('on', !!ex);
+                if (ex) exEl.textContent = t('Open on port {port} to prepare a queue job', { port: ex.port });
+            });
+            renderQueuePill(q);
+        }
+
+        // Pausar todo y salir: el lanzador pausa la cola y el entrenamiento en curso, cierra los entrenadores
+        // y (en este PC) se cierra él; la página va contando los pasos hasta que deja de contestar.
+        async function pauseAllAndExit() {
+            const ok = await askConfirm(t('Pause all and exit'),
+                t('The training in progress is paused saving its checkpoint and every trainer is closed with its window. On this PC the launcher closes too, and next time you open it the queue continues where it was, starting with that training. In the cloud or from another device the launcher stays open with the queue paused.'),
+                t('Pause all and exit'));
+            if (!ok) return;
+            const bye = document.getElementById('bye');
+            const stepEl = document.getElementById('bye-step');
+            bye.classList.add('open');
+            stepEl.textContent = t('Pausing the queue...');
+            let last = null;
+            try { last = await (await fetch('/api/shutdown', { method: 'POST' })).json(); } catch (e) { /* ya cerrado */ }
+            while (true) {
+                await new Promise(r => setTimeout(r, 1000));
+                try {
+                    last = await (await fetch('/api/shutdown', { cache: 'no-store' })).json();
+                } catch (e) {
+                    // El lanzador ya no contesta: se ha cerrado.
+                    stepEl.textContent = t('Everything is closed. You can close this tab.');
+                    break;
+                }
+                if (last.step) stepEl.textContent = last.step;
+                if (last.state === 'done' && last.keep_launcher) break;
+            }
+            const spin = document.getElementById('bye-spin');
+            spin.classList.add('done');
+            if (last && last.keep_launcher) {
+                setTimeout(() => { bye.classList.remove('open'); spin.classList.remove('done'); updateGlow(); }, 4000);
+            }
+        }
+
+        // Botón de la cola: qué entrena, cuánto lleva y cuántos esperan.
+        function renderQueuePill(q) {
+            const job = q.running;
+            const text = document.getElementById('qp-text');
+            const wait = document.getElementById('qp-wait');
+            document.getElementById('qp-dot').hidden = !job;
+            if (job) {
+                const p = job.progress || {};
+                const pct = p.total ? ` · ${Math.round(100 * p.step / p.total)}%` : '';
+                text.innerHTML = `${escapeHtml(job.kind === 'precache' ? t('Pre-caching') : t('LoRA training'))} <b>${escapeHtml(job.trainer_name || '')}</b>`
+                    + (job.project ? ` · ${escapeHtml(job.project)}` : '') + pct;
+            } else {
+                text.textContent = q.paused ? t('Paused') : t('Nothing training');
+            }
+            wait.hidden = !q.pending;
+            wait.textContent = t('{n} waiting', { n: q.pending || 0 });
+        }
+
+        function escapeHtml(s) {
+            return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
         }
 
         function link(url) { return `<a href="${url}" target="_blank">${url}</a>`; }

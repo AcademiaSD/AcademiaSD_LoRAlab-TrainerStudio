@@ -82,7 +82,7 @@ DEFAULTS = {
     "trigger_word": "",
 }
 
-CONFIG_PATH = "settings/train_settings_sdxl.json"
+CONFIG_PATH = os.environ.get("LORALAB_TRAIN_CONFIG") or "settings/train_settings_sdxl.json"
 
 if os.path.exists(CONFIG_PATH):
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:

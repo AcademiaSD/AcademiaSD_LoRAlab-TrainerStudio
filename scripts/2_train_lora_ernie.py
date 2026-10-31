@@ -30,7 +30,7 @@ except (UnicodeEncodeError, LookupError):
     # Consolas embebidas pueden rechazar reconfigure(); nunca dejes que la barra pare el trainer.
     PROGRESS_FILLED, PROGRESS_EMPTY = "#", "-"
 
-CONFIG="settings/train_settings_ernie.json"
+CONFIG=os.environ.get("LORALAB_TRAIN_CONFIG") or "settings/train_settings_ernie.json"
 cfg=json.load(open(CONFIG,encoding="utf-8")) if os.path.isfile(CONFIG) else {}
 MODEL=str(resolve_model_dir(cfg.get("model_id"), "Models/Ernie-NF4")); PROJECT=cfg.get("project_name","").strip()
 CACHE=str(resolve_cache_dir(f"./cached_data_ernie_{PROJECT}" if PROJECT else cfg.get("cache_dir"), "./Cache_Data/cached_data_ernie"))

@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Job queue · AcademiaSD LoRAlab</title>
+    <link rel="icon" type="image/png" href="/assets/qwenimage21/logo_128.png">
+    <script src="/i18n.js"></script>
+    <!--
+        Cola de trabajos (scripts/job_queue.py): lo que entrena, lo que espera y lo terminado.
+        Job queue page: what trains, what waits and what is finished.
+        Se refresca cada 2 s desde /api/queue; la curva de loss del que entrena llega por
+        /api/queue/<id>/metrics (el lanzador se la pide a su entrenador, en otro puerto).
+    -->
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --panel-bg: #1e293b;
+            --panel-border: #334155;
+            --accent: #6366f1;
+            --glow: #38bdf8;
+            --violet: #a78bfa;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --ok: #10b981;
+            --bad: #ef4444;
+            --warn: #f59e0b;
+            --grad: linear-gradient(90deg, #0e7490, #6d28d9);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { min-height: 100vh; color: var(--text-main); padding: 28px 20px 48px;
+               background: radial-gradient(ellipse at top, #1e1b4b 0%, var(--bg-dark) 55%, #020617 100%); }
+        .wrap { max-width: 1080px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+        button { font: inherit; cursor: pointer; }
+
+        /* Cabecera */
+        .top { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+        .top img { height: 52px; border-radius: 10px; box-shadow: 0 0 22px rgba(99, 102, 241, 0.35); }
+        .top h1 { font-size: 1.45rem; font-weight: 800; letter-spacing: -0.3px; }
+        .top p { color: var(--text-muted); font-size: 0.85rem; }
+        .top .spacer { flex: 1; }
+        .btn { display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius: 8px; font-size: 0.85rem; font-weight: 600;
+               color: var(--text-main); background: var(--bg-dark); border: 1px solid var(--panel-border); text-decoration: none;
+               transition: border-color 0.2s, box-shadow 0.2s, transform 0.1s; white-space: nowrap; }
+        .btn:hover { border-color: var(--glow); }
+        .btn:active { transform: translateY(1px); }
+        .btn.primary { background: var(--grad); border-color: transparent; color: #fff; box-shadow: 0 4px 18px rgba(109, 40, 217, 0.35); }
+        .btn.primary:hover { box-shadow: 0 0 0 1px var(--violet), 0 6px 24px rgba(139, 92, 246, 0.55); }
+        .btn.danger:hover { border-color: var(--bad); color: #fecaca; }
+        .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+        .panel { background: rgba(30, 41, 59, 0.82); border: 1px solid var(--panel-border); border-radius: 16px; padding: 20px;
+                 box-shadow: 0 12px 34px rgba(0, 0, 0, 0.35); backdrop-filter: blur(6px); }
+        .panel-h { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+        .panel-h h2 { font-size: 1rem; font-weight: 700; }
+        .panel-h .count { font-size: 0.75rem; color: var(--text-muted); padding: 2px 9px; border-radius: 999px; border: 1px solid var(--panel-border); }
+        .panel-h .right { margin-left: auto; display: flex; gap: 8px; }
+
+        /* Controles de la cola */
+        .controls { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; padding: 14px 20px; }
+        .switch { display: inline-flex; align-items: center; gap: 10px; font-size: 0.88rem; cursor: pointer; user-select: none; }
+        .switch input { display: none; }
+        .switch .track { width: 38px; height: 21px; border-radius: 11px; background: #334155; position: relative; transition: background 0.2s; flex: 0 0 auto; }
+        .switch .track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 15px; height: 15px; border-radius: 50%; background: #e2e8f0;
+                                transition: transform 0.2s; }
+        .switch input:checked + .track { background: var(--grad); }
+        .switch input:checked + .track::after { transform: translateX(17px); }
+        .controls .hint { color: var(--text-muted); font-size: 0.78rem; flex: 1 1 260px; }
+        .pill-state { padding: 4px 12px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; }
+        .pill-state.run { background: rgba(139, 92, 246, 0.18); color: #c4b5fd; border: 1px solid rgba(167, 139, 250, 0.4); }
+        .pill-state.hold { background: rgba(245, 158, 11, 0.14); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.4); }
+        .pill-state.idle { background: rgba(148, 163, 184, 0.12); color: var(--text-muted); border: 1px solid var(--panel-border); }
+
+        /* Entrenando ahora */
+        .hero { position: relative; overflow: hidden; }
+        .hero::before { content: ""; position: absolute; inset: -40% -10% auto auto; width: 420px; height: 420px; pointer-events: none;
+                        background: radial-gradient(circle, rgba(139, 92, 246, 0.22), transparent 65%); }
+        .hero.empty::before { display: none; }
+        .hero-grid { display: grid; grid-template-columns: 170px 1fr; gap: 22px; align-items: center; position: relative; }
+        .hero-cover { width: 170px; aspect-ratio: 1; border-radius: 14px; object-fit: cover; background: #020617;
+                      box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.6), 0 0 30px rgba(139, 92, 246, 0.45); animation: cover-pulse 2.4s ease-in-out infinite; }
+        @keyframes cover-pulse { 50% { box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.9), 0 0 42px rgba(139, 92, 246, 0.65); } }
+        .kicker { display: inline-flex; align-items: center; gap: 8px; font-size: 0.72rem; font-weight: 800; letter-spacing: 1.4px; color: #c4b5fd; text-transform: uppercase; }
+        .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--violet); box-shadow: 0 0 10px var(--violet); animation: blink 1.6s ease-in-out infinite; }
+        @keyframes blink { 50% { opacity: 0.3; } }
+        .hero h3 { font-size: 1.5rem; font-weight: 800; margin: 6px 0 2px; letter-spacing: -0.3px; }
+        .hero h3 .proj { color: var(--text-muted); font-weight: 600; }
+        .chips { display: flex; gap: 7px; flex-wrap: wrap; margin: 8px 0 14px; }
+        .chip { font-size: 0.72rem; padding: 3px 10px; border-radius: 999px; background: rgba(15, 23, 42, 0.7); border: 1px solid var(--panel-border); color: #cbd5e1; }
+        .chip.kind-train { color: #a5f3fc; border-color: rgba(34, 211, 238, 0.35); }
+        .chip.kind-precache { color: #fde68a; border-color: rgba(245, 158, 11, 0.35); }
+        .bar { height: 12px; border-radius: 7px; background: #0b1222; overflow: hidden; border: 1px solid #1e2a44; }
+        .bar i { display: block; height: 100%; width: 0; border-radius: 7px; background: linear-gradient(90deg, #22d3ee, #6366f1, #a78bfa);
+                 box-shadow: 0 0 16px rgba(167, 139, 250, 0.7); transition: width 0.8s ease; position: relative; overflow: hidden; }
+        .bar i::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.25), transparent);
+                        animation: sheen 2.2s linear infinite; transform: translateX(-100%); }
+        @keyframes sheen { to { transform: translateX(100%); } }
+        .stats { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 12px; }
+        .stat { display: flex; flex-direction: column; gap: 2px; }
+        .stat span { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px; }
+        .stat b { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+        .hero-bottom { display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: end; margin-top: 18px; position: relative; }
+        .spark { height: 64px; width: 100%; display: block; }
+        .spark-wrap { position: relative; }
+        .spark-wrap small { position: absolute; top: 0; left: 0; font-size: 0.68rem; color: var(--text-muted); }
+        .actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+        .empty-box { display: flex; align-items: center; gap: 16px; color: var(--text-muted); }
+        .empty-box .ico { width: 54px; height: 54px; border-radius: 14px; display: grid; place-items: center; font-size: 1.5rem;
+                          background: rgba(15, 23, 42, 0.7); border: 1px solid var(--panel-border); }
+        .empty-box b { color: var(--text-main); display: block; margin-bottom: 2px; }
+
+        /* Lista */
+        .list { display: flex; flex-direction: column; gap: 10px; }
+        .row { display: grid; grid-template-columns: 22px 30px 52px 1fr auto auto; align-items: center; gap: 12px; padding: 10px 12px;
+               border-radius: 12px; background: rgba(15, 23, 42, 0.6); border: 1px solid #22304d; transition: border-color 0.15s, transform 0.15s, opacity 0.15s; }
+        .row:hover { border-color: #3b4f78; }
+        .row.dragging { opacity: 0.4; }
+        .row.drop-before { box-shadow: 0 -3px 0 0 var(--violet); }
+        .row.drop-after { box-shadow: 0 3px 0 0 var(--violet); }
+        .row.paused { opacity: 0.72; }
+        .handle { cursor: grab; color: #64748b; font-size: 1rem; text-align: center; user-select: none; }
+        .handle:active { cursor: grabbing; }
+        .pos { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 0.8rem; font-weight: 800;
+               background: rgba(99, 102, 241, 0.16); color: #c7d2fe; border: 1px solid rgba(99, 102, 241, 0.35); }
+        .row img { width: 52px; height: 52px; border-radius: 9px; object-fit: cover; background: #020617; }
+        .row .main { min-width: 0; }
+        .row .title { font-weight: 700; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .row .title .proj { color: var(--text-muted); font-weight: 600; }
+        .row .sub { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px; font-size: 0.75rem; color: var(--text-muted); }
+        .row .note { color: #fcd34d; }
+        .row.failed { border-color: rgba(239, 68, 68, 0.45); }
+        .row.failed .note { color: #fca5a5; font-weight: 600; }
+        .row .detail { flex-basis: 100%; color: #94a3b8; font-family: Consolas, monospace; font-size: 0.7rem;
+                       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .state { font-size: 0.72rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+        .state.queued { background: rgba(99, 102, 241, 0.16); color: #c7d2fe; }
+        .state.paused { background: rgba(245, 158, 11, 0.16); color: #fcd34d; }
+        .state.done { background: rgba(16, 185, 129, 0.16); color: #6ee7b7; }
+        .state.failed { background: rgba(239, 68, 68, 0.16); color: #fca5a5; }
+        .state.stopped { background: rgba(148, 163, 184, 0.16); color: #cbd5e1; }
+        .icons { display: flex; gap: 4px; }
+        .ib { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; border: 1px solid transparent; background: transparent;
+              color: #cbd5e1; font-size: 0.9rem; transition: background 0.15s, border-color 0.15s, color 0.15s; }
+        .ib:hover { background: #1e293b; border-color: var(--panel-border); color: #fff; }
+        .ib.del:hover { color: #fca5a5; border-color: rgba(239, 68, 68, 0.5); }
+        .ib:disabled { opacity: 0.3; cursor: default; background: transparent; border-color: transparent; }
+        .muted-empty { color: var(--text-muted); font-size: 0.88rem; padding: 6px 2px; }
+
+        details.panel > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; }
+        details.panel > summary::-webkit-details-marker { display: none; }
+        details.panel > summary h2 { font-size: 1rem; }
+        details.panel > summary .caret { color: var(--glow); transition: transform 0.2s; display: inline-block; }
+        details.panel[open] > summary .caret { transform: rotate(90deg); }
+        details.panel[open] > summary { margin-bottom: 14px; }
+        .row.hist { grid-template-columns: 52px 1fr auto auto; }
+
+        /* Confirmación */
+        #confirm { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(2, 6, 23, 0.75); z-index: 10; }
+        #confirm.open { display: flex; }
+        #confirm .box { width: min(440px, 92vw); display: flex; flex-direction: column; gap: 12px; padding: 22px; background: var(--panel-bg);
+                        border: 1px solid var(--panel-border); border-radius: 14px; }
+        #confirm h2 { font-size: 1.05rem; }
+        #confirm p { font-size: 0.88rem; color: var(--text-muted); line-height: 1.55; }
+        #confirm .act { display: flex; gap: 10px; justify-content: flex-end; }
+        #toast { position: fixed; left: 50%; top: 18px; transform: translateX(-50%); padding: 10px 16px; border-radius: 10px; font-size: 0.88rem;
+                 background: #1e293b; border: 1px solid var(--panel-border); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); display: none; z-index: 11; }
+        #toast.err { border-color: rgba(239, 68, 68, 0.6); color: #fecaca; }
+
+        @media (max-width: 720px) {
+            body { padding: 18px 12px 40px; }
+            .hero-grid { grid-template-columns: 1fr; }
+            .hero-cover { width: 110px; }
+            .hero-bottom { grid-template-columns: 1fr; }
+            .actions { justify-content: flex-start; }
+            .row { grid-template-columns: 26px 44px 1fr auto; }
+            .row .handle { display: none; }
+            .row .state { grid-column: 3; justify-self: start; }
+            .row .icons { grid-column: 1 / -1; justify-content: flex-end; }
+            .row.hist { grid-template-columns: 44px 1fr auto; }
+            .row img { width: 44px; height: 44px; }
+            .top img { height: 40px; }
+        }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <div class="top">
+        <a href="/"><img src="/assets/banner_LoRAlab.png" alt="AcademiaSD LoRAlab"></a>
+        <div>
+            <h1>Job queue</h1>
+            <p>Trainings and pre-caches, one after another on the GPU</p>
+        </div>
+        <div class="spacer"></div>
+        <span class="pill-state idle no-i18n" id="queue-state"></span>
+        <a class="btn" href="/"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg><span>Launcher</span></a>
+    </div>
+
+    <div class="panel controls">
+        <label class="switch" title="Finish (or pause) the current job and start nothing new until you resume the queue.">
+            <input type="checkbox" id="opt-paused" onchange="setOption('paused', this.checked)"><span class="track"></span><span>Pause the queue</span>
+        </label>
+        <label class="switch" title="If a job fails, the queue pauses instead of starting the next one.">
+            <input type="checkbox" id="opt-stop" onchange="setOption('stop_on_failure', this.checked)"><span class="track"></span><span>Stop if a job fails</span>
+        </label>
+        <span class="hint">Add jobs from any trainer: while one trains, Start asks to add it to the queue. Drag the jobs to change their order.</span>
+    </div>
+
+    <section class="panel hero empty" id="hero"></section>
+
+    <section class="panel">
+        <div class="panel-h">
+            <h2>Up next</h2><span class="count no-i18n" id="pending-count">0</span>
+        </div>
+        <div class="list" id="pending"></div>
+    </section>
+
+    <details class="panel" id="history-box">
+        <summary><span class="caret">▶</span><h2>History</h2><span class="count no-i18n" id="history-count">0</span>
+            <span style="margin-left:auto"><button type="button" class="btn danger" id="clear-history"
+                onclick="event.preventDefault(); clearHistory()">Clear history</button></span></summary>
+        <div class="list" id="history"></div>
+    </details>
+</div>
+
+<div id="confirm" onclick="if (event.target === this) closeConfirm(false)">
+    <div class="box">
+        <h2 id="confirm-title"></h2>
+        <p id="confirm-text"></p>
+        <div class="act">
+            <button type="button" class="btn" onclick="closeConfirm(false)">Cancel</button>
+            <button type="button" class="btn primary" id="confirm-ok" onclick="closeConfirm(true)"></button>
+        </div>
+    </div>
+</div>
+<div id="toast" class="no-i18n"></div>
+
+<script>
+    let state = null;
+    let trainers = {};
+    let dragging = null;
+    const metrics = {};          // id -> {run, points[]}
+    let lastRunningId = null;
+
+    const KIND = { train: () => t('LoRA training'), precache: () => t('Pre-cache') };
+    const STATE = {
+        queued: () => t('Waiting'), paused: () => t('Paused'), done: () => t('Done'),
+        failed: () => t('Failed'), stopped: () => t('Stopped')
+    };
+
+    function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+    function cover(job) { const tr = trainers[job.trainer]; return tr ? '/' + tr.image : '/assets/banner_LoRAlab.png'; }
+    function trainerUrl(job) { return job.port ? `${location.protocol}//${location.hostname}:${job.port}` : ''; }
+    function hms(sec) {
+        if (!isFinite(sec) || sec < 0) return '–';
+        sec = Math.round(sec);
+        const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+        return h ? `${h}h ${String(m).padStart(2, '0')}m` : m ? `${m}m ${String(s).padStart(2, '0')}s` : `${s}s`;
+    }
+    function when(ts) {
+        if (!ts) return '';
+        const d = new Date(ts * 1000);
+        return d.toLocaleString(I18N.lang || undefined, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    }
+
+    function toast(msg, err) {
+        const el = document.getElementById('toast');
+        el.textContent = msg;
+        el.className = err ? 'err' : '';
+        el.style.display = 'block';
+        clearTimeout(toast.timer);
+        toast.timer = setTimeout(() => { el.style.display = 'none'; }, 3500);
+    }
+
+    let confirmResolve = null;
+    function ask(title, text, okLabel) {
+        document.getElementById('confirm-title').textContent = title;
+        document.getElementById('confirm-text').textContent = text;
+        document.getElementById('confirm-ok').textContent = okLabel;
+        document.getElementById('confirm').classList.add('open');
+        return new Promise(r => { confirmResolve = r; });
+    }
+    function closeConfirm(v) {
+        document.getElementById('confirm').classList.remove('open');
+        if (confirmResolve) { confirmResolve(v); confirmResolve = null; }
+    }
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeConfirm(false); });
+
+    async function api(path, body) {
+        const res = await fetch(path, body === undefined ? {} : {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.status === 'error') { toast('[!] ' + (data.error || res.status), true); return null; }
+        return data;
+    }
+
+    async function refresh() {
+        if (dragging) return;
+        try {
+            const data = await (await fetch('/api/queue', { cache: 'no-store' })).json();
+            state = data;
+            render();
+        } catch (e) { /* lanzador ocupado: siguiente vuelta */ }
+    }
+
+    // ------------------------------------------------------------- render
+    function render() {
+        const s = state;
+        document.getElementById('opt-paused').checked = !!s.paused;
+        document.getElementById('opt-stop').checked = !!s.stop_on_failure;
+        const qs = document.getElementById('queue-state');
+        qs.className = 'pill-state no-i18n ' + (s.paused ? 'hold' : s.running ? 'run' : 'idle');
+        qs.textContent = s.paused ? t('Queue paused') : s.running ? t('Running') : t('Idle');
+        renderHero(s.running);
+        renderPending(s.pending || []);
+        renderHistory(s.history || []);
+    }
+
+    function renderHero(job) {
+        const hero = document.getElementById('hero');
+        if (!job) {
+            hero.className = 'panel hero empty';
+            lastRunningId = null;
+            hero.innerHTML = `<div class="empty-box"><div class="ico">⏸</div><div><b>${esc(t('Nothing is training'))}</b>`
+                + `${esc(state.pending && state.pending.length && state.paused ? t('The queue is paused: resume it to start the next job.')
+                      : t('Start a training from any trainer and it will appear here.'))}</div></div>`;
+            return;
+        }
+        hero.className = 'panel hero';
+        const p = job.progress || {};
+        const pct = p.total ? Math.min(100, 100 * p.step / p.total) : 0;
+        const m = metrics[job.id];
+        const dts = m ? m.points.slice(-30).map(x => x.dt).filter(x => x > 0) : [];
+        const sit = dts.length ? dts.reduce((a, b) => a + b, 0) / dts.length : null;
+        const eta = sit && p.total ? (p.total - p.step) * sit : null;
+        const elapsed = job.started ? Date.now() / 1000 - job.started : null;
+        const url = trainerUrl(job);
+        // Se reconstruye al cambiar de trabajo o de idioma; el resto de vueltas solo cambia los números.
+        if (lastRunningId !== job.id + '|' + I18N.lang) {
+            lastRunningId = job.id + '|' + I18N.lang;
+            hero.innerHTML = `
+                <div class="hero-grid">
+                    <img class="hero-cover" src="${cover(job)}" alt="">
+                    <div>
+                        <span class="kicker"><span class="live-dot"></span>${esc(t('Now training'))}</span>
+                        <h3><span class="h-trainer"></span> <span class="proj h-proj"></span></h3>
+                        <div class="chips h-chips"></div>
+                        <div class="bar"><i class="h-bar"></i></div>
+                        <div class="stats">
+                            <div class="stat"><span>${esc(t('Step'))}</span><b class="h-step">–</b></div>
+                            <div class="stat"><span>${esc(t('Progress'))}</span><b class="h-pct">–</b></div>
+                            <div class="stat"><span>s/it</span><b class="h-sit">–</b></div>
+                            <div class="stat"><span>${esc(t('Time left'))}</span><b class="h-eta">–</b></div>
+                            <div class="stat"><span>${esc(t('Elapsed'))}</span><b class="h-el">–</b></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="hero-bottom">
+                    <div class="spark-wrap"><small>${esc(t('Loss'))}</small><canvas class="spark" id="spark"></canvas></div>
+                    <div class="actions">
+                        <a class="btn primary h-open">↗ ${esc(t('Go to the training'))}</a>
+                        <button type="button" class="btn h-pause">⏸ ${esc(t('Pause'))}</button>
+                        <button type="button" class="btn danger h-remove">✕ ${esc(t('Remove'))}</button>
+                    </div>
+                </div>`;
+            hero.querySelector('.h-pause').onclick = () => pauseJob(state.running);
+            hero.querySelector('.h-remove').onclick = () => removeJob(state.running);
+        }
+        hero.querySelector('.h-trainer').textContent = job.trainer_name;
+        hero.querySelector('.h-proj').textContent = job.project ? '· ' + job.project : '';
+        hero.querySelector('.h-chips').innerHTML = `<span class="chip kind-${job.kind}">${esc(KIND[job.kind] ? KIND[job.kind]() : job.kind)}</span>`
+            + (job.port ? `<span class="chip">${esc(t('port'))} ${job.port}</span>` : '')
+            + (job.external ? `<span class="chip">${esc(t('started from its trainer'))}</span>` : '')
+            + (job.requested ? `<span class="chip" style="color:#fcd34d">${esc(job.requested === 'pause' ? t('Pausing…') : t('Removing…'))}</span>` : '');
+        hero.querySelector('.h-bar').style.width = pct.toFixed(1) + '%';
+        hero.querySelector('.h-step').textContent = p.total ? `${p.step} / ${p.total}` : (job.phase === 'boot' ? t('Starting…') : '–');
+        hero.querySelector('.h-pct').textContent = p.total ? pct.toFixed(1) + ' %' : '–';
+        hero.querySelector('.h-sit').textContent = sit ? sit.toFixed(2) : '–';
+        hero.querySelector('.h-eta').textContent = eta != null ? hms(eta) : '–';
+        hero.querySelector('.h-el').textContent = elapsed ? hms(elapsed) : '–';
+        const open = hero.querySelector('.h-open');
+        if (url) { open.href = url; open.style.display = ''; } else open.style.display = 'none';
+        hero.querySelector('.h-pause').disabled = !!job.requested;
+        drawSpark();
+    }
+
+    function rowActions(job, i, n) {
+        const paused = job.state === 'paused', failed = job.state === 'failed';
+        // Fallido: ↻ lo vuelve a poner en cola (al final, para que antes pueda ir, por ejemplo, su pre-caché).
+        const main = failed
+            ? (job.external ? '' : `<button type="button" class="ib" title="${esc(t('Try again'))}" onclick="resumeJob('${job.id}')">↻</button>`)
+            : `<button type="button" class="ib" title="${esc(paused ? t('Resume') : t('Pause'))}" onclick="${paused ? 'resumeJob' : 'pauseJobId'}('${job.id}')">${paused ? '▶' : '⏸'}</button>`;
+        // ✎ Editar: su entrenador con los ajustes de este trabajo (no arranca mientras se edita).
+        const edit = job.external ? '' : `<button type="button" class="ib" title="${esc(t('Edit this job'))}" onclick="editJob('${job.id}')">✎</button>`;
+        return `<div class="icons">
+            ${edit}
+            <button type="button" class="ib" title="${esc(t('Move up'))}" ${i === 0 ? 'disabled' : ''} onclick="moveJob('${job.id}', ${i - 1})">▲</button>
+            <button type="button" class="ib" title="${esc(t('Move down'))}" ${i === n - 1 ? 'disabled' : ''} onclick="moveJob('${job.id}', ${i + 1})">▼</button>
+            ${main}
+            <button type="button" class="ib del" title="${esc(t('Remove'))}" onclick="removeJobId('${job.id}')">✕</button>
+        </div>`;
+    }
+
+    function renderPending(list) {
+        document.getElementById('pending-count').textContent = list.length;
+        const box = document.getElementById('pending');
+        if (!list.length) {
+            box.innerHTML = `<div class="muted-empty">${esc(t('No jobs waiting.'))}</div>`;
+            return;
+        }
+        box.innerHTML = list.map((job, i) => {
+            const total = job.progress && job.progress.total ? `${job.progress.total} ${t('steps')}` : '';
+            return `<div class="row ${job.state === 'paused' || job.state === 'failed' ? job.state : ''}" draggable="true" data-id="${job.id}" data-index="${i}">
+                <span class="handle" title="${esc(t('Drag to change the order'))}">⋮⋮</span>
+                <span class="pos">${i + 1}</span>
+                <img src="${cover(job)}" alt="">
+                <div class="main">
+                    <div class="title">${esc(job.trainer_name)} <span class="proj">· ${esc(job.project || '-')}</span></div>
+                    <div class="sub"><span class="chip kind-${job.kind}">${esc(KIND[job.kind] ? KIND[job.kind]() : job.kind)}</span>
+                        ${total ? `<span>${esc(total)}</span>` : ''}
+                        ${job.editing ? `<span class="note">✎ ${esc(t('Being edited: it does not start until you save or cancel.'))}</span>` : ''}
+                        ${job.note ? `<span class="note">${esc(t(job.note))}</span>` : ''}
+                        ${job.detail ? `<span class="detail" title="${esc(job.detail)}">${esc(job.detail)}</span>` : ''}</div>
+                </div>
+                <span class="state ${job.state}">${esc(STATE[job.state] ? STATE[job.state]() : job.state)}</span>
+                ${rowActions(job, i, list.length)}
+            </div>`;
+        }).join('');
+        bindDrag(box);
+    }
+
+    function renderHistory(list) {
+        document.getElementById('history-count').textContent = list.length;
+        document.getElementById('clear-history').disabled = !list.length;
+        const box = document.getElementById('history');
+        if (!list.length) {
+            box.innerHTML = `<div class="muted-empty">${esc(t('Nothing finished yet.'))}</div>`;
+            return;
+        }
+        box.innerHTML = list.map(job => {
+            const dur = job.started && job.finished ? hms(job.finished - job.started) : '';
+            const p = job.progress || {};
+            return `<div class="row hist">
+                <img src="${cover(job)}" alt="">
+                <div class="main">
+                    <div class="title">${esc(job.trainer_name)} <span class="proj">· ${esc(job.project || '-')}</span></div>
+                    <div class="sub"><span class="chip kind-${job.kind}">${esc(KIND[job.kind] ? KIND[job.kind]() : job.kind)}</span>
+                        ${p.total ? `<span>${p.step}/${p.total}</span>` : ''}
+                        ${dur ? `<span>⏱ ${esc(dur)}</span>` : ''}
+                        <span>${esc(when(job.finished))}</span>
+                        ${job.note ? `<span class="note">${esc(t(job.note))}</span>` : ''}
+                        ${job.detail ? `<span class="detail" title="${esc(job.detail)}">${esc(job.detail)}</span>` : ''}</div>
+                </div>
+                <span class="state ${job.state}">${esc(STATE[job.state] ? STATE[job.state]() : job.state)}</span>
+                <div class="icons">
+                    ${job.state === 'failed' && !job.external ? `<button type="button" class="ib" title="${esc(t('Try again'))}" onclick="resumeJob('${job.id}')">↻</button>` : ''}
+                    <button type="button" class="ib del" title="${esc(t('Remove from the history'))}" onclick="removeJobId('${job.id}', true)">✕</button>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    // ------------------------------------------------------------- curva
+    async function pollMetrics() {
+        const job = state && state.running;
+        if (!job || job.kind !== 'train' || document.hidden) return;
+        const m = metrics[job.id] || (metrics[job.id] = { run: null, points: [] });
+        const since = m.points.length ? m.points[m.points.length - 1].s : 0;
+        try {
+            const d = await (await fetch(`/api/queue/${job.id}/metrics?since=${since}`, { cache: 'no-store' })).json();
+            if (d.run !== m.run && since) { m.points = []; m.run = d.run; return pollMetrics(); }
+            m.run = d.run;
+            m.points.push(...d.points);
+            if (m.points.length > 4000) m.points = m.points.slice(-4000);
+            drawSpark();
+        } catch (e) { /* entrenador ocupado */ }
+    }
+
+    function drawSpark() {
+        const cv = document.getElementById('spark');
+        const job = state && state.running;
+        if (!cv || !job) return;
+        const m = metrics[job.id];
+        const r = cv.getBoundingClientRect(), dpr = devicePixelRatio || 1;
+        cv.width = Math.max(1, r.width * dpr); cv.height = Math.max(1, r.height * dpr);
+        const ctx = cv.getContext('2d');
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, r.width, r.height);
+        if (!m || m.points.length < 2) return;
+        // Media móvil exponencial: la tendencia, no el ruido de cada paso.
+        let ema = null; const sm = m.points.map(p => (ema = ema == null ? p.l : ema * 0.93 + p.l * 0.07));
+        const sorted = sm.slice().sort((a, b) => a - b);
+        const lo = sorted[Math.floor(sorted.length * 0.02)], hi = sorted[Math.ceil(sorted.length * 0.98) - 1];
+        const pad = 14, w = r.width, h = r.height - 2;
+        const x = i => (i / (sm.length - 1)) * w, y = v => pad + (1 - (v - lo) / ((hi - lo) || 1)) * (h - pad);
+        const path = new Path2D();
+        sm.forEach((v, i) => i ? path.lineTo(x(i), y(v)) : path.moveTo(x(i), y(v)));
+        const area = new Path2D(path); area.lineTo(w, h); area.lineTo(0, h); area.closePath();
+        const g = ctx.createLinearGradient(0, pad, 0, h);
+        g.addColorStop(0, 'rgba(99, 102, 241, 0.28)'); g.addColorStop(1, 'rgba(99, 102, 241, 0)');
+        ctx.fillStyle = g; ctx.fill(area);
+        const lg = ctx.createLinearGradient(0, 0, w, 0);
+        lg.addColorStop(0, '#22d3ee'); lg.addColorStop(1, '#a78bfa');
+        ctx.strokeStyle = lg; ctx.lineWidth = 2; ctx.shadowColor = 'rgba(167, 139, 250, 0.7)'; ctx.shadowBlur = 8;
+        ctx.stroke(path);
+    }
+
+    // ------------------------------------------------------------- acciones
+    async function setOption(key, value) {
+        const d = await api('/api/queue/options', { [key]: value });
+        if (d) { state = d; render(); }
+    }
+    async function moveJob(id, index) {
+        const d = await api(`/api/queue/${id}/move`, { index });
+        if (d) { state = d; render(); }
+    }
+    async function editJob(id) {
+        const d = await api(`/api/queue-edit/${id}`, {});
+        if (!d) return;
+        toast(t('Opening the job in its trainer...'));
+        const end = Date.now() + 120000;
+        while (Date.now() < end) {
+            const r = await (await fetch(`/api/status?port=${d.port}`, { cache: 'no-store' })).json().catch(() => ({}));
+            if (r.trainer) { window.location.href = d.url; return; }
+            await new Promise(res => setTimeout(res, 700));
+        }
+        toast('[!] ' + t('It did not start in time. Open it at {url}.', { url: d.url }), true);
+    }
+    async function resumeJob(id) {
+        const d = await api(`/api/queue/${id}/resume`, {});
+        if (d) { state = d; render(); }
+    }
+    async function pauseJobId(id) {
+        const d = await api(`/api/queue/${id}/pause`, {});
+        if (d) { state = d; render(); }
+    }
+    async function pauseJob(job) {
+        if (!job) return;
+        // También uno lanzado desde su entrenador: la cola guarda su copia de ajustes y lo puede continuar.
+        const ok = await ask(t('Pause {name}?', { name: `${job.trainer_name} · ${job.project || '-'}` }),
+            t('It stops saving a checkpoint and stays in the queue as paused; resuming it continues from that step. The next job starts meanwhile.'),
+            t('Pause'));
+        if (ok) await pauseJobId(job.id);
+    }
+    async function removeJob(job) {
+        if (!job) return;
+        const forcing = job.requested === 'remove';
+        const ok = await ask(t('Remove {name}?', { name: `${job.trainer_name} · ${job.project || '-'}` }),
+            forcing ? t('It is not answering the stop: close it now? What it trained since its last checkpoint is lost.')
+                    : t('It stops saving a checkpoint and leaves the queue. Its LoRAs, cache and previews are kept.'),
+            forcing ? t('Close it now') : t('Remove'));
+        if (ok) {
+            const d = await api(`/api/queue/${job.id}/remove`, {});
+            if (d) { state = d; render(); }
+        }
+    }
+    async function removeJobId(id, fromHistory) {
+        const all = [state.running, ...(state.pending || []), ...(state.history || [])].filter(Boolean);
+        const job = all.find(j => j.id === id);
+        if (!job) return;
+        if (!fromHistory) {
+            const ok = await ask(t('Remove {name}?', { name: `${job.trainer_name} · ${job.project || '-'}` }),
+                t('It leaves the queue. Its LoRAs, cache and previews are kept.'), t('Remove'));
+            if (!ok) return;
+        }
+        const d = await api(`/api/queue/${id}/remove`, {});
+        if (d) { state = d; render(); }
+    }
+    async function clearHistory() {
+        const ok = await ask(t('Clear history?'), t('Only the list is cleared: LoRAs, caches and previews are kept.'), t('Clear history'));
+        if (!ok) return;
+        const d = await api('/api/queue/clear-history', {});
+        if (d) { state = d; render(); }
+    }
+
+    // ------------------------------------------------------------- arrastrar
+    function bindDrag(box) {
+        box.querySelectorAll('.row[draggable]').forEach(row => {
+            row.addEventListener('dragstart', e => {
+                dragging = row.dataset.id;
+                row.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', dragging);
+            });
+            row.addEventListener('dragend', () => {
+                row.classList.remove('dragging');
+                box.querySelectorAll('.row').forEach(r => r.classList.remove('drop-before', 'drop-after'));
+                setTimeout(() => { dragging = null; }, 50);
+            });
+            row.addEventListener('dragover', e => {
+                if (!dragging || row.dataset.id === dragging) return;
+                e.preventDefault();
+                const after = e.offsetY > row.offsetHeight / 2;
+                box.querySelectorAll('.row').forEach(r => r.classList.remove('drop-before', 'drop-after'));
+                row.classList.add(after ? 'drop-after' : 'drop-before');
+            });
+            row.addEventListener('drop', e => {
+                e.preventDefault();
+                const from = [...box.querySelectorAll('.row')].findIndex(r => r.dataset.id === dragging);
+                let to = parseInt(row.dataset.index, 10) + (row.classList.contains('drop-after') ? 1 : 0);
+                if (from < to) to -= 1;
+                const id = dragging;
+                dragging = null;
+                if (from !== to) moveJob(id, to);
+            });
+        });
+    }
+
+    async function init() {
+        try {
+            const cfg = await (await fetch('/launcher.json')).json();
+            cfg.trainers.forEach(x => { trainers[x.id] = x; });
+        } catch (e) { /* sin portadas */ }
+        await refresh();
+        pollMetrics();
+        setInterval(refresh, 2000);
+        setInterval(pollMetrics, 5000);
+        window.addEventListener('resize', drawSpark);
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) { refresh(); pollMetrics(); } });
+    }
+    init();
+</script>
+</body>
+</html>

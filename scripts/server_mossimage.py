@@ -24,6 +24,7 @@ import i18n
 import project_layout
 import remote_access
 import file_transfer
+import queue_link
 import training_metrics
 import gpu_stats
 from pathlib import Path
@@ -88,10 +89,10 @@ ASSETS_DIR = BASE_DIR / "assets" / "mossimage"
 UI_FILE = BASE_DIR / "GUI" / "trainer_ui_mossimage.html"
 LOGO_FILE = ASSETS_DIR / "logo.png" if (ASSETS_DIR / "logo.png").exists() else BASE_DIR / "logo.png"
 
-PRECACHE_CONFIG = SETTINGS_DIR / "pre_cache_settings_mossimage.json"
+PRECACHE_CONFIG = Path(os.environ.get("LORALAB_PRECACHE_CONFIG") or SETTINGS_DIR / "pre_cache_settings_mossimage.json")
 PREVIEW_KEYS = ("lora_type", "preview_custom_prompt", "preview_edit_image", "preview_edit_images")
 PREVIEW_MAX = 4
-TRAIN_CONFIG = SETTINGS_DIR / "train_settings_mossimage.json"
+TRAIN_CONFIG = Path(os.environ.get("LORALAB_TRAIN_CONFIG") or SETTINGS_DIR / "train_settings_mossimage.json")
 HF_TOKEN_CONFIG = SETTINGS_DIR / "HF_token.json"
 EXPORT_CONFIG = SETTINGS_DIR / "export_settings.json"  # compartido / shared by every trainer
 CAPTION_CONFIG = SETTINGS_DIR / "caption_settings_mossimage.json"
@@ -1051,6 +1052,7 @@ def open_browser():
 i18n.register(app)
 file_transfer.register(app, get_dataset_dir, get_train_output_dir, DATASET_EXTS)
 runtime.register(app)
+queue_link.register(app, "mossimage", runtime, TRAIN_CONFIG, PRECACHE_CONFIG)
 training_metrics.register(app, get_train_output_dir)
 
 

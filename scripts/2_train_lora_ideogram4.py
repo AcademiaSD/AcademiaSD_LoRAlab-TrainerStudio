@@ -84,7 +84,7 @@ DEFAULTS = {
     "trigger_word": "",
 }
 
-CONFIG_PATH = "settings/train_settings_ideogram4.json"
+CONFIG_PATH = os.environ.get("LORALAB_TRAIN_CONFIG") or "settings/train_settings_ideogram4.json"
 
 if os.path.exists(CONFIG_PATH):
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
