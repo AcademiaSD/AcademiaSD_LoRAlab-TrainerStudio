@@ -387,6 +387,19 @@ def _launch_linux(run: Path, env: dict):
     return proc.pid
 
 
+def _launch_windows(run, env):
+    """Consola propia para el .bat, con su PID a mano para poder cerrarla luego. Se abre minimizada y sin
+    quitar el foco (SW_SHOWMINNOACTIVE): el usuario trabaja en el navegador, que se queda delante; la consola
+    queda en la barra de tareas. Funciona también con Windows Terminal, la terminal por defecto en Windows 11.
+    Own console for the .bat, minimized and without taking the focus: the browser stays in front."""
+    si = subprocess.STARTUPINFO()
+    si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    si.wShowWindow = 7                                  # SW_SHOWMINNOACTIVE
+    proc = subprocess.Popen(["cmd", "/c", str(run)], cwd=str(BASE_DIR), env=env,
+                            creationflags=subprocess.CREATE_NEW_CONSOLE, startupinfo=si)
+    return proc.pid
+
+
 @app.route("/")
 def index():
     return send_from_directory(str(GUI_DIR), "launcher.html")
@@ -482,11 +495,7 @@ def launch():
     env["LORALAB_SKIP_BROWSER"] = "1"
 
     if os.name == "nt":
-        # Consola propia para el .bat, con su PID a mano para poder cerrarla luego.
-        # Own console for the .bat, PID at hand so it can be closed later.
-        proc = subprocess.Popen(["cmd", "/c", str(run)], cwd=str(BASE_DIR), env=env,
-                                creationflags=subprocess.CREATE_NEW_CONSOLE)
-        pid = proc.pid
+        pid = _launch_windows(run, env)
     else:
         pid = _launch_linux(run, env)
     save_active(trainer_id, pid)
@@ -560,9 +569,7 @@ def launch_second(trainer_id, run, draft=None, edit=None):
                    LORALAB_TRAIN_CONFIG=str(folder / f"train_settings_{trainer_id}.json"),
                    LORALAB_PRECACHE_CONFIG=str(folder / f"pre_cache_settings_{trainer_id}.json"))
     if os.name == "nt":
-        proc = subprocess.Popen(["cmd", "/c", str(run)], cwd=str(BASE_DIR), env=env,
-                                creationflags=subprocess.CREATE_NEW_CONSOLE)
-        pid = proc.pid
+        pid = _launch_windows(run, env)
     else:
         pid = _launch_linux(run, env)
     _save_instances(extra_instances() + [{"id": trainer_id, "port": port, "pid": pid, "draft": draft is not None,
