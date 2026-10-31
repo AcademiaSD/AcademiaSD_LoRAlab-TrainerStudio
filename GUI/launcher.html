@@ -263,6 +263,7 @@
             <p class="note" id="confirm-text"></p>
             <div class="actions">
                 <button type="button" onclick="resolveConfirm(false)">Cancel</button>
+                <button type="button" id="confirm-alt" class="no-i18n" onclick="resolveConfirm('alt')" hidden></button>
                 <button type="submit" class="primary" id="confirm-ok"></button>
             </div>
         </form>
@@ -396,12 +397,16 @@
 
         // Confirmación propia, mismo estilo que el resto del lanzador.
         // Own confirm box, in the launcher's own style.
-        function askConfirm(title, text, okLabel) {
+        // altLabel: un tercer botón opcional, que resuelve 'alt' (true = el principal, false = cancelar).
+        function askConfirm(title, text, okLabel, altLabel) {
             return new Promise(resolve => {
                 const modal = document.getElementById('confirm');
                 document.getElementById('confirm-title').innerText = title;
                 document.getElementById('confirm-text').innerText = text;
                 document.getElementById('confirm-ok').innerText = okLabel;
+                const alt = document.getElementById('confirm-alt');
+                alt.hidden = !altLabel;
+                alt.innerText = altLabel || '';
                 const onKey = e => { if (e.key === 'Escape') finish(false); };
                 const finish = value => {
                     modal.classList.remove('open');
@@ -433,15 +438,25 @@
                     // Otro entrenador en marcha: avisar antes de cerrarlo.
                     // Another trainer running: warn before closing it.
                     const current = (cfg.trainers.find(x => x.id === live.active) || {}).name || t('Another trainer');
-                    const ok = await askConfirm(
+                    // Con la cola, varios entrenadores pueden estar abiertos: al lado (otro puerto) o en su lugar.
+                    const choice = await askConfirm(
                         t('Switch trainer'),
-                        t('{current} is open. Opening {next} will close the current trainer and its console window. Continue?',
+                        t('{current} is open. You can open {next} alongside it on another port, or close {current} and its console window and open {next} in its place.',
                           { current, next: trainer.name }),
-                        t('Close and open'));
+                        t('Open alongside'), t('Close and open'));
                     setStatus('');
-                    if (!ok) { card.classList.remove('launching'); return; }
-                    setStatus(t('Closing {current}...', { current }));
-                    data = await apiLaunch(trainer.id, true);
+                    if (!choice) { card.classList.remove('launching'); return; }
+                    if (choice === 'alt') {
+                        setStatus(t('Closing {current}...', { current }));
+                        data = await apiLaunch(trainer.id, true);
+                    } else {
+                        data = await apiLaunch(trainer.id, false, true);
+                        if (data.status === 'ok' && data.port) {
+                            await waitForTrainer(data.url, trainer.name, data.port);
+                            card.classList.remove('launching');
+                            return;
+                        }
+                    }
                 }
                 if (data.status === 'queue_offer') {
                     // El activo está entrenando: no se cierra. El nuevo se abre en otro puerto para

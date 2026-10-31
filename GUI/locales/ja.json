@@ -1386,5 +1386,7 @@
   "Leave it paused": "一時停止のままにする",
   "Queue resumed.": "キューを再開しました。",
   "Could not resume the queue.": "キューを再開できませんでした。",
-  "Interrupted by Pause all and exit: it continues from its checkpoint.": "「すべて一時停止して終了」で中断:チェックポイントから続きます。"
+  "Interrupted by Pause all and exit: it continues from its checkpoint.": "「すべて一時停止して終了」で中断:チェックポイントから続きます。",
+  "{current} is open. You can open {next} alongside it on another port, or close {current} and its console window and open {next} in its place.": "{current} が開いています。{next} を別のポートで並べて開くか、{current} とそのコンソールウィンドウを閉じて代わりに {next} を開けます。",
+  "Open alongside": "並べて開く"
 }

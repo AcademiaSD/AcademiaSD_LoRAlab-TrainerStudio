@@ -471,13 +471,18 @@ def launch():
             return jsonify({"status": "training", "url": trainer_url(),
                             "error": t("Could not check whether {current} is training. Close it from its console window, then try again.",
                                        current=current)}), 409
-        if training:
+        job = QUEUE.running()
+        if training or job:
             # El script de entrenamiento es hijo del servidor: cerrarlo ahora cortaría el
             # entrenamiento, y lo avanzado desde el último checkpoint. Se ofrece abrir el otro en
-            # un puerto distinto, para preparar un trabajo y añadirlo a la cola.
+            # un puerto distinto, para preparar un trabajo y añadirlo a la cola. Igual si entrena un
+            # trabajo de la cola en su propio servidor (p. ej. tras la pre-caché hecha en este): la GPU
+            # está ocupada y el usuario lo ve como «estoy entrenando».
             # The training script is a child of the server: closing it now would cut the
             # training. Offer to open the other one on another port, to prepare a queue job.
-            return jsonify({"status": "queue_offer", "current": current, "url": trainer_url()})
+            # Same while a queue job trains in its own server.
+            name = current if training or not job else job.get("trainer_name") or current
+            return jsonify({"status": "queue_offer", "current": name, "url": trainer_url()})
         if not force:
             return jsonify({"status": "busy", "url": trainer_url()})
         # Cambiar de entrenador: cerrar el activo antes de abrir el nuevo.

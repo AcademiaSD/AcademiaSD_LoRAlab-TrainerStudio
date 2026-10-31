@@ -1386,5 +1386,7 @@
   "Leave it paused": "일시 정지 유지",
   "Queue resumed.": "대기열을 다시 시작했습니다.",
   "Could not resume the queue.": "대기열을 다시 시작하지 못했습니다.",
-  "Interrupted by Pause all and exit: it continues from its checkpoint.": "「모두 일시정지하고 종료」로 중단됨: 체크포인트부터 이어집니다."
+  "Interrupted by Pause all and exit: it continues from its checkpoint.": "「모두 일시정지하고 종료」로 중단됨: 체크포인트부터 이어집니다.",
+  "{current} is open. You can open {next} alongside it on another port, or close {current} and its console window and open {next} in its place.": "{current}이(가) 열려 있습니다. {next}을(를) 다른 포트에서 나란히 열거나, {current}과(와) 콘솔 창을 닫고 대신 {next}을(를) 열 수 있습니다.",
+  "Open alongside": "나란히 열기"
 }

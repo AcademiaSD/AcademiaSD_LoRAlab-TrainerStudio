@@ -1386,5 +1386,7 @@
   "Leave it paused": "Pausiert lassen",
   "Queue resumed.": "Warteschlange fortgesetzt.",
   "Could not resume the queue.": "Warteschlange konnte nicht fortgesetzt werden.",
-  "Interrupted by Pause all and exit: it continues from its checkpoint.": "Durch «Alles pausieren und beenden» unterbrochen: macht ab seinem Checkpoint weiter."
+  "Interrupted by Pause all and exit: it continues from its checkpoint.": "Durch «Alles pausieren und beenden» unterbrochen: macht ab seinem Checkpoint weiter.",
+  "{current} is open. You can open {next} alongside it on another port, or close {current} and its console window and open {next} in its place.": "{current} ist geöffnet. Du kannst {next} daneben auf einem anderen Port öffnen oder {current} samt Konsolenfenster schließen und {next} an seiner Stelle öffnen.",
+  "Open alongside": "Daneben öffnen"
 }

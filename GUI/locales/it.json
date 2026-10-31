@@ -1386,5 +1386,7 @@
   "Leave it paused": "Lasciala in pausa",
   "Queue resumed.": "Coda ripresa.",
   "Could not resume the queue.": "Impossibile riprendere la coda.",
-  "Interrupted by Pause all and exit: it continues from its checkpoint.": "Interrotto da «Metti tutto in pausa ed esci»: riprende dal suo checkpoint."
+  "Interrupted by Pause all and exit: it continues from its checkpoint.": "Interrotto da «Metti tutto in pausa ed esci»: riprende dal suo checkpoint.",
+  "{current} is open. You can open {next} alongside it on another port, or close {current} and its console window and open {next} in its place.": "{current} è aperto. Puoi aprire {next} accanto, su un'altra porta, oppure chiudere {current} e la sua finestra della console e aprire {next} al suo posto.",
+  "Open alongside": "Apri accanto"
 }

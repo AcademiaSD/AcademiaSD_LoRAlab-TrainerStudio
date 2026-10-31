@@ -1386,5 +1386,7 @@
   "Leave it paused": "La laisser en pause",
   "Queue resumed.": "File reprise.",
   "Could not resume the queue.": "Impossible de reprendre la file.",
-  "Interrupted by Pause all and exit: it continues from its checkpoint.": "Interrompu par « Tout mettre en pause et quitter » : il reprend depuis son checkpoint."
+  "Interrupted by Pause all and exit: it continues from its checkpoint.": "Interrompu par « Tout mettre en pause et quitter » : il reprend depuis son checkpoint.",
+  "{current} is open. You can open {next} alongside it on another port, or close {current} and its console window and open {next} in its place.": "{current} est ouvert. Tu peux ouvrir {next} à côté, sur un autre port, ou fermer {current} et sa fenêtre de console et ouvrir {next} à sa place.",
+  "Open alongside": "Ouvrir à côté"
 }
