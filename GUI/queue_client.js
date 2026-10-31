@@ -8,6 +8,8 @@
 //   «¿Añadir a la cola?» en vez de arrancar; los subtítulos avisan de que compartirán la GPU.
 // - En un entrenador abierto por la cola para un trabajo, un aviso arriba lo dice: lo que se guarde
 //   aquí se aplica solo a ese trabajo, que se pausa y continúa desde la cola.
+// - Editor de un trabajo en espera (✎ en la cola): Start pasa a ser «Guardar cambios en la cola», que
+//   guarda en la copia de ajustes del trabajo y vuelve a la cola; Cancelar lo deja como estaba.
 (function () {
     const tr = (k, v) => (typeof t === 'function' ? t(k, v) : k.replace(/\{(\w+)\}/g, (m, n) => (v && n in v ? v[n] : m)));
     const KIND = { train: () => tr('training'), precache: () => tr('pre-cache'), caption: () => tr('captions') };
@@ -35,6 +37,11 @@
     .qc-newjob { margin-top: 10px; color: #fff !important; border: none; background: linear-gradient(90deg, #0e7490, #6d28d9) !important;
         box-shadow: 0 4px 16px rgba(109, 40, 217, 0.35); }
     .qc-newjob:hover { box-shadow: 0 0 0 1px #a78bfa, 0 6px 22px rgba(139, 92, 246, 0.55); }
+    .qc-banner button { border: 1px solid #475569; background: rgba(15, 23, 42, 0.6); color: #e2e8f0; font-weight: 700;
+        font-size: 0.8rem; padding: 6px 12px; border-radius: 7px; cursor: pointer; white-space: nowrap; }
+    .qc-banner button.qc-save { border: none; color: #fff; background: linear-gradient(90deg, #0e7490, #6d28d9); }
+    .qc-banner .qc-actions { margin-left: auto; display: flex; gap: 8px; }
+    .qc-edit-save { color: #fff !important; border: none !important; background: linear-gradient(90deg, #0e7490, #6d28d9) !important; }
     `;
 
     function queueUrl() {
@@ -73,6 +80,11 @@
             }
         }
         updateNewJob();
+        keepTrainEnabled();
+        if (info && info.edit_job) {
+            renderEdit();
+            return;
+        }
         if (info && (info.job_id || info.draft)) {
             let banner = document.getElementById('qc-banner');
             if (!banner) {
@@ -99,6 +111,77 @@
         }
     }
 
+    // ------------------------------------------------------------ edición
+    function banner() {
+        let el = document.getElementById('qc-banner');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'qc-banner';
+            el.className = 'qc-banner no-i18n';
+            const header = document.querySelector('header');
+            if (header) header.insertAdjacentElement('afterend', el);
+            else document.body.prepend(el);
+        }
+        return el;
+    }
+
+    function renderEdit() {
+        const job = info.job || {};
+        const el = banner();
+        if (!el.dataset.lang || el.dataset.lang !== (window.I18N && I18N.lang) || el.dataset.project !== (job.project || '')) {
+            el.dataset.lang = (window.I18N && I18N.lang) || '';
+            el.dataset.project = job.project || '';
+            el.innerHTML = `<span>✎ <b>${escapeHtml(tr('Editing a queued job'))}</b>: ${escapeHtml(job.project || '-')} · ${escapeHtml(KIND[job.kind] ? KIND[job.kind]() : '')}</span>`
+                + `<span class="qc-note">${escapeHtml(tr('Changes are saved to this job only, not to your trainer settings. It does not start while you edit it.'))}</span>`
+                + `<span class="qc-actions"><button type="button" class="qc-cancel">${escapeHtml(tr('Cancel'))}</button>`
+                + `<button type="button" class="qc-save">💾 ${escapeHtml(tr('Save changes to the queue'))}</button></span>`;
+            el.querySelector('.qc-cancel').addEventListener('click', () => finishEdit(false));
+            el.querySelector('.qc-save').addEventListener('click', () => finishEdit(true));
+        }
+        // El botón de empezar del tipo de este trabajo guarda; el otro, Stop y «Nuevo» no hacen falta aquí.
+        const mine = job.kind === 'precache' ? 'btn-precache' : 'btn-train';
+        for (const id of ['btn-train', 'btn-precache']) {
+            const btn = document.getElementById(id);
+            if (!btn) continue;
+            if (id !== mine) { show(btn, false); continue; }
+            btn.classList.add('qc-edit-save');
+            btn.style.gridColumn = '1 / -1';   // sola en su fila (Stop está oculto)
+            const label = '💾 ' + tr('Save changes to the queue');
+            const text = btn.querySelector('.main-text');
+            if (text && text.textContent !== label) { text.textContent = label; text.classList.add('no-i18n'); }
+        }
+        const stop = document.getElementById('btn-stop');
+        if (stop) show(stop, false);
+    }
+
+    async function finishEdit(save) {
+        const buttons = document.querySelectorAll('#qc-banner button, #btn-train, #btn-precache');
+        buttons.forEach(b => { b.disabled = true; });
+        try {
+            if (save) {
+                // Start ya guardó su parte; se guardan las dos por si se cambió también la otra sección.
+                if (typeof savePrecacheSettings === 'function') await savePrecacheSettings();
+                if (typeof saveTrainSettings === 'function') await saveTrainSettings();
+            }
+            const res = await post('/api/queue-edit-done', { save });
+            if (!res.ok || res.data.status !== 'ok') {
+                toast(`[!] ${res.data.error || tr('Could not save it.')}`, 'error');
+                return;
+            }
+            toast(save ? tr('Saved to the queue.') : tr('Changes discarded.'), 'success');
+            setTimeout(openQueue, 400);
+        } finally {
+            buttons.forEach(b => { b.disabled = false; });
+        }
+    }
+
+    // Mostrar / ocultar: los botones altos llevan display:flex !important en algunas páginas (pantallas
+    // estrechas), así que se oculta también con !important.
+    function show(el, on) {
+        if (on) el.style.removeProperty('display');
+        else el.style.setProperty('display', 'none', 'important');
+    }
+
     function escapeHtml(s) {
         return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     }
@@ -112,7 +195,7 @@
         btn.type = 'button';
         btn.id = 'qc-newjob';
         btn.className = 'btn btn-tall btn-full qc-newjob';
-        btn.style.display = 'none';
+        show(btn, false);
         btn.title = tr('Opens this same trainer on another port with its own copy of the settings, to prepare another training and add it to the queue without touching the one in progress.');
         btn.innerHTML = `<span class="main-text">➕ <span>${escapeHtml(tr('New training for the queue'))}</span></span>`;
         btn.addEventListener('click', newJob);
@@ -125,7 +208,19 @@
         const btn = document.getElementById('qc-newjob');
         const stop = document.getElementById('btn-stop');
         if (!btn || !stop) return;
-        btn.style.display = !stop.disabled && info && info.launcher ? '' : 'none';
+        show(btn, !stop.disabled && info && info.launcher && !info.edit_job);
+    }
+
+    // Con la pre-caché en marcha en este entrenador, Start / Resume sigue disponible: el entrenamiento va a
+    // la cola y empieza en cuanto acabe. (Entrenando, el siguiente se prepara con «Nuevo entrenamiento».)
+    function keepTrainEnabled() {
+        const btn = document.getElementById('btn-train');
+        if (!btn) return;
+        if (!btn.__qcObserved) {
+            btn.__qcObserved = true;
+            new MutationObserver(keepTrainEnabled).observe(btn, { attributes: true, attributeFilter: ['disabled'] });
+        }
+        if (btn.disabled && info && info.launcher && info.self_script === 'precache' && !info.edit_job) btn.disabled = false;
     }
 
     async function newJob() {
@@ -184,6 +279,14 @@
             try { gate = (await post('/api/queue-gate', { script: name })).data; } catch (e) { gate = null; }
             if (!gate || gate.mode === 'direct') return original(name, ...rest);
 
+            if (gate.mode === 'edit') return finishEdit(true);
+            if (gate.mode === 'queue_self') {
+                const msg = gate.script === 'precache'
+                    ? tr('The pre-cache is running in this trainer. Add this {kind} to the queue? It starts as soon as the pre-cache finishes.', { kind: KIND[name] ? KIND[name]() : name })
+                    : tr('This trainer is busy. Add this {kind} to the queue? It starts as soon as the GPU is free.', { kind: KIND[name] ? KIND[name]() : name });
+                if (await askConfirm(msg, { okLabel: tr('Add to queue'), cancelLabel: tr('Cancel') })) await addToQueue(name);
+                return;
+            }
             const r = gate.running || {};
             const who = { trainer: r.trainer_name || '', project: r.project || '-', kind: KIND[name] ? KIND[name]() : name };
             if (gate.mode === 'job') {
@@ -199,21 +302,24 @@
             // mode === 'queue'
             const add = await askConfirm(tr('{trainer} is training ({project}). Add this {kind} to the queue? It starts as soon as the GPU is free.', who),
                                          { okLabel: tr('Add to queue'), cancelLabel: tr('Cancel') });
-            if (!add) return;
-            const res = await post('/api/queue-add', { kind: name });
-            if (!res.ok || res.data.status !== 'ok') {
-                toast(`[!] ${res.data.error || tr('Could not add it to the queue.')}`, 'error');
-                return;
-            }
-            const pos = (res.data.pending || []).findIndex(j => j.id === res.data.job.id) + 1;
-            toast(tr('Added to the queue: position {n}.', { n: pos || '?' }), 'success');
-            if (typeof appendTerminal === 'function') {
-                appendTerminal(`\n[SYSTEM] ${tr('Added to the queue: position {n}.', { n: pos || '?' })}`, false, 'term-success');
-            }
-            refresh();
+            if (add) await addToQueue(name);
         };
         wrapped.__queue = true;
         window.startScript = wrapped;
+    }
+
+    async function addToQueue(name) {
+        const res = await post('/api/queue-add', { kind: name });
+        if (!res.ok || res.data.status !== 'ok') {
+            toast(`[!] ${res.data.error || tr('Could not add it to the queue.')}`, 'error');
+            return;
+        }
+        const pos = (res.data.pending || []).findIndex(j => j.id === res.data.job.id) + 1;
+        toast(tr('Added to the queue: position {n}.', { n: pos || '?' }), 'success');
+        if (typeof appendTerminal === 'function') {
+            appendTerminal(`\n[SYSTEM] ${tr('Added to the queue: position {n}.', { n: pos || '?' })}`, false, 'term-success');
+        }
+        refresh();
     }
 
     function init() {

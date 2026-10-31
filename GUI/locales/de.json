@@ -1367,5 +1367,18 @@
   "The GPU (CUDA) is not available.": "Die GPU (CUDA) ist nicht verfügbar.",
   "It was stopped from outside: its console was closed or Ctrl+C was pressed.": "Von außen angehalten: seine Konsole wurde geschlossen oder Strg+C gedrückt.",
   "It stopped with an error:": "Mit einem Fehler beendet:",
-  "It stopped with an error. Open its trainer to see the console.": "Mit einem Fehler beendet. Öffne seinen Trainer, um die Konsole zu sehen."
+  "It stopped with an error. Open its trainer to see the console.": "Mit einem Fehler beendet. Öffne seinen Trainer, um die Konsole zu sehen.",
+  "Only a job waiting in the queue can be edited.": "Nur ein Job, der in der Warteschlange wartet, kann bearbeitet werden.",
+  "This trainer edits a queued job: save the changes to the queue.": "Dieser Trainer bearbeitet einen Job der Warteschlange: speichere die Änderungen in der Warteschlange.",
+  "Editing a queued job": "Job der Warteschlange bearbeiten",
+  "Changes are saved to this job only, not to your trainer settings. It does not start while you edit it.": "Änderungen werden nur in diesem Job gespeichert, nicht in deinen Trainer-Einstellungen. Er startet nicht, während du ihn bearbeitest.",
+  "Save changes to the queue": "Änderungen in der Warteschlange speichern",
+  "Could not save it.": "Konnte nicht gespeichert werden.",
+  "Saved to the queue.": "In der Warteschlange gespeichert.",
+  "Changes discarded.": "Änderungen verworfen.",
+  "The pre-cache is running in this trainer. Add this {kind} to the queue? It starts as soon as the pre-cache finishes.": "Der Pre-Cache läuft in diesem Trainer. Dieses {kind} zur Warteschlange hinzufügen? Es startet, sobald der Pre-Cache fertig ist.",
+  "This trainer is busy. Add this {kind} to the queue? It starts as soon as the GPU is free.": "Dieser Trainer ist beschäftigt. Dieses {kind} zur Warteschlange hinzufügen? Es startet, sobald die GPU frei ist.",
+  "Edit this job": "Diesen Job bearbeiten",
+  "Being edited: it does not start until you save or cancel.": "Wird bearbeitet: startet erst, wenn du speicherst oder abbrichst.",
+  "Opening the job in its trainer...": "Job wird in seinem Trainer geöffnet..."
 }

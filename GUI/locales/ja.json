@@ -1367,5 +1367,18 @@
   "The GPU (CUDA) is not available.": "GPU(CUDA)が使えません。",
   "It was stopped from outside: its console was closed or Ctrl+C was pressed.": "外部から停止されました。コンソールが閉じられたか、Ctrl+Cが押されました。",
   "It stopped with an error:": "エラーで停止しました:",
-  "It stopped with an error. Open its trainer to see the console.": "エラーで停止しました。トレーナーを開いてコンソールを確認してください。"
+  "It stopped with an error. Open its trainer to see the console.": "エラーで停止しました。トレーナーを開いてコンソールを確認してください。",
+  "Only a job waiting in the queue can be edited.": "編集できるのはキューで待機中のジョブだけです。",
+  "This trainer edits a queued job: save the changes to the queue.": "このトレーナーはキューのジョブを編集中です。変更をキューに保存してください。",
+  "Editing a queued job": "キューのジョブを編集中",
+  "Changes are saved to this job only, not to your trainer settings. It does not start while you edit it.": "変更はこのジョブだけに保存され、トレーナーの設定は変わりません。編集中は開始しません。",
+  "Save changes to the queue": "変更をキューに保存",
+  "Could not save it.": "保存できませんでした。",
+  "Saved to the queue.": "キューに保存しました。",
+  "Changes discarded.": "変更を破棄しました。",
+  "The pre-cache is running in this trainer. Add this {kind} to the queue? It starts as soon as the pre-cache finishes.": "このトレーナーでプリキャッシュを実行中です。この{kind}をキューに追加しますか?プリキャッシュが終わるとすぐに開始します。",
+  "This trainer is busy. Add this {kind} to the queue? It starts as soon as the GPU is free.": "このトレーナーは使用中です。この{kind}をキューに追加しますか?GPUが空くとすぐに開始します。",
+  "Edit this job": "このジョブを編集",
+  "Being edited: it does not start until you save or cancel.": "編集中:保存またはキャンセルするまで開始しません。",
+  "Opening the job in its trainer...": "ジョブをトレーナーで開いています..."
 }

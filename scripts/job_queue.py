@@ -222,6 +222,9 @@ class JobQueue:
             if job["state"] == "failed" and re.fullmatch(r"Exited with code -?\d+\.", job.get("note") or ""):
                 # Fallido de una versión anterior: también dice la causa con palabras, no el código.
                 job["note"], job["detail"] = failure_reason(job["kind"], job.get("code"), [])
+            if job.get("editing"):
+                # Editado cuando se cerró el lanzador: se deja como estaba antes de editarlo.
+                self._restore_edit(job)
         self._thread = None
         self._saved_at = 0.0
 
@@ -366,6 +369,52 @@ class JobQueue:
         _http(port, "/api/stop", {})
         return None
 
+    # ---------------------------------------------------------------- edición
+    # Un trabajo en espera se edita en su entrenador, abierto en otro puerto con los ajustes del trabajo
+    # (launcher.py, /api/queue-edit). Mientras se edita no arranca; Cancelar deja sus ajustes como estaban.
+    def begin_edit(self, jid, port=None):
+        with self._lock:
+            job = self._job(jid)
+            if job is None or job["state"] not in WAITING or job.get("external"):
+                return None, t("Only a job waiting in the queue can be edited.")
+            job_dir, backup = JOBS_DIR / jid, JOBS_DIR / jid / "edit_backup"
+            if not backup.exists():
+                backup.mkdir(parents=True)
+                for name in _settings_names(job["trainer"]).values():
+                    if (job_dir / name).exists():
+                        shutil.copy2(job_dir / name, backup / name)
+            job["editing"] = port or True
+            self._save()
+            return dict(job), None
+
+    def end_edit(self, jid, save):
+        """save: se queda con lo guardado en el editor (y relee proyecto y pasos); si no, vuelve atrás."""
+        with self._lock:
+            job = self._job(jid)
+            if job is None:
+                return t("Job not found.")
+            if save:
+                shutil.rmtree(JOBS_DIR / jid / "edit_backup", ignore_errors=True)
+                names = _settings_names(job["trainer"])
+                train = _read_json(JOBS_DIR / jid / names["train"])
+                pre = _read_json(JOBS_DIR / jid / names["pre_cache"])
+                total = int(train.get("total_steps") or 0) if job["kind"] == "train" else 0
+                job.update(project=(train.get("project_name") or pre.get("project_name") or job["project"]).strip(),
+                           progress={"step": 0, "total": total} if total else job.get("progress"))
+            else:
+                self._restore_edit(job)
+            job.pop("editing", None)
+            self._save()
+            return None
+
+    def _restore_edit(self, job):
+        backup = JOBS_DIR / job["id"] / "edit_backup"
+        if backup.exists():
+            for f in backup.iterdir():
+                shutil.copy2(f, JOBS_DIR / job["id"] / f.name)
+            shutil.rmtree(backup, ignore_errors=True)
+        job.pop("editing", None)
+
     def move(self, jid, index):
         """Coloca un pendiente en la posición index de la lista de pendientes (0 = el siguiente)."""
         with self._lock:
@@ -424,7 +473,7 @@ class JobQueue:
         with self._lock:
             if self.data["paused"]:
                 return
-            nxt = next((j for j in self.data["jobs"] if j["state"] == "queued"), None)
+            nxt = next((j for j in self.data["jobs"] if j["state"] == "queued" and not j.get("editing")), None)
         if nxt is not None:
             self._launch(nxt)
 

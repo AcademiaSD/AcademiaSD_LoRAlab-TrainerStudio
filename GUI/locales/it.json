@@ -1367,5 +1367,18 @@
   "The GPU (CUDA) is not available.": "La GPU (CUDA) non è disponibile.",
   "It was stopped from outside: its console was closed or Ctrl+C was pressed.": "Fermato dall'esterno: la sua console è stata chiusa o è stato premuto Ctrl+C.",
   "It stopped with an error:": "Si è fermato con un errore:",
-  "It stopped with an error. Open its trainer to see the console.": "Si è fermato con un errore. Apri il suo trainer per vedere la console."
+  "It stopped with an error. Open its trainer to see the console.": "Si è fermato con un errore. Apri il suo trainer per vedere la console.",
+  "Only a job waiting in the queue can be edited.": "Si può modificare solo un lavoro in attesa nella coda.",
+  "This trainer edits a queued job: save the changes to the queue.": "Questo trainer modifica un lavoro della coda: salva le modifiche nella coda.",
+  "Editing a queued job": "Modifica di un lavoro della coda",
+  "Changes are saved to this job only, not to your trainer settings. It does not start while you edit it.": "Le modifiche si salvano solo in questo lavoro, non nelle impostazioni del tuo trainer. Non parte mentre lo modifichi.",
+  "Save changes to the queue": "Salva le modifiche nella coda",
+  "Could not save it.": "Impossibile salvare.",
+  "Saved to the queue.": "Salvato nella coda.",
+  "Changes discarded.": "Modifiche annullate.",
+  "The pre-cache is running in this trainer. Add this {kind} to the queue? It starts as soon as the pre-cache finishes.": "Il pre-cache è in corso in questo trainer. Aggiungere questo {kind} alla coda? Partirà appena finisce il pre-cache.",
+  "This trainer is busy. Add this {kind} to the queue? It starts as soon as the GPU is free.": "Questo trainer è occupato. Aggiungere questo {kind} alla coda? Partirà appena la GPU sarà libera.",
+  "Edit this job": "Modifica questo lavoro",
+  "Being edited: it does not start until you save or cancel.": "In modifica: non parte finché non salvi o annulli.",
+  "Opening the job in its trainer...": "Apertura del lavoro nel suo trainer..."
 }

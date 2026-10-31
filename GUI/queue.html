@@ -390,7 +390,10 @@
         const main = failed
             ? (job.external ? '' : `<button type="button" class="ib" title="${esc(t('Try again'))}" onclick="resumeJob('${job.id}')">↻</button>`)
             : `<button type="button" class="ib" title="${esc(paused ? t('Resume') : t('Pause'))}" onclick="${paused ? 'resumeJob' : 'pauseJobId'}('${job.id}')">${paused ? '▶' : '⏸'}</button>`;
+        // ✎ Editar: su entrenador con los ajustes de este trabajo (no arranca mientras se edita).
+        const edit = job.external ? '' : `<button type="button" class="ib" title="${esc(t('Edit this job'))}" onclick="editJob('${job.id}')">✎</button>`;
         return `<div class="icons">
+            ${edit}
             <button type="button" class="ib" title="${esc(t('Move up'))}" ${i === 0 ? 'disabled' : ''} onclick="moveJob('${job.id}', ${i - 1})">▲</button>
             <button type="button" class="ib" title="${esc(t('Move down'))}" ${i === n - 1 ? 'disabled' : ''} onclick="moveJob('${job.id}', ${i + 1})">▼</button>
             ${main}
@@ -415,6 +418,7 @@
                     <div class="title">${esc(job.trainer_name)} <span class="proj">· ${esc(job.project || '-')}</span></div>
                     <div class="sub"><span class="chip kind-${job.kind}">${esc(KIND[job.kind] ? KIND[job.kind]() : job.kind)}</span>
                         ${total ? `<span>${esc(total)}</span>` : ''}
+                        ${job.editing ? `<span class="note">✎ ${esc(t('Being edited: it does not start until you save or cancel.'))}</span>` : ''}
                         ${job.note ? `<span class="note">${esc(t(job.note))}</span>` : ''}
                         ${job.detail ? `<span class="detail" title="${esc(job.detail)}">${esc(job.detail)}</span>` : ''}</div>
                 </div>
@@ -509,6 +513,18 @@
     async function moveJob(id, index) {
         const d = await api(`/api/queue/${id}/move`, { index });
         if (d) { state = d; render(); }
+    }
+    async function editJob(id) {
+        const d = await api(`/api/queue-edit/${id}`, {});
+        if (!d) return;
+        toast(t('Opening the job in its trainer...'));
+        const end = Date.now() + 120000;
+        while (Date.now() < end) {
+            const r = await (await fetch(`/api/status?port=${d.port}`, { cache: 'no-store' })).json().catch(() => ({}));
+            if (r.trainer) { window.location.href = d.url; return; }
+            await new Promise(res => setTimeout(res, 700));
+        }
+        toast('[!] ' + t('It did not start in time. Open it at {url}.', { url: d.url }), true);
     }
     async function resumeJob(id) {
         const d = await api(`/api/queue/${id}/resume`, {});

@@ -1367,5 +1367,18 @@
   "The GPU (CUDA) is not available.": "Le GPU (CUDA) n'est pas disponible.",
   "It was stopped from outside: its console was closed or Ctrl+C was pressed.": "Arrêté de l'extérieur : sa console a été fermée ou Ctrl+C a été pressé.",
   "It stopped with an error:": "Arrêté avec une erreur :",
-  "It stopped with an error. Open its trainer to see the console.": "Arrêté avec une erreur. Ouvre son entraîneur pour voir la console."
+  "It stopped with an error. Open its trainer to see the console.": "Arrêté avec une erreur. Ouvre son entraîneur pour voir la console.",
+  "Only a job waiting in the queue can be edited.": "Seul un job en attente dans la file peut être modifié.",
+  "This trainer edits a queued job: save the changes to the queue.": "Cet entraîneur modifie un job de la file : enregistre les changements dans la file.",
+  "Editing a queued job": "Modification d'un job de la file",
+  "Changes are saved to this job only, not to your trainer settings. It does not start while you edit it.": "Les changements ne sont enregistrés que dans ce job, pas dans les réglages de ton entraîneur. Il ne démarre pas pendant que tu le modifies.",
+  "Save changes to the queue": "Enregistrer les changements dans la file",
+  "Could not save it.": "Impossible d'enregistrer.",
+  "Saved to the queue.": "Enregistré dans la file.",
+  "Changes discarded.": "Changements annulés.",
+  "The pre-cache is running in this trainer. Add this {kind} to the queue? It starts as soon as the pre-cache finishes.": "Le pré-cache tourne dans cet entraîneur. Ajouter ce {kind} à la file ? Il démarrera dès que le pré-cache sera terminé.",
+  "This trainer is busy. Add this {kind} to the queue? It starts as soon as the GPU is free.": "Cet entraîneur est occupé. Ajouter ce {kind} à la file ? Il démarrera dès que le GPU sera libre.",
+  "Edit this job": "Modifier ce job",
+  "Being edited: it does not start until you save or cancel.": "En cours de modification : il ne démarre pas tant que tu n'enregistres pas ou n'annules pas.",
+  "Opening the job in its trainer...": "Ouverture du job dans son entraîneur..."
 }

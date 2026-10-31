@@ -1367,5 +1367,18 @@
   "The GPU (CUDA) is not available.": "GPU(CUDA)를 사용할 수 없습니다.",
   "It was stopped from outside: its console was closed or Ctrl+C was pressed.": "외부에서 중지되었습니다. 콘솔이 닫혔거나 Ctrl+C를 눌렀습니다.",
   "It stopped with an error:": "오류로 중지되었습니다:",
-  "It stopped with an error. Open its trainer to see the console.": "오류로 중지되었습니다. 트레이너를 열어 콘솔을 확인하세요."
+  "It stopped with an error. Open its trainer to see the console.": "오류로 중지되었습니다. 트레이너를 열어 콘솔을 확인하세요.",
+  "Only a job waiting in the queue can be edited.": "대기열에서 기다리는 작업만 편집할 수 있습니다.",
+  "This trainer edits a queued job: save the changes to the queue.": "이 트레이너는 대기열 작업을 편집 중입니다. 변경 사항을 대기열에 저장하세요.",
+  "Editing a queued job": "대기열 작업 편집 중",
+  "Changes are saved to this job only, not to your trainer settings. It does not start while you edit it.": "변경 사항은 이 작업에만 저장되며 트레이너 설정은 바뀌지 않습니다. 편집하는 동안에는 시작하지 않습니다.",
+  "Save changes to the queue": "변경 사항을 대기열에 저장",
+  "Could not save it.": "저장하지 못했습니다.",
+  "Saved to the queue.": "대기열에 저장했습니다.",
+  "Changes discarded.": "변경 사항을 취소했습니다.",
+  "The pre-cache is running in this trainer. Add this {kind} to the queue? It starts as soon as the pre-cache finishes.": "이 트레이너에서 프리캐시가 실행 중입니다. 이 {kind}을(를) 대기열에 추가할까요? 프리캐시가 끝나면 바로 시작합니다.",
+  "This trainer is busy. Add this {kind} to the queue? It starts as soon as the GPU is free.": "이 트레이너는 사용 중입니다. 이 {kind}을(를) 대기열에 추가할까요? GPU가 비면 바로 시작합니다.",
+  "Edit this job": "이 작업 편집",
+  "Being edited: it does not start until you save or cancel.": "편집 중: 저장하거나 취소할 때까지 시작하지 않습니다.",
+  "Opening the job in its trainer...": "트레이너에서 작업을 여는 중..."
 }

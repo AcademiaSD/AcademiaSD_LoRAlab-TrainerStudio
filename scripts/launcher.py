@@ -153,6 +153,9 @@ def extra_instances():
         # Un borrador cerrado ya no necesita su copia de ajustes (lo que se añadió a la cola tiene la suya).
         for gone in (i for i in data if isinstance(i, dict) and i not in alive and i.get("draft")):
             shutil.rmtree(DRAFTS_DIR / f"{gone.get('id')}-{gone.get('port')}", ignore_errors=True)
+        # Editor de un trabajo cerrado sin guardar: el trabajo vuelve a como estaba y puede arrancar.
+        for gone in (i for i in data if isinstance(i, dict) and i not in alive and i.get("edit")):
+            QUEUE.end_edit(gone["edit"], save=False)
         _save_instances(alive)
     return alive
 
@@ -399,6 +402,20 @@ def assets(filename):
     return send_from_directory(str(BASE_DIR / "assets"), filename)
 
 
+def _run_script(trainer):
+    """(ruta del .bat / .sh que abre el entrenador, None) o (None, error)."""
+    if os.name == "nt":
+        run = (CODE_DIR / trainer["run"]).resolve()
+        if run.parent != CODE_DIR or run.suffix.lower() != ".bat" or not run.is_file():
+            return None, t("Not found: {name}", name=trainer["run"])
+    else:
+        # En Linux se usa el .sh con el mismo nombre / On Linux use the same-named .sh
+        run = (CODE_DIR / Path(trainer["run"]).with_suffix(".sh")).resolve()
+        if run.parent != CODE_DIR or run.suffix.lower() != ".sh" or not run.is_file():
+            return None, t("Not found: {name}", name=run.name)
+    return run, None
+
+
 @app.route("/api/launch", methods=["POST"])
 def launch():
     req = request.get_json(force=True) or {}
@@ -408,15 +425,9 @@ def launch():
     if trainer is None:
         abort(404)
 
-    if os.name == "nt":
-        run = (CODE_DIR / trainer["run"]).resolve()
-        if run.parent != CODE_DIR or run.suffix.lower() != ".bat" or not run.is_file():
-            return jsonify({"status": "error", "error": t("Not found: {name}", name=trainer["run"])}), 404
-    else:
-        # En Linux se usa el .sh con el mismo nombre / On Linux use the same-named .sh
-        run = (CODE_DIR / Path(trainer["run"]).with_suffix(".sh")).resolve()
-        if run.parent != CODE_DIR or run.suffix.lower() != ".sh" or not run.is_file():
-            return jsonify({"status": "error", "error": t("Not found: {name}", name=run.name)}), 404
+    run, error = _run_script(trainer)
+    if error:
+        return jsonify({"status": "error", "error": error}), 404
 
     # Borrador: el mismo entrenador en otro puerto con su propia copia de los ajustes, para preparar otro
     # entrenamiento del mismo modelo mientras este entrena (el que entrena relee los ajustes normales).
@@ -429,7 +440,7 @@ def launch():
 
     # Ya abierto en otro puerto (para preparar un trabajo de la cola): volver a él.
     # Already open on another port (to prepare a queue job): jump back to it.
-    extra = next((i for i in extra_instances() if i["id"] == trainer_id), None)
+    extra = next((i for i in extra_instances() if i["id"] == trainer_id and not i.get("edit")), None)
     if extra:
         return jsonify({"status": "ok", "url": url_for_port(extra["port"]), "already": True})
     if req.get("second"):
@@ -485,11 +496,46 @@ def launch():
 DRAFTS_DIR = BASE_DIR / "settings" / "queue" / "drafts"
 
 
-def launch_second(trainer_id, run, draft=None):
+@app.route("/api/queue-edit/<jid>", methods=["POST"])
+def queue_edit(jid):
+    """Editar un trabajo en espera: su entrenador en otro puerto, con los ajustes del trabajo."""
+    extra = next((i for i in extra_instances() if i.get("edit") == jid), None)
+    if extra:
+        return jsonify({"status": "ok", "url": url_for_port(extra["port"]), "port": extra["port"], "already": True})
+    job, error = QUEUE.begin_edit(jid)
+    if error:
+        return jsonify({"status": "error", "error": error}), 409
+    trainer = next((x for x in load_config()["trainers"] if x["id"] == job["trainer"]), None)
+    run, error = _run_script(trainer) if trainer else (None, t("Not found: {name}", name=job["trainer"]))
+    if error:
+        QUEUE.end_edit(jid, save=False)
+        return jsonify({"status": "error", "error": error}), 404
+    resp = launch_second(job["trainer"], run, edit=jid)
+    if resp.get_json().get("status") != "ok":
+        QUEUE.end_edit(jid, save=False)
+    return resp
+
+
+@app.route("/api/queue-edit/<jid>/done", methods=["POST"])
+def queue_edit_done(jid):
+    """Guardar o cancelar la edición: el trabajo vuelve a poder arrancar y su editor se cierra."""
+    error = QUEUE.end_edit(jid, save=bool((request.get_json(silent=True) or {}).get("save")))
+    editor = next((i for i in extra_instances() if i.get("edit") == jid), None)
+    if editor:
+        _save_instances([i for i in extra_instances() if i is not editor and i.get("port") != editor["port"]])
+        # Después de contestar: la petición llega a través del propio editor.
+        threading.Timer(1.5, _kill_pid, args=(int(editor["pid"]),)).start()
+    if error:
+        return jsonify({"status": "error", "error": error}), 404
+    return jsonify({"status": "ok"})
+
+
+def launch_second(trainer_id, run, draft=None, edit=None):
     """Abre el entrenador en un puerto libre (trainer_port + 1...), con su consola, sin cerrar el del
     puerto principal, que está entrenando. Lo que se prepare ahí va a la cola.
     draft (dict con "train" / "pre_cache"): borrador con su propia copia de los ajustes, que parte de esos
-    valores; lo que se guarde en él no toca los ajustes normales del entrenador."""
+    valores; lo que se guarde en él no toca los ajustes normales del entrenador.
+    edit (id de un trabajo en espera): editor de ese trabajo, que guarda en su copia de los ajustes."""
     port = QUEUE._free_port(exclude={i["port"] for i in extra_instances()})
     if port is None:
         return jsonify({"status": "error", "error": t("No free port for the job.")}), 409
@@ -508,13 +554,21 @@ def launch_second(trainer_id, run, draft=None):
         env.update(LORALAB_DRAFT="1",
                    LORALAB_TRAIN_CONFIG=str(folder / f"train_settings_{trainer_id}.json"),
                    LORALAB_PRECACHE_CONFIG=str(folder / f"pre_cache_settings_{trainer_id}.json"))
+    elif edit is not None:
+        folder = job_queue.JOBS_DIR / edit
+        env.update(LORALAB_EDIT_JOB=edit,
+                   LORALAB_TRAIN_CONFIG=str(folder / f"train_settings_{trainer_id}.json"),
+                   LORALAB_PRECACHE_CONFIG=str(folder / f"pre_cache_settings_{trainer_id}.json"))
     if os.name == "nt":
         proc = subprocess.Popen(["cmd", "/c", str(run)], cwd=str(BASE_DIR), env=env,
                                 creationflags=subprocess.CREATE_NEW_CONSOLE)
         pid = proc.pid
     else:
         pid = _launch_linux(run, env)
-    _save_instances(extra_instances() + [{"id": trainer_id, "port": port, "pid": pid, "draft": draft is not None}])
+    _save_instances(extra_instances() + [{"id": trainer_id, "port": port, "pid": pid, "draft": draft is not None,
+                                          **({"edit": edit} if edit else {})}])
+    if edit:
+        QUEUE.begin_edit(edit, port)
     return jsonify({"status": "ok", "url": url_for_port(port), "port": port, "second": True})
 
 

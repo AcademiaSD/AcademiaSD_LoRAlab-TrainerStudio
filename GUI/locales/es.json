@@ -1472,5 +1472,18 @@
   "The GPU (CUDA) is not available.": "La GPU (CUDA) no está disponible.",
   "It was stopped from outside: its console was closed or Ctrl+C was pressed.": "Se detuvo desde fuera: se cerró su consola o se pulsó Ctrl+C.",
   "It stopped with an error:": "Se detuvo con un error:",
-  "It stopped with an error. Open its trainer to see the console.": "Se detuvo con un error. Abre su entrenador para ver la consola."
+  "It stopped with an error. Open its trainer to see the console.": "Se detuvo con un error. Abre su entrenador para ver la consola.",
+  "Only a job waiting in the queue can be edited.": "Solo se puede editar un trabajo que espera en la cola.",
+  "This trainer edits a queued job: save the changes to the queue.": "Este entrenador edita un trabajo de la cola: guarda los cambios en la cola.",
+  "Editing a queued job": "Editando un trabajo de la cola",
+  "Changes are saved to this job only, not to your trainer settings. It does not start while you edit it.": "Los cambios se guardan solo en este trabajo, no en los ajustes de tu entrenador. No arranca mientras lo editas.",
+  "Save changes to the queue": "Guardar cambios en la cola",
+  "Could not save it.": "No se pudo guardar.",
+  "Saved to the queue.": "Guardado en la cola.",
+  "Changes discarded.": "Cambios descartados.",
+  "The pre-cache is running in this trainer. Add this {kind} to the queue? It starts as soon as the pre-cache finishes.": "La pre-caché se está haciendo en este entrenador. ¿Añadir este {kind} a la cola? Empezará en cuanto termine la pre-caché.",
+  "This trainer is busy. Add this {kind} to the queue? It starts as soon as the GPU is free.": "Este entrenador está ocupado. ¿Añadir este {kind} a la cola? Empezará en cuanto la GPU quede libre.",
+  "Edit this job": "Editar este trabajo",
+  "Being edited: it does not start until you save or cancel.": "En edición: no arranca hasta que guardes o canceles.",
+  "Opening the job in its trainer...": "Abriendo el trabajo en su entrenador..."
 }

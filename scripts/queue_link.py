@@ -31,6 +31,9 @@ KINDS = ("precache", "train")
 JOB_ID = os.environ.get("LORALAB_JOB_ID") or None
 # Borrador abierto con «Nuevo entrenamiento en cola»: guarda en su propia copia de los ajustes.
 DRAFT = os.environ.get("LORALAB_DRAFT") == "1"
+# Editor de un trabajo en espera (✎ en la cola): guarda en la copia de ajustes de ese trabajo; Start pasa
+# a ser «Guardar cambios en la cola» y aquí nunca se entrena.
+EDIT_JOB = os.environ.get("LORALAB_EDIT_JOB") or None
 
 
 def _launcher(path, payload=None, timeout=2):
@@ -70,10 +73,11 @@ def register(app, trainer_id, runtime, train_config, precache_config):
         return running if running and running.get("port") != my_port else None
 
     def own_job(st):
-        if not JOB_ID or not st:
+        jid = JOB_ID or EDIT_JOB
+        if not jid or not st:
             return None
         jobs = ([st["running"]] if st.get("running") else []) + st.get("pending", []) + st.get("history", [])
-        return next((j for j in jobs if j and j.get("id") == JOB_ID), None)
+        return next((j for j in jobs if j and j.get("id") == jid), None)
 
     # ---------------------------------------------------------- puerta de /api/run
     endpoint = next(r.endpoint for r in app.url_map.iter_rules() if r.rule == "/api/run")
@@ -84,6 +88,8 @@ def register(app, trainer_id, runtime, train_config, precache_config):
         script = data.get("script")
         if script not in KINDS:
             return original_run()
+        if EDIT_JOB:
+            return jsonify({"status": "edit", "error": t("This trainer edits a queued job: save the changes to the queue.")}), 409
         if JOB_ID:
             if request.headers.get("X-LoRAlab-Queue") != "1":
                 return jsonify({"status": "job", "error": t("This trainer runs a queue job: pause or resume it from the queue.")}), 409
@@ -114,11 +120,18 @@ def register(app, trainer_id, runtime, train_config, precache_config):
     @app.route("/api/queue-gate", methods=["POST"])
     def queue_gate():
         script = (request.get_json(force=True) or {}).get("script")
+        if EDIT_JOB and script in KINDS:
+            return jsonify({"mode": "edit", "job_id": EDIT_JOB})
         if JOB_ID and script in KINDS:
             return jsonify({"mode": "job", "job_id": JOB_ID})
         st = queue_state()
         if st is None:
             return jsonify({"mode": "direct", "launcher": False})
+        own = runtime.status()
+        if own.get("running") and script in KINDS:
+            # Este mismo entrenador está ocupado (p. ej. con la pre-caché): lo nuevo va a la cola y arranca
+            # en cuanto acabe, en lugar de esperar a que se libere la página.
+            return jsonify({"mode": "queue_self", "script": own.get("script")})
         running = busy_elsewhere(st)
         if running and script in KINDS:
             return jsonify({"mode": "queue", "running": running})
@@ -142,10 +155,12 @@ def register(app, trainer_id, runtime, train_config, precache_config):
     def queue_info():
         st = queue_state()
         if st is None:
-            return jsonify({"launcher": False, "job_id": JOB_ID, "draft": DRAFT})
+            return jsonify({"launcher": False, "job_id": JOB_ID, "draft": DRAFT, "edit_job": EDIT_JOB})
         pending = [j for j in st.get("pending", []) if j.get("state") != "failed"]
-        return jsonify({"launcher": True, "job_id": JOB_ID, "draft": DRAFT, "job": own_job(st), "port": my_port,
-                        "running": st.get("running"), "queued": len(pending)})
+        own = runtime.status()
+        return jsonify({"launcher": True, "job_id": JOB_ID, "draft": DRAFT, "edit_job": EDIT_JOB, "job": own_job(st), "port": my_port,
+                        "running": st.get("running"), "queued": len(pending),
+                        "self_script": own.get("script") if own.get("running") else None})
 
     @app.route("/api/queue-draft", methods=["POST"])
     def queue_draft():
@@ -154,6 +169,17 @@ def register(app, trainer_id, runtime, train_config, precache_config):
         code, res = _launcher("/api/launch", {"id": trainer_id, "draft": True,
                                               "settings": {"train": _read(train_config), "pre_cache": _read(precache_config)}},
                               timeout=15)
+        if code is None:
+            return jsonify({"status": "error", "error": t("The launcher is not running: the queue needs it.")}), 503
+        return jsonify(res), code
+
+    @app.route("/api/queue-edit-done", methods=["POST"])
+    def queue_edit_done():
+        """Guardar (o cancelar) la edición del trabajo: el lanzador lo deja listo y cierra este editor."""
+        if not EDIT_JOB:
+            return jsonify({"status": "error", "error": t("Job not found.")}), 404
+        save = bool((request.get_json(silent=True) or {}).get("save"))
+        code, res = _launcher(f"/api/queue-edit/{EDIT_JOB}/done", {"save": save}, timeout=10)
         if code is None:
             return jsonify({"status": "error", "error": t("The launcher is not running: the queue needs it.")}), 503
         return jsonify(res), code
