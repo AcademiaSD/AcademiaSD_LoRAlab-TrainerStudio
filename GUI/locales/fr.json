@@ -1380,5 +1380,10 @@
   "This trainer is busy. Add this {kind} to the queue? It starts as soon as the GPU is free.": "Cet entraîneur est occupé. Ajouter ce {kind} à la file ? Il démarrera dès que le GPU sera libre.",
   "Edit this job": "Modifier ce job",
   "Being edited: it does not start until you save or cancel.": "En cours de modification : il ne démarre pas tant que tu n'enregistres pas ou n'annules pas.",
-  "Opening the job in its trainer...": "Ouverture du job dans son entraîneur..."
+  "Opening the job in its trainer...": "Ouverture du job dans son entraîneur...",
+  "The queue is paused, so this job will not start until you resume it. Resume the queue now?": "La file est en pause : ce job ne démarrera pas tant que tu ne la reprends pas. Reprendre la file maintenant ?",
+  "Resume the queue": "Reprendre la file",
+  "Leave it paused": "La laisser en pause",
+  "Queue resumed.": "File reprise.",
+  "Could not resume the queue.": "Impossible de reprendre la file."
 }

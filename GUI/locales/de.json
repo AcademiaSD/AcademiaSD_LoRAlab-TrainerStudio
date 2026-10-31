@@ -1380,5 +1380,10 @@
   "This trainer is busy. Add this {kind} to the queue? It starts as soon as the GPU is free.": "Dieser Trainer ist beschäftigt. Dieses {kind} zur Warteschlange hinzufügen? Es startet, sobald die GPU frei ist.",
   "Edit this job": "Diesen Job bearbeiten",
   "Being edited: it does not start until you save or cancel.": "Wird bearbeitet: startet erst, wenn du speicherst oder abbrichst.",
-  "Opening the job in its trainer...": "Job wird in seinem Trainer geöffnet..."
+  "Opening the job in its trainer...": "Job wird in seinem Trainer geöffnet...",
+  "The queue is paused, so this job will not start until you resume it. Resume the queue now?": "Die Warteschlange ist pausiert, daher startet dieser Job erst, wenn du sie fortsetzt. Warteschlange jetzt fortsetzen?",
+  "Resume the queue": "Warteschlange fortsetzen",
+  "Leave it paused": "Pausiert lassen",
+  "Queue resumed.": "Warteschlange fortgesetzt.",
+  "Could not resume the queue.": "Warteschlange konnte nicht fortgesetzt werden."
 }

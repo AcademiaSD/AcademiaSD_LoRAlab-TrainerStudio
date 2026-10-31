@@ -1380,5 +1380,10 @@
   "This trainer is busy. Add this {kind} to the queue? It starts as soon as the GPU is free.": "このトレーナーは使用中です。この{kind}をキューに追加しますか?GPUが空くとすぐに開始します。",
   "Edit this job": "このジョブを編集",
   "Being edited: it does not start until you save or cancel.": "編集中:保存またはキャンセルするまで開始しません。",
-  "Opening the job in its trainer...": "ジョブをトレーナーで開いています..."
+  "Opening the job in its trainer...": "ジョブをトレーナーで開いています...",
+  "The queue is paused, so this job will not start until you resume it. Resume the queue now?": "キューは一時停止中のため、再開するまでこのジョブは開始しません。今すぐキューを再開しますか?",
+  "Resume the queue": "キューを再開",
+  "Leave it paused": "一時停止のままにする",
+  "Queue resumed.": "キューを再開しました。",
+  "Could not resume the queue.": "キューを再開できませんでした。"
 }

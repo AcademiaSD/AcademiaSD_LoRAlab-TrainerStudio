@@ -319,6 +319,16 @@
         if (typeof appendTerminal === 'function') {
             appendTerminal(`\n[SYSTEM] ${tr('Added to the queue: position {n}.', { n: pos || '?' })}`, false, 'term-success');
         }
+        if (res.data.paused) {
+            // Con la cola pausada no arrancaría nunca: se dice, y se ofrece reanudarla aquí mismo.
+            const go = await askConfirm(tr('The queue is paused, so this job will not start until you resume it. Resume the queue now?'),
+                                        { okLabel: tr('Resume the queue'), cancelLabel: tr('Leave it paused') });
+            if (go) {
+                const r = await post('/api/queue-resume', {});
+                if (r.ok && r.data.status !== 'error') toast(tr('Queue resumed.'), 'success');
+                else toast(`[!] ${r.data.error || tr('Could not resume the queue.')}`, 'error');
+            }
+        }
         refresh();
     }
 

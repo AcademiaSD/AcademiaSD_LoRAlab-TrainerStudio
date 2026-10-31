@@ -173,6 +173,14 @@ def register(app, trainer_id, runtime, train_config, precache_config):
             return jsonify({"status": "error", "error": t("The launcher is not running: the queue needs it.")}), 503
         return jsonify(res), code
 
+    @app.route("/api/queue-resume", methods=["POST"])
+    def queue_resume():
+        """Reanudar la cola entera (estaba pausada al añadir un trabajo)."""
+        code, res = _launcher("/api/queue/options", {"paused": False}, timeout=5)
+        if code is None:
+            return jsonify({"status": "error", "error": t("The launcher is not running: the queue needs it.")}), 503
+        return jsonify(res), code
+
     @app.route("/api/queue-edit-done", methods=["POST"])
     def queue_edit_done():
         """Guardar (o cancelar) la edición del trabajo: el lanzador lo deja listo y cierra este editor."""

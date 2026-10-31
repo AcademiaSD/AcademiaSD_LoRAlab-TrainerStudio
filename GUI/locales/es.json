@@ -1485,5 +1485,10 @@
   "This trainer is busy. Add this {kind} to the queue? It starts as soon as the GPU is free.": "Este entrenador está ocupado. ¿Añadir este {kind} a la cola? Empezará en cuanto la GPU quede libre.",
   "Edit this job": "Editar este trabajo",
   "Being edited: it does not start until you save or cancel.": "En edición: no arranca hasta que guardes o canceles.",
-  "Opening the job in its trainer...": "Abriendo el trabajo en su entrenador..."
+  "Opening the job in its trainer...": "Abriendo el trabajo en su entrenador...",
+  "The queue is paused, so this job will not start until you resume it. Resume the queue now?": "La cola está pausada, así que este trabajo no empezará hasta que la reanudes. ¿Reanudar la cola ahora?",
+  "Resume the queue": "Reanudar la cola",
+  "Leave it paused": "Dejarla pausada",
+  "Queue resumed.": "Cola reanudada.",
+  "Could not resume the queue.": "No se pudo reanudar la cola."
 }
