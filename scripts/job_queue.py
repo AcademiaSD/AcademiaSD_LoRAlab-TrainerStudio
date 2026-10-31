@@ -227,6 +227,9 @@ class JobQueue:
                 self._restore_edit(job)
         self._thread = None
         self._saved_at = 0.0
+        # Retención solo en memoria («Pausar todo y salir»): no lanza nada nuevo mientras se cierra, sin tocar
+        # el interruptor «Pausar la cola»; al volver a abrir el lanzador la cola sigue sola.
+        self.hold = False
 
     # ------------------------------------------------------------------ datos
     def _save(self):
@@ -347,6 +350,17 @@ class JobQueue:
                 job.update(state="queued", note="", code=None, finished=None)
                 self._save()
             return None
+
+    def requeue_interrupted(self, jid):
+        """Trabajo pausado por «Pausar todo y salir»: vuelve a la cola en su sitio (el primero) y al abrir
+        otra vez el lanzador continúa desde su checkpoint."""
+        with self._lock:
+            job = self._job(jid)
+            if job is None or job["state"] != "paused" or job["external"]:
+                return
+            job.update(state="queued", finished=None,
+                       note="Interrupted by Pause all and exit: it continues from its checkpoint.")
+            self._save()
 
     def remove(self, jid):
         with self._lock:
@@ -471,7 +485,7 @@ class JobQueue:
             self._follow(running)
             return
         with self._lock:
-            if self.data["paused"]:
+            if self.data["paused"] or self.hold:
                 return
             nxt = next((j for j in self.data["jobs"] if j["state"] == "queued" and not j.get("editing")), None)
         if nxt is not None:

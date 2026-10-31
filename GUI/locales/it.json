@@ -1342,8 +1342,8 @@
   "History": "Cronologia",
   "Pause all and exit": "Metti tutto in pausa ed esci",
   "⏻ Pause all and exit": "⏻ Metti tutto in pausa ed esci",
-  "Pauses the queue and the training in progress (saving its checkpoint), closes every trainer and their windows, and closes the launcher. Your queue is kept.": "Mette in pausa la coda e l'addestramento in corso (salvando il checkpoint), chiude tutti i trainer e le loro finestre e chiude il launcher. La coda viene conservata.",
-  "The training in progress is paused saving its checkpoint, the queue is paused and every trainer is closed with its window. On this PC the launcher closes too; in the cloud or from another device it stays open. Your queue is kept: resume it next time.": "L'addestramento in corso viene messo in pausa salvando il checkpoint, la coda va in pausa e ogni trainer si chiude con la sua finestra. Su questo PC si chiude anche il launcher; nel cloud o da un altro dispositivo resta aperto. La coda viene conservata: riprendila la prossima volta.",
+  "Pauses the training in progress (saving its checkpoint), closes every trainer and their windows, and closes the launcher. Next time, the queue continues where it was.": "Mette in pausa l'addestramento in corso (salvando il checkpoint), chiude tutti i trainer con le loro finestre e chiude il launcher. La prossima volta la coda riprende da dov'era.",
+  "The training in progress is paused saving its checkpoint and every trainer is closed with its window. On this PC the launcher closes too, and next time you open it the queue continues where it was, starting with that training. In the cloud or from another device the launcher stays open with the queue paused.": "L'addestramento in corso viene messo in pausa salvando il checkpoint e tutti i trainer vengono chiusi con la loro finestra. Su questo PC si chiude anche il launcher, e alla prossima apertura la coda riprende da dov'era, iniziando da quell'addestramento. Nel cloud o da un altro dispositivo il launcher resta aperto con la coda in pausa.",
   "Pausing the queue...": "Messa in pausa della coda...",
   "Pausing {name} and saving its checkpoint...": "Messa in pausa di {name} e salvataggio del checkpoint...",
   "Stopping what is still running...": "Arresto di ciò che è ancora in esecuzione...",
@@ -1385,5 +1385,6 @@
   "Resume the queue": "Riprendi la coda",
   "Leave it paused": "Lasciala in pausa",
   "Queue resumed.": "Coda ripresa.",
-  "Could not resume the queue.": "Impossibile riprendere la coda."
+  "Could not resume the queue.": "Impossibile riprendere la coda.",
+  "Interrupted by Pause all and exit: it continues from its checkpoint.": "Interrotto da «Metti tutto in pausa ed esci»: riprende dal suo checkpoint."
 }

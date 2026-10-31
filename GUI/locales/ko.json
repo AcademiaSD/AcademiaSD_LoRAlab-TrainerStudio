@@ -1342,8 +1342,8 @@
   "History": "기록",
   "Pause all and exit": "모두 일시정지하고 종료",
   "⏻ Pause all and exit": "⏻ 모두 일시정지하고 종료",
-  "Pauses the queue and the training in progress (saving its checkpoint), closes every trainer and their windows, and closes the launcher. Your queue is kept.": "대기열과 진행 중인 학습을 일시정지하고(체크포인트 저장) 모든 트레이너와 창, 런처를 닫습니다. 대기열은 유지됩니다.",
-  "The training in progress is paused saving its checkpoint, the queue is paused and every trainer is closed with its window. On this PC the launcher closes too; in the cloud or from another device it stays open. Your queue is kept: resume it next time.": "진행 중인 학습은 체크포인트를 저장하고 일시정지되며, 대기열도 일시정지되고 모든 트레이너가 창과 함께 닫힙니다. 이 PC에서는 런처도 닫히고, 클라우드나 다른 기기에서는 열린 채로 유지됩니다. 대기열은 유지되니 다음에 재개하세요.",
+  "Pauses the training in progress (saving its checkpoint), closes every trainer and their windows, and closes the launcher. Next time, the queue continues where it was.": "진행 중인 학습을 일시 정지하고(체크포인트 저장) 모든 트레이너와 창을 닫은 뒤 런처를 닫습니다. 다음에는 대기열이 멈춘 곳에서 이어집니다.",
+  "The training in progress is paused saving its checkpoint and every trainer is closed with its window. On this PC the launcher closes too, and next time you open it the queue continues where it was, starting with that training. In the cloud or from another device the launcher stays open with the queue paused.": "진행 중인 학습은 체크포인트를 저장하며 일시 정지되고 모든 트레이너가 창과 함께 닫힙니다. 이 PC에서는 런처도 닫히며, 다음에 열면 대기열이 그 학습부터 멈춘 곳에서 이어집니다. 클라우드나 다른 기기에서는 런처가 대기열을 일시 정지한 채로 열려 있습니다.",
   "Pausing the queue...": "대기열 일시정지 중...",
   "Pausing {name} and saving its checkpoint...": "{name} 일시정지 및 체크포인트 저장 중...",
   "Stopping what is still running...": "실행 중인 작업 중지 중...",
@@ -1385,5 +1385,6 @@
   "Resume the queue": "대기열 다시 시작",
   "Leave it paused": "일시 정지 유지",
   "Queue resumed.": "대기열을 다시 시작했습니다.",
-  "Could not resume the queue.": "대기열을 다시 시작하지 못했습니다."
+  "Could not resume the queue.": "대기열을 다시 시작하지 못했습니다.",
+  "Interrupted by Pause all and exit: it continues from its checkpoint.": "「모두 일시정지하고 종료」로 중단됨: 체크포인트부터 이어집니다."
 }

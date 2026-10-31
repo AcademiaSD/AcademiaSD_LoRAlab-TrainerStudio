@@ -1342,8 +1342,8 @@
   "History": "Historique",
   "Pause all and exit": "Tout mettre en pause et quitter",
   "⏻ Pause all and exit": "⏻ Tout mettre en pause et quitter",
-  "Pauses the queue and the training in progress (saving its checkpoint), closes every trainer and their windows, and closes the launcher. Your queue is kept.": "Met en pause la file et l'entraînement en cours (en enregistrant son checkpoint), ferme tous les entraîneurs et leurs fenêtres, puis le lanceur. Votre file est conservée.",
-  "The training in progress is paused saving its checkpoint, the queue is paused and every trainer is closed with its window. On this PC the launcher closes too; in the cloud or from another device it stays open. Your queue is kept: resume it next time.": "L'entraînement en cours est mis en pause en enregistrant son checkpoint, la file est mise en pause et chaque entraîneur est fermé avec sa fenêtre. Sur ce PC, le lanceur se ferme aussi ; dans le cloud ou depuis un autre appareil, il reste ouvert. Votre file est conservée : reprenez-la la prochaine fois.",
+  "Pauses the training in progress (saving its checkpoint), closes every trainer and their windows, and closes the launcher. Next time, the queue continues where it was.": "Met en pause l'entraînement en cours (en enregistrant son checkpoint), ferme tous les entraîneurs et leurs fenêtres, et ferme le lanceur. La prochaine fois, la file reprend là où elle en était.",
+  "The training in progress is paused saving its checkpoint and every trainer is closed with its window. On this PC the launcher closes too, and next time you open it the queue continues where it was, starting with that training. In the cloud or from another device the launcher stays open with the queue paused.": "L'entraînement en cours est mis en pause en enregistrant son checkpoint et tous les entraîneurs sont fermés avec leur fenêtre. Sur ce PC le lanceur se ferme aussi, et à la prochaine ouverture la file reprend là où elle en était, en commençant par cet entraînement. Dans le cloud ou depuis un autre appareil, le lanceur reste ouvert avec la file en pause.",
   "Pausing the queue...": "Mise en pause de la file...",
   "Pausing {name} and saving its checkpoint...": "Mise en pause de {name} et enregistrement de son checkpoint...",
   "Stopping what is still running...": "Arrêt de ce qui tourne encore...",
@@ -1385,5 +1385,6 @@
   "Resume the queue": "Reprendre la file",
   "Leave it paused": "La laisser en pause",
   "Queue resumed.": "File reprise.",
-  "Could not resume the queue.": "Impossible de reprendre la file."
+  "Could not resume the queue.": "Impossible de reprendre la file.",
+  "Interrupted by Pause all and exit: it continues from its checkpoint.": "Interrompu par « Tout mettre en pause et quitter » : il reprend depuis son checkpoint."
 }

@@ -630,7 +630,10 @@ def _shutdown(keep_launcher):
         print(f"[SHUTDOWN] {text}", flush=True)
 
     step(t("Pausing the queue..."))
-    QUEUE.set_options(paused=True)
+    if keep_launcher:
+        QUEUE.set_options(paused=True)                 # la sesión sigue abierta: pausa visible, con su interruptor
+    else:
+        QUEUE.hold = True                              # solo hasta cerrar: al volver a abrir, la cola sigue sola
     job = QUEUE.running()
     if job:
         step(t("Pausing {name} and saving its checkpoint...", name=f"{job['trainer_name']} · {job['project'] or '-'}"))
@@ -638,6 +641,7 @@ def _shutdown(keep_launcher):
         end = time.time() + PAUSE_TIMEOUT
         while QUEUE.running() and time.time() < end:
             time.sleep(1)
+        QUEUE.requeue_interrupted(job["id"])           # el primero de la cola, desde su checkpoint
     # Lo que aún se ejecute fuera de la cola (unos subtítulos, por ejemplo) se detiene igual que con Stop.
     busy = [p for p in _trainer_ports() if (job_queue._http(p, "/api/status")[1] or {}).get("running")]
     if busy:

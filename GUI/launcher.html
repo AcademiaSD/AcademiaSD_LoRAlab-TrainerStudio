@@ -215,7 +215,7 @@
         <a href="https://ko-fi.com/academiasd" target="_blank">☕ Ko-Fi</a>
         <button type="button" id="net-open" onclick="openNetwork()" hidden>🌐 Remote access</button>
         <button type="button" id="bye-open" class="bye-btn" onclick="pauseAllAndExit()"
-                title="Pauses the queue and the training in progress (saving its checkpoint), closes every trainer and their windows, and closes the launcher. Your queue is kept.">⏻ Pause all and exit</button>
+                title="Pauses the training in progress (saving its checkpoint), closes every trainer and their windows, and closes the launcher. Next time, the queue continues where it was.">⏻ Pause all and exit</button>
     </footer>
 
     <!-- Acceso desde otros equipos de la red. Solo se edita desde este PC (/api/network). -->
@@ -536,7 +536,7 @@
         // y (en este PC) se cierra él; la página va contando los pasos hasta que deja de contestar.
         async function pauseAllAndExit() {
             const ok = await askConfirm(t('Pause all and exit'),
-                t('The training in progress is paused saving its checkpoint, the queue is paused and every trainer is closed with its window. On this PC the launcher closes too; in the cloud or from another device it stays open. Your queue is kept: resume it next time.'),
+                t('The training in progress is paused saving its checkpoint and every trainer is closed with its window. On this PC the launcher closes too, and next time you open it the queue continues where it was, starting with that training. In the cloud or from another device the launcher stays open with the queue paused.'),
                 t('Pause all and exit'));
             if (!ok) return;
             const bye = document.getElementById('bye');
