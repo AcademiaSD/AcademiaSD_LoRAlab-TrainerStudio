@@ -218,6 +218,10 @@ class JobQueue:
         self._lock = threading.RLock()
         self.data = {"paused": False, "stop_on_failure": False, "jobs": []}
         self.data.update(_read_json(QUEUE_FILE))
+        for job in self.data["jobs"]:
+            if job["state"] == "failed" and re.fullmatch(r"Exited with code -?\d+\.", job.get("note") or ""):
+                # Fallido de una versión anterior: también dice la causa con palabras, no el código.
+                job["note"], job["detail"] = failure_reason(job["kind"], job.get("code"), [])
         self._thread = None
         self._saved_at = 0.0
 
@@ -295,6 +299,9 @@ class JobQueue:
         with self._lock:
             if self.running():
                 return None, t("The GPU is busy with another job.")
+            for j in list(self.data["jobs"]):
+                if j["state"] == "failed" and (j["trainer"], j["project"], j["kind"]) == (trainer_id, project, kind):
+                    self._drop(j)             # lanzado otra vez desde su entrenador: sustituye al que falló
             jid = time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:6]
             if isinstance(settings, dict):
                 for key, name in _settings_names(trainer_id).items():
