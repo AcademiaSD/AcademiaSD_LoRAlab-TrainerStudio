@@ -8,6 +8,10 @@
 
 What was added, newest first. Each entry links to its commit.
 
+**2026-11-01**
+
+- <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **Wan 2.2 T2V-A14B, video and image LoRAs for the high noise and/or low noise expert** — images and clips in the same dataset, the experts in NF4 (downloaded ready from `AcademiaSD/Wan22-T2V-A14B-NF4-for-LoRA-Training`, or converted on your PC shard by shard), video previews with both experts, and one LoRA per expert (`_high_noise` / `_low_noise`) for ComfyUI ([details](#wan-22-t2v-a14b--video-and-image-loras-high--low-noise))
+
 **2026-10-31**
 
 - <img src="https://img.shields.io/badge/MAJOR%20UPDATE-7c3aed?style=for-the-badge" alt="MAJOR UPDATE" height="22"> **Job queue: queue trainings and pre-caches of any trainer, even several of the same model, and they run one after another on the GPU** — a queue page to reorder, pause, resume or remove jobs and jump to the one training; Start asks *Add to queue?* while something trains; *New training for the queue* prepares the next one while the current one trains; *Pause all and exit* in the launcher, also on RunPod and other clouds; a failed job stays in the list saying why; **✎** edits a waiting job ([how it works](#-job-queue)) [`d7bc99e`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/d7bc99e) [`e0089ae`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/e0089ae) [`94ecc4f`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/94ecc4f) [`9bf31bf`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/9bf31bf) [`2468e99`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/2468e99)
@@ -190,6 +194,7 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 | **SDXL** | Image LoRAs for SDXL Base, Pony, Illustrious, NoobAI, Juggernaut, RealVis or your own SDXL checkpoint | **4 GB** (NF4) / 12 GB (BF16) |
 | **LTX-2.3** (also LTX-2.5) | Character and style LoRAs for the LTX video model, trained from images | 12 GB |
 | **MiniMax-H3** | Video LoRAs from images, clips and audio, plus training-free **RefMods** | 8 GB |
+| **Wan 2.2 (T2V-A14B)** | Video and image LoRAs from images and clips, for the **high noise** and/or **low noise** expert | **16 GB** (images and 17-frame clips at 480p, measured) |
 | **YuE2-3B** *(experimental / beta)* | Song LoRAs: the AR clones the singer's voice, the NAR learns lyrics and phrasing | ~8 GB (NF4, measured on NAR) |
 
 ---
@@ -205,7 +210,7 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 5. **Desde otro equipo:** el botón **🌐 Remote access** del lanzador abre el entrenador a tu red con usuario y contraseña. Con **⬆ Subir** (o arrastrando archivos o un `.zip` al Dataset Manager) mandas el dataset desde ese equipo, y con **⬇ Descargar LoRA** te bajas el resultado.
 6. **Previsualizaciones nítidas en ComfyUI:** algunos de estos modelos son lentos al generar, y conviene ver el resultado de forma anticipada, mientras se genera, para cancelar si no va bien. Para eso hace falta una buena previsualización. Mi recomendación: al usar tus LoRAs de Qwen-Image 2.1, Krea 2 o FLUX.2 / Klein 9B, pon el nodo **Model Preview Override** de [KJNodes](https://github.com/kijai/ComfyUI-KJNodes) con el TAE de AcademiaSD correspondiente ([Qwen-Image 2.1](https://huggingface.co/AcademiaSD/TAE-Qwen-Image-2.1) · [Krea 2](https://huggingface.co/AcademiaSD/TAE-Krea-2) · [FLUX.2](https://huggingface.co/AcademiaSD/TAE_Flux2_AcademiaSD)) en `ComfyUI/models/vae_approx/`. Detalles en la sección *Sharp previews in ComfyUI*.
 7. **Sin GPU potente:** entrena en la nube con **[RunPod](https://console.runpod.io/deploy?template=lfxvtg5rrb&ref=jbvdshm0)**. Es una plantilla ya preparada: eliges una GPU con CUDA 13, entras con el usuario `loralab` y la contraseña que aparece en *Logs → Container*, y al terminar paras y borras el pod. Detalles en la sección *RunPod*.
-8. **Requisitos:** Windows 10/11, GPU NVIDIA **RTX 20xx / GTX 16xx o posterior** con driver **580 o superior** (o AMD **RX 7000 / RX 9000** de 16 GB, experimental), 8 GB de VRAM (4 GB para Anima y SDXL en NF4, 12 GB para LTX-2.3, FLUX.2 Klein 9B, Ideogram 4 y SDXL en BF16) y 16 GB de RAM (32 GB recomendados).
+8. **Requisitos:** Windows 10/11, GPU NVIDIA **RTX 20xx / GTX 16xx o posterior** con driver **580 o superior** (o AMD **RX 7000 / RX 9000** de 16 GB, experimental), 8 GB de VRAM (4 GB para Anima y SDXL en NF4, 12 GB para LTX-2.3, FLUX.2 Klein 9B, Ideogram 4 y SDXL en BF16, 16 GB para Wan 2.2) y 16 GB de RAM (32 GB recomendados).
 
 **Cola de trabajos:** con un entrenamiento en marcha, *Iniciar / Reanudar* o *Iniciar Pre-Caché* en cualquier entrenador pregunta si añadirlo a la cola, con una copia de los ajustes de ese momento. Los trabajos se ejecutan uno tras otro en la GPU. El botón **Cola** del lanzador y de cada entrenador abre la página de la cola: lo que entrena ahora (progreso, tiempo restante y curva de loss) y lo que espera, que puedes reordenar arrastrando, pausar, continuar o quitar. Pausar guarda un checkpoint y deja el trabajo pausado en la cola; continuar sigue desde ese paso. Mientras un entrenador entrena, **➕ Nuevo entrenamiento en cola** abre un borrador del mismo entrenador en otro puerto para preparar el siguiente sin tocar el que entrena (ponle otro nombre de proyecto). Si un trabajo falla, se queda en la lista en rojo diciendo por qué (no se encuentra la pre-caché o el dataset, falta VRAM…); corrígelo y pulsa **↻** para reintentarlo. **✎** en un trabajo de la cola abre su entrenador con sus ajustes para cambiarlos: el botón de empezar pasa a ser **💾 Guardar cambios en la cola**. Mientras se hace la pre-caché, *Iniciar / Reanudar* sigue disponible y manda el entrenamiento a la cola. **⏻ Pausar todo y salir**, abajo en el lanzador, pausa el entrenamiento en curso guardando su checkpoint y cierra todo desde el navegador; al volver a abrir el lanzador la cola sigue sola donde estaba, empezando por ese entrenamiento. En RunPod y otras nubes el lanzador sigue abierto, con la cola pausada.
 
@@ -218,6 +223,8 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 **Ming-Image:** nuevo entrenador de LoRAs de imagen y de edición (antes → después) para **Ming-Image 0.1 Design** de inclusionAI, el modelo que genera el canal alfa: los diseños transparentes. El captioner escribe los captions en el JSON estilo Figma del propio modelo. El "text encoder" es un MLLM completo (BailingMoE-V2 + ViT) en NF4. La tarea oficial de edición trabaja a 1024. Detalles en la sección *Ming-Image*.
 
 **MOSS-Image:** nuevo entrenador de LoRAs de imagen para MOSS-Image de OpenMOSS (Apache 2.0), sobre **Base** (el recomendado para LoRAs) o **SFT**, con la misma pre-caché para los dos. Entrena a 512² con menos de 6 GB de VRAM. El text encoder (Qwen3.5-9B) se elige en el pre-caché: BF16 exacto repartido entre GPU y RAM (por defecto), INT8 o NF4. Las previews pueden usar el adaptador turbo de 4 pasos de darask0 (unos 4 s por imagen en vez de 43 s). Detalles en la sección *MOSS-Image*.
+
+**Wan 2.2:** nuevo entrenador de LoRAs de vídeo e imagen para **Wan 2.2 T2V-A14B** (Apache 2.0), con imágenes y clips en el mismo dataset. Wan 2.2 tiene dos expertos de 14B: el de **ruido alto** (composición y movimiento) y el de **ruido bajo** (detalle, caras, estilo). *Experto a entrenar* elige cuál aprende: ruido bajo (por defecto, basta para personajes y estilos), ruido alto (movimientos nuevos) o los dos, con un LoRA para cada uno (`_high_noise` / `_low_noise`); en ComfyUI cada uno va en su modelo. Los expertos se descargan ya en NF4 (~7,6 GB cada uno) de `AcademiaSD/Wan22-T2V-A14B-NF4-for-LoRA-Training`; si ese repo aún no tiene uno, se descarga del original shard a shard (57 GB en FP32), se convierte a NF4 en tu PC y se borra cada shard. Los clips necesitan **ffmpeg** en el PATH. Detalles en la sección *Wan 2.2*.
 
 **LR Scheduler:** debajo del learning rate puedes elegir cómo cambia durante el entrenamiento: `cosine` (por defecto: sube durante el warmup y baja suavemente hasta el 10%), `constant` (el mismo LR de principio a fin, como el entrenador de Civitai), `constant_with_warmup`, `linear` o `cosine_with_restarts` (repite la curva tantas veces como indique *Ciclos*). Si no lo tocas, cada entrenador funciona igual que antes. Detalles en la sección *LR scheduler*.
 
@@ -244,6 +251,7 @@ Each trainer downloads **only what it uses**, already quantized. The table compa
 | **FLUX.2 Klein 9B** | 34.7 | — | **8.8** | New trainer: the 9B transformer (18.2 GB) and the Qwen3-8B text encoder (16.4 GB) in NF4 (4.9 GB + 3.8 GB; only the 28 text encoder layers Klein reads). |
 | **Qwen-Image 2512 / Edit 2511** | 57.8 each | — | **26.8 / 18.6 / 15.7** | New trainer: the 20B transformer of 2512 or Edit-2511 in NF4 (9.9 GB each; only the one you train on is downloaded) and the Qwen2.5-VL-7B text encoder you pick: BF16 (exact, default) / INT8 / NF4. The optional Lightning turbo LoRA adds 0.85 GB. |
 | **MOSS-Image** | 27.2 | — | **20.2 / 13.2 / 9.9** | New trainer: the 5B transformer of Base or SFT in NF4 (3.1 GB each; only the one you train on is downloaded) and the Qwen3.5-9B text encoder you pick: BF16 (exact, default) / INT8 / NF4. The optional turbo preview adapter adds 1.2 GB. |
+| **Wan 2.2 T2V-A14B** | 126.2 | — | **~19.5 / ~27** | New trainer: one expert / both, downloaded already in NF4 (~7.6 GB each) from `AcademiaSD/Wan22-T2V-A14B-NF4-for-LoRA-Training`. An expert that repo does not have yet is downloaded from the original shard by shard (57.2 GB in FP32: 69.0 / 126.2 GB in total) and converted to NF4 on your PC, deleting each shard as it goes. On disk it takes **~19.5 GB** with one expert and **~27 GB** with both (UMT5-XXL text encoder and VAE: 11.9 GB). |
 | **ERNIE-Image** | 31.6 | — | **~6.7** | New trainer: downloads the prepared NF4 transformer and Ministral 3B text encoder from `AcademiaSD/Ernie-NF4-for-LoRA-Training`. The optional prompt enhancer is not needed for training. |
 
 The automatic captioner adds, only the first time you use it: **nothing** for Krea 2 (it uses Krea 2's own text encoder), **5.5 GB** for Qwen-Image 2.1 when its text encoder is not already the NF4 one and for LTX-2.3, Z-Image, Anima, FLUX.2 Klein 9B and Ideogram 4 (Qwen3-VL-8B NF4, shared by all of them), and **8.9 GB** for MiniMax-H3 (Qwen3-VL-4B).
@@ -257,12 +265,12 @@ The automatic captioner adds, only the first time you use it: **nothing** for Kr
 | | Minimum | Recommended |
 | :--- | :--- | :--- |
 | **OS** | Windows 10 / 11, or 64-bit Linux ([docs/Linux.md](docs/Linux.md)) | Windows 11 |
-| **GPU** | NVIDIA **RTX 20xx / GTX 16xx or newer** (compute capability 7.5+) with **8 GB VRAM** (4 GB for Anima and SDXL in NF4, 12 GB for LTX-2.3, FLUX.2 Klein 9B, Ideogram 4 and SDXL in BF16) | 12–24 GB VRAM |
+| **GPU** | NVIDIA **RTX 20xx / GTX 16xx or newer** (compute capability 7.5+) with **8 GB VRAM** (4 GB for Anima and SDXL in NF4, 12 GB for LTX-2.3, FLUX.2 Klein 9B, Ideogram 4 and SDXL in BF16, 16 GB for Wan 2.2) | 12–24 GB VRAM |
 | **AMD GPU** *(experimental)* | Radeon **RX 7000 / RX 9000** or Ryzen AI Max (Strix Halo) with 16 GB of VRAM, using the AMD installer (see *Installation*). Confirmed on an RX 7800 XT 16 GB under Windows with MiniMax-H3 | — |
 | **Driver** | NVIDIA **580 or newer** (CUDA 13). AMD: a recent Adrenalin driver on Windows, or `amdgpu` on Linux | Latest |
 | **RAM** | 16 GB | 32 GB |
 | **Disk** | The model of each trainer you use (table above) plus your datasets and caches | SSD |
-| **Other** | Internet the first time each model is used. MiniMax-H3 video clips need **`ffmpeg`** in the `PATH`. | |
+| **Other** | Internet the first time each model is used. MiniMax-H3 and Wan 2.2 video clips need **`ffmpeg`** in the `PATH`. | |
 
 Python, Git and every library are installed by the installer. GTX 10xx and older cards are **not** supported: PyTorch for CUDA 13 starts at the RTX 20xx generation.
 
@@ -689,6 +697,38 @@ The official image-edit task works at 1024: 512 and 768 are out of its distribut
 
 The LoRA works at strength 0.8–1.2; at 2.0 it breaks anatomy.
 
+### Wan 2.2 (T2V-A14B) — video and image LoRAs (high / low noise)
+
+Wan 2.2 A14B splits the denoising steps between two 14B experts: **high noise** (the first steps, σ ≥ 0.875: layout and motion) and **low noise** (the rest: detail, faces, style). *Train Expert* picks which one learns:
+
+- **Low noise** (default): enough for characters, objects and styles.
+- **High noise**: for new motions, choreographies or camera moves.
+- **Both**: one LoRA for each in the same run; the waiting expert stays in RAM and they swap on the GPU.
+
+Each expert exports its own LoRA, named `_high_noise` / `_low_noise`. In ComfyUI each one goes on its own model.
+
+- **Datasets:** images, video clips (`.mp4`, `.mov`, `.mkv`, `.webm`, `.avi`) or a mix, each with its `.txt`. Clips are read at **16 fps** from their start, up to *Max Frames* (4k+1: 17, 33, 49, 81…); a shorter clip uses all it has.
+- **Model:** the first run downloads each expert it needs already in NF4 (~7.6 GB) from `AcademiaSD/Wan22-T2V-A14B-NF4-for-LoRA-Training`. If that repo does not have it, it downloads the original **one shard at a time** (57 GB in FP32), converts it to NF4 and deletes the shard; if it stops, it continues from the next shard. The other expert is only downloaded when you train it.
+- **Captioner:** Qwen3-VL-8B NF4 (shared with the other trainers), with one prompt for images and another for clips. Of each clip it sees only the part that is trained.
+- **Activation Offload** (on by default) keeps the activations in RAM, and the checkpoint works in half blocks: that is what lets clips fit in 16 GB.
+- **Previews:** an image (1 frame) or an `.mp4`, generated with both experts like ComfyUI when the other one is converted.
+
+| Default starting point | |
+| :--- | :--- |
+| Resolution | 832×480 (480p) |
+| Max frames per clip | 17 (1 s at 16 fps) |
+| Rank / Alpha | 16 / 16 |
+| Learning rate | 1e-4 |
+| Steps | 1500 |
+
+| Measured on an RTX 5080 16 GB (low noise, rank 16, 480p) | s/step | Peak VRAM |
+| :--- | ---: | ---: |
+| Image | ~3 | 10.0 GB |
+| Clip, 17 frames | ~18.5 | 12.0 GB |
+| Clip, 33 frames | ~43 | 14.3 GB (does not fit next to a desktop on 16 GB; lower the resolution or use a bigger card) |
+
+On Windows a sample that does not fit in VRAM is left out with a message instead of letting the driver spill into system RAM, where a step takes 30 times longer. More in [docs/README_Wan22.md](docs/README_Wan22.md).
+
 ### LTX-2.3 — character and style LoRAs for the LTX video model
 
 - Works with **LTX-2.3 and LTX-2.5**.
@@ -806,7 +846,7 @@ It needs Python 3.13, the CUDA 13.0 build of PyTorch (`requirements.txt` takes i
 
 ## 📚 Technical notes
 
-Detailed measurements and the reasoning behind each design decision are in `docs\`: [Qwen-Image 2.1](docs/README_QwenImage21.md) · [Krea 2](docs/README_Krea2.md) · [LTX-2.3](docs/README_LTX23.md) · [MiniMax-H3](docs/README_MiniMaxH3.md) (VRAM tables, block swap, video and audio datasets, RefMods and every setting) · [Linux](docs/Linux.md).
+Detailed measurements and the reasoning behind each design decision are in `docs\`: [Qwen-Image 2.1](docs/README_QwenImage21.md) · [Krea 2](docs/README_Krea2.md) · [LTX-2.3](docs/README_LTX23.md) · [MiniMax-H3](docs/README_MiniMaxH3.md) · [Wan 2.2](docs/README_Wan22.md) (VRAM tables, block swap, video and audio datasets, RefMods and every setting) · [Linux](docs/Linux.md).
 
 ## 🛠️ Tools for advanced users
 
@@ -842,7 +882,7 @@ AcademiaSD_LoRAlab-TrainerStudio/
 └── settings/                         # Your settings, HF token, network.json and ui.json (created on first use, never uploaded)
 ```
 
-Models (`Krea-2-NF4`, `LTX23-NF4`, `MiniMax-H3-NF4`, `Qwen-Image21-NF4`, `Z-Image_NF4`, `Anima-Base`, `FLUX.2-Klein-9B_NF4`, `FLUX.3-Image-Klein_NF4`, `Ideogram4-NF4`, `MOSS-Image-NF4`, `Ming-Image_NF4`, `Fibo2_Dev-NF4`, `SDXL-Models`, captioners) are created inside `Models/` on first use, and the caches and the LoRA outputs inside `Cache_Data/` and `Outputs/`. Legacy folders in the project root are moved into these folders automatically. A collision keeps both folders and prints a warning, so nothing is overwritten.
+Models (`Krea-2-NF4`, `LTX23-NF4`, `MiniMax-H3-NF4`, `Qwen-Image21-NF4`, `Z-Image_NF4`, `Anima-Base`, `FLUX.2-Klein-9B_NF4`, `FLUX.3-Image-Klein_NF4`, `Ideogram4-NF4`, `MOSS-Image-NF4`, `Ming-Image_NF4`, `Fibo2_Dev-NF4`, `Wan22-T2V-A14B-NF4`, `SDXL-Models`, captioners) are created inside `Models/` on first use, and the caches and the LoRA outputs inside `Cache_Data/` and `Outputs/`. Legacy folders in the project root are moved into these folders automatically. A collision keeps both folders and prints a warning, so nothing is overwritten.
 
 ---
 
@@ -857,6 +897,7 @@ The code is released under the **MIT License**. The models keep their own licens
 | Krea 2 | Krea 2 Community License |
 | LTX-2.3 | LTX-2 Open-Source License |
 | MiniMax-H3 | MiniMax-H3 Community License Agreement |
+| Wan 2.2 T2V-A14B | Apache 2.0 |
 | Z-Image (and the Z-Image-Fun-Lora-Distill preview LoRA) | Apache 2.0 |
 | Anima | CircleStone Labs Non-Commercial License (plus the NVIDIA Open Model License for Cosmos). Images you generate can be used commercially |
 | FLUX.2 Klein 9B (and the Klein 9B turbo preview LoRA) | FLUX Non-Commercial License — non-commercial |

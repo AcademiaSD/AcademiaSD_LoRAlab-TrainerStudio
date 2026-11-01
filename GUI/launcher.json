@@ -26,6 +26,13 @@
       "run": "Run_LoRAlab-MiniMaxH3.bat"
     },
     {
+      "id": "wan22",
+      "name": "Wan 2.2 (T2V-A14B)",
+      "description": "Video and image LoRAs (high / low noise)",
+      "image": "assets/wan22/portada.jpg",
+      "run": "Run_LoRAlab-Wan22.bat"
+    },
+    {
       "id": "qwenimage21",
       "name": "Qwen-Image 2.1",
       "description": "Image and edit LoRAs",

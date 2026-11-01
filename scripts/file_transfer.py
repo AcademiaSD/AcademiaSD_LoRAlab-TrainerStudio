@@ -89,14 +89,21 @@ def _target(folder, name):
 
 def _strip_options_suffix(stem, opts):
     """Quita del nombre los sufijos que se ponen según los metadatos (_rs/_plus/_lokr), para no
-    duplicarlos. _AR / _NAR solo en los LoRA de YuE2: en otro trainer puede ser parte del nombre."""
-    pattern = r"(_rs)?(_plus)?(_lokr)?(_n?ar)?$" if opts.endswith(("_AR", "_NAR")) else r"(_rs)?(_plus)?(_lokr)?$"
+    duplicarlos. _AR / _NAR solo en los LoRA de YuE2 y _high_noise / _low_noise solo en los de Wan 2.2:
+    en otro trainer pueden ser parte del nombre."""
+    if opts.endswith(("_AR", "_NAR")):
+        pattern = r"(_rs)?(_plus)?(_lokr)?(_n?ar)?$"
+    elif opts.endswith(("_high_noise", "_low_noise")):
+        pattern = r"(_rs)?(_plus)?(_lokr)?(_(high|low)_noise)?$"
+    else:
+        pattern = r"(_rs)?(_plus)?(_lokr)?$"
     return re.sub(pattern, "", stem, flags=re.IGNORECASE) or stem
 
 
 def lora_options_suffix(path):
-    """_rs (rsLoRA), _plus (LoRA+) o _lokr (LoKr) según los metadatos del LoRA, y _AR / _NAR si es una
-    etapa de YuE2 (cada etapa se carga en un sitio distinto de ComfyUI); "" si no lleva ninguno.
+    """_rs (rsLoRA), _plus (LoRA+) o _lokr (LoKr) según los metadatos del LoRA, _AR / _NAR si es una
+    etapa de YuE2 y _high_noise / _low_noise si es de un experto de Wan 2.2 (cada uno se carga en un
+    sitio distinto de ComfyUI); "" si no lleva ninguno.
     Se lee solo la cabecera del .safetensors (8 bytes de longitud + JSON), sin cargar los pesos."""
     try:
         with open(path, "rb") as f:
@@ -106,7 +113,8 @@ def lora_options_suffix(path):
         return ""
     return (("_rs" if meta.get("rslora") == "true" else "") + ("_plus" if meta.get("loraplus_ratio") else "")
             + ("_lokr" if meta.get("lokr_factor") else "")
-            + {"ar": "_AR", "nar": "_NAR"}.get(meta.get("yue2_stage"), ""))
+            + {"ar": "_AR", "nar": "_NAR"}.get(meta.get("yue2_stage"), "")
+            + {"high_noise": "_high_noise", "low_noise": "_low_noise"}.get(meta.get("wan_expert"), ""))
 
 
 def with_lora_options_suffix(name, path):
