@@ -10,7 +10,7 @@ What was added, newest first. Each entry links to its commit.
 
 **2026-11-01**
 
-- <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **Wan 2.2 T2V-A14B, video and image LoRAs for the high noise and/or low noise expert** — images and clips in the same dataset, the experts in NF4 (downloaded ready from `AcademiaSD/Wan22-T2V-A14B-NF4-for-LoRA-Training`, or converted on your PC shard by shard), video previews with both experts, and one LoRA per expert (`_high_noise` / `_low_noise`) for ComfyUI ([details](#wan-22-t2v-a14b--video-and-image-loras-high--low-noise))
+- <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **Wan 2.2 T2V-A14B, video and image LoRAs for the high noise and/or low noise expert** — images and clips in the same dataset, the experts in NF4 (downloaded ready from `AcademiaSD/Wan22-T2V-A14B-NF4-for-LoRA-Training`, or converted on your PC shard by shard), video previews with both experts, and one LoRA per expert (`_high_noise` / `_low_noise`) for ComfyUI ([details](#wan-22-t2v-a14b--video-and-image-loras-high--low-noise)) [`d2be150`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/d2be150)
 
 **2026-10-31**
 
