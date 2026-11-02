@@ -10,7 +10,7 @@ What was added, newest first. Each entry links to its commit.
 
 **2026-11-02**
 
-- **Face likeness in the previews**: a % on each preview and on the training chart, how much its face looks like the dataset's. Optional and off by default: the InsightFace models (non-commercial research only) are downloaded only after accepting their terms in a popup ([details](#-face-likeness-in-the-previews))
+- **Face likeness in the previews**: a % on each preview and on the training chart, how much its face looks like the dataset's. Optional and off by default: the InsightFace models (non-commercial research only) are downloaded only after accepting their terms in a popup ([details](#-face-likeness-in-the-previews)) [`f0a45e2`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/f0a45e2)
 - <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **Wan 2.2 T2V-A14B, video and image LoRAs for the high noise and/or low noise expert** — images and clips in the same dataset, the experts in NF4 (downloaded ready from `AcademiaSD/Wan22-T2V-A14B-NF4-for-LoRA-Training`, or converted on your PC shard by shard), image and video previews with both experts and the lightx2v turbo LoRA (12 steps, ~2 min for a 1 s clip), and one LoRA per expert (`_high_noise` / `_low_noise`) for ComfyUI ([details](#wan-22-t2v-a14b--video-and-image-loras-high--low-noise)) [`d2be150`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/d2be150) [`7b2f238`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/7b2f238) [`591152c`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/591152c)
 
 **2026-10-31**
