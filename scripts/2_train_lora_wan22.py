@@ -434,7 +434,12 @@ def run_preview(model, experts, scheduler, embed, neg, shape, step, train_expert
     try:
         with torch.no_grad():
             g = torch.Generator(device="cuda").manual_seed(actual_seed)
-            latents = denoise(experts, scheduler, embed, neg, shape, g)
+            # Vídeo: un fotograma latente más al principio, y sus 4 fotogramas fuera al decodificar. Con
+            # los expertos en NF4 el primero sale lleno de bloques y destellos (también con WanPipeline,
+            # sin LoRA, con el VAE en FP32 y con shift 12); desde el segundo, limpio. Es lo que hace
+            # --trim-first-frames de mlx-video con Wan 14B cuantizado.
+            trim = 4 if shape[0] > 1 else 0
+            latents = denoise(experts, scheduler, embed, neg, (shape[0] + trim // 4, *shape[1:]), g)
             stage = "VAE decode"
             # Con el experto en la GPU (~8 GB) el VAE no cabe al decodificar varios fotogramas,
             # ni por mosaicos. Una imagen sí cabe y se ahorra el ir y venir del experto.
@@ -455,6 +460,7 @@ def run_preview(model, experts, scheduler, embed, neg, shape, step, train_expert
                 vae.enable_tiling()
                 video = vae.decode(lat, return_dict=False)[0]
             frames = ((video.float() / 2 + 0.5).clamp(0, 1)[0].permute(1, 2, 3, 0).cpu().numpy() * 255).astype("uint8")
+            frames = frames[trim:]
             vae.to("cpu")
 
         if frames.shape[0] == 1:
