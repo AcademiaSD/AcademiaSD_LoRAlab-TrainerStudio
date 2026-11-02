@@ -359,6 +359,13 @@ class Experts:
             self.on_gpu = expert
         return self.models[expert]
 
+    def release(self):
+        """Deja la GPU sin experto (para el VAE de las previews de vídeo)."""
+        if self.on_gpu is not None:
+            self.models[self.on_gpu].to("cpu")
+            self.on_gpu = None
+            free_vram()
+
 
 def denoise(experts, scheduler, embed, neg, shape, generator):
     """
@@ -400,6 +407,10 @@ def run_preview(model, experts, scheduler, embed, neg, shape, step, train_expert
         with torch.no_grad():
             g = torch.Generator(device="cuda").manual_seed(actual_seed)
             latents = denoise(experts, scheduler, embed, neg, shape, g)
+            # Con el experto en la GPU (~8 GB) el VAE no cabe al decodificar varios fotogramas,
+            # ni por mosaicos. Una imagen sí cabe y se ahorra el ir y venir del experto.
+            if shape[0] > 1:
+                experts.release()
 
             vae = VaeHolder.get().to("cuda")
             mean, std = wan.latent_stats(vae, "cuda")
@@ -423,6 +434,11 @@ def run_preview(model, experts, scheduler, embed, neg, shape, step, train_expert
         else:
             out = wan.write_video(frames, os.path.join(OUTPUT_DIR, f"preview_step_{step}.mp4"))
         print("  ↳ " + t("Preview saved to: {path}", path=out))
+    except torch.OutOfMemoryError:
+        # Una preview que no cabe no debe parar el entrenamiento.
+        print("  ↳ [!] " + t("Out of VRAM in the preview: skipped. Lower Preview Frames or the preview size."), flush=True)
+        if VaeHolder.vae is not None:
+            VaeHolder.vae.to("cpu")
     finally:
         # Vuelve a la GPU el experto con el que sigue el entrenamiento.
         experts.use(train_expert_now)

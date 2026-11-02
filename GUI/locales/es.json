@@ -1549,5 +1549,6 @@
   "Keeps the inputs of every block (what gradient checkpointing stores) in RAM instead of VRAM. With video it decides whether a 14B expert fits in 16 GB: 17 frames at 480p are about 3 GB of activations. It costs a little speed; with only images it hardly matters.": "Guarda las entradas de cada bloque (lo que guarda el gradient checkpointing) en la RAM en vez de en la VRAM. Con vídeo decide si un experto de 14B cabe en 16 GB: 17 fotogramas a 480p son unos 3 GB de activaciones. Cuesta un poco de velocidad; con solo imágenes apenas importa.",
   "Out of VRAM with {n} samples of {f} frames at {w}x{h}: they are left out of this training. Lower Max Frames or the resolution in Pre-Cache, or turn on Activation Offload.": "Sin VRAM con {n} muestras de {f} fotogramas a {w}x{h}: se quedan fuera de este entrenamiento. Baja Máx. fotogramas o la resolución en el Pre-Caché, o activa las activaciones en RAM.",
   "No sample fits in VRAM.": "Ninguna muestra cabe en la VRAM.",
-  "Downloading the {label} expert in NF4 from Hugging Face: {repo} (~7.6 GB)": "Descargando de Hugging Face el experto de {label} en NF4: {repo} (~7,6 GB)"
+  "Downloading the {label} expert in NF4 from Hugging Face: {repo} (~7.6 GB)": "Descargando de Hugging Face el experto de {label} en NF4: {repo} (~7,6 GB)",
+  "Out of VRAM in the preview: skipped. Lower Preview Frames or the preview size.": "Sin VRAM en la preview: se salta. Baja los fotogramas o el tamaño de la preview."
 }
