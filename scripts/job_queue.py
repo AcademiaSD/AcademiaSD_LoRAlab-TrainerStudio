@@ -306,8 +306,12 @@ class JobQueue:
             if self.running():
                 return None, t("The GPU is busy with another job.")
             for j in list(self.data["jobs"]):
-                if j["state"] == "failed" and (j["trainer"], j["project"], j["kind"]) == (trainer_id, project, kind):
-                    self._drop(j)             # lanzado otra vez desde su entrenador: sustituye al que falló
+                # Lanzado otra vez desde su entrenador: es el mismo entrenamiento (mismo proyecto, mismo
+                # checkpoint) que el que falló o se pausó, así que lo sustituye. Si no, cada Stop + Resume
+                # dejaba otro pausado en la cola. Los que esperan turno (queued) no se tocan.
+                if j["state"] in ("failed", "paused") and not j.get("editing") \
+                        and (j["trainer"], j["project"], j["kind"]) == (trainer_id, project, kind):
+                    self._drop(j)
             jid = time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:6]
             if isinstance(settings, dict):
                 for key, name in _settings_names(trainer_id).items():
