@@ -19,9 +19,9 @@ T2V-A14B is the one the community uses most (ComfyUI loads its LoRAs in high / l
 
 `transformer` (diffusers name) is the **high noise** expert and `transformer_2` the **low noise** one. `model_index.json` sets `boundary_ratio = 0.875`: steps with `t >= 875` go to the high noise expert.
 
-- **Low noise** (σ < 0.875): detail, faces, textures, style. Enough for characters, objects and styles. Default.
+- **Low noise** (σ < 0.875): detail, faces, textures, style. Enough for characters, objects and styles.
 - **High noise** (σ ≥ 0.875): layout and motion. For new motions, choreographies or camera moves.
-- **Both**: one LoRA for each in the same run. Each Grad Accum group belongs to one expert, picked with the share of noise levels it gets under the training distribution (about 30 % high with shift 3). The waiting expert stays in RAM (~7.6 GB); swapping them on the GPU takes about 4 s (measured on an RTX 5080), so a Grad Accum of 2–4 makes it rarer.
+- **Both** (default): one LoRA for each in the same run. Each Grad Accum group belongs to one expert, picked with the share of noise levels it gets under the training distribution (about 30 % high with shift 3). The waiting expert stays in RAM (~7.6 GB); swapping them on the GPU takes about 4 s (measured on an RTX 5080), so a Grad Accum of 2–4 makes it rarer.
 
 Timesteps: the same shifted distribution as the other trainers (`train_shift` 3.0), cut to the expert's range by rejection sampling, so the shape inside the range is kept.
 

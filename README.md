@@ -8,9 +8,9 @@
 
 What was added, newest first. Each entry links to its commit.
 
-**2026-11-01**
+**2026-11-02**
 
-- <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **Wan 2.2 T2V-A14B, video and image LoRAs for the high noise and/or low noise expert** — images and clips in the same dataset, the experts in NF4 (downloaded ready from `AcademiaSD/Wan22-T2V-A14B-NF4-for-LoRA-Training`, or converted on your PC shard by shard), video previews with both experts, and one LoRA per expert (`_high_noise` / `_low_noise`) for ComfyUI ([details](#wan-22-t2v-a14b--video-and-image-loras-high--low-noise)) [`d2be150`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/d2be150)
+- <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **Wan 2.2 T2V-A14B, video and image LoRAs for the high noise and/or low noise expert** — images and clips in the same dataset, the experts in NF4 (downloaded ready from `AcademiaSD/Wan22-T2V-A14B-NF4-for-LoRA-Training`, or converted on your PC shard by shard), image and video previews with both experts and the lightx2v turbo LoRA (12 steps, ~2 min for a 1 s clip), and one LoRA per expert (`_high_noise` / `_low_noise`) for ComfyUI ([details](#wan-22-t2v-a14b--video-and-image-loras-high--low-noise)) [`d2be150`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/d2be150) [`7b2f238`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/7b2f238) [`591152c`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/591152c)
 
 **2026-10-31**
 
@@ -224,7 +224,7 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 
 **MOSS-Image:** nuevo entrenador de LoRAs de imagen para MOSS-Image de OpenMOSS (Apache 2.0), sobre **Base** (el recomendado para LoRAs) o **SFT**, con la misma pre-caché para los dos. Entrena a 512² con menos de 6 GB de VRAM. El text encoder (Qwen3.5-9B) se elige en el pre-caché: BF16 exacto repartido entre GPU y RAM (por defecto), INT8 o NF4. Las previews pueden usar el adaptador turbo de 4 pasos de darask0 (unos 4 s por imagen en vez de 43 s). Detalles en la sección *MOSS-Image*.
 
-**Wan 2.2:** nuevo entrenador de LoRAs de vídeo e imagen para **Wan 2.2 T2V-A14B** (Apache 2.0), con imágenes y clips en el mismo dataset. Wan 2.2 tiene dos expertos de 14B: el de **ruido alto** (composición y movimiento) y el de **ruido bajo** (detalle, caras, estilo). *Experto a entrenar* elige cuál aprende: ruido bajo (por defecto, basta para personajes y estilos), ruido alto (movimientos nuevos) o los dos, con un LoRA para cada uno (`_high_noise` / `_low_noise`); en ComfyUI cada uno va en su modelo. Los expertos se descargan ya en NF4 (~7,6 GB cada uno) de `AcademiaSD/Wan22-T2V-A14B-NF4-for-LoRA-Training`; si ese repo aún no tiene uno, se descarga del original shard a shard (57 GB en FP32), se convierte a NF4 en tu PC y se borra cada shard. Los clips necesitan **ffmpeg** en el PATH. Detalles en la sección *Wan 2.2*.
+**Wan 2.2:** nuevo entrenador de LoRAs de vídeo e imagen para **Wan 2.2 T2V-A14B** (Apache 2.0), con imágenes y clips en el mismo dataset. Wan 2.2 tiene dos expertos de 14B: el de **ruido alto** (composición y movimiento) y el de **ruido bajo** (detalle, caras, estilo). *Experto a entrenar* elige cuál aprende: ruido bajo (basta para personajes y estilos), ruido alto (movimientos nuevos) o los dos (por defecto), con un LoRA para cada uno (`_high_noise` / `_low_noise`); en ComfyUI cada uno va en su modelo. Los expertos se descargan ya en NF4 (~7,6 GB cada uno) de `AcademiaSD/Wan22-T2V-A14B-NF4-for-LoRA-Training`; si ese repo aún no tiene uno, se descarga del original shard a shard (57 GB en FP32), se convierte a NF4 en tu PC y se borra cada shard. Las previews pueden usar el LoRA turbo lightx2v (12 pasos, unos 2 minutos por clip de 1 s). Los clips necesitan **ffmpeg** en el PATH. Detalles en la sección *Wan 2.2*.
 
 **LR Scheduler:** debajo del learning rate puedes elegir cómo cambia durante el entrenamiento: `cosine` (por defecto: sube durante el warmup y baja suavemente hasta el 10%), `constant` (el mismo LR de principio a fin, como el entrenador de Civitai), `constant_with_warmup`, `linear` o `cosine_with_restarts` (repite la curva tantas veces como indique *Ciclos*). Si no lo tocas, cada entrenador funciona igual que antes. Detalles en la sección *LR scheduler*.
 
@@ -701,9 +701,9 @@ The LoRA works at strength 0.8–1.2; at 2.0 it breaks anatomy.
 
 Wan 2.2 A14B splits the denoising steps between two 14B experts: **high noise** (the first steps, σ ≥ 0.875: layout and motion) and **low noise** (the rest: detail, faces, style). *Train Expert* picks which one learns:
 
-- **Low noise** (default): enough for characters, objects and styles.
+- **Low noise**: enough for characters, objects and styles.
 - **High noise**: for new motions, choreographies or camera moves.
-- **Both**: one LoRA for each in the same run; the waiting expert stays in RAM and they swap on the GPU.
+- **Both** (default): one LoRA for each in the same run; the waiting expert stays in RAM and they swap on the GPU.
 
 Each expert exports its own LoRA, named `_high_noise` / `_low_noise`. In ComfyUI each one goes on its own model.
 
@@ -711,15 +711,15 @@ Each expert exports its own LoRA, named `_high_noise` / `_low_noise`. In ComfyUI
 - **Model:** the first run downloads each expert it needs already in NF4 (~7.6 GB) from `AcademiaSD/Wan22-T2V-A14B-NF4-for-LoRA-Training`. If that repo does not have it, it downloads the original **one shard at a time** (57 GB in FP32), converts it to NF4 and deletes the shard; if it stops, it continues from the next shard. The other expert is only downloaded when you train it.
 - **Captioner:** Qwen3-VL-8B NF4 (shared with the other trainers), with one prompt for images and another for clips. Of each clip it sees only the part that is trained.
 - **Activation Offload** (on by default) keeps the activations in RAM, and the checkpoint works in half blocks: that is what lets clips fit in 16 GB.
-- **Previews:** an image (1 frame) or an `.mp4`, generated with both experts like ComfyUI when the other one is converted.
+- **Previews:** an image (1 frame) or an `.mp4`, generated with both experts like ComfyUI when the other one is converted. *Turbo LoRA* (on by default) uses Kijai's lightx2v distill LoRA: 12 steps at CFG 1, high noise for the first 4 and low noise for the rest, about 2 minutes for a 17-frame clip instead of 9. Previews are off until you set *Preview Every*.
 
 | Default starting point | |
 | :--- | :--- |
 | Resolution | 832×480 (480p) |
 | Max frames per clip | 17 (1 s at 16 fps) |
-| Rank / Alpha | 16 / 16 |
+| Rank / Alpha | 8 / 8 |
 | Learning rate | 1e-4 |
-| Steps | 1500 |
+| Steps | 1000 |
 
 | Measured on an RTX 5080 16 GB (low noise, rank 16, 480p) | s/step | Peak VRAM |
 | :--- | ---: | ---: |
