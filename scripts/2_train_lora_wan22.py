@@ -379,7 +379,14 @@ def denoise(experts, scheduler, embed, neg, shape, generator):
     boundary = wan.BOUNDARY * scheduler.config.num_train_timesteps
     texts = torch.stack([pad_text(embed), pad_text(neg)]).to(device)
 
-    for t_ in scheduler.timesteps:
+    # Una preview de vídeo tarda minutos: una línea de progreso (con \r, como la del entrenamiento) para
+    # que no parezca colgado. Sin la palabra "Step", que la página toma por el paso del entrenamiento.
+    n_steps, t0 = len(scheduler.timesteps), time.time()
+
+    def mmss(s):
+        return f"{int(s // 60):02d}:{int(s % 60):02d}"
+
+    for i, t_ in enumerate(scheduler.timesteps, 1):
         expert = "high" if t_ >= boundary else "low"
         if expert not in experts.models:
             expert = next(iter(experts.models))
@@ -397,6 +404,10 @@ def denoise(experts, scheduler, embed, neg, shape, generator):
         pred = out[1:] + cfg_scale * (out[:1] - out[1:]) if use_cfg else out
         latents = scheduler.step(pred, t_, latents, return_dict=False)[0]
 
+        elapsed = time.time() - t0
+        print(f"\r  ↳ {t('Preview sampling')} {i}/{n_steps} ({i * 100 // n_steps}%) | {expert} | "
+              f"{mmss(elapsed)} | ETA {mmss(elapsed / i * (n_steps - i))}", end="", flush=True)
+    print(flush=True)
     return latents
 
 
@@ -417,6 +428,7 @@ def run_preview(model, experts, scheduler, embed, neg, shape, step, train_expert
             # Con el experto en la GPU (~8 GB) el VAE no cabe al decodificar varios fotogramas,
             # ni por mosaicos. Una imagen sí cabe y se ahorra el ir y venir del experto.
             if shape[0] > 1:
+                print("  ↳ " + t("Decoding {n} frames...", n=(shape[0] - 1) * 4 + 1), flush=True)
                 experts.release()
 
             vae = VaeHolder.get().to("cuda")
