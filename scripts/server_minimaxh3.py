@@ -25,6 +25,7 @@ import remote_access
 import file_transfer
 import queue_link
 import training_metrics
+import face_match
 import gpu_stats
 from pathlib import Path
 from i18n import t
@@ -2201,6 +2202,7 @@ file_transfer.register(app, get_dataset_dir, get_train_output_dir, DATASET_EXTS)
 runtime.register(app)
 queue_link.register(app, "minimaxh3", runtime, TRAIN_CONFIG, PRECACHE_CONFIG)
 training_metrics.register(app, get_train_output_dir)
+face_match.register(app, get_dataset_dir, get_train_output_dir)
 
 
 if __name__ == "__main__":
