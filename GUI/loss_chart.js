@@ -197,6 +197,8 @@
             this.bindPointer();
             new ResizeObserver(() => this.draw()).observe(this.canvas);
             document.addEventListener('visibilitychange', () => { if (!document.hidden && this.isOpen()) this.poll(); });
+            // Parecido facial (face_match.js): llegan porcentajes o se cambia «Mostrar %».
+            document.addEventListener('facematch-update', () => { if (this.isOpen()) this.draw(); });
             this.setOpen(store('open') === true);
         }
 
@@ -464,7 +466,11 @@
                 ctx.fillStyle = '#0b1222'; ctx.strokeStyle = COLORS.preview; ctx.lineWidth = 2;
                 ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
                 this.hits.push({ kind: 'preview', step, file, x, y });
+                // Encima del LoRA si hay uno en el mismo paso, para no taparlo.
+                const lora = this.loras().some(l => l.step === step);
+                drawFaceMatch(ctx, file, x, lora ? y - 34 : y - 14, L.pad.t);
             }
+            wantFaceMatch(this.previews);
 
             // Punto vivo al final de la curva (la animación es CSS)
             const lastP = this.points[this.points.length - 1];
@@ -638,7 +644,11 @@
                 ctx.fillStyle = '#0b1222'; ctx.strokeStyle = COLORS.preview; ctx.lineWidth = 2;
                 ctx.beginPath(); ctx.arc(top[0], top[1], 4.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
                 this.hits.push({ kind: 'preview', step, file, x: top[0], y: top[1] });
+                // Encima del LoRA si hay uno en el mismo paso, para no taparlo.
+                const label = this.loras().some(l => l.step === step) ? P(xOf(step), w[1] + 0.17, Z) : top;
+                drawFaceMatch(ctx, file, label[0], label[1] - 13, 0);
             }
+            wantFaceMatch(this.previews);
             if (this.best) {
                 const w = back[colOf(this.best.s)], p = P(xOf(this.best.s), w[1], Z);
                 ctx.fillStyle = COLORS.best; ctx.shadowColor = COLORS.best; ctx.shadowBlur = 10;
@@ -851,6 +861,32 @@
     const norm3 = a => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
 
     // Rombo de un LoRA guardado en (x, y), unido por un trazo a la curva en (footX, footY). El final, dorado.
+    // Parecido facial de un preview (face_match.js), solo con el sistema instalado y «Mostrar %» marcado.
+    function wantFaceMatch(previews) {
+        const fm = window.FaceMatch;
+        if (fm && fm.active()) fm.want(previews.map(p => p[1]));
+    }
+
+    function drawFaceMatch(ctx, file, x, y, minY) {
+        const fm = window.FaceMatch;
+        const v = fm && fm.active() ? fm.get(file) : undefined;
+        if (v == null) return;   // sin pedir aún, o sin cara
+        const text = Math.round(v) + '%';
+        ctx.save();
+        ctx.font = '700 10px Segoe UI, sans-serif';
+        const w = ctx.measureText(text).width + 10, h = 15;
+        y = Math.max(minY + h / 2 + 1, y);
+        ctx.fillStyle = v >= 60 ? 'rgba(5, 150, 105, 0.92)' : v >= 40 ? 'rgba(180, 83, 9, 0.92)' : 'rgba(185, 28, 28, 0.92)';
+        ctx.strokeStyle = v >= 60 ? '#34d399' : v >= 40 ? '#fbbf24' : '#f87171';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x - w / 2, y - h / 2, w, h, h / 2); else ctx.rect(x - w / 2, y - h / 2, w, h);
+        ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(text, x, y + 0.5);
+        ctx.restore();
+    }
+
     function drawLoraMark(ctx, x, y, footY, final, footX = x) {
         const color = final ? '#fbbf24' : COLORS.ckpt, r = final ? 7 : 5.5;
         ctx.strokeStyle = final ? 'rgba(251, 191, 36, 0.6)' : 'rgba(16, 185, 129, 0.6)'; ctx.lineWidth = 1;

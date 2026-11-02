@@ -10,6 +10,7 @@ What was added, newest first. Each entry links to its commit.
 
 **2026-11-02**
 
+- **Face likeness in the previews**: a % on each preview and on the training chart, how much its face looks like the dataset's. Optional and off by default: the InsightFace models (non-commercial research only) are downloaded only after accepting their terms in a popup ([details](#-face-likeness-in-the-previews))
 - <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **Wan 2.2 T2V-A14B, video and image LoRAs for the high noise and/or low noise expert** — images and clips in the same dataset, the experts in NF4 (downloaded ready from `AcademiaSD/Wan22-T2V-A14B-NF4-for-LoRA-Training`, or converted on your PC shard by shard), image and video previews with both experts and the lightx2v turbo LoRA (12 steps, ~2 min for a 1 s clip), and one LoRA per expert (`_high_noise` / `_low_noise`) for ComfyUI ([details](#wan-22-t2v-a14b--video-and-image-loras-high--low-noise)) [`d2be150`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/d2be150) [`7b2f238`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/7b2f238) [`591152c`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/591152c)
 
 **2026-10-31**
@@ -226,6 +227,8 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 
 **Wan 2.2:** nuevo entrenador de LoRAs de vídeo e imagen para **Wan 2.2 T2V-A14B** (Apache 2.0), con imágenes y clips en el mismo dataset. Wan 2.2 tiene dos expertos de 14B: el de **ruido alto** (composición y movimiento) y el de **ruido bajo** (detalle, caras, estilo). *Experto a entrenar* elige cuál aprende: ruido bajo (basta para personajes y estilos), ruido alto (movimientos nuevos) o los dos (por defecto), con un LoRA para cada uno (`_high_noise` / `_low_noise`); en ComfyUI cada uno va en su modelo. Los expertos se descargan ya en NF4 (~7,6 GB cada uno) de `AcademiaSD/Wan22-T2V-A14B-NF4-for-LoRA-Training`; si ese repo aún no tiene uno, se descarga del original shard a shard (57 GB en FP32), se convierte a NF4 en tu PC y se borra cada shard. Las previews pueden usar el LoRA turbo lightx2v (12 pasos, unos 2 minutos por clip de 1 s). Los clips necesitan **ffmpeg** en el PATH. Detalles en la sección *Wan 2.2*.
 
+**Parecido facial:** encima de las previews, **👤 Parecido facial → Activar...** pone en cada preview (y sobre su círculo en la gráfica del entrenamiento) el % de parecido de su cara con la del dataset; la misma persona suele pasar del 40-50%. No se descarga por defecto: los modelos de InsightFace son solo para investigación no comercial, y antes de descargarlos hay que aceptar en una ventana que se usan bajo tu responsabilidad y sin fines comerciales. Funciona en la CPU, también en RunPod. Detalles en la sección *Face likeness in the previews*.
+
 **LR Scheduler:** debajo del learning rate puedes elegir cómo cambia durante el entrenamiento: `cosine` (por defecto: sube durante el warmup y baja suavemente hasta el 10%), `constant` (el mismo LR de principio a fin, como el entrenador de Civitai), `constant_with_warmup`, `linear` o `cosine_with_restarts` (repite la curva tantas veces como indique *Ciclos*). Si no lo tocas, cada entrenador funciona igual que antes. Detalles en la sección *LR scheduler*.
 
 **Idiomas:** la interfaz y los mensajes de consola están en inglés, español, alemán, francés, portugués, italiano, japonés y coreano. Elige el idioma en el selector **🌍 Language** de la parte inferior del lanzador y pulsa **💾 Save settings**; por defecto está en inglés. Los prompts de los captions siguen siempre en inglés, que es lo que entienden los modelos. Detalles en la sección *Languages*.
@@ -432,6 +435,20 @@ My recommendation: **kijai's KJNodes** plus **AcademiaSD's tiny decoders (TAE)**
 3. Add the **Model Preview Override** node between the model (with your LoRA) and the sampler, and pick the TAE in its `tiny_vae` input.
 
 ComfyUI's built-in TAESD preview method does not load these files: use the KJNodes node. They are for previews only; the final image is still decoded with the real VAE.
+
+## 👤 Face likeness in the previews
+
+<p align="center">
+  <img src="assets/likeness.jpg" alt="Face likeness on the training previews" width="900">
+</p>
+
+For character LoRAs: each preview gets a badge with how much its face looks like the person in the dataset, so you can see from which step the LoRA has learned the face and whether later steps keep it. The same % appears above each preview circle on the training chart, in 2D and 3D.
+
+- **Off by default, nothing is downloaded.** Click **👤 Face likeness → Enable...** above the previews. A popup explains the terms and has two checkboxes: *I accept that I download and use these models under my own responsibility* and *I will not use them for commercial purposes*. **Download** is enabled only with both checked.
+- It downloads InsightFace's `buffalo_l` (the SCRFD face detector and the ArcFace recognizer, ~280 MB, only those two files are kept) to `Models/FaceMatch-InsightFace/`, and installs `onnxruntime`. **The InsightFace pretrained models are licensed for non-commercial research purposes only**; the acceptance is saved in `settings/face_match.json`.
+- It runs on the CPU of the machine with the trainer, so it uses no VRAM and works the same on Windows, Linux, macOS and RunPod, from any browser or phone.
+- **Reference:** the largest face in each dataset image, averaged. **Likeness:** ArcFace cosine similarity of the preview's closest face to that reference, ×100. The same person usually scores above 40-50%; a different one, under 20-30%. Green from 60%, amber from 40%, red below; *no face* when none is detected.
+- **Show %** hides or shows the badges in the gallery and the chart. Video previews (Wan 2.2, LTX-2.3) are not scored; YuE2 (audio) does not have it.
 
 ## 🧪 The trainers
 
@@ -911,6 +928,7 @@ The code is released under the **MIT License**. The models keep their own licens
 | Pony Diffusion V6 XL, Illustrious XL v0.1, NoobAI-XL 1.1 | Fair AI Public License 1.0-SD |
 | Juggernaut XI v11 | CC BY-NC-ND 4.0 — non-commercial |
 | Qwen3-VL-4B (MiniMax-H3 captioner) | Apache 2.0 |
+| InsightFace buffalo_l (optional face likeness, downloaded only after accepting its terms) | Non-commercial research purposes only |
 
 Built with PyTorch, Diffusers, Transformers, PEFT, bitsandbytes, Flask and the Hugging Face Hub.
 
@@ -941,6 +959,7 @@ Code adapted or copied from other projects, and the work it builds on:
 | [Diffusers FLUX.3 Klein LoRA trainer](https://github.com/huggingface/diffusers/blob/main/examples/dreambooth/train_dreambooth_lora_flux3_klein.py) | FLUX.3 Klein training recipe: timestep shift, position ids, text window and LoRA targets, followed in `scripts/2_train_lora_flux3klein.py` | Apache-2.0 |
 | [MOSS-Image](https://github.com/OpenMOSS/MOSS-Image) by the OpenMOSS Team | The MOSS-Image transformer of `pipeline_moss_image.py`, adapted in `scripts/moss_image_model.py` (NF4 layers, gradient checkpointing); prompt encoding, preview guidance, training noise schedule (technical report) and caption guide | Apache-2.0 |
 | [kohya-ss sd-scripts](https://github.com/kohya-ss/sd-scripts) | `ss_*` LoRA metadata convention, SDXL LoRA key format and 75-token caption chunking | Apache-2.0 |
+| [InsightFace](https://github.com/deepinsight/insightface) by deepinsight | SCRFD output decoding and ArcFace 5-point face alignment, reimplemented with NumPy and Pillow in `scripts/face_match.py`; its `buffalo_l` models are downloaded on request (non-commercial research only) | MIT (code) |
 
 Models and LoRAs downloaded at run time (not part of this repository): MelBandRoFormer weights by [Kijai](https://huggingface.co/Kijai/MelBandRoFormer_comfy), the Klein 9B turbo preview LoRA by [kalle07](https://huggingface.co/kalle07/FLUX.2-klein-9B-turbo-lora-set), the Qwen-Image 2.1 turbo LoRA by [Viggle](https://huggingface.co/Viggle/Qwen-Image-2.1-viggle-turbo), the Qwen-Image-2512 and Edit-2511 Lightning LoRAs by [lightx2v](https://huggingface.co/lightx2v/Qwen-Image-2512-Lightning), the MOSS-Image 4-step adapter by [darask0](https://huggingface.co/darask0/MOSS-Image_4-step_adapter_lora) (built on the 8-step adapter by [lodestones](https://huggingface.co/lodestones/MOSS-Image-SFT-8-steps-dmd)), the MOSS-Image-Edit-HQ armV5 and armV4 LoRAs by [akhaliq](https://huggingface.co/akhaliq/MOSS-Image-Edit-HQ), the Moss-Image-Edit LoRA by [chinoll](https://huggingface.co/chinoll/Moss-Image-Edit) (whose reference format, from [ComfyUI-Moss-Image-Edit](https://github.com/Chenkin-x/ComfyUI-Moss-Image-Edit), the trainer reimplements), Z-Image-Fun-Lora-Distill by [Alibaba PAI](https://huggingface.co/alibaba-pai/Z-Image-Fun-Lora-Distill), and the ungated Ideogram 4 NF4 mirror by [Unsloth](https://huggingface.co/unsloth/ideogram-4-nf4-diffusers). Thanks to all of them.
 
