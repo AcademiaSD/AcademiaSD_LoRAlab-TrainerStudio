@@ -351,6 +351,38 @@ class JobQueue:
                 self._save()
             return None
 
+    def claim_for_page(self, jid, port, kind):
+        """
+        Start/Resume en la página de un trabajo pausado (o fallido) cuyo servidor sigue abierto: arranca ahí
+        mismo. resume() lo relanzaría en otro servidor y cerraría el de la página que lo pidió. Se marca en
+        marcha antes de que su servidor lo arranque, para que la cola no lance otro a la vez.
+        """
+        with self._lock:
+            job = self._job(jid)
+            if job is None:
+                return t("Job not found.")
+            if job["state"] not in ("paused", "failed") or job["external"] or job.get("port") != port \
+                    or job["kind"] != kind:
+                return t("This trainer runs a queue job: pause or resume it from the queue.")
+            if self.running():
+                return t("The GPU is busy with another job.")
+            if job["state"] == "failed":
+                self.data["jobs"].remove(job)
+                self.data["jobs"].append(job)
+            # phase "page": su servidor aún no ha arrancado el proceso (ver _follow).
+            job.update(state="running", phase="page", started=time.time(), finished=None, code=None, note="",
+                       detail="", requested=None, requested_at=None, lost=0)
+            self._save()
+        return None
+
+    def release_from_page(self, jid):
+        """La página reclamó el trabajo pero su servidor no lo arrancó: vuelve a pausado."""
+        with self._lock:
+            job = self._job(jid)
+            if job is not None and job["state"] == "running" and job.get("phase") == "page":
+                self._finish(job, "paused")
+        return None
+
     def requeue_interrupted(self, jid):
         """Trabajo pausado por «Pausar todo y salir»: vuelve a la cola en su sitio (el primero) y al abrir
         otra vez el lanzador continúa desde su checkpoint."""
@@ -559,6 +591,15 @@ class JobQueue:
             job["lost"] = 0
             if st.get("progress"):
                 job["progress"] = st["progress"]
+            if job["phase"] == "page":
+                # Arrancado desde su página: hasta ver el proceso en marcha, su "last" es el de la vez
+                # anterior y lo daría por terminado.
+                if st.get("running"):
+                    job["phase"] = "run"
+                    self._save()
+                elif time.time() - (job["started"] or 0) > START_TIMEOUT:
+                    self._finish(job, "paused", note=t("The trainer did not start the job."))
+                return
             phase, requested = job["phase"], job.get("requested")
         if phase == "boot":
             if requested in ("pause", "remove"):
@@ -695,6 +736,12 @@ def register(app, load_trainers):
         ops = {"pause": jq.pause, "resume": jq.resume, "remove": jq.remove}
         if action == "move":
             return reply(jq.move(jid, (request.get_json(force=True) or {}).get("index", 0)))
+        if action == "claim":
+            req = request.get_json(force=True) or {}
+            err = jq.claim_for_page(jid, int(req.get("port") or 0), str(req.get("kind", "")))
+            return (jsonify({"status": "error", "error": err}), 409) if err else jsonify({"status": "ok"})
+        if action == "release":
+            return reply(jq.release_from_page(jid))
         if action not in ops:
             return jsonify({"status": "error", "error": t("Unknown action: {name}", name=action)}), 404
         return reply(ops[action](jid))

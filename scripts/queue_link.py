@@ -8,8 +8,9 @@ register(app, trainer_id, runtime, train_config, precache_config) en cada server
 - Envuelve su /api/run. Con la GPU ocupada por un trabajo de otro puerto, pre-caché y entrenamiento
   no arrancan (409 "queue"): la página ofrece añadirlo a la cola. Con la GPU libre arrancan como
   siempre y se registran en la cola como trabajo externo, para verlos allí.
-- Un servidor abierto por la cola para un trabajo (LORALAB_JOB_ID) solo arranca cuando se lo pide la
-  cola (cabecera X-LoRAlab-Queue); su página lleva un aviso y se controla desde la cola.
+- Un servidor abierto por la cola para un trabajo (LORALAB_JOB_ID) arranca cuando se lo pide la
+  cola (cabecera X-LoRAlab-Queue), o desde su página con el trabajo pausado y la GPU libre; si no, se
+  controla desde la cola.
 - Sin lanzador (entrenador abierto con su .bat sin el lanzador) todo funciona como antes.
 - /api/queue-gate dice a la página qué hacer al pulsar Start, /api/queue-add añade un trabajo con una
   copia de los ajustes que este entrenador tiene guardados (los suyos, o la copia de su trabajo) y
@@ -92,7 +93,17 @@ def register(app, trainer_id, runtime, train_config, precache_config):
             return jsonify({"status": "edit", "error": t("This trainer edits a queued job: save the changes to the queue.")}), 409
         if JOB_ID:
             if request.headers.get("X-LoRAlab-Queue") != "1":
-                return jsonify({"status": "job", "error": t("This trainer runs a queue job: pause or resume it from the queue.")}), 409
+                # Start/Resume en su propia página: con el trabajo pausado y la GPU libre arranca aquí mismo,
+                # y la cola lo sigue como en marcha. Si no, se controla desde la cola.
+                code, res = _launcher(f"/api/queue/{JOB_ID}/claim", {"port": my_port, "kind": script}, timeout=5)
+                if code != 200:
+                    error = (res or {}).get("error") or t("This trainer runs a queue job: pause or resume it from the queue.")
+                    return jsonify({"status": "job", "error": error}), 409
+                resp = original_run()
+                status = resp[1] if isinstance(resp, tuple) else getattr(resp, "status_code", 200)
+                if status != 200:
+                    _launcher(f"/api/queue/{JOB_ID}/release", {})
+                return resp
             return original_run()
         st = queue_state()
         if busy_elsewhere(st):
@@ -123,6 +134,12 @@ def register(app, trainer_id, runtime, train_config, precache_config):
         if EDIT_JOB and script in KINDS:
             return jsonify({"mode": "edit", "job_id": EDIT_JOB})
         if JOB_ID and script in KINDS:
+            st = queue_state()
+            own = own_job(st)
+            if own and own.get("state") in ("paused", "failed") and own.get("kind") == script \
+                    and own.get("port") == my_port and not (st or {}).get("running"):
+                # Su trabajo está parado y la GPU libre: Start/Resume arranca aquí (ver gated_run).
+                return jsonify({"mode": "direct", "launcher": True})
             return jsonify({"mode": "job", "job_id": JOB_ID})
         st = queue_state()
         if st is None:
