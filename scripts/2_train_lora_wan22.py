@@ -703,6 +703,13 @@ def train_wan22():
                 else:
                     set_peft_model_state_dict(lora_models[e], {k: v.float() for k, v in saved_sd.items()})
             optimizer.load_state_dict(torch.load(OPT_FILE, weights_only=False))
+            # load_state_dict deja cada estado en el dispositivo de su parámetro, y con Both el experto
+            # que espera está en la RAM. Todo a la GPU, como cuando AdamW lo crea en el primer paso:
+            # si no, al subir ese experto sus pesos están en cuda y sus estados en cpu.
+            for state in optimizer.state.values():
+                for k, v in state.items():
+                    if torch.is_tensor(v) and k != "step":
+                        state[k] = v.to("cuda")
             print(t("Resuming training from step {n}...", n=start_step))
         except Exception as e:
             print("[!] " + t("Warning reading checkpoint: {error}", error=e))
