@@ -1552,5 +1552,8 @@
   "Downloading the {label} expert in NF4 from Hugging Face: {repo} (~7.6 GB)": "Descargando de Hugging Face el experto de {label} en NF4: {repo} (~7,6 GB)",
   "Out of VRAM in the preview ({stage}, {f} frames at {w}x{h}): skipped. Lower Preview Frames or Preview Size.": "Sin VRAM en la preview ({stage}, {f} fotogramas a {w}x{h}): se salta. Baja los fotogramas o el tamaño de la preview.",
   "Preview sampling": "Muestreo de la preview",
-  "Decoding {n} frames...": "Decodificando {n} fotogramas..."
+  "Decoding {n} frames...": "Decodificando {n} fotogramas...",
+  "Video preview: {n} sampling steps (fewer leave blocks in the first and last frames).": "Preview de vídeo: {n} pasos de muestreo (con menos quedan bloques en los primeros y últimos fotogramas).",
+  "Video preview limited to {w}x{h} (0.5 MP): it takes much longer at Preview Size.": "Preview de vídeo limitada a {w}x{h} (0,5 MP): al tamaño de la preview tardaría mucho más.",
+  "Video previews use at least 40 Preview Steps and at most 0.5 MP (about 832 x 480), whatever Preview Steps and Preview Size say: with fewer steps the first and last frames come out with blocks, and larger they take much longer. Image previews keep your values.": "Las previews de vídeo usan como mínimo 40 pasos y como mucho 0,5 MP (unos 832 x 480), digan lo que digan Preview Steps y Preview Size: con menos pasos los primeros y últimos fotogramas salen con bloques, y más grandes tardan mucho más. Las previews de imagen mantienen tus valores."
 }

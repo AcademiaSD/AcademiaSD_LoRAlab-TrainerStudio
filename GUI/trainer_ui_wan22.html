@@ -648,7 +648,7 @@
                         </div>
                         <div class="form-group" title="1 = a still image (fast). More frames give an .mp4 at 16 fps and cost much more: 33 frames are about 9 times the work of one.">
                             <label>Preview Frames:</label>
-                            <select id="train_preview_frames">
+                            <select id="train_preview_frames" onchange="updateVideoPreviewNote()">
                                 <option value="1" selected>1 (image)</option>
                                 <option value="17">17 (1 s)</option>
                                 <option value="33">33 (2 s)</option>
@@ -656,6 +656,9 @@
                                 <option value="81">81 (5 s)</option>
                             </select>
                         </div>
+                    </div>
+                    <div id="video_preview_note" style="display:none; font-size:0.72rem; color:#fbbf24; margin:-4px 0 8px 0; line-height:1.35;">
+                        Video previews use at least 40 Preview Steps and at most 0.5 MP (about 832 x 480), whatever Preview Steps and Preview Size say: with fewer steps the first and last frames come out with blocks, and larger they take much longer. Image previews keep your values.
                     </div>
 
                     <div class="form-row">
@@ -816,6 +819,12 @@
 
     <script>
         // Paso actual en la consola: "Step 12/1000" en inglés o en el idioma elegido.
+        // Aviso de las previews de vídeo: el trainer usa como mínimo 40 pasos y como mucho 0,5 MP.
+        function updateVideoPreviewNote() {
+            const note = document.getElementById('video_preview_note');
+            if (note) note.style.display = parseInt(document.getElementById('train_preview_frames').value) > 1 ? '' : 'none';
+        }
+
         function stepRe() {
             const word = t('Step').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             return new RegExp(`(?:Step|${word})\\s+(\\d+)/(\\d+)`, 'i');
@@ -1003,7 +1012,7 @@
                     if (t.preview_cfg !== undefined) document.getElementById('train_preview_cfg').value = t.preview_cfg;
                     PreviewSize.apply(t);
                     if (t.preview_cfg_high !== undefined) document.getElementById('train_preview_cfg_high').value = t.preview_cfg_high;
-                    if (t.preview_frames !== undefined) document.getElementById('train_preview_frames').value = t.preview_frames;
+                    if (t.preview_frames !== undefined) document.getElementById('train_preview_frames').value = t.preview_frames; updateVideoPreviewNote();
                     if (t.train_expert) document.getElementById('train_expert').value = t.train_expert;
                     if (t.activation_offload !== undefined) document.getElementById('train_activation_offload').checked = t.activation_offload;
                     if (t.export_final_name) document.getElementById('export_final_name').value = t.export_final_name;
@@ -1075,7 +1084,7 @@
                     if (data.preview_cfg !== undefined) document.getElementById('train_preview_cfg').value = data.preview_cfg;
                     PreviewSize.apply(data);
                     if (data.preview_cfg_high !== undefined) document.getElementById('train_preview_cfg_high').value = data.preview_cfg_high;
-                    if (data.preview_frames !== undefined) document.getElementById('train_preview_frames').value = data.preview_frames;
+                    if (data.preview_frames !== undefined) document.getElementById('train_preview_frames').value = data.preview_frames; updateVideoPreviewNote();
                     if (data.train_expert !== undefined) document.getElementById('train_expert').value = data.train_expert;
                     if (data.activation_offload !== undefined) document.getElementById('train_activation_offload').checked = data.activation_offload;
                     if (data.export_final_name !== undefined) document.getElementById('export_final_name').value = data.export_final_name;

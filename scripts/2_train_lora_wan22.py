@@ -144,6 +144,10 @@ TRAIN_SHIFT       = float(cfg.get("train_shift", DEFAULTS["train_shift"]))
 ACTIVATION_OFFLOAD = bool(cfg.get("activation_offload", DEFAULTS["activation_offload"]))
 PREVIEW_EVERY     = cfg.get("preview_every",     DEFAULTS["preview_every"])
 PREVIEW_STEPS     = cfg.get("preview_steps",     DEFAULTS["preview_steps"])
+# Previews de vídeo: menos pasos dejan bloques en los fotogramas de los extremos (ver denoise).
+MIN_VIDEO_PREVIEW_STEPS = 40
+# Y como mucho 0,5 MP: Wan A14B trabaja a 480p (0,4 MP) y más tamaño solo alarga la preview.
+MAX_VIDEO_PREVIEW_PIXELS = 500_000
 PREVIEW_CFG       = cfg.get("preview_cfg",       DEFAULTS["preview_cfg"])
 PREVIEW_CFG_HIGH  = cfg.get("preview_cfg_high",  DEFAULTS["preview_cfg_high"])
 PREVIEW_FRAMES    = wan.valid_frames(cfg.get("preview_frames", DEFAULTS["preview_frames"]))
@@ -375,7 +379,14 @@ def denoise(experts, scheduler, embed, neg, shape, generator):
     """
     device = "cuda"
     latents = torch.randn((1, wan.LATENT_CHANNELS, *shape), generator=generator, device=device, dtype=torch.float32)
-    scheduler.set_timesteps(PREVIEW_STEPS, device=device)
+    steps = PREVIEW_STEPS
+    if shape[0] > 1 and steps < MIN_VIDEO_PREVIEW_STEPS:
+        # Con los expertos en NF4 y menos de 40 pasos, los fotogramas de los extremos del clip salen con
+        # bloques de 16 px (también con WanPipeline y sin LoRA). Las imágenes salen limpias con menos.
+        steps = MIN_VIDEO_PREVIEW_STEPS
+        print("  ↳ " + t("Video preview: {n} sampling steps (fewer leave blocks in the first and last frames).",
+                         n=steps), flush=True)
+    scheduler.set_timesteps(steps, device=device)
     boundary = wan.BOUNDARY * scheduler.config.num_train_timesteps
     texts = torch.stack([pad_text(embed), pad_text(neg)]).to(device)
 
@@ -942,6 +953,14 @@ def train_wan22():
                 elif PREVIEW_SIZE > 0:
                     s = PREVIEW_SIZE / 8 / math.sqrt(H * W)
                     H, W = max(2, round(H * s / 2) * 2), max(2, round(W * s / 2) * 2)
+                if PREVIEW_FRAMES > 1 and H * W * 64 > MAX_VIDEO_PREVIEW_PIXELS:
+                    # Vídeo: como mucho 0,5 MP, con la misma forma. Más tarda mucho más (cada fotograma
+                    # latente suma tokens y la atención crece más que en proporción) y no enseña más del
+                    # parecido ni del movimiento. Las imágenes se quedan con Preview Size.
+                    s = math.sqrt(MAX_VIDEO_PREVIEW_PIXELS / (H * W * 64))
+                    H, W = max(2, int(H * s / 2) * 2), max(2, int(W * s / 2) * 2)
+                    print("  ↳ " + t("Video preview limited to {w}x{h} (0.5 MP): it takes much longer at Preview Size.",
+                                     w=W * 8, h=H * 8), flush=True)
                 shape = ((PREVIEW_FRAMES - 1) // 4 + 1, H, W)
                 run_preview(model, experts, scheduler, cache_data[p_name]["emb"], neg, shape, step, current)
 
