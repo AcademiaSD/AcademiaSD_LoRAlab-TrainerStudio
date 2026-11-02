@@ -465,16 +465,16 @@
                     <div class="form-group" title="Wan 2.2 A14B has two 14B experts: high noise (the first steps: layout and motion) and low noise (the rest: detail, faces, style). Low noise is enough for characters, objects and styles. High noise is for new motions or camera moves. Both trains one LoRA for each in the same run; the waiting one stays in RAM. Each expert exports its own LoRA (_high_noise / _low_noise) and in ComfyUI each goes on its own model. Fixed for the whole training: to change it, start a new one.">
                         <label>Train Expert:</label>
                         <select id="train_expert">
-                            <option value="low" selected>Low noise: detail, faces, style (recommended)</option>
+                            <option value="low">Low noise: detail, faces, style</option>
                             <option value="high">High noise: layout and motion</option>
-                            <option value="both">Both: one LoRA for each expert</option>
+                            <option value="both" selected>Both: one LoRA for each expert (recommended)</option>
                         </select>
                     </div>
 
                     <div class="form-row">
                         <div class="form-group">
                             <label>Total Steps:</label>
-                            <input type="number" id="train_total_steps" value="1500">
+                            <input type="number" id="train_total_steps" value="1000">
                         </div>
                         <div class="form-group">
                             <label>Learning Rate:</label>
@@ -506,11 +506,11 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label>LoRA Rank (R):</label>
-                            <input type="number" id="train_lora_rank" value="16">
+                            <input type="number" id="train_lora_rank" value="8">
                         </div>
                         <div class="form-group">
                             <label>LoRA Alpha (A):</label>
-                            <input type="number" id="train_lora_alpha" value="16">
+                            <input type="number" id="train_lora_alpha" value="8">
                         </div>
                     </div>
 
@@ -622,7 +622,7 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label>Preview Every:</label>
-                            <input type="number" id="train_preview_every" value="0">
+                            <input type="number" id="train_preview_every" value="50">
                         </div>
                         <div class="form-group">
                             <label>Caption Mode:</label>
@@ -667,8 +667,8 @@
                         <div class="form-group" title="1 = a still image (fast). More frames give an .mp4 at 16 fps and cost much more: 33 frames are about 9 times the work of one.">
                             <label>Preview Frames:</label>
                             <select id="train_preview_frames" onchange="updateVideoPreviewNote()">
-                                <option value="1" selected>1 (image)</option>
-                                <option value="17">17 (1 s)</option>
+                                <option value="1">1 (image)</option>
+                                <option value="17" selected>17 (1 s)</option>
                                 <option value="33">33 (2 s)</option>
                                 <option value="49">49 (3 s)</option>
                                 <option value="81">81 (5 s)</option>
@@ -697,8 +697,8 @@
                         <div class="form-group">
                             <label title="Training = the sample's own ratio and size. Pick a ratio and Preview Size to force a fixed output. Dimensions snap to the model's required grid and stay within its native size.">Aspect Ratio:</label>
                             <select id="train_preview_aspect" onchange="syncPreviewSize()">
-                                <option value="auto" selected>Training</option>
-                                <option value="1:1">1:1</option>
+                                <option value="auto">Training</option>
+                                <option value="1:1" selected>1:1</option>
                                 <option value="2:3">2:3</option>
                                 <option value="3:4">3:4</option>
                                 <option value="4:3">4:3</option>
