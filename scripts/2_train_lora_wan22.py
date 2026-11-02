@@ -386,9 +386,14 @@ def denoise(experts, scheduler, embed, neg, shape, generator):
         model = experts.use(expert)
         cfg_scale = PREVIEW_CFG_HIGH if t_ >= boundary else PREVIEW_CFG
         use_cfg = cfg_scale > 1.0
-        n = 2 if use_cfg else 1
-        out = predict(model, latents.to(torch.bfloat16).expand(n, -1, -1, -1, -1),
-                      t_.expand(n) / 1000, texts[:n]).float()
+        x = latents.to(torch.bfloat16)
+        if use_cfg and shape[0] > 1:
+            # Vídeo: cond y negativo por separado. Mismo cálculo con la mitad de activaciones; juntos,
+            # 17 fotogramas a 768 px no caben al lado del experto en 16 GB.
+            out = torch.cat([predict(model, x, t_.expand(1) / 1000, texts[i:i + 1]).float() for i in (0, 1)])
+        else:
+            n = 2 if use_cfg else 1
+            out = predict(model, x.expand(n, -1, -1, -1, -1), t_.expand(n) / 1000, texts[:n]).float()
         pred = out[1:] + cfg_scale * (out[:1] - out[1:]) if use_cfg else out
         latents = scheduler.step(pred, t_, latents, return_dict=False)[0]
 
@@ -403,10 +408,12 @@ def run_preview(model, experts, scheduler, embed, neg, shape, step, train_expert
     actual_seed = random.randint(1, 2147483647) if SEED <= 0 else SEED
     print("  ↳ " + t("Preview seed used: {seed}", seed=actual_seed))
 
+    stage = "sampling"
     try:
         with torch.no_grad():
             g = torch.Generator(device="cuda").manual_seed(actual_seed)
             latents = denoise(experts, scheduler, embed, neg, shape, g)
+            stage = "VAE decode"
             # Con el experto en la GPU (~8 GB) el VAE no cabe al decodificar varios fotogramas,
             # ni por mosaicos. Una imagen sí cabe y se ahorra el ir y venir del experto.
             if shape[0] > 1:
@@ -436,7 +443,8 @@ def run_preview(model, experts, scheduler, embed, neg, shape, step, train_expert
         print("  ↳ " + t("Preview saved to: {path}", path=out))
     except torch.OutOfMemoryError:
         # Una preview que no cabe no debe parar el entrenamiento.
-        print("  ↳ [!] " + t("Out of VRAM in the preview: skipped. Lower Preview Frames or the preview size."), flush=True)
+        print("  ↳ [!] " + t("Out of VRAM in the preview ({stage}, {f} frames at {w}x{h}): skipped. Lower Preview Frames or Preview Size.",
+                             stage=stage, f=(shape[0] - 1) * 4 + 1, w=shape[2] * 8, h=shape[1] * 8), flush=True)
         if VaeHolder.vae is not None:
             VaeHolder.vae.to("cpu")
     finally:

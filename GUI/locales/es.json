@@ -1550,5 +1550,5 @@
   "Out of VRAM with {n} samples of {f} frames at {w}x{h}: they are left out of this training. Lower Max Frames or the resolution in Pre-Cache, or turn on Activation Offload.": "Sin VRAM con {n} muestras de {f} fotogramas a {w}x{h}: se quedan fuera de este entrenamiento. Baja Máx. fotogramas o la resolución en el Pre-Caché, o activa las activaciones en RAM.",
   "No sample fits in VRAM.": "Ninguna muestra cabe en la VRAM.",
   "Downloading the {label} expert in NF4 from Hugging Face: {repo} (~7.6 GB)": "Descargando de Hugging Face el experto de {label} en NF4: {repo} (~7,6 GB)",
-  "Out of VRAM in the preview: skipped. Lower Preview Frames or the preview size.": "Sin VRAM en la preview: se salta. Baja los fotogramas o el tamaño de la preview."
+  "Out of VRAM in the preview ({stage}, {f} frames at {w}x{h}): skipped. Lower Preview Frames or Preview Size.": "Sin VRAM en la preview ({stage}, {f} fotogramas a {w}x{h}): se salta. Baja los fotogramas o el tamaño de la preview."
 }
