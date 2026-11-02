@@ -87,11 +87,12 @@ DEFAULTS = {
     # 480p son ~5.8 GB de activaciones. Con imágenes apenas importa.
     "activation_offload": True,
     "preview_every": 0,
-    "preview_steps": 30,
-    "preview_cfg": 3.0,
-    "preview_cfg_high": 4.0,
+    "preview_steps": 12,
+    "preview_cfg": 1.0,
+    "preview_cfg_high": 1.0,
     "preview_frames": 1,
     "preview_turbo": True,
+    "turbo_lora_strength": 0.7,
     "preview_size": 0,
     "preview_width": 0,
     "preview_height": 0,
@@ -152,8 +153,9 @@ MAX_VIDEO_PREVIEW_PIXELS = 500_000
 PREVIEW_CFG       = cfg.get("preview_cfg",       DEFAULTS["preview_cfg"])
 PREVIEW_CFG_HIGH  = cfg.get("preview_cfg_high",  DEFAULTS["preview_cfg_high"])
 PREVIEW_FRAMES    = wan.valid_frames(cfg.get("preview_frames", DEFAULTS["preview_frames"]))
-# Previews con lightx2v (12 pasos, CFG 1): varias veces más rápidas. Preview Steps y CFG no se usan entonces.
+# Previews con lightx2v: con él la página pone 12 pasos y CFG 1 (sin él, 30 y 4/3).
 PREVIEW_TURBO     = bool(cfg.get("preview_turbo", DEFAULTS["preview_turbo"]))
+TURBO_STRENGTH    = float(cfg.get("turbo_lora_strength", DEFAULTS["turbo_lora_strength"]))
 # Lado de la preview en píxeles (área size², proporción de la muestra); 0 = tamaño de entrenamiento.
 PREVIEW_SIZE      = cfg.get("preview_size",      DEFAULTS["preview_size"])
 PREVIEW_WIDTH     = int(cfg.get("preview_width",  DEFAULTS["preview_width"]))
@@ -427,12 +429,9 @@ def mmss(s):
     return f"{int(s // 60):02d}:{int(s % 60):02d}"
 
 
-# Previews turbo: lo mismo que el workflow de ComfyUI con lightx2v (euler, scheduler beta, CFG 1). 12 pasos,
-# los 4 primeros con el experto de ruido alto; lightx2v a 0.7 en los dos y el LoRA entrenado a 0.6 en el
-# de ruido alto y a 1.0 en el de ruido bajo.
-TURBO_STEPS = 12
-TURBO_HIGH_STEPS = 4
-TURBO_STRENGTH = 0.7
+# Previews turbo: lo mismo que el workflow de ComfyUI con lightx2v (euler, scheduler beta). Pasos y CFG son los
+# de la página (12 y 1 al marcar el turbo); el primer tercio de los pasos va al experto de ruido alto (4 de 12).
+# lightx2v a Strength en los dos y el LoRA entrenado a 0.6 en el de ruido alto y a 1.0 en el de ruido bajo.
 TURBO_LORA_SCALE = {"high": 0.6, "low": 1.0}
 
 
@@ -465,18 +464,27 @@ class Turbo:
         cls.lora.release()
 
 
-def denoise_turbo(experts, embed, shape, generator):
-    """Euler sobre los sigmas del scheduler beta de ComfyUI, sin negativo (CFG 1): una pasada por paso."""
+def denoise_turbo(experts, embed, neg, shape, generator):
+    """
+    Euler sobre los sigmas del scheduler beta de ComfyUI. Con CFG 1 (lo que pone el turbo) una pasada por
+    paso; si en la página se sube, cond y negativo por separado, como en denoise.
+    """
     latents = torch.randn((1, wan.LATENT_CHANNELS, *shape), generator=generator, device="cuda", dtype=torch.float32)
-    sigmas = wan.turbo_sigmas(TURBO_STEPS)
-    text = pad_text(embed).unsqueeze(0).to("cuda")
+    sigmas = wan.turbo_sigmas(max(1, int(PREVIEW_STEPS)))
+    texts = torch.stack([pad_text(embed), pad_text(neg)]).to("cuda")
     n_steps, t0 = len(sigmas) - 1, time.time()
+    high_steps = max(1, round(n_steps / 3))
     for i in range(n_steps):
-        expert = "high" if i < TURBO_HIGH_STEPS else "low"
+        expert = "high" if i < high_steps else "low"
+        cfg_scale = PREVIEW_CFG_HIGH if expert == "high" else PREVIEW_CFG
         if expert not in experts.models:
             expert = next(iter(experts.models))
+        model, x = experts.use(expert), latents.to(torch.bfloat16)
         sigma = torch.tensor([sigmas[i]], device="cuda")
-        v = predict(experts.use(expert), latents.to(torch.bfloat16), sigma, text).float()
+        v = predict(model, x, sigma, texts[:1]).float()
+        if cfg_scale > 1.0:
+            v_neg = predict(model, x, sigma, texts[1:]).float()
+            v = v_neg + cfg_scale * (v - v_neg)
         latents = latents + (sigmas[i + 1] - sigmas[i]) * v
         elapsed = time.time() - t0
         print(f"\r  ↳ {t('Preview sampling')} {i + 1}/{n_steps} ({(i + 1) * 100 // n_steps}%) | {expert} | "
@@ -497,7 +505,8 @@ def run_preview(model, experts, scheduler, embed, neg, shape, step, train_expert
     if PREVIEW_TURBO:
         try:
             turbo = Turbo.attach(experts)
-            print("  ↳ " + t("Turbo preview (lightx2v): {n} steps, CFG 1.", n=TURBO_STEPS), flush=True)
+            print("  ↳ " + t("Turbo preview (lightx2v, strength {s:g}): {n} steps, CFG {h:g}/{l:g}.",
+                             s=TURBO_STRENGTH, n=PREVIEW_STEPS, h=PREVIEW_CFG_HIGH, l=PREVIEW_CFG), flush=True)
         except Exception as e:
             # Sin conexión la primera vez, por ejemplo: preview normal.
             print("  ↳ [!] " + t("Turbo LoRA not available ({error}): normal preview.", error=e), flush=True)
@@ -513,7 +522,7 @@ def run_preview(model, experts, scheduler, embed, neg, shape, step, train_expert
             trim = 4 if shape[0] > 1 else 0
             gen_shape = (shape[0] + trim // 4, *shape[1:])
             if turbo:
-                latents = denoise_turbo(experts, embed, gen_shape, g)
+                latents = denoise_turbo(experts, embed, neg, gen_shape, g)
                 Turbo.detach(turbo)
                 turbo = None
             else:
@@ -600,7 +609,7 @@ def reload_live_settings():
     """
     global _live_mtime, TOTAL_STEPS, SAVE_EVERY, LR, MAX_GRAD_NORM
     global PREVIEW_EVERY, PREVIEW_STEPS, PREVIEW_CFG, PREVIEW_CFG_HIGH, PREVIEW_FRAMES, PREVIEW_SIZE, PREVIEW_WIDTH, PREVIEW_HEIGHT
-    global PREVIEW_CAPTION_MODE, PREVIEW_CUSTOM_PROMPT, SEED, PREVIEW_TURBO
+    global PREVIEW_CAPTION_MODE, PREVIEW_CUSTOM_PROMPT, SEED, PREVIEW_TURBO, TURBO_STRENGTH
 
     try:
         mtime = os.path.getmtime(CONFIG_PATH)
@@ -641,6 +650,7 @@ def reload_live_settings():
     PREVIEW_CFG_HIGH      = fresh("preview_cfg_high",      float, PREVIEW_CFG_HIGH)
     PREVIEW_FRAMES        = fresh("preview_frames",        lambda v: wan.valid_frames(int(v)), PREVIEW_FRAMES)
     PREVIEW_TURBO         = fresh("preview_turbo",         bool,  PREVIEW_TURBO)
+    TURBO_STRENGTH        = fresh("turbo_lora_strength",   float, TURBO_STRENGTH)
     PREVIEW_SIZE          = fresh("preview_size",          int,   PREVIEW_SIZE)
     PREVIEW_WIDTH         = fresh("preview_width",         int,   PREVIEW_WIDTH)
     PREVIEW_HEIGHT        = fresh("preview_height",        int,   PREVIEW_HEIGHT)

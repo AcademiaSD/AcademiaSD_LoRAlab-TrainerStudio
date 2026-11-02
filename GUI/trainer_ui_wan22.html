@@ -641,17 +641,28 @@
                         <textarea id="train_preview_custom_prompt" rows="2" placeholder="Write your custom prompt for the preview here..."></textarea>
                     </div>
 
-                    <div class="form-group" title="Previews with the lightx2v LoRA, as in ComfyUI: 12 steps (4 with the high noise expert, 8 with the low noise one), CFG 1, lightx2v at 0.7 and your LoRA at 0.6 (high) / 1.0 (low). Several times faster; Preview Steps and the CFGs are not used. The first time it downloads the LoRA (317 MB).">
-                        <label style="display: flex; align-items: center; gap: 8px; margin: 0 0 8px 0; cursor: pointer;" for="train_preview_turbo">
-                            <input type="checkbox" id="train_preview_turbo" checked style="width: 18px; height: 18px; cursor: pointer;">
-                            Turbo Previews (lightx2v)
-                        </label>
+                    <!-- TURBO LORA: lightx2v (Wan 2.1 T2V 14B), 12 pasos sin CFG -->
+                    <div class="form-group" style="background: #0f172a; padding: 10px; border-radius: 8px; border: 1px solid var(--panel-border); margin-top: 6px;"
+                         title="lightx2v step and CFG distill LoRA, as in ComfyUI: 12 steps without CFG, about 5 times faster. The first third of the steps goes to the high noise expert, your LoRA at 0.6 there and 1.0 on the low noise one. Downloaded the first time (317 MB). It only affects the previews, not the trained LoRA.">
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <label style="margin: 0; font-weight: 600; color: #38bdf8; cursor: pointer;" for="train_preview_turbo">
+                                🚀 Turbo LoRA (Fast Previews)
+                            </label>
+                            <input type="checkbox" id="train_preview_turbo" checked onchange="toggleTurboMode(this.checked)" style="width: 18px; height: 18px; cursor: pointer;">
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
+                            <label style="font-size:0.75rem; color:var(--text-muted); margin:0; white-space:nowrap;">Strength:</label>
+                            <input type="number" step="0.05" id="train_turbo_strength" value="0.7" style="padding:3px 8px; font-size:0.8rem; width:80px;">
+                        </div>
+                        <span class="no-i18n" style="font-size: 0.7rem; color: var(--text-muted); display: block; margin-top: 4px;">
+                            Models/Wan22-T2V-A14B-NF4/turbo/Wan21_T2V_14B_lightx2v_cfg_step_distill_lora_rank32.safetensors
+                        </span>
                     </div>
 
                     <div class="form-row">
                         <div class="form-group">
                             <label>Preview Steps:</label>
-                            <input type="number" id="train_preview_steps" value="30">
+                            <input type="number" id="train_preview_steps" value="12">
                         </div>
                         <div class="form-group" title="1 = a still image (fast). More frames give an .mp4 at 16 fps and cost much more: 33 frames are about 9 times the work of one.">
                             <label>Preview Frames:</label>
@@ -665,17 +676,17 @@
                         </div>
                     </div>
                     <div id="video_preview_note" style="display:none; font-size:0.72rem; color:#fbbf24; margin:-4px 0 8px 0; line-height:1.35;">
-                        Video previews use at most 0.5 MP (about 832 x 480), whatever Preview Size says, and without Turbo Previews at least 40 Preview Steps: with fewer steps the first and last frames come out with blocks, and larger they take much longer. Image previews keep your values.
+                        Video previews use at most 0.5 MP (about 832 x 480), whatever Preview Size says, and without the Turbo LoRA at least 40 Preview Steps: with fewer steps the first and last frames come out with blocks, and larger they take much longer. Image previews keep your values.
                     </div>
 
                     <div class="form-row">
                         <div class="form-group" title="CFG of the high noise steps (the first ones). Wan's default is 4.">
                             <label>CFG High Noise:</label>
-                            <input type="number" step="0.1" id="train_preview_cfg_high" value="4">
+                            <input type="number" step="0.1" id="train_preview_cfg_high" value="1">
                         </div>
                         <div class="form-group" title="CFG of the low noise steps. Wan's default is 3.">
                             <label>CFG Low Noise:</label>
-                            <input type="number" step="0.1" id="train_preview_cfg" value="3">
+                            <input type="number" step="0.1" id="train_preview_cfg" value="1">
                         </div>
                     </div>
                     <div style="font-size:0.72rem; color:var(--text-muted); margin:-4px 0 8px 0; line-height:1.35;">
@@ -826,6 +837,14 @@
 
     <script>
         // Paso actual en la consola: "Step 12/1000" en inglés o en el idioma elegido.
+        // Como en los otros trainers con LoRA turbo: marcarlo pone los valores del turbo, quitarlo los normales de Wan.
+        function toggleTurboMode(isTurbo) {
+            document.getElementById('train_preview_steps').value = isTurbo ? 12 : 30;
+            document.getElementById('train_preview_cfg_high').value = isTurbo ? 1 : 4;
+            document.getElementById('train_preview_cfg').value = isTurbo ? 1 : 3;
+            if (isTurbo) document.getElementById('train_turbo_strength').value = 0.7;
+        }
+
         // Aviso de las previews de vídeo: el trainer usa como mínimo 40 pasos y como mucho 0,5 MP.
         function updateVideoPreviewNote() {
             const note = document.getElementById('video_preview_note');
@@ -1023,6 +1042,9 @@
                     if (t.train_expert) document.getElementById('train_expert').value = t.train_expert;
                     if (t.activation_offload !== undefined) document.getElementById('train_activation_offload').checked = t.activation_offload;
                     if (t.preview_turbo !== undefined) document.getElementById('train_preview_turbo').checked = t.preview_turbo;
+                    if (t.turbo_lora_strength !== undefined) document.getElementById('train_turbo_strength').value = t.turbo_lora_strength;
+                    // Guardados antes de que el turbo tuviera Strength: llevan los pasos y CFG sin turbo.
+                    else if (t.preview_turbo) toggleTurboMode(true);
                     if (t.export_final_name) document.getElementById('export_final_name').value = t.export_final_name;
                     updateFinalNameSuffix();
                 }
@@ -1096,6 +1118,9 @@
                     if (data.train_expert !== undefined) document.getElementById('train_expert').value = data.train_expert;
                     if (data.activation_offload !== undefined) document.getElementById('train_activation_offload').checked = data.activation_offload;
                     if (data.preview_turbo !== undefined) document.getElementById('train_preview_turbo').checked = data.preview_turbo;
+                    if (data.turbo_lora_strength !== undefined) document.getElementById('train_turbo_strength').value = data.turbo_lora_strength;
+                    // Guardados antes de que el turbo tuviera Strength: llevan los pasos y CFG sin turbo.
+                    else if (data.preview_turbo) toggleTurboMode(true);
                     if (data.export_final_name !== undefined) document.getElementById('export_final_name').value = data.export_final_name;
                     updateFinalNameSuffix();
 
@@ -1230,7 +1255,7 @@
                     preview_cfg: 'train_preview_cfg',
                     preview_aspect_ratio: 'train_preview_aspect', preview_size: 'train_preview_size',
                     preview_cfg_high: 'train_preview_cfg_high', preview_frames: 'train_preview_frames',
-                    preview_turbo: 'train_preview_turbo' },
+                    preview_turbo: 'train_preview_turbo', turbo_lora_strength: 'train_turbo_strength' },
             resume: { trigger_word: 'trigger_word', lr_scheduler: 'train_lr_scheduler',
                       warmup_steps: 'train_warmup_steps', lr_cycles: 'train_lr_cycles', batch_size: 'train_batch_size',
                       grad_accum_steps: 'train_grad_accum', activation_offload: 'train_activation_offload' },
@@ -1272,6 +1297,7 @@
                 preview_cfg_high: parseFloat(document.getElementById('train_preview_cfg_high').value),
                 preview_frames: parseInt(document.getElementById('train_preview_frames').value),
                 preview_turbo: document.getElementById('train_preview_turbo').checked,
+                turbo_lora_strength: parseFloat(document.getElementById('train_turbo_strength').value),
                 train_expert: document.getElementById('train_expert').value,
                 activation_offload: document.getElementById('train_activation_offload').checked,
                 export_final_name: document.getElementById('export_final_name').value
