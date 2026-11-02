@@ -68,6 +68,7 @@ LEGACY_MODEL_NAMES = (
     "YuE2-Vae-legacy",
     "Qwen3-ASR",
     "SheetSage2",
+    "Wan22-T2V-A14B-NF4",
 )
 
 CACHE_NAME_ALIASES = {
@@ -97,6 +98,7 @@ OUTPUT_NAME_PREFIXES = (
     "qwen_image21_lora_output",
     "qwenimage2512_lora_output",
     "sdxl_lora_output",
+    "wan22_lora_output",
     "yue2_lora_output",
     "zimage_lora_output",
 )

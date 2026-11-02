@@ -79,16 +79,31 @@
         };
     }
 
+    // "Training" with a fixed ratio: the area of this trainer's Pre-Cache (precache_target_area, in px²),
+    // so a 512 x 512 training gets 512-area previews instead of 1024. Without that field, 1024 as before.
+    function trainingSize() {
+        const el = document.getElementById('precache_target_area');
+        const area = el ? parseInt(el.value, 10) : 0;
+        return area > 0 ? Math.round(Math.sqrt(area)) : 0;
+    }
+
+    // Size used for the width/height: the selected one, or the training one for "Training".
+    function effectiveSize(aspectValue, sizeValue) {
+        return aspectValue !== 'auto' && !sizeValue ? trainingSize() : sizeValue;
+    }
+
     function sync() {
         const { aspect, size, hint } = controls();
         if (!aspect || !size) return;
-        if (aspect.value !== 'auto' && (parseInt(size.value, 10) || 0) === 0) {
+        if (aspect.value !== 'auto' && (parseInt(size.value, 10) || 0) === 0 && !trainingSize()) {
             size.value = '1024';
         }
         const sizeValue = parseInt(size.value, 10) || 0;
-        const dim = aspect.value !== 'auto' ? compute(aspect.value, sizeValue) : { width: 0, height: 0 };
+        const dim = aspect.value !== 'auto' ? compute(aspect.value, effectiveSize(aspect.value, sizeValue)) : { width: 0, height: 0 };
         if (!hint) return;
-        if (dim.width > 0) {
+        if (dim.width > 0 && !sizeValue) {
+            hint.textContent = `${dim.width} × ${dim.height} px · ${t('training area')}`;
+        } else if (dim.width > 0) {
             hint.textContent = `${dim.width} × ${dim.height} px · ${(dim.width * dim.height).toLocaleString()} px²`;
         } else if (sizeValue > 0) {
             hint.textContent = `${sizeValue} × ${sizeValue} px² (${t('area')}) · ${t('sample ratio')}`;
@@ -101,7 +116,7 @@
         const { aspect, size } = controls();
         const aspectValue = aspect ? aspect.value : 'auto';
         const sizeValue = size ? (parseInt(size.value, 10) || 0) : 0;
-        const dim = aspectValue !== 'auto' ? compute(aspectValue, sizeValue) : { width: 0, height: 0 };
+        const dim = aspectValue !== 'auto' ? compute(aspectValue, effectiveSize(aspectValue, sizeValue)) : { width: 0, height: 0 };
         return {
             preview_size: sizeValue,
             preview_aspect_ratio: aspectValue,
@@ -126,6 +141,10 @@
     window.PreviewSize = { configure, values, apply, compute, sync };
     window.syncPreviewSize = sync;
     document.addEventListener('DOMContentLoaded', sync);
+    // The Pre-Cache resolution changes what "Training" means.
+    document.addEventListener('change', e => {
+        if (e.target && (e.target.id === 'target_area_select' || e.target.id === 'precache_target_area')) sync();
+    });
     window.addEventListener('load', sync);
     // i18n changes document.documentElement.lang before re-applying the DOM.
     // Rebuild the hint so it follows the selected UI language too.
