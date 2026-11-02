@@ -74,6 +74,14 @@ Video previews use at least **40 sampling steps** and at most **0.5 MP** (the sa
 
 Before decoding a video the expert goes to RAM: next to it the VAE does not fit, not even tiled. The prompt and the negative one run one after the other instead of in a batch of two (same result, half the activations). Measured on 16 GB with both experts and their LoRAs: 17 frames at 672x864, 12.0 GB peak.
 
+### Turbo previews (lightx2v)
+
+On by default (*Turbo Previews*, it can be switched while training). The previews then run as the usual ComfyUI workflow with the lightx2v LoRA (`Wan21_T2V_14B_lightx2v_cfg_step_distill_lora_rank32`, from `Kijai/WanVideo_comfy`, downloaded the first time to `Models/Wan22-T2V-A14B-NF4/turbo/`, 317 MB): Euler over the sigmas of ComfyUI's beta scheduler (its Wan table, shift 8), CFG 1 (no negative pass), **12 steps**, the first 4 on the high noise expert and the other 8 on the low noise one. lightx2v at 0.7 on both experts; the trained LoRA at 0.6 on the high noise expert and 1.0 on the low noise one. *Preview Steps*, the CFGs and the 40-step minimum do not apply.
+
+lightx2v is put on the experts only for the preview: its LoRA layers as forward hooks that add their output, its bias and norm differences (`diff_b`, `diff`) added in place and restored afterwards, and the trained LoRA's scaling put back. The training, its LoRA and the optimizer never see it.
+
+Measured (RTX 5080, both experts with LoRA, 17 frames at 560x864): **~1.9 min** instead of ~9.5 min, 11.4 GB peak; an image, ~20 s. If the download fails, the preview runs the normal way and says so.
+
 ## Exported LoRAs
 
 `Wan22_HIGH_*` and `Wan22_LOW_*`, with the original Wan key names (`diffusion_model.blocks.N.self_attn.q.lora_A.weight`, `.alpha` per layer). ComfyUI, Wan2GP and diffusers (`WanLoraLoaderMixin`) load them. Send to Models and Download add `_high_noise` / `_low_noise` to the name, read from the LoRA's metadata (`wan_expert`). In ComfyUI, each LoRA goes on its own model: the high noise one on the high noise model, the low noise one on the low noise model.

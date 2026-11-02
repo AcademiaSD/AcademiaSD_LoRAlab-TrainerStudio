@@ -31,6 +31,7 @@ import subprocess
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from accelerate import init_empty_weights
 from bitsandbytes.functional import QuantState, quantize_4bit
 from bitsandbytes.nn import Linear4bit, Params4bit
@@ -398,6 +399,122 @@ def comfy_key(name):
         _, n, rest = name.split(".", 2)
         return f"diffusion_model.blocks.{n}.{_BLOCK_RENAME.get(rest, rest)}"
     return "diffusion_model." + _TOP_RENAME.get(name, name)
+
+
+# Normas que traen los LoRAs de ComfyUI (pesos "diff"). En el original la norma de la atención al texto
+# es norm3; en diffusers, norm2.
+_NORM_RENAME = {"self_attn.norm_q": "attn1.norm_q", "self_attn.norm_k": "attn1.norm_k",
+                "cross_attn.norm_q": "attn2.norm_q", "cross_attn.norm_k": "attn2.norm_k", "norm3": "norm2"}
+_BLOCK_FROM_COMFY = {**{v: k for k, v in _BLOCK_RENAME.items()}, **_NORM_RENAME}
+_TOP_FROM_COMFY = {v: k for k, v in _TOP_RENAME.items()}
+
+
+def diffusers_name(key):
+    """diffusion_model.blocks.3.self_attn.q -> blocks.3.attn1.to_q (lo contrario de comfy_key)."""
+    key = key.removeprefix("diffusion_model.")
+    if key.startswith("blocks."):
+        _, n, rest = key.split(".", 2)
+        return f"blocks.{n}.{_BLOCK_FROM_COMFY.get(rest, rest)}"
+    return _TOP_FROM_COMFY.get(key, key)
+
+
+# =============================================================================
+# PREVIEWS TURBO (lightx2v)
+# =============================================================================
+
+# LoRA de destilación de pasos y CFG de Wan 2.1 T2V 14B, el que se usa con Wan 2.2 A14B en ComfyUI.
+TURBO_REPO = "Kijai/WanVideo_comfy"
+TURBO_FILE = "Wan21_T2V_14B_lightx2v_cfg_step_distill_lora_rank32.safetensors"
+
+
+def ensure_turbo(model_dir):
+    folder = os.path.join(model_dir, "turbo")
+    path = os.path.join(folder, TURBO_FILE)
+    if not os.path.exists(path):
+        from huggingface_hub import hf_hub_download
+        enable_hf_file_progress()
+        print(t("Downloading the turbo LoRA for the previews: {repo} (~317 MB)", repo=TURBO_REPO), flush=True)
+        hf_hub_download(TURBO_REPO, TURBO_FILE, local_dir=folder, token=get_hf_token())
+    return path
+
+
+class TurboLoRA:
+    """
+    El LoRA lightx2v (formato de ComfyUI: lora_down/lora_up sin alpha, o sea escala 1; diff_b para los bias
+    y diff para los pesos de las normas), puesto en un experto solo mientras dura una preview. Las capas
+    LoRA van como hooks que suman su salida; bias y normas se cambian en su sitio y remove() los deja
+    como estaban. Así no toca el LoRA que se entrena ni el optimizador.
+    """
+
+    def __init__(self, path):
+        self.parts = {}
+        with safe_open(path, framework="pt", device="cpu") as f:
+            for key in f.keys():
+                for suffix, part in ((".lora_down.weight", "down"), (".lora_up.weight", "up"),
+                                     (".diff_b", "diff_b"), (".diff", "diff")):
+                    if key.endswith(suffix):
+                        name = diffusers_name(key[:-len(suffix)])
+                        self.parts.setdefault(name, {})[part] = f.get_tensor(key).to(torch.bfloat16)
+                        break
+        self._gpu = {}
+
+    def apply(self, model, strength):
+        base = model.get_base_model() if hasattr(model, "get_base_model") else model
+        modules = dict(base.named_modules())
+        handles, saved = [], []
+        for name, p in self.parts.items():
+            module = modules.get(name)
+            if module is None:
+                continue
+            if "down" in p:
+                if name not in self._gpu:
+                    self._gpu[name] = (p["down"].to("cuda"), p["up"].to("cuda"))
+                down, up = self._gpu[name]
+
+                def hook(_, args, out, down=down, up=up):
+                    return out + (strength * F.linear(F.linear(args[0].to(down.dtype), down), up)).to(out.dtype)
+
+                handles.append(module.register_forward_hook(hook))
+            # Con LoRA de PEFT la capa original está en base_layer.
+            target = getattr(module, "base_layer", module)
+            for part, attr in (("diff_b", "bias"), ("diff", "weight")):
+                weight = getattr(target, attr, None)
+                if part in p and weight is not None and weight.shape == p[part].shape:
+                    saved.append((weight, weight.data.clone()))
+                    weight.data += strength * p[part].to(weight.device, weight.dtype)
+        return handles, saved
+
+    def remove(self, state):
+        handles, saved = state
+        for h in handles:
+            h.remove()
+        for weight, original in saved:
+            weight.data = original.to(weight.device)
+
+    def release(self):
+        """Fuera de la GPU al acabar la preview (~0.3 GB)."""
+        self._gpu.clear()
+
+
+def turbo_sigmas(steps, shift=8.0, a=0.6, b=0.6):
+    """
+    Los de ComfyUI con el scheduler beta: su tabla de 1000 sigmas de Wan (shift 8 por defecto) y de ella los
+    pasos que reparte una Beta(0.6, 0.6), más juntos al principio y al final. La inversa de la Beta se
+    integra aquí (x = sin² θ deja la densidad sin infinitos) para no depender de scipy.
+    """
+    t_ = np.arange(1, 1001) / 1000
+    table = shift * t_ / (1 + (shift - 1) * t_)
+    theta = np.linspace(0, np.pi / 2, 200001)
+    pdf = 2 * np.sin(theta) ** (2 * a - 1) * np.cos(theta) ** (2 * b - 1)
+    cdf = np.concatenate([[0.0], np.cumsum((pdf[1:] + pdf[:-1]) / 2 * np.diff(theta))])
+    cdf /= cdf[-1]
+    ppf = np.interp(1 - np.linspace(0, 1, steps, endpoint=False), cdf, np.sin(theta) ** 2)
+    sigmas, last = [], -1
+    for i in np.rint(ppf * (len(table) - 1)).astype(int):
+        if i != last:
+            sigmas.append(float(table[i]))
+        last = i
+    return sigmas + [0.0]
 
 
 # =============================================================================

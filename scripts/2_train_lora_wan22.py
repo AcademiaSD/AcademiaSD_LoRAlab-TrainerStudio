@@ -91,6 +91,7 @@ DEFAULTS = {
     "preview_cfg": 3.0,
     "preview_cfg_high": 4.0,
     "preview_frames": 1,
+    "preview_turbo": True,
     "preview_size": 0,
     "preview_width": 0,
     "preview_height": 0,
@@ -151,6 +152,8 @@ MAX_VIDEO_PREVIEW_PIXELS = 500_000
 PREVIEW_CFG       = cfg.get("preview_cfg",       DEFAULTS["preview_cfg"])
 PREVIEW_CFG_HIGH  = cfg.get("preview_cfg_high",  DEFAULTS["preview_cfg_high"])
 PREVIEW_FRAMES    = wan.valid_frames(cfg.get("preview_frames", DEFAULTS["preview_frames"]))
+# Previews con lightx2v (12 pasos, CFG 1): varias veces más rápidas. Preview Steps y CFG no se usan entonces.
+PREVIEW_TURBO     = bool(cfg.get("preview_turbo", DEFAULTS["preview_turbo"]))
 # Lado de la preview en píxeles (área size², proporción de la muestra); 0 = tamaño de entrenamiento.
 PREVIEW_SIZE      = cfg.get("preview_size",      DEFAULTS["preview_size"])
 PREVIEW_WIDTH     = int(cfg.get("preview_width",  DEFAULTS["preview_width"]))
@@ -184,7 +187,8 @@ print(f"  {'Timesteps / Shift':<22}: {TIMESTEP_SAMPLING} / {TRAIN_SHIFT}")
 print(f"  {t('Activation Offload'):<22}: {t('ON') if ACTIVATION_OFFLOAD else t('OFF')}")
 print(f"  {t('Preview'):<22}: {t('Mode')}={PREVIEW_CAPTION_MODE} | Prompt='{PREVIEW_CUSTOM_PROMPT}'")
 print(f"  {t('Preview Every'):<22}: {PREVIEW_EVERY} | {t('Preview Steps')} {PREVIEW_STEPS} | CFG {PREVIEW_CFG_HIGH}/{PREVIEW_CFG} | "
-      f"{t('Frames')} {PREVIEW_FRAMES} | {t('Preview Size')} {PREVIEW_SIZE or t('Training')}")
+      f"{t('Frames')} {PREVIEW_FRAMES} | {t('Preview Size')} {PREVIEW_SIZE or t('Training')}"
+      f" | Turbo {t('ON') if PREVIEW_TURBO else t('OFF')}")
 print(f"  {t('Seed'):<22}: {SEED} ({t('random') if SEED <= 0 else t('fixed')})")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -394,9 +398,6 @@ def denoise(experts, scheduler, embed, neg, shape, generator):
     # que no parezca colgado. Sin la palabra "Step", que la página toma por el paso del entrenamiento.
     n_steps, t0 = len(scheduler.timesteps), time.time()
 
-    def mmss(s):
-        return f"{int(s // 60):02d}:{int(s % 60):02d}"
-
     for i, t_ in enumerate(scheduler.timesteps, 1):
         expert = "high" if t_ >= boundary else "low"
         if expert not in experts.models:
@@ -422,6 +423,68 @@ def denoise(experts, scheduler, embed, neg, shape, generator):
     return latents
 
 
+def mmss(s):
+    return f"{int(s // 60):02d}:{int(s % 60):02d}"
+
+
+# Previews turbo: lo mismo que el workflow de ComfyUI con lightx2v (euler, scheduler beta, CFG 1). 12 pasos,
+# los 4 primeros con el experto de ruido alto; lightx2v a 0.7 en los dos y el LoRA entrenado a 0.6 en el
+# de ruido alto y a 1.0 en el de ruido bajo.
+TURBO_STEPS = 12
+TURBO_HIGH_STEPS = 4
+TURBO_STRENGTH = 0.7
+TURBO_LORA_SCALE = {"high": 0.6, "low": 1.0}
+
+
+class Turbo:
+    lora = None
+
+    @classmethod
+    def attach(cls, experts):
+        """lightx2v en cada experto y el LoRA entrenado a su fuerza de preview. Devuelve con qué deshacerlo."""
+        if cls.lora is None:
+            cls.lora = wan.TurboLoRA(wan.ensure_turbo(MODEL_ID))
+        states, scales = [], []
+        for e, m in experts.models.items():
+            states.append(cls.lora.apply(m, TURBO_STRENGTH))
+            factor = TURBO_LORA_SCALE.get(e, 1.0)
+            for module in m.modules():
+                scaling = getattr(module, "scaling", None)
+                if isinstance(scaling, dict) and "default" in scaling:
+                    scales.append((scaling, scaling["default"]))
+                    scaling["default"] *= factor
+        return states, scales
+
+    @classmethod
+    def detach(cls, undo):
+        states, scales = undo
+        for s in states:
+            cls.lora.remove(s)
+        for scaling, value in scales:
+            scaling["default"] = value
+        cls.lora.release()
+
+
+def denoise_turbo(experts, embed, shape, generator):
+    """Euler sobre los sigmas del scheduler beta de ComfyUI, sin negativo (CFG 1): una pasada por paso."""
+    latents = torch.randn((1, wan.LATENT_CHANNELS, *shape), generator=generator, device="cuda", dtype=torch.float32)
+    sigmas = wan.turbo_sigmas(TURBO_STEPS)
+    text = pad_text(embed).unsqueeze(0).to("cuda")
+    n_steps, t0 = len(sigmas) - 1, time.time()
+    for i in range(n_steps):
+        expert = "high" if i < TURBO_HIGH_STEPS else "low"
+        if expert not in experts.models:
+            expert = next(iter(experts.models))
+        sigma = torch.tensor([sigmas[i]], device="cuda")
+        v = predict(experts.use(expert), latents.to(torch.bfloat16), sigma, text).float()
+        latents = latents + (sigmas[i + 1] - sigmas[i]) * v
+        elapsed = time.time() - t0
+        print(f"\r  ↳ {t('Preview sampling')} {i + 1}/{n_steps} ({(i + 1) * 100 // n_steps}%) | {expert} | "
+              f"{mmss(elapsed)} | ETA {mmss(elapsed / (i + 1) * (n_steps - i - 1))}", end="", flush=True)
+    print(flush=True)
+    return latents
+
+
 def run_preview(model, experts, scheduler, embed, neg, shape, step, train_expert_now):
     was_training = model.training
     for m in experts.models.values():
@@ -429,6 +492,15 @@ def run_preview(model, experts, scheduler, embed, neg, shape, step, train_expert
 
     actual_seed = random.randint(1, 2147483647) if SEED <= 0 else SEED
     print("  ↳ " + t("Preview seed used: {seed}", seed=actual_seed))
+
+    turbo = None
+    if PREVIEW_TURBO:
+        try:
+            turbo = Turbo.attach(experts)
+            print("  ↳ " + t("Turbo preview (lightx2v): {n} steps, CFG 1.", n=TURBO_STEPS), flush=True)
+        except Exception as e:
+            # Sin conexión la primera vez, por ejemplo: preview normal.
+            print("  ↳ [!] " + t("Turbo LoRA not available ({error}): normal preview.", error=e), flush=True)
 
     stage = "sampling"
     try:
@@ -439,7 +511,13 @@ def run_preview(model, experts, scheduler, embed, neg, shape, step, train_expert
             # sin LoRA, con el VAE en FP32 y con shift 12); desde el segundo, limpio. Es lo que hace
             # --trim-first-frames de mlx-video con Wan 14B cuantizado.
             trim = 4 if shape[0] > 1 else 0
-            latents = denoise(experts, scheduler, embed, neg, (shape[0] + trim // 4, *shape[1:]), g)
+            gen_shape = (shape[0] + trim // 4, *shape[1:])
+            if turbo:
+                latents = denoise_turbo(experts, embed, gen_shape, g)
+                Turbo.detach(turbo)
+                turbo = None
+            else:
+                latents = denoise(experts, scheduler, embed, neg, gen_shape, g)
             stage = "VAE decode"
             # Con el experto en la GPU (~8 GB) el VAE no cabe al decodificar varios fotogramas,
             # ni por mosaicos. Una imagen sí cabe y se ahorra el ir y venir del experto.
@@ -477,6 +555,8 @@ def run_preview(model, experts, scheduler, embed, neg, shape, step, train_expert
         if VaeHolder.vae is not None:
             VaeHolder.vae.to("cpu")
     finally:
+        if turbo:
+            Turbo.detach(turbo)  # la preview falló a medias: el entrenamiento sigue sin lightx2v
         # Vuelve a la GPU el experto con el que sigue el entrenamiento.
         experts.use(train_expert_now)
         for e, m in experts.models.items():
@@ -520,7 +600,7 @@ def reload_live_settings():
     """
     global _live_mtime, TOTAL_STEPS, SAVE_EVERY, LR, MAX_GRAD_NORM
     global PREVIEW_EVERY, PREVIEW_STEPS, PREVIEW_CFG, PREVIEW_CFG_HIGH, PREVIEW_FRAMES, PREVIEW_SIZE, PREVIEW_WIDTH, PREVIEW_HEIGHT
-    global PREVIEW_CAPTION_MODE, PREVIEW_CUSTOM_PROMPT, SEED
+    global PREVIEW_CAPTION_MODE, PREVIEW_CUSTOM_PROMPT, SEED, PREVIEW_TURBO
 
     try:
         mtime = os.path.getmtime(CONFIG_PATH)
@@ -560,6 +640,7 @@ def reload_live_settings():
     PREVIEW_CFG           = fresh("preview_cfg",           float, PREVIEW_CFG)
     PREVIEW_CFG_HIGH      = fresh("preview_cfg_high",      float, PREVIEW_CFG_HIGH)
     PREVIEW_FRAMES        = fresh("preview_frames",        lambda v: wan.valid_frames(int(v)), PREVIEW_FRAMES)
+    PREVIEW_TURBO         = fresh("preview_turbo",         bool,  PREVIEW_TURBO)
     PREVIEW_SIZE          = fresh("preview_size",          int,   PREVIEW_SIZE)
     PREVIEW_WIDTH         = fresh("preview_width",         int,   PREVIEW_WIDTH)
     PREVIEW_HEIGHT        = fresh("preview_height",        int,   PREVIEW_HEIGHT)
