@@ -86,7 +86,7 @@ DEFAULTS = {
     # vez de en la VRAM. Con vídeo es la diferencia entre caber o no en 16 GB: 33 fotogramas a
     # 480p son ~5.8 GB de activaciones. Con imágenes apenas importa.
     "activation_offload": True,
-    "preview_every": 50,
+    "preview_every": 0,
     "preview_steps": 12,
     "preview_cfg": 1.0,
     "preview_cfg_high": 1.0,
