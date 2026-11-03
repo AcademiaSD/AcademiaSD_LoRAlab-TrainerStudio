@@ -152,7 +152,7 @@ def training_in_progress(root=PROJECT_ROOT):
                     if argument.startswith("-"):
                         continue
                     filename = os.path.basename(argument)
-                    if filename.endswith(".py") and filename.startswith(("2_train_lora_", "1_pre_cache_", "0_caption_")):
+                    if filename.endswith(".py") and filename.startswith(("2_train_lora_", "1_pre_cache_", "0_caption_", "0_forge_")):
                         busy = True
                     break
                 if busy:

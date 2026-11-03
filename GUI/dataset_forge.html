@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dataset Forge · AcademiaSD LoRAlab</title>
+    <script src="/i18n.js"></script>
+    <link rel="icon" type="image/png" href="/assets/logo_128.png">
+    <!-- Dataset Forge (scripts/dataset_forge.py): un dataset de personaje desde pocas imágenes.
+         1 Origen y referencias → 2 Analizar (captions que faltan + ficha) → 3 Plan editable → 4 Generar. -->
+    <style>
+        :root { --bg: #0f172a; --panel: #1e293b; --border: #334155; --text: #e2e8f0; --muted: #94a3b8;
+                --accent: #38bdf8; --ok: #10b981; --warn: #f59e0b; --bad: #ef4444; }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 0.92rem; }
+        .wrap { max-width: 1100px; margin: 0 auto; padding: 16px; }
+        h1 { font-size: 1.35rem; margin: 4px 0 2px; }
+        .sub { color: var(--muted); margin: 0 0 16px; }
+        .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; }
+        .card h2 { font-size: 1rem; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+        .step { display: inline-flex; width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg, #0e7490, #6d28d9);
+                align-items: center; justify-content: center; font-size: 0.8rem; flex: 0 0 auto; }
+        .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+        .field { display: flex; flex-direction: column; gap: 4px; flex: 1 1 140px; min-width: 0; }
+        .field.wide { flex: 3 1 260px; }
+        label { color: var(--muted); font-size: 0.8rem; }
+        input[type=text], input[type=number], select, textarea {
+            width: 100%; background: #0b1222; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font: inherit; }
+        textarea { resize: vertical; }
+        .btn { padding: 9px 14px; border-radius: 6px; border: none; font-weight: 600; cursor: pointer; font: inherit; font-weight: 600;
+               background: #334155; color: #fff; min-height: 38px; }
+        .btn.go { background: linear-gradient(90deg, #0e7490, #6d28d9); }
+        .btn.ok { background: var(--ok); }
+        .btn.bad { background: var(--bad); }
+        .btn:disabled { opacity: .45; cursor: not-allowed; }
+        .hint { color: var(--muted); font-size: 0.8rem; margin: 6px 0 0; line-height: 1.4; }
+        .warn { background: rgba(245, 158, 11, .1); border: 1px solid rgba(245, 158, 11, .4); color: #fde68a; border-radius: 8px; padding: 8px 12px; margin: 8px 0; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-top: 10px; }
+        .thumb { position: relative; border: 2px solid var(--border); border-radius: 8px; overflow: hidden; background: #0b1222; cursor: pointer; }
+        .thumb.sel { border-color: var(--accent); }
+        .thumb img { width: 100%; height: 170px; object-fit: cover; display: block; }
+        .thumb .cap { font-size: 0.72rem; padding: 4px 6px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .thumb .tick { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 50%; background: rgba(15, 23, 42, .85);
+                       border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 0.8rem; color: transparent; }
+        .thumb:not(.sel) img { opacity: .55; }
+        .thumb.sel .tick { background: var(--accent); border-color: var(--accent); color: #0f172a; }
+        .badge { position: absolute; top: 6px; left: 6px; padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; color: #fff; }
+        .b-ok { background: rgba(5, 150, 105, .92); } .b-bad { background: rgba(185, 28, 28, .92); } .b-none { background: rgba(51, 65, 85, .92); }
+        .nocap { color: var(--warn); }
+        .progress { height: 10px; background: #0b1222; border-radius: 5px; overflow: hidden; margin: 10px 0 6px; }
+        .progress i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #22d3ee, #a78bfa); transition: width .4s; }
+        pre.console { background: #020617; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; max-height: 220px; overflow: auto;
+                      font-size: 0.75rem; white-space: pre-wrap; word-break: break-word; margin: 8px 0 0; }
+        .refcap { display: flex; gap: 10px; margin-top: 8px; align-items: flex-start; }
+        .refcap img { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; flex: 0 0 auto; }
+        .hidden { display: none !important; }
+        .msg { margin-top: 8px; min-height: 1.2em; }
+        .msg.err { color: #f87171; }
+        #out-grid .thumb { cursor: zoom-in; }
+        .lb { position: fixed; inset: 0; z-index: 50; background: rgba(2, 6, 23, .94); display: none; flex-direction: column;
+              align-items: center; justify-content: center; padding: 12px; gap: 10px; }
+        .lb.open { display: flex; }
+        .lb img { max-width: 100%; max-height: calc(100vh - 150px); object-fit: contain; border-radius: 8px; }
+        .lb .lb-info { max-width: 900px; text-align: center; color: var(--muted); font-size: 0.85rem; line-height: 1.4; }
+        .lb .lb-info b { color: var(--text); }
+        .lb .lb-nav { display: flex; gap: 10px; }
+        .lb .btn { min-width: 52px; }
+        @media (max-width: 600px) { .thumb img { height: 130px; } .grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); } }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <div style="display:flex;align-items:center;gap:10px;justify-content:space-between">
+        <h1>🧬 Dataset Forge</h1>
+        <button type="button" class="btn" onclick="closeForge()" title="Back to the trainer. A running generation keeps going.">✕ Close</button>
+    </div>
+    <p class="sub">A character dataset from a few images (from 1): new outfits, places and framings that keep the face.</p>
+
+    <!-- 1. Origen -->
+    <div class="card">
+        <h2><span class="step">1</span><span>Source and references</span></h2>
+        <div class="row">
+            <div class="field wide"><label>Folder with the images</label>
+                <input type="text" id="source" class="no-i18n" onchange="loadSource()" onkeydown="if (event.key === 'Enter') this.blur()"></div>
+            <button type="button" class="btn" onclick="browseFolder()">📁 Browse</button>
+        </div>
+        <p class="hint">Click the images to use as reference (up to 4 go into the model; more only help the likeness check). Only people.</p>
+        <div class="grid no-i18n" id="src-grid"></div>
+    </div>
+
+    <!-- 2. Analizar -->
+    <div class="card">
+        <h2><span class="step">2</span><span>Character sheet</span></h2>
+        <p class="hint" style="margin-top:0">Analyze writes the captions the references lack and describes the features that do not change (age, hair, eyes...). Uses the shared Qwen3-VL-8B captioner (~5 GB, downloaded the first time).</p>
+        <div class="row" style="margin-top:8px">
+            <button type="button" class="btn go" id="btn-analyze" onclick="run('analyze')">🔍 Analyze</button>
+        </div>
+        <div class="row" style="margin-top:12px">
+            <div class="field"><label>Subject</label>
+                <select id="subject" onchange="makePlan()">
+                    <option value="woman">woman</option><option value="man">man</option><option value="person">person</option>
+                </select></div>
+            <div class="field wide"><label>Fixed features (they help the model, they are left out of the captions)</label>
+                <input type="text" id="identity" class="no-i18n" placeholder="e.g. about 25 years old, long wavy blonde hair, blue eyes"></div>
+        </div>
+        <div id="refcaps" class="no-i18n"></div>
+    </div>
+
+    <!-- 3. Plan -->
+    <div class="card">
+        <h2><span class="step">3</span><span>Plan</span></h2>
+        <div class="row">
+            <div class="field wide"><label>Model</label>
+                <select id="model" onchange="syncModel()">
+                    <option value="flux3klein">FLUX.3 Klein · FLUX Kommunity License</option>
+                    <option value="fibo2">Fibo 2.0 · CC BY-NC 4.0</option>
+                    <option value="qwen21">Qwen-Image 2.1 · Qwen Research License (non-commercial)</option>
+                    <option value="klein9b">FLUX.2 Klein 9B · FLUX Non-Commercial License</option>
+                    <option value="edit2511">Qwen-Image-Edit 2511 · Apache 2.0</option>
+                </select></div>
+            <div class="field" id="quality-field"><label>Quality</label>
+                <select id="quality" onchange="syncSteps()">
+                    <option value="fast">Fast (turbo)</option>
+                    <option value="best">Best quality</option>
+                </select></div>
+            <div class="field" id="steps-field"><label>Steps</label><select id="steps"></select></div>
+            <div class="field"><label>Trigger word</label><input type="text" id="trigger" class="no-i18n"></div>
+            <div class="field"><label>Images</label><input type="number" id="count" min="1" max="200" value="20" onchange="makePlan()"></div>
+            <div class="field"><label>Resolution</label>
+                <select id="resolution"><option value="768">768</option><option value="1024" selected>1024</option><option value="1328">1328</option></select></div>
+            <div class="field"><label>Minimum likeness %</label><input type="number" id="threshold" min="0" max="100" value="60"></div>
+            <div class="field"><label>Tries per image</label><input type="number" id="tries" min="1" max="10" value="2"></div>
+            <div class="field"><label>Seed (0 = random)</label><input type="number" id="seed" value="0"></div>
+        </div>
+        <div class="warn hidden" id="fm-warn">Face likeness is not installed: the images are kept without checking the likeness. Enable it above the previews of the trainer (👤 Face likeness → Enable...).</div>
+        <p class="hint">One image per line: framing, outfit, place, light, angle and expression. Edit, add or delete lines freely; this text (with the trigger) is the caption of each image. Half indoors, half outdoors, mostly close-ups.</p>
+        <textarea id="plan" rows="10" class="no-i18n" style="margin-top:8px"></textarea>
+        <div class="row" style="margin-top:8px"><button type="button" class="btn" onclick="makePlan(true)">🎲 New plan</button></div>
+    </div>
+
+    <!-- 4. Generar -->
+    <div class="card">
+        <h2><span class="step">4</span><span>Generate</span></h2>
+        <div class="row">
+            <div class="field wide"><label>Output folder (new; the source is not touched)</label><input type="text" id="output" class="no-i18n"></div>
+            <label style="display:flex;align-items:center;gap:6px;color:var(--text)"><input type="checkbox" id="include-refs" checked style="width:18px;height:18px"> Copy the references too</label>
+        </div>
+        <p class="hint" id="hint-flux3klein">FLUX.3 Klein (NF4). Fast: NoiseToNova's turbo LoRA (PDD), 4 or 8 steps (about 12 or 25 s per image), with higher likeness but a more made-up, contrasted look. Best: 12 to 50 steps with CFG 3.5 (16 steps about 85 s per image, 28 about 2.5 min), softer and more natural. The most natural images: clean anatomy, new poses and the framing of the plan; the face drifts a little more than with Fibo 2.0. Downloaded the first time (~12 GB) if the FLUX.3 Klein trainer has not done it yet. FLUX Kommunity License: non-commercial use; commercial use of the images only for Qualifying Users (see the license). The images under the minimum likeness go to <b class="no-i18n">_rejected</b>.</p>
+        <p class="hint hidden" id="hint-fibo2">Fibo 2.0 Dev (NF4), 30 steps with CFG 5 (about 5 min per image). The highest likeness in our tests and clean anatomy, with a slightly more retouched look. Downloaded the first time (~13 GB) if the Fibo 2.0 trainer has not done it yet. CC BY-NC 4.0: non-commercial use only. The images under the minimum likeness go to <b class="no-i18n">_rejected</b>.</p>
+        <p class="hint hidden" id="hint-qwen21">Qwen-Image 2.1 (NF4), fast and with high likeness, but bodies can be out of proportion and it tends to copy the pose of the reference. Best quality: 20 steps, cleaner anatomy and higher likeness (about 40-70 s per image). Fast: Viggle's turbo LoRA, 4 steps (about 20-30 s), more deformed bodies. Each try is checked with the face likeness. Downloaded the first time (~22 GB with the text encoder) if the Qwen-Image 2.1 trainer has not done it yet. Qwen Research License: non-commercial use only. The images under the minimum likeness go to <b class="no-i18n">_rejected</b>.</p>
+        <p class="hint hidden" id="hint-klein9b">FLUX.2 Klein 9B (NF4) with kalle07's turbo LoRA, 4 steps (about 20 s per image). Natural anatomy, but in our tests the face drifts more than with Qwen-Image 2.1 and it does not always follow the framing. Downloaded the first time (~9 GB) if the FLUX.2 Klein 9B trainer has not done it yet. FLUX Non-Commercial License. The images under the minimum likeness go to <b class="no-i18n">_rejected</b>.</p>
+        <p class="hint hidden" id="hint-edit2511">Qwen-Image-Edit-2511 (NF4, Apache 2.0) with the Lightning LoRA, 4 steps per image; each try is checked with the face likeness. Downloaded the first time (~27 GB with the text encoder) if the Qwen-Image 2512 trainer has not done it yet. The images under the minimum likeness go to <b class="no-i18n">_rejected</b>.</p>
+        <label style="display:flex;align-items:flex-start;gap:8px;color:var(--text);margin-top:10px;cursor:pointer">
+            <input type="checkbox" id="consent" style="width:20px;height:20px;flex:0 0 auto;margin:0" onchange="syncConsent()">
+            <span>I have the right to use the images of this person, or their permission, to create new images of them.</span></label>
+        <div class="row" style="margin-top:8px">
+            <button type="button" class="btn go" id="btn-generate" onclick="run('generate')" disabled>🧬 Generate dataset</button>
+            <button type="button" class="btn bad hidden" id="btn-stop" onclick="stopRun()">■ Stop</button>
+            <button type="button" class="btn ok hidden" id="btn-use" onclick="useDataset()">📂 Use in Dataset Manager</button>
+        </div>
+        <div class="progress hidden" id="progress"><i></i></div>
+        <div class="msg no-i18n" id="msg"></div>
+        <pre class="console no-i18n hidden" id="console"></pre>
+        <div class="grid no-i18n" id="out-grid"></div>
+    </div>
+</div>
+
+<!-- Explorador de carpetas web (sin diálogo nativo: RunPod, Linux sin escritorio, móvil). -->
+<div class="lb no-i18n" id="fb">
+    <div class="card" style="width:100%;max-width:560px;max-height:calc(100vh - 32px);overflow:auto;margin:0">
+        <div id="fb-drives" class="row" style="gap:6px"></div>
+        <div id="fb-path" style="margin:10px 0;word-break:break-all;color:var(--accent)"></div>
+        <div id="fb-list"></div>
+        <div class="row" style="margin-top:12px">
+            <button type="button" class="btn" onclick="$('fb').classList.remove('open')"></button>
+            <button type="button" class="btn go" id="fb-use"></button>
+        </div>
+    </div>
+</div>
+
+<!-- Visor: una imagen generada a tamaño completo, con su % y su caption. ← → o los botones para pasar. -->
+<div class="lb no-i18n" id="lb">
+    <img id="lb-img" alt="">
+    <div class="lb-info" id="lb-info"></div>
+    <div class="lb-nav">
+        <button type="button" class="btn" data-lb="-1">←</button>
+        <button type="button" class="btn" data-lb="0">✕</button>
+        <button type="button" class="btn" data-lb="1">→</button>
+    </div>
+</div>
+
+<script>
+    const $ = id => document.getElementById(id);
+    let source = { path: '', images: [] };
+    let selected = new Set();
+    let refCaptions = {};
+    let faceMatch = false;
+    let logTotal = 0, polling = null, lastMode = null, outputDir = '', running = false;
+
+    function syncModel() {
+        for (const m of ['qwen21', 'flux3klein', 'fibo2', 'klein9b', 'edit2511']) $('hint-' + m).classList.toggle('hidden', $('model').value !== m);
+        // Qwen-Image 2.1 y FLUX.3 tienen las dos calidades; los otros van siempre con sus pasos fijos.
+        $('quality-field').classList.toggle('hidden', !['qwen21', 'flux3klein'].includes($('model').value));
+        $('steps-field').classList.toggle('hidden', $('model').value !== 'flux3klein');
+    }
+
+    // Pasos de FLUX.3: el turbo PDD solo admite 4 u 8; sin turbo, de 12 a 50 (por defecto 8 / 28).
+    function syncSteps(value) {
+        const fast = $('quality').value === 'fast';
+        const opts = fast ? [8, 4] : [12, 16, 20, 28, 36, 50];
+        const keep = +(value ?? $('steps').value);
+        $('steps').innerHTML = opts.map(n => `<option value="${n}">${n}</option>`).join('');
+        $('steps').value = String(opts.includes(keep) ? keep : (fast ? 8 : 28));
+    }
+
+    // Generar solo con la casilla de permiso marcada (el servidor también la exige).
+    function syncConsent() { $('btn-generate').disabled = running || !$('consent').checked; }
+
+    const img = path => '/api/forge/image?path=' + encodeURIComponent(path);
+    const join = (dir, file) => dir.replace(/[\\/]+$/, '') + (dir.includes('\\') ? '\\' : '/') + file;
+    const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    async function api(url, body) {
+        const res = await fetch(url, body === undefined ? { cache: 'no-store' }
+            : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        return res.json().catch(() => ({ ok: false, error: 'HTTP ' + res.status }));
+    }
+
+    function setMsg(text, err) { $('msg').textContent = text || ''; $('msg').className = 'msg no-i18n' + (err ? ' err' : ''); }
+
+    async function init() {
+        const data = await api('/api/forge/settings');
+        const s = data.settings;
+        faceMatch = data.face_match;
+        $('fm-warn').classList.toggle('hidden', faceMatch);
+        $('source').value = s.source_dir;
+        $('trigger').value = s.trigger_word || '';
+        $('model').value = s.model || 'flux3klein';
+        $('quality').value = s.quality || 'fast';
+        syncSteps(s.steps);
+        syncModel();
+        $('subject').value = s.subject || 'person';
+        $('identity').value = s.identity || '';
+        $('count').value = s.count; $('resolution').value = String(s.resolution);
+        $('threshold').value = s.threshold; $('tries').value = s.max_tries; $('seed').value = s.seed;
+        $('include-refs').checked = s.include_references !== false;
+        refCaptions = s.ref_captions || {};
+        selected = new Set(s.references || []);
+        await loadSource(true);
+        if (s.output_dir) $('output').value = s.output_dir;
+        if (s.plan && s.plan.length) $('plan').value = s.plan.map(p => p.text).join('\n');
+        else makePlan();
+        poll();
+    }
+
+    // Volver al entrenador: la pestaña se abrió con window.open y se puede cerrar; si no, a su página.
+    function closeForge() {
+        window.close();
+        setTimeout(() => { location.href = '/'; }, 200);
+    }
+
+    // Como «Browse» en el entrenador: diálogo nativo y, si no lo hay o se cancela, el explorador web.
+    async function browseFolder() {
+        const current = $('source').value.trim();
+        try {
+            const res = await fetch('/api/select-folder', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                            body: JSON.stringify({ initial_dir: current }) });
+            const data = await res.json();
+            if (data.status === 'ok' && data.path) { $('source').value = data.path; loadSource(); return; }
+        } catch (e) {}
+        browseWeb(current);
+    }
+
+    async function browseWeb(path) {
+        const data = await api('/api/browse-dir?path=' + encodeURIComponent(path || ''));
+        $('fb-drives').innerHTML = (data.drives || []).map(d => `<button type="button" class="btn" data-p="${esc(d)}">${esc(d)}</button>`).join('');
+        $('fb-path').textContent = data.current_path + (data.image_count ? `  ·  ${data.image_count} img` : '');
+        $('fb-list').innerHTML = [`<div class="refcap" style="cursor:pointer" data-p="${esc(data.parent_path)}">⬆ ..</div>`]
+            .concat((data.directories || []).map(d => `<div class="refcap" style="cursor:pointer" data-p="${esc(d.path)}">📁 ${esc(d.name)}</div>`)).join('');
+        $('fb').querySelector('.btn:not(.go)').textContent = t('Cancel');
+        $('fb-use').textContent = '✓ ' + t('Use this folder');
+        $('fb-use').onclick = () => { $('fb').classList.remove('open'); $('source').value = data.current_path; loadSource(); };
+        $('fb').classList.add('open');
+    }
+    $('fb').addEventListener('click', e => {
+        const p = e.target.closest('[data-p]');
+        if (p) browseWeb(p.dataset.p);
+        else if (e.target === $('fb')) $('fb').classList.remove('open');
+    });
+
+    async function loadSource(keep) {
+        const data = await api('/api/forge/list?path=' + encodeURIComponent($('source').value.trim()));
+        source = data;
+        if (!data.ok) { $('src-grid').innerHTML = `<p class="hint">${esc(t('Folder not found.'))}</p>`; return; }
+        $('source').value = data.path;
+        const names = new Set(data.images.map(i => i.file));
+        selected = new Set([...selected].filter(n => names.has(n)));
+        if (!keep || !selected.size) selected = new Set(data.images.slice(0, 2).map(i => i.file));
+        if (!keep || !$('output').value) $('output').value = data.default_output;
+        renderSource();
+    }
+
+    function renderSource() {
+        $('src-grid').innerHTML = source.images.map(i => `
+            <div class="thumb ${selected.has(i.file) ? 'sel' : ''}" data-f="${esc(i.file)}">
+                <img src="${img(join(source.path, i.file))}&v=${i.mtime}" alt="" loading="lazy">
+                <span class="tick">✓</span>
+                <div class="cap ${i.caption || refCaptions[i.file] ? '' : 'nocap'}" title="${esc(i.caption || refCaptions[i.file] || '')}">${esc(i.caption || refCaptions[i.file] || t('no caption'))}</div>
+            </div>`).join('') || `<p class="hint">${esc(t('No images in this folder.'))}</p>`;
+        renderRefCaps();
+    }
+
+    $('src-grid').addEventListener('click', e => {
+        const card = e.target.closest('.thumb');
+        if (!card) return;
+        const f = card.dataset.f;
+        selected.has(f) ? selected.delete(f) : selected.add(f);
+        card.classList.toggle('sel', selected.has(f));
+        renderRefCaps();
+    });
+
+    // Captions de las referencias sin .txt: los escribe Analizar y se pueden corregir aquí.
+    function renderRefCaps() {
+        const missing = source.images.filter(i => selected.has(i.file) && !i.caption);
+        $('refcaps').innerHTML = missing.map(i => `
+            <div class="refcap"><img src="${img(join(source.path, i.file))}" alt="">
+            <textarea rows="3" data-f="${esc(i.file)}" placeholder="${esc(t('Analyze writes this caption.'))}">${esc(refCaptions[i.file] || '')}</textarea></div>`).join('');
+    }
+    $('refcaps').addEventListener('input', e => { if (e.target.dataset.f) refCaptions[e.target.dataset.f] = e.target.value.trim(); });
+
+    async function makePlan(reseed) {
+        if (reseed) $('seed').value = Math.floor(Math.random() * 1e6);
+        const data = await api('/api/forge/plan', { count: +$('count').value || 20, subject: $('subject').value, seed: +$('seed').value || 0 });
+        $('plan').value = data.plan.map(p => p.text).join('\n');
+    }
+
+    function settings() {
+        return {
+            source_dir: source.path, references: [...selected], output_dir: $('output').value.trim(),
+            trigger_word: $('trigger').value.trim(), model: $('model').value, quality: $('quality').value, steps: +$('steps').value, subject: $('subject').value, identity: $('identity').value.trim(),
+            count: +$('count').value || 20, resolution: +$('resolution').value, threshold: +$('threshold').value,
+            max_tries: +$('tries').value || 1, seed: +$('seed').value || 0, include_references: $('include-refs').checked,
+            ref_captions: refCaptions,
+            plan: $('plan').value.split('\n').map(s => s.trim()).filter(Boolean).map(text => ({ text })),
+        };
+    }
+
+    async function run(mode) {
+        setMsg('');
+        const data = await api('/api/forge/run', { mode, settings: settings(), consent: $('consent').checked });
+        if (!data.ok) { setMsg(data.error || 'Error', true); return; }
+        lastMode = mode; logTotal = 0; $('console').textContent = '';
+        if (mode === 'generate') $('out-grid').innerHTML = '';
+        poll();
+    }
+
+    async function stopRun() { await api('/api/forge/stop', {}); }
+
+    async function poll() {
+        clearTimeout(polling);
+        const data = await api('/api/forge/status?since=' + logTotal);
+        const st = data.status || {};
+        if (data.lines && data.lines.length) {
+            const c = $('console');
+            c.classList.remove('hidden');
+            c.textContent += data.lines.join('\n') + '\n';
+            c.scrollTop = c.scrollHeight;
+        }
+        logTotal = data.total || logTotal;
+        const busy = !!st.running;
+        running = busy;
+        $('btn-analyze').disabled = busy;
+        syncConsent();
+        $('btn-stop').classList.toggle('hidden', !busy);
+        if (st.message) setMsg(st.message, st.phase === 'error');
+
+        if (st.mode === 'generate' && st.total) {
+            $('progress').classList.remove('hidden');
+            $('progress').firstElementChild.style.width = Math.round(100 * (st.items || []).length / st.total) + '%';
+            outputDir = st.output_dir || outputDir;
+            renderResults(st.items || []);
+            $('btn-use').classList.toggle('hidden', busy || !(st.items || []).some(i => i.ok));
+        }
+        // Análisis recién terminado: rellena la ficha y los captions.
+        if (st.mode === 'analyze' && st.phase === 'done' && st.result && lastMode === 'analyze') {
+            lastMode = null;
+            $('subject').value = st.result.subject;
+            if (st.result.identity) $('identity').value = st.result.identity;
+            Object.assign(refCaptions, st.result.captions || {});
+            renderSource();
+            makePlan();
+        }
+        polling = setTimeout(poll, busy ? 1500 : 6000);
+    }
+
+    let results = [], lbIndex = -1;
+    const resultSrc = i => img(i.ok ? join(outputDir, i.file) : join(join(outputDir, '_rejected'), i.file)) + '&s=' + i.seed;
+    const scoreLabel = i => i.score == null ? '–' : Math.round(i.score) + '%';
+
+    function renderResults(items) {
+        results = items;
+        const grid = $('out-grid');
+        if (grid.childElementCount === items.length) return;
+        grid.innerHTML = items.map((i, n) => {
+            const cls = i.score == null ? 'b-none' : i.ok ? 'b-ok' : 'b-bad';
+            return `<div class="thumb" data-i="${n}"><img src="${resultSrc(i)}" alt="" loading="lazy">
+                <span class="badge ${cls}">👤 ${scoreLabel(i)}</span><div class="cap" title="${esc(i.text)}">${esc(i.text)}</div></div>`;
+        }).join('');
+    }
+
+    function showResult(n) {
+        if (!results.length) return;
+        lbIndex = (n + results.length) % results.length;
+        const i = results[lbIndex];
+        $('lb-img').src = resultSrc(i);
+        $('lb-info').innerHTML = `<b>${esc(i.file)} · 👤 ${scoreLabel(i)} · ${esc(i.ok ? t('kept') : t('rejected'))}</b><br>${esc(i.text)}`;
+        $('lb').classList.add('open');
+    }
+    function closeResult() { $('lb').classList.remove('open'); lbIndex = -1; }
+
+    $('out-grid').addEventListener('click', e => { const c = e.target.closest('.thumb'); if (c) showResult(+c.dataset.i); });
+    $('lb').addEventListener('click', e => {
+        const b = e.target.closest('[data-lb]');
+        if (b) { +b.dataset.lb ? showResult(lbIndex + +b.dataset.lb) : closeResult(); }
+        else if (e.target === $('lb')) closeResult();
+    });
+    document.addEventListener('keydown', e => {
+        if (lbIndex < 0) return;
+        if (e.key === 'Escape') closeResult();
+        else if (e.key === 'ArrowLeft') showResult(lbIndex - 1);
+        else if (e.key === 'ArrowRight') showResult(lbIndex + 1);
+    });
+
+    // El entrenador que abrió esta página cambia su carpeta del dataset (dataset_forge_button.js).
+    function useDataset() {
+        const msg = { type: 'loralab-forge-done', path: outputDir };
+        try { new BroadcastChannel('loralab-forge').postMessage(msg); } catch (e) {}
+        try { if (window.opener) window.opener.postMessage(msg, location.origin); } catch (e) {}
+        setMsg(t('Sent to the trainer: {path}', { path: outputDir }));
+    }
+
+    init();
+</script>
+</body>
+</html>
