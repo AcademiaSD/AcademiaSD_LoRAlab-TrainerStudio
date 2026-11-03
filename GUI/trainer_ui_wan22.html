@@ -350,6 +350,8 @@
                         <label>Resolution (px²):</label>
                         <select id="target_area_select" onchange="syncResolution(this.value)"
                                 title="Area of every sample; each one keeps its own aspect ratio. 480p is Wan's native training size and the one that fits 16 GB with video. 720p costs about 2.3 times more per step.">
+                            <option value="200704">448 x 448 (200,704 px²)</option>
+                            <option value="230400">480 x 480 (230,400 px²)</option>
                             <option value="262144">512 x 512 (262,144 px²)</option>
                             <option value="399360" selected>832 x 480 · 480p (399,360 px²)</option>
                             <option value="522240">960 x 544 (522,240 px²)</option>
@@ -999,7 +1001,7 @@
                     if (p.target_area) {
                         document.getElementById('precache_target_area').value = p.target_area;
                         const sel = document.getElementById('target_area_select');
-                        if (['262144', '399360', '522240', '921600'].includes(String(p.target_area))) {
+                        if (['200704', '230400', '262144', '399360', '522240', '921600'].includes(String(p.target_area))) {
                             sel.value = String(p.target_area);
                         } else {
                             sel.value = 'custom';
@@ -1077,7 +1079,7 @@
                     if (data.target_area !== undefined) {
                         document.getElementById('precache_target_area').value = data.target_area;
                         const sel = document.getElementById('target_area_select');
-                        if (['262144', '399360', '522240', '921600'].includes(String(data.target_area))) {
+                        if (['200704', '230400', '262144', '399360', '522240', '921600'].includes(String(data.target_area))) {
                             sel.value = String(data.target_area);
                             document.getElementById('precache_target_area').style.display = 'none';
                         } else {
