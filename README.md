@@ -8,6 +8,11 @@
 
 What was added, newest first. Each entry links to its commit.
 
+**2026-11-03**
+
+- **Wan 2.2 on 12 GB of VRAM**: the Pre-Cache has 448 x 448 and 480 x 480. At 448 x 448 (rank 8, both experts) training peaks at 10.4 GB, and 1-frame previews stay below that ([details](#wan-22-t2v-a14b--video-and-image-loras-high--low-noise)) [`e95a6ef`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/e95a6ef)
+- Launcher: the browser opens once the launcher is ready, without the error page first, and a trainer opens about 1.3 s sooner [`1dcb7f1`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/1dcb7f1)
+
 **2026-11-02**
 
 - **Dataset Forge: a character dataset from a few images, even one** — 🧬 in the Dataset Manager opens it: it captions the references, writes a character sheet, plans outfits, places and framings, and generates them with FLUX.3 Klein (or Fibo 2.0 / Qwen-Image 2.1 / FLUX.2 Klein 9B / Qwen-Image-Edit-2511), keeping only the images that pass the face likeness ([details](#-dataset-forge))
@@ -196,7 +201,7 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 | **SDXL** | Image LoRAs for SDXL Base, Pony, Illustrious, NoobAI, Juggernaut, RealVis or your own SDXL checkpoint | **4 GB** (NF4) / 12 GB (BF16) |
 | **LTX-2.3** (also LTX-2.5) | Character and style LoRAs for the LTX video model, trained from images | 12 GB |
 | **MiniMax-H3** | Video LoRAs from images, clips and audio, plus training-free **RefMods** | 8 GB |
-| **Wan 2.2 (T2V-A14B)** | Video and image LoRAs from images and clips, for the **high noise** and/or **low noise** expert | **16 GB** (images and 17-frame clips at 480p, measured) |
+| **Wan 2.2 (T2V-A14B)** | Video and image LoRAs from images and clips, for the **high noise** and/or **low noise** expert | **12 GB** (images at 448×448 with image previews), **16 GB** (17-frame clips at 480p), measured |
 | **YuE2-3B** *(experimental / beta)* | Song LoRAs: the AR clones the singer's voice, the NAR learns lyrics and phrasing | ~8 GB (NF4, measured on NAR) |
 
 ---
@@ -212,7 +217,7 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 5. **Desde otro equipo:** el botón **🌐 Remote access** del lanzador abre el entrenador a tu red con usuario y contraseña. Con **⬆ Subir** (o arrastrando archivos o un `.zip` al Dataset Manager) mandas el dataset desde ese equipo, y con **⬇ Descargar LoRA** te bajas el resultado.
 6. **Previsualizaciones nítidas en ComfyUI:** algunos de estos modelos son lentos al generar, y conviene ver el resultado de forma anticipada, mientras se genera, para cancelar si no va bien. Para eso hace falta una buena previsualización. Mi recomendación: al usar tus LoRAs de Qwen-Image 2.1, Krea 2 o FLUX.2 / Klein 9B, pon el nodo **Model Preview Override** de [KJNodes](https://github.com/kijai/ComfyUI-KJNodes) con el TAE de AcademiaSD correspondiente ([Qwen-Image 2.1](https://huggingface.co/AcademiaSD/TAE-Qwen-Image-2.1) · [Krea 2](https://huggingface.co/AcademiaSD/TAE-Krea-2) · [FLUX.2](https://huggingface.co/AcademiaSD/TAE_Flux2_AcademiaSD)) en `ComfyUI/models/vae_approx/`. Detalles en la sección *Sharp previews in ComfyUI*.
 7. **Sin GPU potente:** entrena en la nube con **[RunPod](https://console.runpod.io/deploy?template=lfxvtg5rrb&ref=jbvdshm0)**. Es una plantilla ya preparada: eliges una GPU con CUDA 13, entras con el usuario `loralab` y la contraseña que aparece en *Logs → Container*, y al terminar paras y borras el pod. Detalles en la sección *RunPod*.
-8. **Requisitos:** Windows 10/11, GPU NVIDIA **RTX 20xx / GTX 16xx o posterior** con driver **580 o superior** (o AMD **RX 7000 / RX 9000** de 16 GB, experimental), 8 GB de VRAM (4 GB para Anima y SDXL en NF4, 12 GB para LTX-2.3, FLUX.2 Klein 9B, Ideogram 4 y SDXL en BF16, 16 GB para Wan 2.2) y 16 GB de RAM (32 GB recomendados).
+8. **Requisitos:** Windows 10/11, GPU NVIDIA **RTX 20xx / GTX 16xx o posterior** con driver **580 o superior** (o AMD **RX 7000 / RX 9000** de 16 GB, experimental), 8 GB de VRAM (4 GB para Anima y SDXL en NF4, 12 GB para LTX-2.3, FLUX.2 Klein 9B, Ideogram 4, SDXL en BF16 y Wan 2.2 con imágenes a 448×448, 16 GB para Wan 2.2 con vídeo) y 16 GB de RAM (32 GB recomendados).
 
 **Cola de trabajos:** con un entrenamiento en marcha, *Iniciar / Reanudar* o *Iniciar Pre-Caché* en cualquier entrenador pregunta si añadirlo a la cola, con una copia de los ajustes de ese momento. Los trabajos se ejecutan uno tras otro en la GPU. El botón **Cola** del lanzador y de cada entrenador abre la página de la cola: lo que entrena ahora (progreso, tiempo restante y curva de loss) y lo que espera, que puedes reordenar arrastrando, pausar, continuar o quitar. Pausar guarda un checkpoint y deja el trabajo pausado en la cola; continuar sigue desde ese paso. Mientras un entrenador entrena, **➕ Nuevo entrenamiento en cola** abre un borrador del mismo entrenador en otro puerto para preparar el siguiente sin tocar el que entrena (ponle otro nombre de proyecto). Si un trabajo falla, se queda en la lista en rojo diciendo por qué (no se encuentra la pre-caché o el dataset, falta VRAM…); corrígelo y pulsa **↻** para reintentarlo. **✎** en un trabajo de la cola abre su entrenador con sus ajustes para cambiarlos: el botón de empezar pasa a ser **💾 Guardar cambios en la cola**. Mientras se hace la pre-caché, *Iniciar / Reanudar* sigue disponible y manda el entrenamiento a la cola. **⏻ Pausar todo y salir**, abajo en el lanzador, pausa el entrenamiento en curso guardando su checkpoint y cierra todo desde el navegador; al volver a abrir el lanzador la cola sigue sola donde estaba, empezando por ese entrenamiento. En RunPod y otras nubes el lanzador sigue abierto, con la cola pausada.
 
@@ -226,7 +231,7 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 
 **MOSS-Image:** nuevo entrenador de LoRAs de imagen para MOSS-Image de OpenMOSS (Apache 2.0), sobre **Base** (el recomendado para LoRAs) o **SFT**, con la misma pre-caché para los dos. Entrena a 512² con menos de 6 GB de VRAM. El text encoder (Qwen3.5-9B) se elige en el pre-caché: BF16 exacto repartido entre GPU y RAM (por defecto), INT8 o NF4. Las previews pueden usar el adaptador turbo de 4 pasos de darask0 (unos 4 s por imagen en vez de 43 s). Detalles en la sección *MOSS-Image*.
 
-**Wan 2.2:** nuevo entrenador de LoRAs de vídeo e imagen para **Wan 2.2 T2V-A14B** (Apache 2.0), con imágenes y clips en el mismo dataset. Wan 2.2 tiene dos expertos de 14B: el de **ruido alto** (composición y movimiento) y el de **ruido bajo** (detalle, caras, estilo). *Experto a entrenar* elige cuál aprende: ruido bajo (basta para personajes y estilos), ruido alto (movimientos nuevos) o los dos (por defecto), con un LoRA para cada uno (`_high_noise` / `_low_noise`); en ComfyUI cada uno va en su modelo. Los expertos se descargan ya en NF4 (~7,6 GB cada uno) de `AcademiaSD/Wan22-T2V-A14B-NF4-for-LoRA-Training`; si ese repo aún no tiene uno, se descarga del original shard a shard (57 GB en FP32), se convierte a NF4 en tu PC y se borra cada shard. Las previews pueden usar el LoRA turbo lightx2v (12 pasos, unos 2 minutos por clip de 1 s). Los clips necesitan **ffmpeg** en el PATH. Detalles en la sección *Wan 2.2*.
+**Wan 2.2:** nuevo entrenador de LoRAs de vídeo e imagen para **Wan 2.2 T2V-A14B** (Apache 2.0), con imágenes y clips en el mismo dataset. Wan 2.2 tiene dos expertos de 14B: el de **ruido alto** (composición y movimiento) y el de **ruido bajo** (detalle, caras, estilo). *Experto a entrenar* elige cuál aprende: ruido bajo (basta para personajes y estilos), ruido alto (movimientos nuevos) o los dos (por defecto), con un LoRA para cada uno (`_high_noise` / `_low_noise`); en ComfyUI cada uno va en su modelo. Los expertos se descargan ya en NF4 (~7,6 GB cada uno) de `AcademiaSD/Wan22-T2V-A14B-NF4-for-LoRA-Training`; si ese repo aún no tiene uno, se descarga del original shard a shard (57 GB en FP32), se convierte a NF4 en tu PC y se borra cada shard. Las previews pueden usar el LoRA turbo lightx2v (12 pasos, unos 2 minutos por clip de 1 s). Con 12 GB de VRAM: pre-caché a 448 x 448 y previews de 1 frame (10,4 GB de pico con rank 8 y los dos expertos). Los clips necesitan **ffmpeg** en el PATH. Detalles en la sección *Wan 2.2*.
 
 **Parecido facial:** encima de las previews, **👤 Parecido facial → Activar...** pone en cada preview (y sobre su círculo en la gráfica del entrenamiento) el % de parecido de su cara con la del dataset; la misma persona suele pasar del 40-50%. No se descarga por defecto: los modelos de InsightFace son solo para investigación no comercial, y antes de descargarlos hay que aceptar en una ventana que se usan bajo tu responsabilidad y sin fines comerciales. Funciona en la CPU, también en RunPod. Detalles en la sección *Face likeness in the previews*.
 
@@ -271,7 +276,7 @@ The automatic captioner adds, only the first time you use it: **nothing** for Kr
 | | Minimum | Recommended |
 | :--- | :--- | :--- |
 | **OS** | Windows 10 / 11, or 64-bit Linux ([docs/Linux.md](docs/Linux.md)) | Windows 11 |
-| **GPU** | NVIDIA **RTX 20xx / GTX 16xx or newer** (compute capability 7.5+) with **8 GB VRAM** (4 GB for Anima and SDXL in NF4, 12 GB for LTX-2.3, FLUX.2 Klein 9B, Ideogram 4 and SDXL in BF16, 16 GB for Wan 2.2) | 12–24 GB VRAM |
+| **GPU** | NVIDIA **RTX 20xx / GTX 16xx or newer** (compute capability 7.5+) with **8 GB VRAM** (4 GB for Anima and SDXL in NF4, 12 GB for LTX-2.3, FLUX.2 Klein 9B, Ideogram 4, SDXL in BF16 and Wan 2.2 with images at 448×448, 16 GB for Wan 2.2 with video) | 12–24 GB VRAM |
 | **AMD GPU** *(experimental)* | Radeon **RX 7000 / RX 9000** or Ryzen AI Max (Strix Halo) with 16 GB of VRAM, using the AMD installer (see *Installation*). Confirmed on an RX 7800 XT 16 GB under Windows with MiniMax-H3 | — |
 | **Driver** | NVIDIA **580 or newer** (CUDA 13). AMD: a recent Adrenalin driver on Windows, or `amdgpu` on Linux | Latest |
 | **RAM** | 16 GB | 32 GB |
@@ -771,6 +776,8 @@ Each expert exports its own LoRA, named `_high_noise` / `_low_noise`. In ComfyUI
 | Image | ~3 | 10.0 GB |
 | Clip, 17 frames | ~18.5 | 12.0 GB |
 | Clip, 33 frames | ~43 | 14.3 GB (does not fit next to a desktop on 16 GB; lower the resolution or use a bigger card) |
+
+**12 GB cards:** pre-cache at **448 x 448** and keep the previews at 1 frame. Measured with rank 8 / alpha 8 and both experts: 10.4 GB peak while training, a bit less for an image preview. A 17-frame video preview goes slightly over 12 GB. 480 x 480 is in between; 512 x 512 is just over 12 GB.
 
 On Windows a sample that does not fit in VRAM is left out with a message instead of letting the driver spill into system RAM, where a step takes 30 times longer. More in [docs/README_Wan22.md](docs/README_Wan22.md).
 

@@ -64,6 +64,10 @@ The expert that is not trained is only downloaded if you convert it (train it on
 | Clip 33 frames | 14.3 GB (15.6 GB reserved) | ~43 s — does not fit next to a desktop on a 16 GB card |
 | Clip 33 frames, before the two-half checkpoint | 16.6 GB | 544 s (driver spilling into system RAM) |
 
+### 12 GB of VRAM
+
+Images pre-cached at **448 x 448** (200,704 px²), rank 8 / alpha 8, both experts, Activation Offload on: **10.37 GB** peak while training. A 1-frame preview uses a bit less; a 17-frame video preview goes slightly over 12 GB, so keep *Preview Frames* at 1 on a 12 GB card. 480 x 480 (230,400 px²) sits in between; 512 x 512 is just over 12 GB.
+
 The expert itself takes 8.1 GB on the GPU (7.2 GB of NF4 weights plus the LoRA and its optimizer). With *Both*, each expert swap adds about 4 s.
 
 ## Previews
