@@ -1398,7 +1398,7 @@
   "Compares the face in each preview with the dataset. Optional: not downloaded by default.": "Confronta il volto di ogni anteprima con il dataset. Facoltativo: non viene scaricato per impostazione predefinita.",
   "Enable...": "Attiva...",
   "No faces found in the dataset images.": "Nessun volto trovato nelle immagini del dataset.",
-  "Reference: {faces} faces in {images} dataset images. The same person usually scores above 40-50%.": "Riferimento: {faces} volti in {images} immagini del dataset. La stessa persona di solito supera il 40-50%.",
+  "Reference: {faces} faces in {images} dataset images. In generated images, 45% or more is a strong likeness and 30-45% a partial one.": "Riferimento: {faces} volti in {images} immagini del dataset. Nelle immagini generate, 45% o più è una forte somiglianza e 30-45% una somiglianza parziale.",
   "Similarity with the faces of the dataset.": "Somiglianza con i volti del dataset.",
   "Show %": "Mostra %",
   "Face likeness: terms of use": "Somiglianza del volto: condizioni d'uso",

@@ -876,8 +876,8 @@
         ctx.font = '700 10px Segoe UI, sans-serif';
         const w = ctx.measureText(text).width + 10, h = 15;
         y = Math.max(minY + h / 2 + 1, y);
-        ctx.fillStyle = v >= 60 ? 'rgba(5, 150, 105, 0.92)' : v >= 40 ? 'rgba(180, 83, 9, 0.92)' : 'rgba(185, 28, 28, 0.92)';
-        ctx.strokeStyle = v >= 60 ? '#34d399' : v >= 40 ? '#fbbf24' : '#f87171';
+        ctx.fillStyle = v >= 45 ? 'rgba(5, 150, 105, 0.92)' : v >= 30 ? 'rgba(180, 83, 9, 0.92)' : 'rgba(185, 28, 28, 0.92)';
+        ctx.strokeStyle = v >= 45 ? '#34d399' : v >= 30 ? '#fbbf24' : '#f87171';
         ctx.lineWidth = 1;
         ctx.beginPath();
         if (ctx.roundRect) ctx.roundRect(x - w / 2, y - h / 2, w, h, h / 2); else ctx.rect(x - w / 2, y - h / 2, w, h);

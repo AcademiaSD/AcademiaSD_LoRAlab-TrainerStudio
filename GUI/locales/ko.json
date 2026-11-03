@@ -1398,7 +1398,7 @@
   "Compares the face in each preview with the dataset. Optional: not downloaded by default.": "각 미리보기의 얼굴을 데이터셋과 비교합니다. 선택 사항: 기본으로 다운로드되지 않습니다.",
   "Enable...": "활성화...",
   "No faces found in the dataset images.": "데이터셋 이미지에서 얼굴을 찾지 못했습니다.",
-  "Reference: {faces} faces in {images} dataset images. The same person usually scores above 40-50%.": "기준: 데이터셋 이미지 {images}장에서 얼굴 {faces}개. 같은 사람은 보통 40-50%를 넘습니다.",
+  "Reference: {faces} faces in {images} dataset images. In generated images, 45% or more is a strong likeness and 30-45% a partial one.": "기준: 데이터셋 이미지 {images}장에서 얼굴 {faces}개. 생성 이미지에서는 45% 이상이면 많이 닮았고 30-45%는 부분적으로 닮았습니다.",
   "Similarity with the faces of the dataset.": "데이터셋 얼굴과의 유사도.",
   "Show %": "% 표시",
   "Face likeness: terms of use": "얼굴 유사도: 이용 조건",

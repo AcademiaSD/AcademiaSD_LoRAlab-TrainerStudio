@@ -13,7 +13,8 @@ research only, so they are NOT downloaded by default: the user asks for them fro
 accepting, in a popup, that they use them under their own responsibility and not commercially.
 
 Referencia: media de los embeddings de la cara más grande de cada imagen del dataset.
-Parecido de una preview: coseno (x100) de su cara más parecida contra esa referencia.
+Parecido de una preview: coseno (x100) de su cara más parecida contra esa referencia. De una preview de
+vídeo se mira su primer fotograma (con el ffmpeg del PATH o el de imageio-ffmpeg).
 Reference: mean embedding of the largest face in each dataset image. A preview's likeness: cosine
 (x100) of its closest face against that reference.
 
@@ -41,6 +42,7 @@ MODEL_DIR = project_layout.MODELS_DIR / "FaceMatch-InsightFace"
 MODEL_URL = "https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip"
 MODEL_FILES = ("det_10g.onnx", "w600k_r50.onnx")
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+VIDEO_EXTS = {".mp4", ".webm", ".mov", ".mkv"}
 LICENSE_NOTE = (
     "InsightFace buffalo_l (SCRFD det_10g + ArcFace w600k_r50)\n"
     "Source: " + MODEL_URL + "\n\n"
@@ -281,6 +283,29 @@ class Scorer:
         return None if best is None else round(max(0.0, min(1.0, best)) * 100, 1)
 
 
+def _ffmpeg():
+    exe = shutil.which("ffmpeg")
+    if exe:
+        return exe
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        return None
+
+
+def _first_frame(path):
+    """Primer fotograma de un vídeo como imagen PIL, o None sin ffmpeg."""
+    import io
+    from PIL import Image
+    exe = _ffmpeg()
+    if not exe:
+        return None
+    out = subprocess.run([exe, "-v", "error", "-i", str(path), "-frames:v", "1", "-f", "image2pipe",
+                          "-vcodec", "png", "-"], capture_output=True, timeout=60, check=True).stdout
+    return Image.open(io.BytesIO(out)).convert("RGB")
+
+
 def _image_files(folder):
     folder = Path(folder)
     if not folder.is_dir():
@@ -321,12 +346,14 @@ def scores(dataset_dir, output_dir, names):
         out = Path(output_dir).resolve()
         for name in names:
             path = (out / name).resolve()
-            if path.parent != out or not path.is_file() or path.suffix.lower() not in IMAGE_EXTS:
+            video = path.suffix.lower() in VIDEO_EXTS
+            if path.parent != out or not path.is_file() or not (video or path.suffix.lower() in IMAGE_EXTS):
                 continue
             key = (str(path), path.stat().st_mtime_ns)
             if key not in _scores:
                 try:
-                    faces = eng.faces(path)
+                    src = _first_frame(path) if video else path
+                    faces = eng.faces(src) if src is not None else []
                 except Exception:
                     faces = []
                 best = max((float(f @ ref) for f in faces), default=None)

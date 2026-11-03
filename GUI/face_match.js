@@ -93,7 +93,7 @@
     let chartBusy = false;
     async function want(names) {
         if (!active()) return;
-        names.filter(n => /\.(png|jpe?g|webp|bmp)$/i.test(n) && !(n in byName)).forEach(n => wanted.add(n));
+        names.filter(n => /\.(png|jpe?g|webp|bmp|mp4|webm|mov|mkv)$/i.test(n) && !(n in byName)).forEach(n => wanted.add(n));
         if (chartBusy || !wanted.size) return;
         chartBusy = true;
         const todo = [...wanted];
@@ -106,8 +106,12 @@
 
     function cards() {
         return [...gallery.querySelectorAll('.preview-card')].map(card => {
-            const img = card.querySelector('img');
-            return img ? { card, img, name: img.getAttribute('alt') || '', src: img.getAttribute('src') || '' } : null;
+            // Un vídeo no tiene alt: su nombre sale de /api/preview/<nombre>?v=... (el servidor mira su primer fotograma).
+            const img = card.querySelector('img, video');
+            if (!img) return null;
+            const src = img.getAttribute('src') || '';
+            const fromSrc = decodeURIComponent((src.split('?')[0].split('#')[0].split('/').pop()) || '');
+            return { card, img, name: img.getAttribute('alt') || (img.tagName === 'VIDEO' ? fromSrc : ''), src };
         }).filter(c => c && c.name);
     }
 
@@ -122,7 +126,7 @@
                 c.card.appendChild(badge);
             }
             const v = cache[c.src];
-            badge.className = 'fm-badge no-i18n ' + (v == null ? 'fm-none' : v >= 60 ? 'fm-hi' : v >= 40 ? 'fm-mid' : 'fm-lo');
+            badge.className = 'fm-badge no-i18n ' + (v == null ? 'fm-none' : v >= 45 ? 'fm-hi' : v >= 30 ? 'fm-mid' : 'fm-lo');
             badge.textContent = v == null ? '👤 ' + tr('no face') : '👤 ' + Math.round(v) + '%';
         }
     }
@@ -136,7 +140,7 @@
         renderBar(tr('Analyzing faces...'));
         try {
             const res = await fetchScores(todo.map(c => c.name));
-            // Lo que el servidor no devuelve (vídeo, archivo que ya no está) no se vuelve a pedir.
+            // Lo que el servidor no devuelve (vídeo sin ffmpeg, archivo que ya no está) no se vuelve a pedir.
             todo.forEach(c => { cache[c.src] = c.name in res ? res[c.name] : null; });
             renderBar();
         } catch (e) { renderBar(null, e.message || String(e)); }
@@ -165,7 +169,7 @@
         if (error) msg = `<span class="fm-error">${escapeHtml(error)}</span>`;
         else if (working) msg = working;
         else if (reference && !reference.faces) msg = tr('No faces found in the dataset images.');
-        else if (reference) msg = tr('Reference: {faces} faces in {images} dataset images. The same person usually scores above 40-50%.', reference);
+        else if (reference) msg = tr('Reference: {faces} faces in {images} dataset images. In generated images, 45% or more is a strong likeness and 30-45% a partial one.', reference);
         else msg = tr('Similarity with the faces of the dataset.');
         bar.innerHTML = `${title}<label><input type="checkbox" data-fm="show" ${enabled() ? 'checked' : ''}> ${tr('Show %')}</label>
             <span class="fm-msg">${msg}</span>`;

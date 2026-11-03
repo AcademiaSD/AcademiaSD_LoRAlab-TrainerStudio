@@ -1398,7 +1398,7 @@
   "Compares the face in each preview with the dataset. Optional: not downloaded by default.": "各プレビューの顔をデータセットと比較します。任意機能: 既定ではダウンロードされません。",
   "Enable...": "有効にする...",
   "No faces found in the dataset images.": "データセットの画像に顔が見つかりません。",
-  "Reference: {faces} faces in {images} dataset images. The same person usually scores above 40-50%.": "基準: データセット画像 {images} 枚中 {faces} 個の顔。同一人物なら通常 40〜50% を超えます。",
+  "Reference: {faces} faces in {images} dataset images. In generated images, 45% or more is a strong likeness and 30-45% a partial one.": "基準: データセット画像 {images} 枚中 {faces} 個の顔。生成画像では 45% 以上でかなり似ており、30-45% は部分的に似ています。",
   "Similarity with the faces of the dataset.": "データセットの顔との類似度。",
   "Show %": "% を表示",
   "Face likeness: terms of use": "顔の類似度: 利用条件",
