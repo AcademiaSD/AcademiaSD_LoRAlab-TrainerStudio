@@ -241,9 +241,13 @@ class _Engine:
         return emb / (np.linalg.norm(emb) + 1e-9)
 
     def faces(self, path):
+        """path: ruta o imagen PIL."""
         from PIL import Image, ImageOps
-        with Image.open(path) as im:
-            img = ImageOps.exif_transpose(im).convert("RGB")
+        if isinstance(path, Image.Image):
+            img = path.convert("RGB")
+        else:
+            with Image.open(path) as im:
+                img = ImageOps.exif_transpose(im).convert("RGB")
         found = self._detect(img)
         # La más grande primero: en el dataset es la del personaje.
         found.sort(key=lambda f: (f[1][2] - f[1][0]) * (f[1][3] - f[1][1]), reverse=True)
@@ -255,6 +259,26 @@ def _get_engine():
     if _engine is None:
         _engine = _Engine()
     return _engine
+
+
+class Scorer:
+    """Para Dataset Forge: referencia con unas imágenes concretas y % de cualquier imagen PIL."""
+
+    def __init__(self, ref_paths):
+        eng = _get_engine()
+        embs = [f[0] for f in (eng.faces(p) for p in ref_paths) if f]
+        self.faces = len(embs)
+        self.ref = None
+        if embs:
+            ref = eng.np.mean(embs, axis=0)
+            self.ref = ref / (eng.np.linalg.norm(ref) + 1e-9)
+
+    def score(self, image):
+        """Porcentaje de la cara más parecida, o None si no hay cara (o no la hubo en las referencias)."""
+        if self.ref is None:
+            return None
+        best = max((float(f @ self.ref) for f in _get_engine().faces(image)), default=None)
+        return None if best is None else round(max(0.0, min(1.0, best)) * 100, 1)
 
 
 def _image_files(folder):
