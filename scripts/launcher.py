@@ -504,7 +504,9 @@ def launch():
     else:
         pid = _launch_linux(run, env)
     save_active(trainer_id, pid)
-    return jsonify({"status": "ok", "url": trainer_url(), "remote": not remote_access.is_local()})
+    # port: la página espera a que conteste con /api/status?port=, que solo mira el puerto.
+    return jsonify({"status": "ok", "url": trainer_url(), "port": remote_access.port_of("trainer_port"),
+                    "remote": not remote_access.is_local()})
 
 
 DRAFTS_DIR = BASE_DIR / "settings" / "queue" / "drafts"
@@ -751,5 +753,12 @@ if __name__ == "__main__":
     print(f"  URL : {url}")
     print("  " + t("Close this window to close the launcher."))
     print("=" * 70)
-    threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+    def open_browser():
+        # Cuando el servidor ya escucha: abrirlo antes da la página de error del navegador.
+        # Once the server listens: opening it earlier shows the browser's error page.
+        end = time.time() + 60
+        while time.time() < end and not _port_open(remote_access.port_of("launcher_port")):
+            time.sleep(0.1)
+        webbrowser.open(url)
+    threading.Thread(target=open_browser, daemon=True).start()
     remote_access.serve(app, "launcher_port")
