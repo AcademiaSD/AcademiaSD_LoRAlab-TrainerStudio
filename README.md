@@ -10,7 +10,7 @@ What was added, newest first. Each entry links to its commit.
 
 **2026-11-04**
 
-- <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **FLUX.1 Dev, image LoRAs** — LoRA and LoKr on the transformer and T5-XXL in NF4, downloaded ready from `diffusers/FLUX.1-dev-bnb-4bit` with no token. 1,500 steps at 768² take about 70 minutes and peak at ~11 GB of VRAM on an RTX 5080 ([details](#flux1-dev--image-loras))
+- <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **FLUX.1 Dev, image LoRAs** — LoRA and LoKr on the transformer and T5-XXL in NF4, downloaded ready from `diffusers/FLUX.1-dev-bnb-4bit` with no token. 1,500 steps at 768² take about 70 minutes and peak at ~11 GB of VRAM on an RTX 5080 ([details](#flux1-dev--image-loras)) [`21965bb`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/21965bb)
 
 **2026-11-03**
 
