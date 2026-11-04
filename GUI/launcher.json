@@ -89,6 +89,13 @@
       "run": "Run_LoRAlab-YuE2.bat"
     },
     {
+      "id": "flux1",
+      "name": "FLUX.1 Dev",
+      "description": "Image LoRAs",
+      "image": "assets/flux1/portada.jpg",
+      "run": "Run_LoRAlab-Flux1.bat"
+    },
+    {
       "id": "klein9b",
       "name": "FLUX.2 Klein 9B",
       "description": "Image and edit LoRAs",

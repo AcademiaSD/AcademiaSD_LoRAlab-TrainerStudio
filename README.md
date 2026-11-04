@@ -8,6 +8,10 @@
 
 What was added, newest first. Each entry links to its commit.
 
+**2026-11-04**
+
+- <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **FLUX.1 Dev, image LoRAs** — LoRA and LoKr on the transformer and T5-XXL in NF4, downloaded ready from `diffusers/FLUX.1-dev-bnb-4bit` with no token. 1,500 steps at 768² take about 70 minutes and peak at ~11 GB of VRAM on an RTX 5080 ([details](#flux1-dev--image-loras))
+
 **2026-11-03**
 
 - **Wan 2.2 on 12 GB of VRAM**: the Pre-Cache has 448 x 448 and 480 x 480. At 448 x 448 (rank 8, both experts) training peaks at 10.4 GB, and 1-frame previews stay below that ([details](#wan-22-t2v-a14b--video-and-image-loras-high--low-noise)) [`e95a6ef`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/e95a6ef)
@@ -194,6 +198,7 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 | **Ming-Image** *(experimental)* | Image LoRAs for transparent designs and edit LoRAs (before → after) on inclusionAI's Ming-Image 0.1 Design | 7 GB (512²) / 13 GB (1024²) |
 | **Anima** | Anime and illustration LoRAs (characters, styles) | **4 GB** (NF4) / 6 GB (BF16) |
 | **ERNIE-Image** | Image LoRAs (characters, objects, styles); supports rsLoRA, LoRA+ and LoKr | **Under 8 GB** (NF4; verified during training) |
+| **FLUX.1 Dev** | Image LoRAs (characters, objects, styles) | 12 GB (768², ~11 GB measured) |
 | **FLUX.2 Klein 9B** | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) | 12 GB |
 | **FLUX.3 Image Klein** | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) | 8 GB |
 | **MOSS-Image** | Image LoRAs (characters, objects, styles) on MOSS-Image Base or SFT **and edit LoRAs** (before → after, on top of armV5, armV4 or Moss-Image-Edit); supports rsLoRA, LoRA+ and LoKr | **6 GB** (512²) / 8 GB |
@@ -222,6 +227,8 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 **Cola de trabajos:** con un entrenamiento en marcha, *Iniciar / Reanudar* o *Iniciar Pre-Caché* en cualquier entrenador pregunta si añadirlo a la cola, con una copia de los ajustes de ese momento. Los trabajos se ejecutan uno tras otro en la GPU. El botón **Cola** del lanzador y de cada entrenador abre la página de la cola: lo que entrena ahora (progreso, tiempo restante y curva de loss) y lo que espera, que puedes reordenar arrastrando, pausar, continuar o quitar. Pausar guarda un checkpoint y deja el trabajo pausado en la cola; continuar sigue desde ese paso. Mientras un entrenador entrena, **➕ Nuevo entrenamiento en cola** abre un borrador del mismo entrenador en otro puerto para preparar el siguiente sin tocar el que entrena (ponle otro nombre de proyecto). Si un trabajo falla, se queda en la lista en rojo diciendo por qué (no se encuentra la pre-caché o el dataset, falta VRAM…); corrígelo y pulsa **↻** para reintentarlo. **✎** en un trabajo de la cola abre su entrenador con sus ajustes para cambiarlos: el botón de empezar pasa a ser **💾 Guardar cambios en la cola**. Mientras se hace la pre-caché, *Iniciar / Reanudar* sigue disponible y manda el entrenamiento a la cola. **⏻ Pausar todo y salir**, abajo en el lanzador, pausa el entrenamiento en curso guardando su checkpoint y cierra todo desde el navegador; al volver a abrir el lanzador la cola sigue sola donde estaba, empezando por ese entrenamiento. En RunPod y otras nubes el lanzador sigue abierto, con la cola pausada.
 
 **Linux:** ya tiene soporte para Linux. Cada `.bat` tiene su `.sh` equivalente; la instalación y el uso están en [docs/Linux.md](docs/Linux.md). Gracias a **[Jonathan Hecl (@jonathanhecl)](https://github.com/jonathanhecl)** por aportarlo.
+
+**FLUX.1 Dev:** nuevo entrenador de LoRAs de imagen para **FLUX.1 [dev]** de Black Forest Labs (FLUX.1 [dev] Non-Commercial License). Se descarga ya en **NF4** (13,5 GB, sin token) y los dos text encoders solo se usan en el pre-caché. Detalles en la sección *FLUX.1 Dev*.
 
 **FLUX.3 Image Klein:** nuevo entrenador de LoRAs normales y de edición (antes → después) para FLUX.3 Image Klein Base, desde 8 GB de VRAM. El captioner escribe en los formatos propios de FLUX.3 (prosa detallada, y opcionalmente con tabla de cajas `<id>`; en edición, la instrucción con `<ref_image_0>`). Necesita la versión nueva de diffusers: ejecuta **`Update_LoRAlab-TrainerStudio.bat`** antes de abrirlo. Detalles en la sección *FLUX.3 Image Klein*.
 
@@ -259,6 +266,7 @@ Each trainer downloads **only what it uses**, already quantized. The table compa
 | **Anima** | 5.6 | — | **5.6** | New trainer: the official diffusers version of Anima-Base. The 2B model trains in BF16, or in NF4 quantized when loading (nothing extra to download). |
 | **SDXL** | ~7 per model | — | **~7 per model** | New trainer: only the preset you pick is downloaded (one `.safetensors` file); your own checkpoint downloads nothing. |
 | **Ideogram 4** | 16.1 (NF4) | — | **16.1** | New trainer: the official NF4 release, which includes the unconditional transformer used only by the previews. It is downloaded from Unsloth's ungated mirror (same weights, no license gate or token needed); the Ideogram license still applies. |
+| **FLUX.1 Dev** | 33.7 | — | **13.5** | New trainer: the 12B transformer (23.8 GB) and the T5-XXL text encoder (9.5 GB) in NF4 (6.7 GB + 6.3 GB), from `diffusers/FLUX.1-dev-bnb-4bit`. |
 | **FLUX.2 Klein 9B** | 34.7 | — | **8.8** | New trainer: the 9B transformer (18.2 GB) and the Qwen3-8B text encoder (16.4 GB) in NF4 (4.9 GB + 3.8 GB; only the 28 text encoder layers Klein reads). |
 | **Qwen-Image 2512 / Edit 2511** | 57.8 each | — | **26.8 / 18.6 / 15.7** | New trainer: the 20B transformer of 2512 or Edit-2511 in NF4 (9.9 GB each; only the one you train on is downloaded) and the Qwen2.5-VL-7B text encoder you pick: BF16 (exact, default) / INT8 / NF4. The optional Lightning turbo LoRA adds 0.85 GB. |
 | **MOSS-Image** | 27.2 | — | **20.2 / 13.2 / 9.9** | New trainer: the 5B transformer of Base or SFT in NF4 (3.1 GB each; only the one you train on is downloaded) and the Qwen3.5-9B text encoder you pick: BF16 (exact, default) / INT8 / NF4. The optional turbo preview adapter adds 1.2 GB. |
@@ -637,6 +645,18 @@ The official image-edit task works at 1024: 512 and 768 are out of its distribut
 | Learning rate | 2e-5 |
 | Speed | ~0.65 s/step at 512² in BF16, ~0.8 s/step in NF4 (under 4 GB of VRAM); ~1.6 s/step at 1024² in BF16 |
 
+### FLUX.1 Dev — image LoRAs
+
+- Trains on **FLUX.1 [dev]** (11.9B) in **NF4**. The first run downloads `diffusers/FLUX.1-dev-bnb-4bit`, which is not gated and needs no token; the FLUX.1 [dev] license still applies.
+- **Pre-cache:** the same caption goes to T5-XXL (NF4, the 512-token sequence) and to CLIP-L (the pooled vector). Training does not load either of them.
+- **Train Guidance:** FLUX.1 dev takes guidance as an input. Training uses 1 by default; the setting is read when training starts.
+- **Timesteps:** the resolution-dependent shift of the official pipeline.
+- **Previews:** 28 steps / **Preview Guidance** 3.5 (the same input as ComfyUI's FluxGuidance node, with no negative pass). There is no turbo option.
+- **Captioner:** Qwen3-VL-8B NF4, shared with Z-Image and FLUX.2 Klein 9B.
+- **Speed and VRAM** (768², RTX 5080): ~2.6 s/step, ~11 GB with previews · pre-cache ~5 GB.
+- **LoRA Targets:** *Blocks* (attention + MLP of the 19 double and 38 single blocks, default) or *All*. The LoRA is exported in diffusers format, which ComfyUI maps to FLUX.1's layers.
+- `tools/flux1/5_conversor_Flux1_NF4.py` is optional: it builds your own NF4 cache from the gated official repo (accept the license on Hugging Face first).
+
 ### FLUX.2 Klein 9B — image and edit LoRAs
 
 - Trains on **FLUX.2 [klein] Base 9B** (the undistilled model, the one meant for fine-tuning). The LoRA also loads on the distilled **FLUX.2 [klein] 9B**; it is not compatible with the 4B models.
@@ -902,7 +922,7 @@ Detailed measurements and the reasoning behind each design decision are in `docs
 
 ## 🛠️ Tools for advanced users
 
-`tools\` contains the scripts used to build the NF4 models from the originals (`Run_Conversor_Krea2.bat`, `Run_Conversor_LTX23.bat`, `5_conversor_QwenImage21_NF4.py`, `5_conversor_ZImage_NF4.py`, `5_conversor_Klein9B_NF4.py`, `5_conversor_Fibo2_NF4.py`) and a `.parquet` dataset extractor for Qwen-Image 2.1 (`6_extract_parquet.py`). They are not needed to train: the trainers download the ready-made NF4 models.
+`tools\` contains the scripts used to build the NF4 models from the originals (`Run_Conversor_Krea2.bat`, `Run_Conversor_LTX23.bat`, `5_conversor_QwenImage21_NF4.py`, `5_conversor_ZImage_NF4.py`, `5_conversor_Flux1_NF4.py`, `5_conversor_Klein9B_NF4.py`, `5_conversor_Fibo2_NF4.py`) and a `.parquet` dataset extractor for Qwen-Image 2.1 (`6_extract_parquet.py`). They are not needed to train: the trainers download the ready-made NF4 models.
 
 **Before merging changes to the interfaces or servers**, `tools/smoke_test_ui.py` checks every trainer in under a minute: it starts each server and, in a headless Chrome or Edge, does what the **Pre-Cache**, **Start / Resume** and **Save JSON** (while training) buttons do, without launching anything. It fails on a button that never reaches its script, a JavaScript error or a save that does not answer `ok`, and it works on a temporary copy, so your settings are not touched. No extra packages: it needs Chrome, Edge or Chromium installed.
 
@@ -934,7 +954,7 @@ AcademiaSD_LoRAlab-TrainerStudio/
 └── settings/                         # Your settings, HF token, network.json and ui.json (created on first use, never uploaded)
 ```
 
-Models (`Krea-2-NF4`, `LTX23-NF4`, `MiniMax-H3-NF4`, `Qwen-Image21-NF4`, `Z-Image_NF4`, `Anima-Base`, `FLUX.2-Klein-9B_NF4`, `FLUX.3-Image-Klein_NF4`, `Ideogram4-NF4`, `MOSS-Image-NF4`, `Ming-Image_NF4`, `Fibo2_Dev-NF4`, `Wan22-T2V-A14B-NF4`, `SDXL-Models`, captioners) are created inside `Models/` on first use, and the caches and the LoRA outputs inside `Cache_Data/` and `Outputs/`. Legacy folders in the project root are moved into these folders automatically. A collision keeps both folders and prints a warning, so nothing is overwritten.
+Models (`Krea-2-NF4`, `LTX23-NF4`, `MiniMax-H3-NF4`, `Qwen-Image21-NF4`, `Z-Image_NF4`, `Anima-Base`, `FLUX.1-Dev_NF4`, `FLUX.2-Klein-9B_NF4`, `FLUX.3-Image-Klein_NF4`, `Ideogram4-NF4`, `MOSS-Image-NF4`, `Ming-Image_NF4`, `Fibo2_Dev-NF4`, `Wan22-T2V-A14B-NF4`, `SDXL-Models`, captioners) are created inside `Models/` on first use, and the caches and the LoRA outputs inside `Cache_Data/` and `Outputs/`. Legacy folders in the project root are moved into these folders automatically. A collision keeps both folders and prints a warning, so nothing is overwritten.
 
 ---
 
@@ -952,6 +972,7 @@ The code is released under the **MIT License**. The models keep their own licens
 | Wan 2.2 T2V-A14B | Apache 2.0 |
 | Z-Image (and the Z-Image-Fun-Lora-Distill preview LoRA) | Apache 2.0 |
 | Anima | CircleStone Labs Non-Commercial License (plus the NVIDIA Open Model License for Cosmos). Images you generate can be used commercially |
+| FLUX.1 [dev] | FLUX.1 [dev] Non-Commercial License — non-commercial |
 | FLUX.2 Klein 9B (and the Klein 9B turbo preview LoRA) | FLUX Non-Commercial License — non-commercial |
 | FLUX.3 Image Klein (and NoiseToNova's PDD turbo LoRA) | FLUX Kommunity License (see the model card) |
 | MOSS-Image Base and SFT (and darask0's 4-step turbo adapter) | Apache 2.0 |
@@ -991,6 +1012,7 @@ Code adapted or copied from other projects, and the work it builds on:
 | [ADLX](https://github.com/GPUOpen-LibrariesAndSDKs/ADLX) by AMD | AMD GPU VRAM and temperature on Windows (`scripts/gpu_stats.py`, through the `amd-adlx` package the AMD installer installs) | ADLX SDK License |
 | [LyCORIS](https://github.com/KohakuBlueleaf/LyCORIS) by KohakuBlueleaf | The LoKr method in `scripts/lora_options.py`: Kronecker factorization, initialization and `lokr_*` key layout (reimplemented for NF4 layers) | Apache-2.0 |
 | [rsLoRA](https://arxiv.org/abs/2312.03732) (Kalajdzievski) and [LoRA+](https://arxiv.org/abs/2402.12354) (Hayou, Ghosh, Yu) | The `alpha/√rank` scaling and the separate learning rate for `lora_B` | papers |
+| [Diffusers FLUX.1 LoRA trainer](https://github.com/huggingface/diffusers/blob/main/examples/dreambooth/train_dreambooth_lora_flux.py) | FLUX.1 training recipe: velocity target and guidance input, followed in `scripts/2_train_lora_flux1.py` | Apache-2.0 |
 | [Diffusers FLUX.3 Klein LoRA trainer](https://github.com/huggingface/diffusers/blob/main/examples/dreambooth/train_dreambooth_lora_flux3_klein.py) | FLUX.3 Klein training recipe: timestep shift, position ids, text window and LoRA targets, followed in `scripts/2_train_lora_flux3klein.py` | Apache-2.0 |
 | [MOSS-Image](https://github.com/OpenMOSS/MOSS-Image) by the OpenMOSS Team | The MOSS-Image transformer of `pipeline_moss_image.py`, adapted in `scripts/moss_image_model.py` (NF4 layers, gradient checkpointing); prompt encoding, preview guidance, training noise schedule (technical report) and caption guide | Apache-2.0 |
 | [kohya-ss sd-scripts](https://github.com/kohya-ss/sd-scripts) | `ss_*` LoRA metadata convention, SDXL LoRA key format and 75-token caption chunking | Apache-2.0 |
