@@ -348,12 +348,12 @@
                     <div class="form-group">
                         <label>Resolution (px²):</label>
                         <select id="target_area_select" onchange="syncResolution(this.value)">
-                            <option value="262144">512 x 512 (262,144 px²)</option>
-                            <option value="589824" selected>768 x 768 (589,824 px²)</option>
+                            <option value="262144" selected>512 x 512 (262,144 px²)</option>
+                            <option value="589824">768 x 768 (589,824 px²)</option>
                             <option value="1048576">1024 x 1024 (1,048,576 px²)</option>
                             <option value="custom">Custom</option>
                         </select>
-                        <input type="number" id="precache_target_area" value="589824" style="margin-top:6px; display:none;">
+                        <input type="number" id="precache_target_area" value="262144" style="margin-top:6px; display:none;">
                     </div>
 
                     <div class="form-row">
@@ -367,7 +367,7 @@
                         </div>
                         <div class="form-group">
                             <label>Max Side:</label>
-                            <input type="number" id="precache_max_side" value="1280">
+                            <input type="number" id="precache_max_side" value="512">
                         </div>
                     </div>
 
@@ -452,7 +452,7 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label>Total Steps:</label>
-                            <input type="number" id="train_total_steps" value="1500">
+                            <input type="number" id="train_total_steps" value="800">
                         </div>
                         <div class="form-group">
                             <label>Learning Rate:</label>
@@ -484,11 +484,11 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label>LoRA Rank (R):</label>
-                            <input type="number" id="train_lora_rank" value="16">
+                            <input type="number" id="train_lora_rank" value="8">
                         </div>
                         <div class="form-group">
                             <label>LoRA Alpha (A):</label>
-                            <input type="number" id="train_lora_alpha" value="16">
+                            <input type="number" id="train_lora_alpha" value="8">
                         </div>
                     </div>
 
@@ -606,7 +606,7 @@
                             <label>Caption Mode:</label>
                             <select id="train_preview_caption_mode" onchange="toggleCaptionMode(this.value)">
                                 <option value="first">First</option>
-                                <option value="random">Random</option>
+                                <option value="random" selected>Random</option>
                                 <option value="rotate4">Rotate 4</option>
                                 <option value="custom">Custom prompt</option>
                             </select>

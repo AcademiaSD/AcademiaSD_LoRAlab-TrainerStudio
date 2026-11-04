@@ -10,7 +10,7 @@ What was added, newest first. Each entry links to its commit.
 
 **2026-11-04**
 
-- <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **FLUX.1 Dev, image LoRAs** — LoRA and LoKr on the transformer and T5-XXL in NF4, downloaded ready from `diffusers/FLUX.1-dev-bnb-4bit` with no token. 1,500 steps at 768² take about 70 minutes and peak at ~11 GB of VRAM on an RTX 5080 ([details](#flux1-dev--image-loras)) [`21965bb`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/21965bb)
+- <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **FLUX.1 Dev, image LoRAs** — LoRA and LoKr on the transformer and T5-XXL in NF4, downloaded ready from `diffusers/FLUX.1-dev-bnb-4bit` with no token. 800 steps at 512² take about 16 minutes and peak at ~10 GB of VRAM on an RTX 5080 ([details](#flux1-dev--image-loras)) [`21965bb`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/21965bb)
 
 **2026-11-03**
 
@@ -198,7 +198,7 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 | **Ming-Image** *(experimental)* | Image LoRAs for transparent designs and edit LoRAs (before → after) on inclusionAI's Ming-Image 0.1 Design | 7 GB (512²) / 13 GB (1024²) |
 | **Anima** | Anime and illustration LoRAs (characters, styles) | **4 GB** (NF4) / 6 GB (BF16) |
 | **ERNIE-Image** | Image LoRAs (characters, objects, styles); supports rsLoRA, LoRA+ and LoKr | **Under 8 GB** (NF4; verified during training) |
-| **FLUX.1 Dev** | Image LoRAs (characters, objects, styles) | 12 GB (768², ~11 GB measured) |
+| **FLUX.1 Dev** | Image LoRAs (characters, objects, styles) | 12 GB (~10 GB measured at 512², ~11 GB at 768²) |
 | **FLUX.2 Klein 9B** | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) | 12 GB |
 | **FLUX.3 Image Klein** | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) | 8 GB |
 | **MOSS-Image** | Image LoRAs (characters, objects, styles) on MOSS-Image Base or SFT **and edit LoRAs** (before → after, on top of armV5, armV4 or Moss-Image-Edit); supports rsLoRA, LoRA+ and LoKr | **6 GB** (512²) / 8 GB |
@@ -653,7 +653,8 @@ The official image-edit task works at 1024: 512 and 768 are out of its distribut
 - **Timesteps:** the resolution-dependent shift of the official pipeline.
 - **Previews:** 28 steps / **Preview Guidance** 3.5 (the same input as ComfyUI's FluxGuidance node, with no negative pass). There is no turbo option.
 - **Captioner:** Qwen3-VL-8B NF4, shared with Z-Image and FLUX.2 Klein 9B.
-- **Speed and VRAM** (768², RTX 5080): ~2.6 s/step, ~11 GB with previews · pre-cache ~5 GB.
+- **Defaults:** 512², 800 steps, rank / alpha 8 / 8, previews off (**Preview Every** 0).
+- **Speed and VRAM** (RTX 5080, with previews): ~1.2 s/step and ~10 GB at 512², ~2.6 s/step and ~11 GB at 768² · pre-cache ~5 GB.
 - **LoRA Targets:** *Blocks* (attention + MLP of the 19 double and 38 single blocks, default) or *All*. The LoRA is exported in diffusers format, which ComfyUI maps to FLUX.1's layers.
 - `tools/flux1/5_conversor_Flux1_NF4.py` is optional: it builds your own NF4 cache from the gated official repo (accept the license on Hugging Face first).
 
