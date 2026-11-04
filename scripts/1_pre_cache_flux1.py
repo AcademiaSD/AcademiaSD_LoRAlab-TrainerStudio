@@ -36,7 +36,7 @@ DEFAULTS = {
     "dataset_path": "./dataset",
     "cache_dir": "./Cache_Data/cached_data_flux1",
     "target_area": 512 * 512,
-    "max_side": 512,
+    "max_side": 768,
     "multiple": 32,
     "project_name": "",
     "trigger_word": "",
