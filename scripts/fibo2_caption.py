@@ -20,6 +20,19 @@ JSON_EXT = ".json"
 TXT_EXT = ".txt"
 
 
+def read_text_file(path):
+    """Texto en UTF-8 (con o sin BOM), cp1252 o latin-1. Los .txt guardados en Windows
+    suelen venir en cp1252 y rompían el pre-caché al decodificarlos como UTF-8."""
+    with open(path, "rb") as f:
+        raw = f.read()
+    for encoding in ("utf-8-sig", "cp1252", "latin-1"):
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return ""
+
+
 def compact(caption):
     """El caption en la forma en que se entrenó: JSON sin espacios."""
     return json.dumps(caption, separators=(",", ":"), ensure_ascii=False)
@@ -81,8 +94,7 @@ def read_caption(stem_path, prefer_json=True):
     if not os.path.exists(path):
         return ""
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            text = f.read().strip()
+        text = read_text_file(path).strip()
     except OSError:
         return ""
     if path.endswith(JSON_EXT):
