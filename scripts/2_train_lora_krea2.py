@@ -1391,7 +1391,7 @@ def train_krea2():
             noise  = torch.randn_like(latent_patched)
             t_exp  = sigma.view(-1, 1, 1)
 
-            target_dtype = next(model.parameters()).dtype
+            target_dtype = torch.bfloat16
             noisy = ((1 - t_exp) * latent_patched + t_exp * noise).to(target_dtype)
             target = noise - latent_patched
 

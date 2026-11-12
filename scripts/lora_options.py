@@ -120,7 +120,8 @@ class LoKrLinear(torch.nn.Module):
         return self.base.weight
 
     def forward(self, x, *args, **kwargs):
-        out = self.base(x, *args, **kwargs)
+        base_dtype = getattr(self.base, "compute_dtype", None) or self.base.weight.dtype
+        out = self.base(x.to(base_dtype), *args, **kwargs)
         X = x.to(self.lokr_w1.dtype).reshape(*x.shape[:-1], self.c, self.d)
         y = torch.einsum("ac,...cr->...ar", self.lokr_w1, X @ self.lokr_w2_b.T) @ self.lokr_w2_a.T
         return out + (self.scale * y.reshape(*x.shape[:-1], self.a * self.b)).to(out.dtype)
