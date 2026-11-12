@@ -390,8 +390,7 @@ def read_caption(name):
     json_path = fibo2_caption.caption_path(os.path.join(DATASET_PATH, name))
     if json_path.endswith(fibo2_caption.JSON_EXT) and os.path.exists(json_path):
         try:
-            with open(json_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
+            data = json.loads(fibo2_caption.read_text_file(json_path))
             if not isinstance(data, dict):
                 return compact({"short_description": str(data)})
             return compact(data)
@@ -399,8 +398,7 @@ def read_caption(name):
             print(f"⚠ {name}.json no se pudo leer ({exc}); se usa el .txt")
     txt_path = fibo2_caption.caption_path(os.path.join(DATASET_PATH, name), prefer_json=False)
     if os.path.exists(txt_path):
-        with open(txt_path, "r", encoding="utf-8") as f:
-            return f.read().strip()
+        return fibo2_caption.read_text_file(txt_path).strip()
     return ""
 
 
