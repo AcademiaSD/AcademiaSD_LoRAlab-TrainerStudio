@@ -14,6 +14,7 @@ capas NF4. rsLoRA (Kalajdzievski, 2023) y LoRA+ (Hayou et al., 2024) siguen sus 
 import json
 import math
 import os
+from contextlib import contextmanager
 
 import torch
 from safetensors.torch import save_file
@@ -107,6 +108,7 @@ class LoKrLinear(torch.nn.Module):
         (self.a, self.b), (self.c, self.d) = (lokr_factorization(base.out_features, factor),
                                               lokr_factorization(base.in_features, factor))
         self.scale = alpha / rank
+        self._disabled = 0
         # Inicialización de LyCORIS: w1 y w2_a aleatorias, w2_b a cero (el LoKr empieza sin efecto).
         self.lokr_w1 = torch.nn.Parameter(torch.empty(self.a, self.c))
         self.lokr_w2_a = torch.nn.Parameter(torch.empty(self.b, rank))
@@ -119,9 +121,15 @@ class LoKrLinear(torch.nn.Module):
         # El peso de la capa base, como las capas de PEFT: hay modelos que lo consultan (dispositivo, dtype).
         return self.base.weight
 
+    @property
+    def base_layer(self):
+        return self.base
+
     def forward(self, x, *args, **kwargs):
         base_dtype = getattr(self.base, "compute_dtype", None) or self.base.weight.dtype
         out = self.base(x.to(base_dtype), *args, **kwargs)
+        if self._disabled:
+            return out
         X = x.to(self.lokr_w1.dtype).reshape(*x.shape[:-1], self.c, self.d)
         y = torch.einsum("ac,...cr->...ar", self.lokr_w1, X @ self.lokr_w2_b.T) @ self.lokr_w2_a.T
         return out + (self.scale * y.reshape(*x.shape[:-1], self.a * self.b)).to(out.dtype)
@@ -150,6 +158,20 @@ class LoKrModel(torch.nn.Module):
 
     def forward(self, *args, **kwargs):
         return self.base_model.model(*args, **kwargs)
+
+    def get_base_model(self):
+        return self.base_model.model
+
+    @contextmanager
+    def disable_adapter(self):
+        layers = list(self.lokr_layers().values())
+        for layer in layers:
+            layer._disabled += 1
+        try:
+            yield
+        finally:
+            for layer in layers:
+                layer._disabled -= 1
 
     def lokr_layers(self):
         return {n: m for n, m in self.base_model.model.named_modules() if isinstance(m, LoKrLinear)}
