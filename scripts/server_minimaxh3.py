@@ -90,6 +90,9 @@ OUTPUT_PREFIX = "minimaxh3image_lora_output" if IMAGE_MODE else "minimaxh3_lora_
 # Sus latentes salen del VAE de H3-Image, no del de video: nunca comparte cache con MiniMax-H3.
 CACHE_PREFIX = "cached_data_minimaxh3image" if IMAGE_MODE else "cached_data_minimaxh3"
 ASSETS_DIR = BASE_DIR / "assets" / "minimaxh3"
+# The image card has its own logo and favicon; anything it lacks comes from the MiniMax-H3 folder.
+# La tarjeta de imagen tiene su logo y favicon; lo que no tenga sale de la carpeta de MiniMax-H3.
+IMAGE_ASSETS_DIR = BASE_DIR / "assets" / "minimaxh3image"
 UI_FILE = BASE_DIR / "GUI" / "trainer_ui_minimaxh3.html"
 LOGO_FILE = ASSETS_DIR / "logo.png" if (ASSETS_DIR / "logo.png").exists() else BASE_DIR / "logo.png"
 PRECACHE_CONFIG = Path(os.environ.get("LORALAB_PRECACHE_CONFIG") or SETTINGS_DIR / f"pre_cache_settings_{TRAINER_ID}.json")
@@ -465,6 +468,8 @@ def index():
 
 @app.route("/assets/<path:filename>")
 def serve_assets(filename):
+    if IMAGE_MODE and (IMAGE_ASSETS_DIR / filename).is_file():
+        return send_from_directory(str(IMAGE_ASSETS_DIR), filename)
     if ASSETS_DIR.exists():
         return send_from_directory(str(ASSETS_DIR), filename)
     return send_from_directory(str(BASE_DIR), filename)
