@@ -643,7 +643,21 @@ LOW_RAM_MODE = bool(
     and SYSTEM_RAM_GB <= LOW_RAM_THRESHOLD_GB
 )
 
-CACHE_DIR = str(resolve_cache_dir(f"./cached_data_minimaxh3_{PROJECT_NAME}" if PROJECT_NAME else cfg_get("cache_dir"), DEFAULTS["cache_dir"]))
+# MiniMax-H3-Image (server_minimaxh3image.py sets LORALAB_H3_MODEL=image): same text encoder,
+# but the latents come from the IMAGE VAE of MiniMax-H3-Image, never from the video VAE, so its
+# caches live in their own folders and only images are cached. Of the MiniMax-H3 NF4 repo it
+# needs the text encoder alone.
+# MiniMax-H3-Image: mismo text encoder, pero los latentes salen del VAE de IMAGEN de H3-Image,
+# nunca del de video; cache en carpeta propia, solo imagenes, y del repo NF4 de H3 solo el text encoder.
+IMAGE_MODE = os.environ.get("LORALAB_H3_MODEL", "").strip().lower() == "image"
+IMAGE_NF4_DIR = str(resolve_model_dir(cfg_get("image_nf4_dir", "Models/MiniMax-H3-Image-NF4"), "Models/MiniMax-H3-Image-NF4"))
+IMAGE_NF4_REPO = str(cfg_get("image_nf4_repo", "AcademiaSD/MiniMax-H3-Image-NF4-for-LoRA-Training"))
+CACHE_PREFIX = "cached_data_minimaxh3image" if IMAGE_MODE else "cached_data_minimaxh3"
+if IMAGE_MODE:
+    WRITE_AUDIO_LATENT = False
+    ENCODE_AUDIO = False
+
+CACHE_DIR = str(resolve_cache_dir(f"./{CACHE_PREFIX}_{PROJECT_NAME}" if PROJECT_NAME else (cfg_get("cache_dir") if not IMAGE_MODE else f"./{CACHE_PREFIX}"), DEFAULTS["cache_dir"]))
 
 # The cache path is used EXACTLY as configured - no automatic suffix.
 # La ruta de cache se usa EXACTAMENTE como esta configurada - sin sufijo automatico.
@@ -2649,6 +2663,78 @@ def read_video_frames(path, count, width, height):
     return torch.from_numpy(arr.copy())          # [T,H,W,3] uint8
 
 
+def _hf_token():
+    """settings/HF_token.json, optional: the repos are public, a token only makes the download faster."""
+    try:
+        with open(os.path.join("settings", "HF_token.json"), "r", encoding="utf-8") as fh:
+            return (json.load(fh).get("token") or "").strip() or None
+    except Exception:
+        return None
+
+
+def _hf_download(repo_id, local_dir, allow_patterns=None):
+    enable_hf_file_progress()
+    from huggingface_hub import snapshot_download
+    os.makedirs(local_dir, exist_ok=True)
+    try:
+        snapshot_download(repo_id=repo_id, local_dir=local_dir, allow_patterns=allow_patterns, token=_hf_token())
+    except Exception as e:
+        diag_error(t("Hugging Face download failed ({0}): {1}", repo_id, e))
+        raise
+    log_dev(L("[DOWNLOAD] Download completed at {}",
+              "[DOWNLOAD] Descarga completada en {}").format(os.path.abspath(local_dir)))
+
+
+def ensure_h3image_models(nf4_model_id, repo_id="AcademiaSD/MiniMax-H3-NF4"):
+    """
+    MiniMax-H3-Image only. From the MiniMax-H3 NF4 repo, the text encoder ALONE (18 GB of the 41):
+    no video DiT, no video VAE, no audio VAE. Then the MiniMax-H3-Image NF4 repo, whose VAE the
+    pre-cache encodes with and whose DiT the trainer loads.
+    Solo MiniMax-H3-Image. Del repo NF4 de H3, SOLO el text encoder (18 GB de 41); despues el repo
+    NF4 de H3-Image, con cuyo VAE codifica el pre-cache y cuyo DiT carga el entrenador.
+    """
+    te_dir = os.path.join(nf4_model_id, "text_encoder")
+    if os.path.isdir(os.path.join(te_dir, "weights")) and os.path.isfile(os.path.join(te_dir, "index.json")):
+        log_dev(L("[OK] Text encoder found: {}", "[OK] Text encoder encontrado: {}").format(os.path.abspath(te_dir)))
+    else:
+        log_dev("=" * 90)
+        log_dev(L("[DOWNLOAD] MiniMax-H3 text encoder only ({}/text_encoder, ~18 GB). The video model is not downloaded.",
+                  "[DOWNLOAD] Solo el text encoder de MiniMax-H3 ({}/text_encoder, ~18 GB). El modelo de video no se descarga.")
+                .format(repo_id))
+        log_dev("=" * 90)
+        _hf_download(repo_id, nf4_model_id, ["text_encoder/*", "LICENSE"])
+
+    if all(os.path.isdir(os.path.join(IMAGE_NF4_DIR, d)) for d in ("transformers", "vae")):
+        log_dev(L("[OK] MiniMax-H3-Image NF4 found: {}", "[OK] MiniMax-H3-Image NF4 encontrado: {}")
+                .format(os.path.abspath(IMAGE_NF4_DIR)))
+    else:
+        log_dev("=" * 90)
+        log_dev(L("[DOWNLOAD] MiniMax-H3-Image NF4 ({}, ~19 GB) ...", "[DOWNLOAD] MiniMax-H3-Image NF4 ({}, ~19 GB) ...")
+                .format(IMAGE_NF4_REPO))
+        log_dev("=" * 90)
+        _hf_download(IMAGE_NF4_REPO, IMAGE_NF4_DIR)
+
+
+def load_h3image_vae():
+    """The MiniMax-H3-Image VAE (CNN encoder, 2D ViT decoder), float32 on CUDA."""
+    import minimaxh3image_model as H3I
+    log_dev(L("[VAE] MiniMax-H3-Image VAE: {}", "[VAE] VAE de MiniMax-H3-Image: {}")
+            .format(os.path.join(IMAGE_NF4_DIR, "vae")))
+    return H3I.load_vae(IMAGE_NF4_DIR, "cuda", torch.float32)
+
+
+def encode_h3image_latent(vae, image):
+    """
+    One image -> normalized latent [1, 24, 1, h, w] bf16, exactly as the released MiniMax-H3-Image
+    pipeline encodes: ImageNet-normalized [0, 1] pixels, then (z - latents_mean) / latents_std.
+    The posterior MEAN is kept: a training target should not carry a random draw.
+    Una imagen -> latente normalizado, igual que el pipeline oficial; se guarda la MEDIA.
+    """
+    import minimaxh3image_model as H3I
+    latent = H3I.encode_image(vae, image, sample=False)          # [1, 24, h, w] float32, CPU
+    return latent[:, :, None].to(torch.bfloat16).contiguous()
+
+
 def encode_video_latent(vae, image):
     """One still image = one video frame (T=1) / Una imagen fija = un frame de video (T=1)."""
     vae_dtype = next(vae.parameters()).dtype
@@ -2980,7 +3066,10 @@ def preprocess_minimaxh3():
         DIAG["env"]["transformers"], DIAG["env"]["torch"]))
     log_dev("=" * 90)
 
-    ensure_nf4_model_exists(NF4_MODEL_ID, repo_id="AcademiaSD/MiniMax-H3-NF4")
+    if IMAGE_MODE:
+        ensure_h3image_models(NF4_MODEL_ID, repo_id="AcademiaSD/MiniMax-H3-NF4")
+    else:
+        ensure_nf4_model_exists(NF4_MODEL_ID, repo_id="AcademiaSD/MiniMax-H3-NF4")
 
     os.makedirs(DATASET_PATH, exist_ok=True)
 
@@ -3008,6 +3097,13 @@ def preprocess_minimaxh3():
 
     images = sorted(f for f in os.listdir(DATASET_PATH)
                     if f.lower().endswith(IMAGE_EXTS + VIDEO_EXTS + AUDIO_EXTS))
+    if IMAGE_MODE:
+        _skipped = [f for f in images if not f.lower().endswith(IMAGE_EXTS)]
+        images = [f for f in images if f.lower().endswith(IMAGE_EXTS)]
+        if _skipped:
+            log_dev(L("[DATASET] MiniMax-H3-Image trains images only: {} clips / audio files skipped.",
+                      "[DATASET] MiniMax-H3-Image solo entrena imagenes: se omiten {} clips / audios.")
+                    .format(len(_skipped)))
     if not images:
         raise RuntimeError(L("No images in {}", "No hay imagenes en {}").format(DATASET_PATH))
 
@@ -3083,7 +3179,7 @@ def preprocess_minimaxh3():
             raise RuntimeError(msg)
         diag_warn(msg)
 
-    audio_channels = read_audio_channels(NF4_MODEL_ID, AUDIO_LATENT_CHANNELS)
+    audio_channels = AUDIO_LATENT_CHANNELS if IMAGE_MODE else read_audio_channels(NF4_MODEL_ID, AUDIO_LATENT_CHANNELS)
     audio_vae = load_h3_audio_vae(NF4_MODEL_ID) if (WRITE_AUDIO_LATENT and ENCODE_AUDIO) else None
     DIAG["config"]["audio_latent_channels"] = audio_channels
 
@@ -3251,11 +3347,17 @@ def preprocess_minimaxh3():
     # ==================================================================
     log_dev("")
     log_dev("=" * 90)
-    log_dev(L(" PHASE 2/2: VIDEO VAE -> LATENTS", " FASE 2/2: VIDEO VAE -> LATENTES"))
+    if IMAGE_MODE:
+        log_dev(L(" PHASE 2/2: MINIMAX-H3-IMAGE VAE -> LATENTS", " FASE 2/2: VAE DE MINIMAX-H3-IMAGE -> LATENTES"))
+    else:
+        log_dev(L(" PHASE 2/2: VIDEO VAE -> LATENTS", " FASE 2/2: VIDEO VAE -> LATENTES"))
     log_dev("=" * 90)
 
-    vae, _ = load_vaes(NF4_MODEL_ID)
-    force_cuda_or_die(vae, "video VAE", strict_meta=True)
+    if IMAGE_MODE:
+        vae = load_h3image_vae()
+    else:
+        vae, _ = load_vaes(NF4_MODEL_ID)
+        force_cuda_or_die(vae, "video VAE", strict_meta=True)
     torch.cuda.reset_peak_memory_stats()
 
     # Running accumulators for the latent statistics self-test.
@@ -3348,7 +3450,7 @@ def preprocess_minimaxh3():
             log_dev("    Bucket: {}x{}".format(bw, bh))
 
             with torch.inference_mode():
-                video_latent = encode_video_latent(vae, image)
+                video_latent = encode_h3image_latent(vae, image) if IMAGE_MODE else encode_video_latent(vae, image)
 
         torch.save(video_latent, video_path)
 
@@ -3418,6 +3520,7 @@ def preprocess_minimaxh3():
                 "num_frames": 1,
                 "num_frames_pixels": 1,
                 "num_frames_config": NUM_FRAMES,
+                "vae": "minimaxh3image" if IMAGE_MODE else "minimaxh3video",
                 "frame_rate": FRAME_RATE,
                 "prompt": prompt,
                 "video_latent": os.path.basename(video_path),
@@ -3550,6 +3653,7 @@ def preprocess_minimaxh3():
         "max_sequence_length": MAX_SEQ_LEN,
         "trigger_word": TRIGGER_WORD,
         "audio_latent_channels": audio_channels,
+        "vae": "minimaxh3image" if IMAGE_MODE else "minimaxh3video",
         "text_encoder_hidden_layer": TEXT_ENCODER_HIDDEN_LAYER,
         "prompt_encoding": "Qwen3-VL raw layer-50 output, NO final norm, no special tokens",
         "rope_rebuilt_modules": DIAG["rope"].get("rebuilt_modules", []),

@@ -26,6 +26,13 @@
       "run": "Run_LoRAlab-MiniMaxH3.bat"
     },
     {
+      "id": "minimaxh3image",
+      "name": "MiniMax-H3 Image",
+      "description": "Image LoRAs (16 MP model, 6 steps)",
+      "image": "assets/minimaxh3image/portada.jpg",
+      "run": "Run_LoRAlab-MiniMaxH3Image.bat"
+    },
+    {
       "id": "wan22",
       "name": "Wan 2.2 (T2V-A14B)",
       "description": "Video and image LoRAs (high / low noise)",

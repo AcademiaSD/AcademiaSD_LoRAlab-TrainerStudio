@@ -494,6 +494,8 @@
 							<option value="331776" selected>576 x 576 (331,776 px²)</option>
                             <option value="589824">768 x 768 (589,824 px²)</option>
                             <option value="1048576">1024 x 1024 (1,048,576 px²)</option>
+                            <option value="2359296">1536 x 1536 (2,359,296 px²) - H3 Image</option>
+                            <option value="4194304">2048 x 2048 (4,194,304 px²) - H3 Image</option>
                             <option value="custom">Custom</option>
                         </select>
                         <input type="number" id="precache_target_area" value="331776" style="margin-top:6px; display:none;">
@@ -659,7 +661,7 @@
                     <div class="form-row-3">
                         <div class="form-group">
                             <label>Rank:</label>
-                            <input type="number" id="train_lora_rank" value="16">
+                            <input type="number" id="train_lora_rank" value="16" onchange="if (h3ImageSelected()) { const pf = document.getElementById('train_vram_profile'); if (pf && pf.value !== 'custom') applyVramProfile(pf.value); }">
                         </div>
                         <div class="form-group">
                             <label>Alpha:</label>
@@ -781,6 +783,24 @@
                         <div class="form-group">
                             <label>RAM Limit (GB, 0 = off):</label>
                             <input type="number" step="1" min="0" id="train_ram_limit_gb" value="0" title="Only used in Auto mode. Ceiling for TOTAL system RAM, the figure you see in Task Manager. 0 = no limit, everything stays in RAM. Above 0, the blocks that would push the machine past it are parked in a memory-mapped file instead.">
+                        </div>
+                        <div class="form-group" style="display:none">
+                            <label>Train Model:</label>
+                            <select id="train_h3_model" onchange="applyH3ImageMode()" title="Which DiT the LoRA is trained on. MiniMax-H3 (video) is the joint video+audio model. MiniMax-H3-Image is the 6-step distilled image model: it reuses this pre-cache (same text encoder and latent space) but only its images, needs Models/MiniMax-H3-Image-NF4, and is trained on its 6 distilled noise levels with one output head each. Image LoRAs want a higher pre-cache resolution: 1024 x 1024 or more.">
+                                <option value="video">MiniMax-H3 (video)</option>
+                                <option value="image">MiniMax-H3-Image</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="display:none">
+                            <label>Train On:</label>
+                            <select id="train_dit" class="no-i18n" title="Which DiT the LoRA trains on. MiniMax-H3-Image + adapter (default): it trains on the image model itself, with a frozen de-distillation adapter that is NOT used when generating; it gives clearly more likeness. MiniMax-H3 (video): it trains on the non-distilled video DiT and is transferred to H3-Image, with less likeness.">
+                                <option value="image" selected>MiniMax-H3-Image + adapter</option>
+                                <option value="video">MiniMax-H3 (video)</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="display:none">
+                            <label>Adapter Strength:</label>
+                            <input type="number" step="0.1" min="0" id="train_adapter_strength" value="1.5" title="Strength of the frozen de-distillation adapter while training. Only used with MiniMax-H3-Image + adapter. Default 1.5.">
                         </div>
                         <div class="form-group">
                             <label>Train Audio:</label>
@@ -1319,7 +1339,7 @@
             const aspect = document.getElementById('train_preview_aspect');
             const size = document.getElementById('train_preview_size');
             if (aspect && size && aspect.value !== 'auto' && !(parseInt(size.value, 10) > 0)) {
-                size.value = '480';
+                size.value = window.H3_IMAGE ? '1024' : '480';
             }
             syncPreviewSize();
         }
@@ -1401,10 +1421,47 @@
             }
         }
 
+        // MiniMax-H3-Image: no audio, no clips, no RefMod, no Turbo LoRA and no video VRAM plan. The model is
+        // distilled to 6 steps with one output head each and has no CFG, so the preview is fixed to 6 / 1.
+        // MiniMax-H3-Image: sin audio, clips, RefMod, Turbo ni plan de VRAM de video; preview fija a 6 pasos, CFG 1.
+        function applyH3ImageMode() {
+            const on = !!window.H3_IMAGE;
+            const groups = ['precache_num_frames', 'train_vram_swap_gb', 'train_vram_headroom_gb',
+                            'train_park_mode', 'train_ram_limit_gb', 'train_use_audio_loss', 'train_use_sage_attention',
+                            'train_preview_shift'];
+            groups.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) (el.closest('.form-group') || el).style.display = on ? 'none' : '';
+            });
+            ['train_dit', 'train_adapter_strength'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) (el.closest('.form-group') || el).style.display = on ? '' : 'none';
+            });
+            ['btn-vocals', 'btn-split', 'btn-fps', 'pnl_refmod'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.style.display = on ? 'none' : '';
+            });
+            const turbo = document.getElementById('train_use_turbo');
+            if (turbo && turbo.parentElement && turbo.parentElement.parentElement)
+                turbo.parentElement.parentElement.style.display = on ? 'none' : '';
+            const steps = document.getElementById('train_preview_steps');
+            const cfg = document.getElementById('train_preview_cfg');
+            if (steps.dataset.videoTitle === undefined) steps.dataset.videoTitle = steps.title;
+            if (on) { steps.value = 6; cfg.value = 1; }
+            steps.readOnly = on;
+            cfg.readOnly = on;
+            const prof = document.getElementById('train_vram_profile');
+            if (prof && prof.value !== 'custom') applyVramProfile(prof.value);
+            steps.title = on ? 'MiniMax-H3-Image is distilled to 6 steps, one output head per step, with no CFG: the preview always runs 6 steps at CFG 1.'
+                             : steps.dataset.videoTitle;
+        }
+
         function updateProjectPaths() {
             const proj = document.getElementById('project_name').value.trim();
-            const cacheDir = proj ? `./Cache_Data/cached_data_minimaxh3_${proj}` : './Cache_Data/cached_data_minimaxh3';
-            const outputDir = proj ? `./Outputs/minimaxh3_lora_output_${proj}` : './Outputs/minimaxh3_lora_output';
+            const cachePrefix = window.H3_IMAGE ? 'cached_data_minimaxh3image' : 'cached_data_minimaxh3';
+            const cacheDir = proj ? `./Cache_Data/${cachePrefix}_${proj}` : `./Cache_Data/${cachePrefix}`;
+            const outPrefix = window.H3_IMAGE ? 'minimaxh3image_lora_output' : 'minimaxh3_lora_output';
+            const outputDir = proj ? `./Outputs/${outPrefix}_${proj}` : `./Outputs/${outPrefix}`;
             
             document.getElementById('precache_cache_dir').value = cacheDir;
             document.getElementById('train_output_dir').value = outputDir;
@@ -1748,6 +1805,27 @@
         // GB de la tarjeta detectada por la telemetria (nvidia-smi), o null.
         let detectedVramGb = null;
 
+        // MiniMax-H3-Image: its own plan, the one 2_train_lora_minimaxh3image.py computes. Same constants.
+        // MiniMax-H3-Image: su propio plan, el mismo que calcula su entrenador.
+        const VRAM_IMAGE = { SLACK: 2.0, BASE: 4.2, PER_TOKEN: 0.0006, BLOCK: 0.32, BLOCKS: 50, SEC_PER_SWAPPED: 0.09, LORA_PER_RANK: 0.08 };
+        function h3ImageSelected() {
+            return !!window.H3_IMAGE;
+        }
+        function vramComputeImage(targetGb) {
+            const seq = vramSequenceTokens();
+            // An image is ONE latent frame: without a cache the video estimate counts the clip's frames.
+            // Una imagen es UN fotograma latente: sin cache, la estimacion de video cuenta los del clip.
+            const tokens = (seq.textTokens || 0) + Math.round((seq.videoTokens || 0) / Math.max(1, seq.latentFrames || 1));
+            const M = VRAM_IMAGE;
+            // Same plan as the trainer: the constants were measured at rank 16; each unit of rank costs
+            // 0.08 GB (fp32 LoRA + grads + AdamW). Mismo calculo que el entrenador.
+            const rank = parseInt(document.getElementById('train_lora_rank').value) || 16;
+            const floor = M.BASE + M.PER_TOKEN * tokens + M.LORA_PER_RANK * (rank - 16);
+            const blocks = Math.max(0, Math.min(M.BLOCKS, Math.floor((targetGb - M.SLACK - floor) / M.BLOCK)));
+            return { budget: targetGb, blocks, tokens, peak: floor + blocks * M.BLOCK, usable: targetGb - M.SLACK,
+                     fits: targetGb - M.SLACK >= floor, seq };
+        }
+
         async function applyVramProfile(key) {
             const info = document.getElementById('vram_auto_info');
             if (String(key) === 'custom') {
@@ -1771,6 +1849,24 @@
                 modo = t('GPU detected: {gb} GB', { gb: targetGb.toFixed(1) });
             }
 
+            if (h3ImageSelected()) {
+                const r = vramComputeImage(targetGb);
+                document.getElementById('train_vram_budget_gb').value = r.budget.toFixed(2);
+                if (!info) return;
+                if (!r.fits) {
+                    info.innerHTML = '<span style="color:var(--danger)">'
+                        + t('Does not fit in {gb} GB at this resolution (peak {peak} GB > {usable} usable). Lower the pre-cache resolution.',
+                            { gb: targetGb, peak: r.peak.toFixed(2), usable: r.usable.toFixed(2) }) + '</span>';
+                    return;
+                }
+                info.innerHTML = `${modo} &middot; ` + t('{blocks}/50 resident blocks', { blocks: r.blocks }) + ' &middot; '
+                    + t('estimated peak {peak} GB of {usable} usable ({spare} spare).',
+                        { peak: r.peak.toFixed(2), usable: r.usable.toFixed(2), spare: (r.usable - r.peak).toFixed(2) })
+                    + ' ' + t('Sequence {n} tokens.', { n: r.tokens })
+                    + (parseInt(document.getElementById('train_resident_blocks').value) > 0
+                        ? ' <span style="color:var(--warning)">' + t('Resident Blocks is set by hand and overrides the plan.') + '</span>' : '');
+                return;
+            }
             const r = vramComputeFor(targetGb);
             document.getElementById('train_vram_budget_gb').value = r.budget.toFixed(2);
             document.getElementById('train_vram_swap_gb').value = r.swap.toFixed(2);
@@ -1821,6 +1917,16 @@
             const sw = parseFloat(document.getElementById('train_vram_swap_gb').value);
             const h = parseFloat(document.getElementById('train_vram_headroom_gb').value);
             let match = 'custom';
+            if (h3ImageSelected()) {
+                for (const opt of Array.from(sel.options)) {
+                    if (opt.value !== 'custom' && opt.value !== 'auto' && Math.abs(parseFloat(opt.value) - b) < 0.005) match = opt.value;
+                }
+                sel.value = match;
+                const info = document.getElementById('vram_auto_info');
+                if (info && match === 'custom') info.innerHTML = t('Manual values.');
+                else if (match !== 'custom') applyVramProfile(match);
+                return;
+            }
             for (const opt of Array.from(sel.options)) {
                 if (opt.value === 'custom' || opt.value === 'auto') continue;
                 const r = vramComputeFor(parseFloat(opt.value));
@@ -1841,6 +1947,31 @@
                 await loadHfToken();
                 const res = await fetch('/api/settings');
                 const data = await res.json();
+                // Tarjeta MiniMax-H3 Image: misma GUI, modelo fijado a imagen / the image card pins the model.
+                if (data.h3_model_forced === 'image') {
+                    window.H3_IMAGE = true;
+                    document.title = 'AcademiaSD MiniMax-H3 Image LoRAlab';
+                    const h1 = document.querySelector('h1');
+                    if (h1) h1.textContent = 'AcademiaSD MiniMax-H3 Image LoRAlab';
+                    const model = document.getElementById('train_h3_model');
+                    model.value = 'image';
+                    (model.closest('.form-group') || model).style.display = 'none';
+                    if (!(data.pre_cache && data.pre_cache.target_area)) applyResolution(1048576);
+                    if (!(data.train && data.train.lr)) document.getElementById('train_lr').value = '0.0002';
+                    if (!(data.train && data.train.total_steps)) document.getElementById('train_total_steps').value = 1200;
+                    // MiniMax-H3-Image works at 4-20 MP and is best at ~16 MP: the video sizes (360-640) are
+                    // below its 0.65 MP minimum. Area sides, at the preview aspect; 21:9 at 16 MP is 6272 wide.
+                    // MiniMax-H3-Image trabaja a 4-20 MP, mejor a ~16 MP: los tamanos de video quedan por debajo de su minimo.
+                    document.getElementById('train_preview_size').innerHTML =
+                        '<option value="0" selected>Training</option>' +
+                        '<option value="1024">1024 x 1024 (1 MP, fast)</option>' +
+                        '<option value="1536">1536 x 1536 (2.4 MP)</option>' +
+                        '<option value="2048">2048 x 2048 (4.2 MP)</option>' +
+                        '<option value="3072">3072 x 3072 (9.4 MP, slow)</option>' +
+                        '<option value="4096">4096 x 4096 (16.8 MP, native, very slow)</option>';
+                    if (window.PreviewSize) PreviewSize.configure({ step: 32, maxSide: 6272 });
+                    if (!(data.pre_cache && data.pre_cache.max_side)) document.getElementById('precache_max_side').value = 2048;
+                }
                 if (data.export && data.export.export_models_dir) document.getElementById('export_models_dir').value = data.export.export_models_dir;
                 if (data.pre_cache) {
                     const p = data.pre_cache;
@@ -1857,6 +1988,8 @@
                     const t = data.train;
                     lastTrainSaved = { ...t };
                     if (t.total_steps) document.getElementById('train_total_steps').value = t.total_steps;
+                    if (t.train_dit) document.getElementById('train_dit').value = t.train_dit;
+                    if (t.adapter_strength !== undefined) document.getElementById('train_adapter_strength').value = t.adapter_strength;
                     if (t.lr) document.getElementById('train_lr').value = t.lr;
                     if (t.lr_scheduler) document.getElementById('train_lr_scheduler').value = t.lr_scheduler;
                     if (t.warmup_steps !== undefined) document.getElementById('train_warmup_steps').value = t.warmup_steps;
@@ -1893,6 +2026,8 @@
                     if (t.ram_limit_gb !== undefined) document.getElementById('train_ram_limit_gb').value = t.ram_limit_gb;
                     if (t.use_sage_attention !== undefined) document.getElementById('train_use_sage_attention').checked = !!t.use_sage_attention;
                     if (t.use_audio_loss !== undefined) document.getElementById('train_use_audio_loss').checked = !!t.use_audio_loss;
+                    if (t.h3_model !== undefined) document.getElementById('train_h3_model').value = window.H3_IMAGE ? 'image' : 'video';
+                    applyH3ImageMode();
                     if (t.resident_blocks !== undefined) document.getElementById('train_resident_blocks').value = t.resident_blocks;
                     if (t.park_mode !== undefined) document.getElementById('train_park_mode').value = t.park_mode;
                     if (t.vram_swap_gb !== undefined) document.getElementById('train_vram_swap_gb').value = t.vram_swap_gb;
@@ -2002,6 +2137,8 @@
                     if (data.ram_limit_gb !== undefined) document.getElementById('train_ram_limit_gb').value = data.ram_limit_gb;
                     if (data.use_sage_attention !== undefined) document.getElementById('train_use_sage_attention').checked = !!data.use_sage_attention;
                     if (data.use_audio_loss !== undefined) document.getElementById('train_use_audio_loss').checked = !!data.use_audio_loss;
+                    if (data.h3_model !== undefined) document.getElementById('train_h3_model').value = window.H3_IMAGE ? 'image' : 'video';
+                    applyH3ImageMode();
                     if (data.resident_blocks !== undefined) document.getElementById('train_resident_blocks').value = data.resident_blocks;
                     if (data.park_mode !== undefined) document.getElementById('train_park_mode').value = data.park_mode;
                     if (data.vram_swap_gb !== undefined) document.getElementById('train_vram_swap_gb').value = data.vram_swap_gb;
@@ -2188,6 +2325,9 @@
                 ram_limit_gb: parseFloat(document.getElementById('train_ram_limit_gb').value) || 0,
                 use_sage_attention: document.getElementById('train_use_sage_attention').checked,
                 use_audio_loss: document.getElementById('train_use_audio_loss').checked,
+                h3_model: document.getElementById('train_h3_model').value,
+                train_dit: document.getElementById('train_dit').value,
+                adapter_strength: parseFloat(document.getElementById('train_adapter_strength').value) || 1.5,
                 resident_blocks: parseInt(document.getElementById('train_resident_blocks').value) || 0,
                 park_mode: document.getElementById('train_park_mode').value,
                 vram_swap_gb: parseFloat(document.getElementById('train_vram_swap_gb').value),

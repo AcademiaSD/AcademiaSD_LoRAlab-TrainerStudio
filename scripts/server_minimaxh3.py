@@ -78,17 +78,31 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 BASE_DIR = SCRIPTS_DIR.parent
 SETTINGS_DIR = BASE_DIR / "settings"
 SETTINGS_DIR.mkdir(exist_ok=True)
+# MiniMax-H3-Image is this same server and GUI opened in image mode (server_minimaxh3image.py sets it):
+# its own settings files and output folders, the same pre-cache and cache folders.
+# MiniMax-H3-Image es este mismo servidor y GUI en modo imagen: ajustes y carpetas de salida propios,
+# mismo pre-cache y mismas carpetas de cache.
+IMAGE_MODE = os.environ.get("LORALAB_H3_MODEL", "").strip().lower() == "image"
+TRAINER_ID = "minimaxh3image" if IMAGE_MODE else "minimaxh3"
+TRAINER_TITLE = "MiniMax-H3 Image" if IMAGE_MODE else "MiniMax-H3"
+OUTPUT_PREFIX = "minimaxh3image_lora_output" if IMAGE_MODE else "minimaxh3_lora_output"
+# Its latents come from the MiniMax-H3-Image VAE, not the video one: never share a cache with MiniMax-H3.
+# Sus latentes salen del VAE de H3-Image, no del de video: nunca comparte cache con MiniMax-H3.
+CACHE_PREFIX = "cached_data_minimaxh3image" if IMAGE_MODE else "cached_data_minimaxh3"
 ASSETS_DIR = BASE_DIR / "assets" / "minimaxh3"
 UI_FILE = BASE_DIR / "GUI" / "trainer_ui_minimaxh3.html"
 LOGO_FILE = ASSETS_DIR / "logo.png" if (ASSETS_DIR / "logo.png").exists() else BASE_DIR / "logo.png"
-PRECACHE_CONFIG = Path(os.environ.get("LORALAB_PRECACHE_CONFIG") or SETTINGS_DIR / "pre_cache_settings_minimaxh3.json")
+PRECACHE_CONFIG = Path(os.environ.get("LORALAB_PRECACHE_CONFIG") or SETTINGS_DIR / f"pre_cache_settings_{TRAINER_ID}.json")
 REFMOD_CONFIG = SETTINGS_DIR / "refmod_settings_minimaxh3.json"
-TRAIN_CONFIG = Path(os.environ.get("LORALAB_TRAIN_CONFIG") or SETTINGS_DIR / "train_settings_minimaxh3.json")
+TRAIN_CONFIG = Path(os.environ.get("LORALAB_TRAIN_CONFIG") or SETTINGS_DIR / f"train_settings_{TRAINER_ID}.json")
 HF_TOKEN_CONFIG = SETTINGS_DIR / "HF_token.json"
 EXPORT_CONFIG = SETTINGS_DIR / "export_settings.json"  # compartido / shared by every trainer
 CAPTION_SCRIPT = SCRIPTS_DIR / "0_caption_MiniMaxH3.py"
 PRECACHE_SCRIPT = SCRIPTS_DIR / "1_pre_cache_MiniMaxH3.py"
 TRAIN_SCRIPT = SCRIPTS_DIR / "2_train_lora_MiniMaxH3.py"
+# MiniMax-H3-Image shares this GUI, pre-cache and settings file: "h3_model": "image" picks its trainer.
+# MiniMax-H3-Image comparte esta GUI, el pre-cache y los ajustes: "h3_model": "image" elige su entrenador.
+TRAIN_SCRIPT_IMAGE = SCRIPTS_DIR / "2_train_lora_minimaxh3image.py"
 
 app = Flask(__name__)
 project_layout.ensure_layout_and_log(BASE_DIR)
@@ -191,8 +205,8 @@ def get_train_output_dir():
     cfg = read_json_file(TRAIN_CONFIG, {})
     proj = cfg.get("project_name", "").strip()
     if proj:
-        return resolve_config_path(f"minimaxh3_lora_output_{proj}", "minimaxh3_lora_output")
-    return resolve_config_path(cfg.get("output_dir"), "minimaxh3_lora_output")
+        return resolve_config_path(f"{OUTPUT_PREFIX}_{proj}", OUTPUT_PREFIX)
+    return resolve_config_path(cfg.get("output_dir"), OUTPUT_PREFIX)
 
 
 # Extensiones del dataset. Se declaran una sola vez: antes cada endpoint tenia
@@ -220,12 +234,19 @@ def get_dataset_dir():
     return resolve_config_path(cfg.get("dataset_path"), "./dataset")
 
 
+def h3_image_selected():
+    """True when the LoRA is trained on MiniMax-H3-Image: the image card, or the selector of the video one."""
+    return IMAGE_MODE
+
+
 def get_script_for_name(script_name):
     if script_name == "caption":
         return CAPTION_SCRIPT
     if script_name == "precache":
         return PRECACHE_SCRIPT
     if script_name == "train":
+        if h3_image_selected():
+            return TRAIN_SCRIPT_IMAGE
         return TRAIN_SCRIPT
     return None
 
@@ -403,6 +424,8 @@ def export_lora():
         if not output_dir.exists():
             return jsonify({"status": "error", "error": t("Output folder does not exist: {path}", path=output_dir)}), 404
         final_file = output_dir / "MiniMaxH3_FINAL_LoRA.safetensors"
+        if h3_image_selected():
+            final_file = output_dir / "MiniMaxH3Image_FINAL_LoRA.safetensors"
         source_file = None
         if final_file.exists():
             source_file = final_file
@@ -467,6 +490,7 @@ def get_settings():
         "train": read_json_file(TRAIN_CONFIG, {}),
         "refmod": read_json_file(REFMOD_CONFIG, {}),
         "export": read_json_file(EXPORT_CONFIG, {}),
+        "h3_model_forced": "image" if IMAGE_MODE else "",
         "base_dir": str(BASE_DIR)
     })
 
@@ -478,8 +502,8 @@ def save_precache():
         if not isinstance(data, dict):
             return jsonify({"status": "error", "error": t("JSON object required.")}), 400
         proj = data.get("project_name", "").strip()
-        cache_dir_name = f"cached_data_minimaxh3_{proj}" if proj else "cached_data_minimaxh3"
-        output_dir_name = f"minimaxh3_lora_output_{proj}" if proj else "minimaxh3_lora_output"
+        cache_dir_name = f"{CACHE_PREFIX}_{proj}" if proj else CACHE_PREFIX
+        output_dir_name = f"{OUTPUT_PREFIX}_{proj}" if proj else OUTPUT_PREFIX
         data["cache_dir"] = f"./Cache_Data/{cache_dir_name}"
         write_json_file(PRECACHE_CONFIG, data)
         saved_files = [PRECACHE_CONFIG.name]
@@ -533,8 +557,8 @@ def save_train():
         if not isinstance(data, dict):
             return jsonify({"status": "error", "error": t("JSON object required.")}), 400
         proj = data.get("project_name", "").strip()
-        cache_dir_name = f"cached_data_minimaxh3_{proj}" if proj else "cached_data_minimaxh3"
-        output_dir_name = f"minimaxh3_lora_output_{proj}" if proj else "minimaxh3_lora_output"
+        cache_dir_name = f"{CACHE_PREFIX}_{proj}" if proj else CACHE_PREFIX
+        output_dir_name = f"{OUTPUT_PREFIX}_{proj}" if proj else OUTPUT_PREFIX
         data["cache_dir"] = f"./Cache_Data/{cache_dir_name}"
         data["output_dir"] = f"./Outputs/{output_dir_name}"
         # Lo que había antes: con el entrenamiento en marcha, la GUI avisa solo de lo que ha cambiado.
@@ -688,7 +712,7 @@ def cache_info():
                     "max_audio_rows": max_audio,
                     "cached_num_frames": max_frames,
                     "cached_target_area": cached_area,
-                    "form_target_area": int(cfg.get("target_area", 0) or 0)})
+                    "form_target_area": int(read_json_file(PRECACHE_CONFIG, {}).get("target_area", 0) or 0)})
     return jsonify(out)
 
 
@@ -1095,8 +1119,8 @@ def _get_precache_dir():
     cfg = read_json_file(PRECACHE_CONFIG, {})
     proj = str(cfg.get("project_name", "")).strip()
     if proj:
-        return resolve_config_path("cached_data_minimaxh3_{}".format(proj), "./cached_data_minimaxh3")
-    return resolve_config_path(cfg.get("cache_dir"), "./cached_data_minimaxh3")
+        return resolve_config_path("{}_{}".format(CACHE_PREFIX, proj), "./" + CACHE_PREFIX)
+    return resolve_config_path(cfg.get("cache_dir"), "./" + CACHE_PREFIX)
 
 
 def _wipe_dir(path):
@@ -2202,15 +2226,15 @@ def open_browser():
 i18n.register(app)
 file_transfer.register(app, get_dataset_dir, get_train_output_dir, DATASET_EXTS)
 runtime.register(app)
-queue_link.register(app, "minimaxh3", runtime, TRAIN_CONFIG, PRECACHE_CONFIG)
+queue_link.register(app, TRAINER_ID, runtime, TRAIN_CONFIG, PRECACHE_CONFIG)
 training_metrics.register(app, get_train_output_dir)
 face_match.register(app, get_dataset_dir, get_train_output_dir)
 dataset_forge.register(app, get_dataset_dir)
 
 
-if __name__ == "__main__":
+def main():
     print("\n" + "=" * 70)
-    print("  ACADEMIASD — MiniMax-H3 LORALAB TRAINER WEB SERVER")
+    print(f"  ACADEMIASD — {TRAINER_TITLE} LORALAB TRAINER WEB SERVER")
     print("=" * 70)
     print(f"  {t('Base folder'):<20}: {BASE_DIR}")
     print(f"  {t('Python interpreter'):<20}: {sys.executable}")
@@ -2218,3 +2242,7 @@ if __name__ == "__main__":
     print("=" * 70 + "\n")
     threading.Timer(1.2, open_browser).start()
     remote_access.serve(app, "trainer_port")
+
+
+if __name__ == "__main__":
+    main()
