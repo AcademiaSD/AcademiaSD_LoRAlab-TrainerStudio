@@ -293,13 +293,21 @@ def set_frozen_enabled(model, enabled):
 def lora_file_to_modules(path):
     """
     A LoRA file in the exported (original checkpoint) layout -> {diffusers module name: (A, B)}:
-    qkv_proj split per attention head into to_q/to_k/to_v, out_proj -> to_out.0, mlp.fc1 ->
+    qkv_proj split into to_q/to_k/to_v, out_proj -> to_out.0, mlp.fc1 ->
     ff.net.0.proj with the SwiGLU halves back to [value; gate], mlp.fc2 -> ff.net.2. Scaling is
     already baked into B by the exporter.
     Un LoRA exportado -> modulos de diffusers (inverso del exportador).
     """
+    from safetensors import safe_open
     from safetensors.torch import load_file
+    with safe_open(path, "pt") as fh:
+        meta = fh.metadata() or {}
     sd = load_file(path)
+    # qkv_proj is [q; k; v] (ComfyUI's layout). Only the files this trainer exported before it
+    # wrote `qkv_layout` interleave it per attention head (128 rows each) - the published
+    # de-distillation adapter is one of them.
+    # Los LoRAs de imagen anteriores a `qkv_layout` van intercalados por cabeza.
+    interleaved = ("qkv_layout" not in meta and "MiniMax-H3-Image" in meta.get("trained_with", ""))
     out_map = {}
     for key in sd:
         if not key.endswith(".lora_A.weight"):
@@ -315,9 +323,13 @@ def lora_file_to_modules(path):
         if dbase.endswith("attn.qkv_proj"):
             stem = dbase[: -len("qkv_proj")]
             out = B.shape[0] // 3
-            rows = B.reshape(out // 128, 3, 128, -1)
-            for i, n in enumerate(("to_q", "to_k", "to_v")):
-                out_map[stem + n] = (A, rows[:, i].reshape(out, -1).contiguous())
+            if interleaved:
+                rows = B.reshape(out // 128, 3, 128, -1)
+                parts = [rows[:, i].reshape(out, -1) for i in range(3)]
+            else:
+                parts = list(B.chunk(3, dim=0))
+            for n, part in zip(("to_q", "to_k", "to_v"), parts):
+                out_map[stem + n] = (A, part.contiguous())
         elif dbase.endswith("attn.out_proj"):
             out_map[dbase.replace("out_proj", "to_out.0")] = (A, B)
         elif dbase.endswith("mlp.fc1"):

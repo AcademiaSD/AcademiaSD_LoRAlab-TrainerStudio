@@ -559,16 +559,13 @@ def _fuse_qkv(q_A, q_B, k_A, k_B, v_A, v_B):
     for part, out, rank in zip((q_B, k_B, v_B), outs, ranks):
         B[row:row + out, col:col + rank] = part.float()
         row, col = row + out, col + rank
-    # The checkpoint's qkv_proj is NOT [q; k; v]: it is interleaved per attention head,
-    # [q_h0, k_h0, v_h0, q_h1, ...] in runs of head_dim rows. Verified row by row against
-    # MiniMaxAI/MiniMax-H3-Image `transformer/` (row 128 is to_k row 0, row 256 is to_v
-    # row 0, row 384 is to_q row 128).
-    # El qkv_proj del checkpoint va intercalado por cabeza, no en tres bloques.
-    out, head_dim = outs[0], 128
-    heads = out // head_dim
-    rows = torch.arange(out).reshape(heads, head_dim)
-    order = torch.stack([rows, rows + out, rows + 2 * out], dim=1).reshape(-1)
-    return torch.cat([q_A.float(), k_A.float(), v_A.float()], dim=0), B[order]
+    # [q; k; v] in three blocks: the layout of the checkpoints ComfyUI loads (its MiniMax-H3
+    # attention does qkv_proj(x).split(heads * head_dim)). Verified on the ComfyUI H3-Image
+    # checkpoint: its qkv_proj row norms match [to_q; to_k; to_v] (correlation 1.0) and not a
+    # per-head interleave (0.21). LoRAs exported before `qkv_layout` was written used that
+    # interleave; minimaxh3image_model.lora_file_to_modules still reads them.
+    # [q; k; v] en tres bloques, como el checkpoint que carga ComfyUI.
+    return torch.cat([q_A.float(), k_A.float(), v_A.float()], dim=0), B
 
 
 def export_lora(model, path):
@@ -599,7 +596,7 @@ def export_lora(model, path):
     project = str(cfg("project_name") or "").strip()
     meta = {
         "format": "minimaxh3_lora", "lora_key_prefix": prefix, "baked_scaling": "{:.6f}".format(scale),
-        "qkv_fused": "true", "swiglu_fc1_halves_swapped": "true",
+        "qkv_fused": "true", "qkv_layout": "q_k_v", "swiglu_fc1_halves_swapped": "true",
         "trained_with": "AcademiaSD LoRAlab MiniMax-H3-Image (trained on the {} DiT{})".format(
             "MiniMax-H3-Image" if TRAIN_ON_IMAGE else "MiniMax-H3",
             ", adapter " + os.path.basename(str(cfg("adapter_lora"))) if TRAIN_ON_IMAGE and str(cfg("adapter_lora") or "").strip().lower() not in ("", "none") else ""),

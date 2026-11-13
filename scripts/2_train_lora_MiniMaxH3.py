@@ -5770,6 +5770,7 @@ def build_lora_metadata(prefix, scaling, extra=None):
         "lora_key_prefix": prefix,
         "baked_scaling": "{:.6f}".format(scaling),
         "qkv_fused": "true",
+        "qkv_layout": "q_k_v",
         "swiglu_fc1_halves_swapped": "true",
 
         # --- procedencia / provenance ---
