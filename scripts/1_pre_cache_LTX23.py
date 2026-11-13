@@ -40,6 +40,7 @@ import torchvision.transforms.functional as F_vision
 from PIL import Image
 from diffusers import DiffusionPipeline
 from i18n import t
+from text_io import read_text_file
 import gpu_stats
 from project_layout import resolve_cache_dir, resolve_model_dir
 
@@ -973,8 +974,7 @@ def read_prompt(base_name):
     prompt = ""
 
     if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            prompt = f.read().strip()
+        prompt = read_text_file(path).strip()
 
     if TRIGGER_WORD and TRIGGER_WORD.lower() not in prompt.lower():
         prompt = f"{TRIGGER_WORD}, {prompt}".strip(", ")

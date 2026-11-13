@@ -49,6 +49,7 @@ import time
 
 import torch
 from i18n import t
+from text_io import read_text_file
 from project_layout import resolve_model_dir
 
 
@@ -719,7 +720,7 @@ def main():
         txt = os.path.join(dataset, os.path.splitext(name)[0] + ".txt")
         if not overwrite and os.path.isfile(txt):
             try:
-                if open(txt, encoding="utf-8").read().strip():
+                if read_text_file(txt).strip():
                     continue
             except Exception:
                 pass

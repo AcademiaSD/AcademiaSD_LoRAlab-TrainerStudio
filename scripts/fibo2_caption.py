@@ -16,21 +16,11 @@ import json
 import os
 import re
 
+# Lectura de .txt en cualquier codificación, compartida con los demás entrenadores (#71).
+from text_io import read_text_file  # noqa: F401  (fibo2_caption.read_text_file)
+
 JSON_EXT = ".json"
 TXT_EXT = ".txt"
-
-
-def read_text_file(path):
-    """Texto en UTF-8 (con o sin BOM), cp1252 o latin-1. Los .txt guardados en Windows
-    suelen venir en cp1252 y rompían el pre-caché al decodificarlos como UTF-8."""
-    with open(path, "rb") as f:
-        raw = f.read()
-    for encoding in ("utf-8-sig", "cp1252", "latin-1"):
-        try:
-            return raw.decode(encoding)
-        except UnicodeDecodeError:
-            continue
-    return ""
 
 
 def compact(caption):

@@ -51,6 +51,7 @@ import torchvision.transforms.functional as F_vision
 from PIL import Image
 from safetensors import safe_open
 from i18n import t
+from text_io import read_text_file
 from project_layout import resolve_cache_dir, resolve_model_dir
 
 # ============================================================================
@@ -855,8 +856,7 @@ def read_prompt(base_name):
     had = False
     if os.path.exists(path):
         had = True
-        with open(path, "r", encoding="utf-8") as f:
-            prompt = f.read().strip()
+        prompt = read_text_file(path).strip()
     # EL TRIGGER SALE DEL CAPTION Y DE NINGUN OTRO SITIO.
     #
     # Aqui habia una linea que se lo ponia delante a toda muestra que no lo

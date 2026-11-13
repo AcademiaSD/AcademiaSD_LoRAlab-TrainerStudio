@@ -21,6 +21,7 @@ import webbrowser
 from console_stream import read_console
 from trainer_stream import TrainerStream
 import i18n
+from text_io import read_text_file
 import project_layout
 import remote_access
 import file_transfer
@@ -809,7 +810,7 @@ def dataset_info():
                 caption = ""
                 if txt_path.exists():
                     try:
-                        caption = txt_path.read_text(encoding="utf-8").strip()
+                        caption = read_text_file(txt_path).strip()
                     except Exception:
                         pass
                 # mtime va a la URL (?v=) para que el navegador no muestre una imagen reemplazada desde su caché.
@@ -876,7 +877,7 @@ def batch_caption():
             return jsonify({"status": "ok", "updated_count": 0})
 
         for txt_path in dataset_caption_paths(dataset_dir):
-            current = txt_path.read_text(encoding="utf-8").strip() if txt_path.exists() else ""
+            current = read_text_file(txt_path).strip() if txt_path.exists() else ""
 
             if not common:
                 text = current

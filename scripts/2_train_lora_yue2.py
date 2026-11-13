@@ -65,6 +65,7 @@ import torch.nn.functional as F
 from peft import LoraConfig, get_peft_model, get_peft_model_state_dict, set_peft_model_state_dict
 from safetensors.torch import save_file, load, safe_open
 from i18n import t
+from text_io import read_text_file
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import lora_options
 import training_metrics
@@ -812,8 +813,7 @@ def _preview_letra(sample_name):
     if sample_name:
         path = os.path.join(DATASET_PATH, sample_name + ".txt")
         if os.path.isfile(path):
-            with open(path, "r", encoding="utf-8") as f:
-                return f.read().strip()
+            return read_text_file(path).strip()
     return ""
 
 

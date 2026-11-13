@@ -25,6 +25,7 @@ import torchvision.transforms.functional as F_vision
 from PIL import Image
 
 from i18n import t
+from text_io import read_text_file
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 
 try:
@@ -369,8 +370,7 @@ def read_caption(name):
     path = os.path.join(DATASET_PATH, f"{name}.txt")
     if not os.path.exists(path):
         return ""
-    with open(path, "r", encoding="utf-8") as f:
-        return f.read().strip()
+    return read_text_file(path).strip()
 
 
 def encode_latents(vae, jobs, device="cuda"):

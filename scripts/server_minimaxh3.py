@@ -20,6 +20,7 @@ import webbrowser
 from console_stream import read_console
 from trainer_stream import TrainerStream
 import i18n
+from text_io import read_text_file
 import project_layout
 import remote_access
 import file_transfer
@@ -815,7 +816,7 @@ def dataset_info():
                 caption = ""
                 if txt_path.exists():
                     try:
-                        caption = txt_path.read_text(encoding="utf-8").strip()
+                        caption = read_text_file(txt_path).strip()
                     except Exception:
                         pass
                 try:
@@ -1017,7 +1018,7 @@ def batch_caption():
 
             actual = ""
             if txt_path.exists():
-                actual = txt_path.read_text(encoding="utf-8").strip()
+                actual = read_text_file(txt_path).strip()
 
             if not comun:
                 text = actual
@@ -1830,7 +1831,7 @@ def split_samples():
             txt = m.with_suffix(".txt")
             if txt.exists():
                 try:
-                    contenido = txt.read_text(encoding="utf-8")
+                    contenido = read_text_file(txt)
                     for h in hechos:
                         h.with_suffix(".txt").write_text(contenido, encoding="utf-8")
                     shutil.move(str(txt), str(backup / txt.name))

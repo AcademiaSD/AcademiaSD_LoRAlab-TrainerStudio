@@ -21,6 +21,7 @@ from PIL import Image
 from diffusers import AutoencoderKLWan
 from transformers import AutoTokenizer, UMT5EncoderModel
 from i18n import t
+from text_io import read_text_file
 from project_layout import resolve_cache_dir, resolve_model_dir
 import wan22_model as wan
 
@@ -148,8 +149,7 @@ def read_caption(name):
     path = os.path.join(DATASET_PATH, f"{name}.txt")
     if not os.path.exists(path):
         return ""
-    with open(path, "r", encoding="utf-8") as f:
-        return f.read().strip()
+    return read_text_file(path).strip()
 
 
 def fit(img, bw, bh):

@@ -49,6 +49,7 @@ import logging
 
 import numpy as np
 from i18n import t
+from text_io import read_text_file
 from project_layout import resolve_cache_dir, resolve_model_dir
 
 try:
@@ -315,8 +316,7 @@ def read_letra(name):
     path = os.path.join(DATASET_PATH, name + ".txt")
     if not os.path.isfile(path):
         return ""
-    with open(path, "r", encoding="utf-8") as f:
-        return f.read().strip()
+    return read_text_file(path).strip()
 
 
 def read_plan(name):
@@ -327,8 +327,7 @@ def read_plan(name):
     path = os.path.join(DATASET_PATH, name + ".abc")
     if not os.path.isfile(path):
         return None
-    with open(path, "r", encoding="utf-8") as f:
-        text = f.read().strip()
+    text = read_text_file(path).strip()
     return text or None
 
 

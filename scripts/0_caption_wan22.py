@@ -25,6 +25,7 @@ from PIL import Image
 from huggingface_hub import snapshot_download
 from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
 from i18n import t
+from text_io import read_text_file
 from project_layout import resolve_model_dir
 import wan22_model as wan
 
@@ -191,7 +192,7 @@ def main():
     pending = []
     for name in files:
         txt = os.path.join(dataset, os.path.splitext(name)[0] + ".txt")
-        if not cfg["overwrite"] and os.path.isfile(txt) and open(txt, encoding="utf-8").read().strip():
+        if not cfg["overwrite"] and os.path.isfile(txt) and read_text_file(txt).strip():
             continue
         pending.append(name)
 

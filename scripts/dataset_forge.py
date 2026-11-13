@@ -27,6 +27,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from text_io import read_text_file
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 GUI_DIR = BASE_DIR / "GUI"
@@ -298,7 +299,7 @@ def register(app, get_dataset_dir):
             caption = ""
             if txt.is_file():
                 try:
-                    caption = txt.read_text(encoding="utf-8").strip()
+                    caption = read_text_file(txt).strip()
                 except OSError:
                     pass
             items.append({"file": p.name, "caption": caption, "mtime": int(p.stat().st_mtime)})

@@ -7,6 +7,7 @@ from PIL import Image
 from diffusers import AutoencoderKLFlux2, ErnieImagePipeline
 from transformers import AutoTokenizer, Mistral3Model
 from project_layout import resolve_cache_dir, resolve_model_dir
+from text_io import read_text_file
 
 CONFIG = os.environ.get("LORALAB_PRECACHE_CONFIG") or "settings/pre_cache_settings_ernie.json"
 DEFAULTS = {"model_id": "Models/Ernie-NF4", "dataset_path": "./dataset", "cache_dir": "./Cache_Data/cached_data_ernie", "target_area": 512*512, "max_side": 1536, "multiple": 32, "project_name": "", "trigger_word": "", "preview_custom_prompt": ""}
@@ -114,7 +115,7 @@ def main():
         stem=os.path.splitext(f)[0]
         # ERNIE is text-to-image. These files are independent images; there is no paired edit path.
         cap=os.path.join(DATASET,stem+".txt")
-        prompt=open(cap,encoding="utf-8").read().strip() if os.path.isfile(cap) else ""
+        prompt=read_text_file(cap).strip() if os.path.isfile(cap) else ""
         samples.append((stem,os.path.join(DATASET,f),with_trigger(prompt)))
     if not samples: raise RuntimeError(f"No images found in {DATASET}")
     print(f"ERNIE-Image text-to-image pre-cache: {len(samples)} images | {CACHE}",flush=True)

@@ -4,6 +4,7 @@ import json
 import hashlib
 import os
 from pathlib import Path
+from text_io import read_text_file
 
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
@@ -54,11 +55,7 @@ def build_metadata(dataset_dir, metadata_path, mode="edit"):
             if not caption.is_file():
                 errors.append(f"{image.name}: falta {caption.name} con el caption")
                 continue
-            try:
-                prompt = caption.read_text(encoding="utf-8-sig").strip()
-            except UnicodeError:
-                errors.append(f"{caption.name}: no es texto UTF-8 válido")
-                continue
+            prompt = read_text_file(caption).strip()
             if not prompt:
                 errors.append(f"{caption.name}: el caption está vacío")
                 continue
@@ -94,11 +91,7 @@ def build_metadata(dataset_dir, metadata_path, mode="edit"):
         if not caption.is_file():
             errors.append(f"{before.name}: falta {caption.name} con la instrucción")
             continue
-        try:
-            prompt = caption.read_text(encoding="utf-8-sig").strip()
-        except UnicodeError:
-            errors.append(f"{caption.name}: no es texto UTF-8 válido")
-            continue
+        prompt = read_text_file(caption).strip()
         if not prompt:
             errors.append(f"{caption.name}: la instrucción está vacía")
             continue

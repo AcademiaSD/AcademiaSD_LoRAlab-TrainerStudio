@@ -27,6 +27,7 @@ import torch.nn.functional as F
 from PIL import Image, ImageOps
 
 from i18n import t
+from text_io import read_text_file
 from project_layout import resolve_model_dir
 import dataset_forge as forge
 import gpu_stats
@@ -90,8 +91,7 @@ def open_image(path):
 def read_caption(path):
     txt = os.path.splitext(path)[0] + ".txt"
     try:
-        with open(txt, encoding="utf-8") as f:
-            return f.read().strip()
+        return read_text_file(txt).strip()
     except OSError:
         return ""
 
