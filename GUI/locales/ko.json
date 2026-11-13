@@ -1496,7 +1496,6 @@
   "Which DiT the LoRA is trained on. MiniMax-H3 (video) is the joint video+audio model. MiniMax-H3-Image is the 6-step distilled image model: it reuses this pre-cache (same text encoder and latent space) but only its images, needs Models/MiniMax-H3-Image-NF4, and is trained on its 6 distilled noise levels with one output head each. Image LoRAs want a higher pre-cache resolution: 1024 x 1024 or more.": "LoRA를 학습할 DiT. MiniMax-H3(비디오)는 비디오+오디오 통합 모델입니다. MiniMax-H3-Image는 6스텝으로 증류된 이미지 모델로, 이 프리캐시(같은 텍스트 인코더와 잠재 공간)의 이미지만 재사용하며 Models/MiniMax-H3-Image-NF4가 필요하고, 증류된 6개의 노이즈 레벨에서 각각의 출력 헤드로 학습합니다. 이미지 LoRA는 더 높은 프리캐시 해상도(1024 x 1024 이상)가 필요합니다.",
   "Sequence {n} tokens.": "{n} 토큰 시퀀스.",
   "Resident Blocks is set by hand and overrides the plan.": "Resident Blocks가 수동으로 설정되어 플랜보다 우선합니다.",
-  "Only {0} GB of VRAM free: {1} resident blocks moved back to RAM, {2} remain. Set Resident Blocks to {2} or less next time.": "여유 VRAM이 {0} GB뿐입니다: 상주 블록 {1}개를 RAM으로 되돌렸고 {2}개가 남았습니다. 다음에는 Resident Blocks를 {2} 이하로 설정하세요.",
   "resident_blocks={0} is above the {1} the VRAM plan fits; it may run out of VRAM.": "resident_blocks={0}이(가) VRAM 플랜에 맞는 {1}을(를) 초과합니다. VRAM이 부족할 수 있습니다.",
   "MiniMax-H3-Image is distilled to 6 steps, one output head per step, with no CFG: the preview always runs 6 steps at CFG 1.": "MiniMax-H3-Image는 6스텝으로 증류되었고 스텝마다 출력 헤드가 있으며 CFG가 없습니다. 미리보기는 항상 6스텝, CFG 1로 실행됩니다.",
   "This cache was not made with the MiniMax-H3-Image VAE ({0}). Run Pre-Cache from the MiniMax-H3 Image card: it writes its own cache folder.": "이 캐시는 MiniMax-H3-Image VAE로 만들어지지 않았습니다({0}). MiniMax-H3 Image 카드에서 Pre-Cache를 실행하세요. 자체 캐시 폴더에 기록합니다.",
@@ -1509,5 +1508,7 @@
   "De-distillation adapter not found: {0} ({1})": "역증류 어댑터를 찾을 수 없습니다: {0} ({1})",
   "MiniMax-H3-Image VAE for the previews ({0}/vae, ~2.2 GB) -> {1}": "미리보기용 MiniMax-H3-Image VAE({0}/vae, 약 2.2 GB) -> {1}",
   "MiniMax-H3-Image VAE unavailable ({0}); decoding with the video VAE.": "MiniMax-H3-Image VAE를 사용할 수 없습니다({0}). 비디오 VAE로 디코딩합니다.",
-  "Strength of the LoRA in the previews, like the LoRA strength in ComfyUI. Only the previews change: training and the saved LoRAs do not. It can be changed while training.": "미리보기에서의 LoRA 강도(ComfyUI의 LoRA 강도와 같음). 미리보기만 바뀌며 학습과 저장된 LoRA는 바뀌지 않습니다. 학습 중에도 바꿀 수 있습니다."
+  "Strength of the LoRA in the previews, like the LoRA strength in ComfyUI. Only the previews change: training and the saved LoRAs do not. It can be changed while training.": "미리보기에서의 LoRA 강도(ComfyUI의 LoRA 강도와 같음). 미리보기만 바뀌며 학습과 저장된 LoRA는 바뀌지 않습니다. 학습 중에도 바꿀 수 있습니다.",
+  "The step peaked at {0} GB and other programs use {1} GB, on a {2} GB card: {3} resident blocks moved back to RAM, {4} remain. Set Resident Blocks to {4} or less next time.": "스텝 최대 사용량 {0} GB, 다른 프로그램 사용량 {1} GB ({2} GB 카드): 상주 블록 {3}개를 RAM으로 되돌렸고 {4}개가 남았습니다. 다음에는 Resident Blocks를 {4} 이하로 설정하세요.",
+  "The steps leave {0} GB of VRAM unused: about {1} more resident blocks fit. Set Resident Blocks to {2} next time for faster steps.": "스텝에서 VRAM {0} GB가 사용되지 않습니다. 상주 블록을 약 {1}개 더 둘 수 있습니다. 다음에는 Resident Blocks를 {2}(으)로 설정하면 스텝이 빨라집니다."
 }

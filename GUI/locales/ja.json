@@ -1496,7 +1496,6 @@
   "Which DiT the LoRA is trained on. MiniMax-H3 (video) is the joint video+audio model. MiniMax-H3-Image is the 6-step distilled image model: it reuses this pre-cache (same text encoder and latent space) but only its images, needs Models/MiniMax-H3-Image-NF4, and is trained on its 6 distilled noise levels with one output head each. Image LoRAs want a higher pre-cache resolution: 1024 x 1024 or more.": "LoRA を学習する DiT。MiniMax-H3（動画）は動画＋音声の統合モデルです。MiniMax-H3-Image は 6 ステップに蒸留された画像モデルで、このプリキャッシュ（同じテキストエンコーダーと潜在空間）の画像のみを再利用し、Models/MiniMax-H3-Image-NF4 が必要です。蒸留された 6 つのノイズレベルで、それぞれ専用の出力ヘッドを使って学習します。画像 LoRA にはより高いプリキャッシュ解像度（1024 x 1024 以上）が必要です。",
   "Sequence {n} tokens.": "{n} トークンのシーケンス。",
   "Resident Blocks is set by hand and overrides the plan.": "Resident Blocks が手動で設定されており、プランより優先されます。",
-  "Only {0} GB of VRAM free: {1} resident blocks moved back to RAM, {2} remain. Set Resident Blocks to {2} or less next time.": "空き VRAM が {0} GB しかありません：常駐ブロック {1} 個を RAM に戻し、残りは {2} 個です。次回は Resident Blocks を {2} 以下にしてください。",
   "resident_blocks={0} is above the {1} the VRAM plan fits; it may run out of VRAM.": "resident_blocks={0} は VRAM プランが収まる {1} を超えています。VRAM が不足する可能性があります。",
   "MiniMax-H3-Image is distilled to 6 steps, one output head per step, with no CFG: the preview always runs 6 steps at CFG 1.": "MiniMax-H3-Image は 6 ステップに蒸留され、ステップごとに出力ヘッドがあり、CFG はありません。プレビューは常に 6 ステップ、CFG 1 で実行されます。",
   "This cache was not made with the MiniMax-H3-Image VAE ({0}). Run Pre-Cache from the MiniMax-H3 Image card: it writes its own cache folder.": "このキャッシュは MiniMax-H3-Image の VAE で作成されていません（{0}）。MiniMax-H3 Image カードから Pre-Cache を実行してください。専用のキャッシュフォルダーに書き込みます。",
@@ -1509,5 +1508,7 @@
   "De-distillation adapter not found: {0} ({1})": "脱蒸留アダプターが見つかりません：{0}（{1}）",
   "MiniMax-H3-Image VAE for the previews ({0}/vae, ~2.2 GB) -> {1}": "プレビュー用の MiniMax-H3-Image VAE（{0}/vae、約 2.2 GB）-> {1}",
   "MiniMax-H3-Image VAE unavailable ({0}); decoding with the video VAE.": "MiniMax-H3-Image VAE が使えません（{0}）。動画 VAE でデコードします。",
-  "Strength of the LoRA in the previews, like the LoRA strength in ComfyUI. Only the previews change: training and the saved LoRAs do not. It can be changed while training.": "プレビューでの LoRA の強さ（ComfyUI の LoRA 強度と同じ）。変わるのはプレビューだけで、学習や保存される LoRA は変わりません。学習中にも変更できます。"
+  "Strength of the LoRA in the previews, like the LoRA strength in ComfyUI. Only the previews change: training and the saved LoRAs do not. It can be changed while training.": "プレビューでの LoRA の強さ（ComfyUI の LoRA 強度と同じ）。変わるのはプレビューだけで、学習や保存される LoRA は変わりません。学習中にも変更できます。",
+  "The step peaked at {0} GB and other programs use {1} GB, on a {2} GB card: {3} resident blocks moved back to RAM, {4} remain. Set Resident Blocks to {4} or less next time.": "ステップのピークは {0} GB、他のプログラムが {1} GB 使用（カードは {2} GB）：常駐ブロック {3} 個を RAM に戻し、残りは {4} 個です。次回は Resident Blocks を {4} 以下にしてください。",
+  "The steps leave {0} GB of VRAM unused: about {1} more resident blocks fit. Set Resident Blocks to {2} next time for faster steps.": "ステップで {0} GB の VRAM が使われていません。常駐ブロックをあと約 {1} 個増やせます。次回は Resident Blocks を {2} にするとステップが速くなります。"
 }

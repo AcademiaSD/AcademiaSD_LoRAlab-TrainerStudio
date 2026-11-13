@@ -363,10 +363,11 @@ VRAM_SLACK_GB = 2.0
 # ~5.4 M parameters per unit of rank. The other constants were measured at rank 16.
 # El LoRA en entrenamiento cuesta 16 bytes por parametro; el resto se midio con rank 16.
 VRAM_LORA_GB_PER_RANK = 0.08
-# Below this much free VRAM after a step, Windows starts moving memory to "shared GPU memory"
-# (system RAM over PCIe) instead of failing, and a step gets 2-3 times slower.
-# Con menos VRAM libre que esto, Windows pasa memoria a la "memoria compartida" y todo va 2-3 veces mas lento.
-VRAM_GUARD_GB = 0.4
+# When a step's peak plus what other programs use goes past the card, Windows moves memory to
+# "shared GPU memory" (system RAM over PCIe) instead of failing, and a step gets 2-3 times slower.
+# This is the margin the guard keeps below the card's size.
+# Si el pico de un paso mas lo de otros programas pasa de la VRAM, Windows usa la memoria compartida.
+VRAM_GUARD_GB = 0.1
 VRAM_BASE_GB = 4.2
 VRAM_PER_TOKEN_GB = 0.0006
 VRAM_BLOCK_GB = 0.32
@@ -397,17 +398,34 @@ def plan_resident_blocks(num_blocks, max_tokens):
 
 def vram_guard(model):
     """
-    After a step, checks the VRAM that is really free on the card. Below VRAM_GUARD_GB, moves
-    resident blocks back to RAM (last ones first), two at a time: a block streamed from RAM costs
+    After a step, checks whether the step's peak plus other programs' VRAM got within
+    VRAM_GUARD_GB of the card's size. If so, moves resident blocks back to RAM (last ones
+    first), two at a time: a block streamed from RAM costs
     a fraction of a second per step, spilling into Windows' shared GPU memory costs 2-3 times the
     step. Works on the plan's value and on a hand-typed one alike. Returns True when it moved any.
     Si la tarjeta se queda sin VRAM libre, devuelve bloques residentes a la RAM antes de que
     Windows empiece a usar la memoria compartida.
     """
-    free = torch.cuda.mem_get_info()[0] / 2**30
+    # mem_get_info()'s free VRAM leaves out what PyTorch keeps cached between steps, so right
+    # after a step the card always looks full: that number is useless here. What matters is the
+    # step's PEAK (max_memory_reserved) plus what other programs hold, against the card's size.
+    # La VRAM "libre" no cuenta la cache de PyTorch: se compara el pico del paso con la tarjeta.
+    free, total = torch.cuda.mem_get_info()
+    reserved = torch.cuda.memory_reserved()
+    others = max(0, total - free - reserved)
+    peak = torch.cuda.max_memory_reserved()
+    torch.cuda.reset_peak_memory_stats()
+    over = (peak + others - total) / 2**30
+    model._vram_seen = max(getattr(model, "_vram_seen", -1e9), over)
     resident = getattr(model, "_resident_blocks", 0)
-    if free >= VRAM_GUARD_GB or resident <= 0:
+    # Only an overflow seen on two checks in a row counts: a single spike (the first steps'
+    # one-off allocations, a bigger bucket) must not cost resident blocks for the whole run.
+    # Solo cuenta si se repite en dos comprobaciones seguidas: un pico suelto no.
+    strikes = getattr(model, "_vram_strikes", 0) + 1 if over >= -VRAM_GUARD_GB else 0
+    model._vram_strikes = strikes
+    if strikes < 2 or resident <= 0:
         return False
+    model._vram_strikes = 0
     move = min(resident, 2)
     blocks = list(model.transformer_blocks)
     for block in blocks[resident - move:resident]:
@@ -416,9 +434,33 @@ def vram_guard(model):
                 mod.make_offloaded()
     model._resident_blocks = resident - move
     gc_cuda()
-    log("[VRAM][!] " + t("Only {0} GB of VRAM free: {1} resident blocks moved back to RAM, {2} remain. Set Resident Blocks to {2} or less next time.",
-                        "{:.2f}".format(free), move, model._resident_blocks))
+    log("[VRAM][!] " + t("The step peaked at {0} GB and other programs use {1} GB, on a {2} GB card: {3} resident blocks moved back to RAM, {4} remain. Set Resident Blocks to {4} or less next time.",
+                        "{:.1f}".format(peak / 2**30), "{:.1f}".format(others / 2**30), "{:.1f}".format(total / 2**30),
+                        move, model._resident_blocks))
     return True
+
+
+# Margin kept free when suggesting MORE resident blocks: steps differ in size (buckets, captions)
+# and a preview adds its own peak. / Margen al recomendar mas bloques residentes.
+VRAM_ADVICE_MARGIN_GB = 1.0
+
+
+def vram_advice(model):
+    """
+    Once the first steps have run: if their highest peak left room on the card, says how many
+    more resident blocks would fit. Each resident block saves its upload from RAM on every step.
+    Tras los primeros pasos: si sobra VRAM, dice cuantos bloques residentes mas caben.
+    """
+    seen = getattr(model, "_vram_seen", None)
+    resident = getattr(model, "_resident_blocks", 0)
+    total_blocks = len(model.transformer_blocks)
+    if seen is None or resident >= total_blocks:
+        return
+    room = -seen - VRAM_ADVICE_MARGIN_GB
+    more = min(total_blocks - resident, int(room // VRAM_BLOCK_GB))
+    if more >= 2:
+        log("[VRAM] " + t("The steps leave {0} GB of VRAM unused: about {1} more resident blocks fit. Set Resident Blocks to {2} next time for faster steps.",
+                          "{:.1f}".format(-seen), more, resident + more))
 
 
 def ensure_nf4():
@@ -907,8 +949,10 @@ def main():
                     optimizer.zero_grad(set_to_none=True)
                     last_update = step
             dt = time.time() - t0
-            if step - start_step <= 20 or step % max(1, PREVIEW_EVERY) == 1:
+            if 2 < step - start_step <= 20 or step % max(1, PREVIEW_EVERY) == 1:
                 vram_guard(model)
+                if step - start_step == 20:
+                    vram_advice(model)
             step_loss = float(loss)
             running_loss += step_loss
             avg_time = dt if avg_time == 0 else 0.1 * dt + 0.9 * avg_time
@@ -935,6 +979,8 @@ def main():
                 except Exception as exc:
                     log("[PREVIEW][WARN] {}".format(exc))
                     gc_cuda()
+                # The preview's own peak is not a training step's: the guard must not see it.
+                torch.cuda.reset_peak_memory_stats()
 
     except KeyboardInterrupt:
         pass
