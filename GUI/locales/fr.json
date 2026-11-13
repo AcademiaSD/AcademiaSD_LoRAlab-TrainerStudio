@@ -1508,5 +1508,6 @@
   "De-distillation adapter ({0}/adapter/{1}) -> {2}": "Adaptateur de dé-distillation ({0}/adapter/{1}) -> {2}",
   "De-distillation adapter not found: {0} ({1})": "Adaptateur de dé-distillation introuvable : {0} ({1})",
   "MiniMax-H3-Image VAE for the previews ({0}/vae, ~2.2 GB) -> {1}": "VAE de MiniMax-H3-Image pour les aperçus ({0}/vae, ~2,2 Go) -> {1}",
-  "MiniMax-H3-Image VAE unavailable ({0}); decoding with the video VAE.": "VAE de MiniMax-H3-Image indisponible ({0}) ; décodage avec le VAE vidéo."
+  "MiniMax-H3-Image VAE unavailable ({0}); decoding with the video VAE.": "VAE de MiniMax-H3-Image indisponible ({0}) ; décodage avec le VAE vidéo.",
+  "Strength of the LoRA in the previews, like the LoRA strength in ComfyUI. Only the previews change: training and the saved LoRAs do not. It can be changed while training.": "Force du LoRA dans les aperçus, comme la force du LoRA dans ComfyUI. Seuls les aperçus changent : ni l'entraînement ni les LoRA enregistrés. Modifiable pendant l'entraînement."
 }

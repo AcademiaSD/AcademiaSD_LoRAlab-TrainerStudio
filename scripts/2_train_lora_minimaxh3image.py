@@ -134,6 +134,10 @@ DEFAULTS = {
     "preview_width": 0,
     "preview_height": 0,
     "preview_vae_device": "cuda",
+    # Strength of the LoRA in the previews, like the LoRA strength in ComfyUI. Only the preview:
+    # training and the saved LoRAs do not change. Can be changed while training.
+    # Fuerza del LoRA en las previews, como en ComfyUI. No cambia el entrenamiento ni los LoRAs.
+    "preview_lora_strength": 1.0,
     "debug_training": False,
 }
 
@@ -239,7 +243,7 @@ def reload_live_settings():
         return
     live = ("total_steps", "lr", "save_every", "max_grad_norm", "weight_decay", "caption_dropout", "preview_every",
             "preview_caption_mode", "preview_seed", "preview_size", "preview_width", "preview_height",
-            "preview_vae_device")
+            "preview_vae_device", "preview_lora_strength")
     changed = [k for k in live if k in fresh and fresh[k] != CFG.get(k)]
     for key in changed:
         CFG[key] = fresh[key]
@@ -743,6 +747,7 @@ def run_preview(model, entries, step):
         width, height = width * scale, height * scale
     width, height = M.canvas_size(width, height)
     t0 = time.time()
+    strength = float(cfg("preview_lora_strength") if cfg("preview_lora_strength") not in (None, "") else 1.0)
     # The preview is rendered by MiniMax-H3-Image, the model the LoRA is for, with the LoRA being
     # trained attached (shared tensors, no copy). Its NF4 weights stay packed in RAM and are
     # uploaded layer by layer: it costs ~3 GB of VRAM on top of training, and is freed afterwards.
@@ -752,9 +757,10 @@ def run_preview(model, entries, step):
         # without the adapter (unless preview_with_adapter).
         M.set_frozen_enabled(model, cfg_bool("preview_with_adapter"))
         try:
-            latent = M.sample(model, entry["embeds"], width, height,
-                              seed=(lambda v: v if v >= 0 else step_seed(step, 11) % 2**31)(int(cfg("preview_seed"))),
-                              text_token_tags=entry["tags"], device=DEVICE)
+            with lora_strength(model, strength):
+                    latent = M.sample(model, entry["embeds"], width, height,
+                                  seed=(lambda v: v if v >= 0 else step_seed(step, 11) % 2**31)(int(cfg("preview_seed"))),
+                                  text_token_tags=entry["tags"], device=DEVICE)
         finally:
             M.set_frozen_enabled(model, True)
             gc_cuda()
@@ -764,6 +770,9 @@ def run_preview(model, entries, step):
             shared = M.attach_lora(image_model, model)
             if DEBUG:
                 log("[PREVIEW] LoRA modules attached to MiniMax-H3-Image: {}".format(shared))
+            for mod in image_model.modules():
+                if isinstance(mod, M.LazyNF4Linear) and mod.lora_A is not None:
+                    mod.lora_scale = mod.lora_scale * strength
             latent = M.sample(image_model, entry["embeds"], width, height,
                               seed=(lambda v: v if v >= 0 else step_seed(step, 11) % 2**31)(int(cfg("preview_seed"))),
                               text_token_tags=entry["tags"], device=DEVICE)
@@ -779,8 +788,22 @@ def run_preview(model, entries, step):
         gc_cuda()
     path = os.path.join(OUTPUT_DIR, "preview_step_{}.png".format(step))
     image.save(path)
-    log("[PREVIEW] {} | {}x{} | {} {} | CFG 1 | {:.0f}s | {}".format(
-        os.path.basename(path), width, height, M.NUM_PDD_HEADS, t("steps"), time.time() - t0, entry["prompt"][:80]))
+    log("[PREVIEW] {} | {}x{} | {} {} | CFG 1 | LoRA x{:g} | {:.0f}s | {}".format(
+        os.path.basename(path), width, height, M.NUM_PDD_HEADS, t("steps"), strength, time.time() - t0, entry["prompt"][:80]))
+
+
+@contextlib.contextmanager
+def lora_strength(model, strength):
+    """Multiplies the LoRA scale of every module by `strength` and puts it back afterwards."""
+    mods = [m for m in model.modules() if isinstance(m, M.LazyNF4Linear) and m.lora_A is not None]
+    saved = [m.lora_scale for m in mods]
+    for m in mods:
+        m.lora_scale = m.lora_scale * strength
+    try:
+        yield
+    finally:
+        for m, v in zip(mods, saved):
+            m.lora_scale = v
 
 
 def fmt_time(seconds):

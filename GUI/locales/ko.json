@@ -1508,5 +1508,6 @@
   "De-distillation adapter ({0}/adapter/{1}) -> {2}": "역증류 어댑터({0}/adapter/{1}) -> {2}",
   "De-distillation adapter not found: {0} ({1})": "역증류 어댑터를 찾을 수 없습니다: {0} ({1})",
   "MiniMax-H3-Image VAE for the previews ({0}/vae, ~2.2 GB) -> {1}": "미리보기용 MiniMax-H3-Image VAE({0}/vae, 약 2.2 GB) -> {1}",
-  "MiniMax-H3-Image VAE unavailable ({0}); decoding with the video VAE.": "MiniMax-H3-Image VAE를 사용할 수 없습니다({0}). 비디오 VAE로 디코딩합니다."
+  "MiniMax-H3-Image VAE unavailable ({0}); decoding with the video VAE.": "MiniMax-H3-Image VAE를 사용할 수 없습니다({0}). 비디오 VAE로 디코딩합니다.",
+  "Strength of the LoRA in the previews, like the LoRA strength in ComfyUI. Only the previews change: training and the saved LoRAs do not. It can be changed while training.": "미리보기에서의 LoRA 강도(ComfyUI의 LoRA 강도와 같음). 미리보기만 바뀌며 학습과 저장된 LoRA는 바뀌지 않습니다. 학습 중에도 바꿀 수 있습니다."
 }
