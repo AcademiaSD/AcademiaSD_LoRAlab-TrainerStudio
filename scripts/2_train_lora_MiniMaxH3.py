@@ -205,11 +205,11 @@ DEFAULTS = {
     # dataset caption. 0 = OFF (nothing is loaded, no time is lost).
     "preview_every": 0,
     # Still-image previews are decoded by the MiniMax-H3-Image VAE (only its vae/ folder, 2.2 GB,
-    # downloaded the first time). Its latent space is the video one and it decodes this DiT's
-    # latents cleanly; the video VAE, on a single latent frame, leaves horizontal stripes and
-    # an orange cast. Clip previews (preview_num_frames > 1) keep the video VAE.
-    # Las previews de imagen las decodifica el VAE de MiniMax-H3-Image: el de video, con un
-    # solo frame latente, deja rayas horizontales y un tono naranja.
+    # downloaded the first time). Its latent space is the video one: it decodes this DiT's latents
+    # as well as the video VAE and several times faster, since the video VAE has to decode a whole
+    # clip of copies to get one clean frame. False, or a failure, uses the video VAE. Clip
+    # previews (preview_num_frames > 1) always use the video VAE.
+    # Las previews de imagen las decodifica el VAE de MiniMax-H3-Image, igual de bien y mas rapido.
     "preview_image_vae": True,
     "preview_image_vae_dir": "Models/MiniMax-H3-Image-NF4",
     "preview_image_vae_repo": "AcademiaSD/MiniMax-H3-Image-NF4-for-LoRA-Training",
@@ -6326,19 +6326,29 @@ def decode_latent_to_png(latent_norm, nf4_dir, out_path, device="cpu", frame_ind
     ls = torch.tensor(vae.config.latents_std, device=device, dtype=torch.float32).view(1, -1, 1, 1, 1)
     z = (z * ls + lm).to(compute_dtype)
 
+    still = z.shape[2] == 1
     with torch.no_grad():
-        # _decode_clip y NO decode(): decode() asume la rejilla temporal 17n+5 y
-        # con un unico frame latente calcula num_chunks=0 y devuelve un vacio.
-        # _decode_clip, NOT decode(): decode() assumes the 17n+5 temporal grid and
-        # computes num_chunks=0 for a single latent frame, returning an empty tensor.
-        px = vae._decode_clip(z)
+        if still:
+            # A single latent is the FIRST latent of a clip and decodes badly on its own
+            # (horizontal stripes, an orange cast). As the reference does: decode a whole
+            # clip of copies (tokens_chunk_size latents) and keep its first real frame,
+            # the one right after the frame_pre_padding frames. decode() cannot be used
+            # here: with one latent it computes zero chunks and returns nothing.
+            # Un latente suelto es el primero de un clip y sale mal solo: se decodifica un
+            # clip de copias y se toma su primer frame real.
+            px = vae._decode_clip(z.repeat(1, 1, int(vae.tokens_chunk_size), 1, 1))
+            px = px[:, :, int(vae.frame_pre_padding):int(vae.frame_pre_padding) + 1]
+        else:
+            # A clip: decode() does the temporal chunking and the cross-fades the
+            # encoder's chunking needs. / Un clip: decode() hace el troceado temporal.
+            px = vae.decode(z, return_dict=False)[0]
 
     px = px.float()
     mean = torch.tensor(_IMAGENET_MEAN, device=px.device).view(1, 3, 1, 1, 1)
     std = torch.tensor(_IMAGENET_STD, device=px.device).view(1, 3, 1, 1, 1)
     px = (px * std + mean).clamp(0, 1)
 
-    idx = max(0, min(int(frame_index), px.shape[2] - 1))
+    idx = 0 if still else max(0, min(int(frame_index), px.shape[2] - 1))
     frame = px[0, :, idx].permute(1, 2, 0).cpu().numpy()
     Image.fromarray((frame * 255.0).astype("uint8")).save(out_path)
     return out_path
