@@ -204,6 +204,15 @@ DEFAULTS = {
     # Every N steps renders <OUTPUT_DIR>/preview_step_N.png using the FIRST
     # dataset caption. 0 = OFF (nothing is loaded, no time is lost).
     "preview_every": 0,
+    # Still-image previews are decoded by the MiniMax-H3-Image VAE (only its vae/ folder, 2.2 GB,
+    # downloaded the first time). Its latent space is the video one and it decodes this DiT's
+    # latents cleanly; the video VAE, on a single latent frame, leaves horizontal stripes and
+    # an orange cast. Clip previews (preview_num_frames > 1) keep the video VAE.
+    # Las previews de imagen las decodifica el VAE de MiniMax-H3-Image: el de video, con un
+    # solo frame latente, deja rayas horizontales y un tono naranja.
+    "preview_image_vae": True,
+    "preview_image_vae_dir": "Models/MiniMax-H3-Image-NF4",
+    "preview_image_vae_repo": "AcademiaSD/MiniMax-H3-Image-NF4-for-LoRA-Training",
     "preview_size": 0,
     "preview_width": 0,
     "preview_height": 0,
@@ -6245,6 +6254,56 @@ def release_preview_video_vae():
             torch.cuda.empty_cache()
 
 
+_PREVIEW_IMAGE_VAE = {}
+
+
+def ensure_preview_image_vae():
+    """
+    Folder holding the MiniMax-H3-Image VAE (config.json + weights), downloading ONLY vae/ of
+    preview_image_vae_repo when it is missing. None if it cannot be had.
+    Carpeta con el VAE de MiniMax-H3-Image; si falta, baja solo su carpeta vae/.
+    """
+    root = str(resolve_model_dir(cfg_get("preview_image_vae_dir", DEFAULTS["preview_image_vae_dir"]),
+                                 DEFAULTS["preview_image_vae_dir"]))
+    vae_dir = os.path.join(root, "vae")
+    if os.path.isfile(os.path.join(vae_dir, "config.json")) and             os.path.isfile(os.path.join(vae_dir, "diffusion_pytorch_model.safetensors")):
+        return root
+    repo = str(cfg_get("preview_image_vae_repo", DEFAULTS["preview_image_vae_repo"]))
+    log_print("[DOWNLOAD] " + t("MiniMax-H3-Image VAE for the previews ({0}/vae, ~2.2 GB) -> {1}", repo, vae_dir), flush=True, essential=True)
+    try:
+        from huggingface_hub import snapshot_download
+        os.makedirs(root, exist_ok=True)
+        snapshot_download(repo_id=repo, local_dir=root, allow_patterns=["vae/*"])
+    except Exception as exc:
+        log_print("[DOWNLOAD][ERROR] " + t("Download failed: {0}", exc), flush=True, essential=True)
+        return None
+    return root if os.path.isfile(os.path.join(vae_dir, "config.json")) else None
+
+
+def decode_latent_with_image_vae(latent_norm, out_path, device="cpu"):
+    """
+    One normalized latent frame (1, C, 1, H, W) -> PNG through the MiniMax-H3-Image VAE.
+    Kept in RAM between previews when it runs on the CPU; on CUDA it is freed after each one.
+    Un frame latente -> PNG con el VAE de MiniMax-H3-Image.
+    """
+    import minimaxh3image_model as H3I
+    vae = _PREVIEW_IMAGE_VAE.get(device)
+    if vae is None:
+        root = ensure_preview_image_vae()
+        if root is None:
+            raise FileNotFoundError("MiniMax-H3-Image VAE")
+        vae = H3I.load_vae(root, device)
+        if device == "cpu":
+            _PREVIEW_IMAGE_VAE[device] = vae
+    try:
+        with torch.no_grad():
+            H3I.decode_latent(vae, latent_norm[:, :, 0].float()).save(out_path)
+    finally:
+        if device != "cpu":
+            del vae
+            free_vram(clear_cache=True, collect=True)
+
+
 def decode_latent_to_png(latent_norm, nf4_dir, out_path, device="cpu", frame_index=0):
     """Latente NORMALIZADO [1,24,1,H,W] -> PNG.
 
@@ -6579,8 +6638,16 @@ def run_training_preview(model, entries, step, output_dir, nf4_dir,
         # que peor se resuelven. Con una imagen suelta manda preview_frame_index.
         # For a clip, take a middle frame: the temporal edges resolve worst.
         _frame_idx = PREVIEW_FRAME_INDEX if n_lat == 1 else (n_lat * 4) // 2
-        decode_latent_to_png(latent_out.cpu(), nf4_dir, out_path,
-                             device=PREVIEW_VAE_DEVICE, frame_index=_frame_idx)
+        decoded = False
+        if n_lat == 1 and _cfg_bool("preview_image_vae", DEFAULTS["preview_image_vae"]):
+            try:
+                decode_latent_with_image_vae(latent_out.cpu(), out_path, device=PREVIEW_VAE_DEVICE)
+                decoded = True
+            except Exception as exc:
+                log_print("[PREVIEW][WARN] " + t("MiniMax-H3-Image VAE unavailable ({0}); decoding with the video VAE.", exc), flush=True, essential=True)
+        if not decoded:
+            decode_latent_to_png(latent_out.cpu(), nf4_dir, out_path,
+                                 device=PREVIEW_VAE_DEVICE, frame_index=_frame_idx)
         return out_path
 
     finally:
