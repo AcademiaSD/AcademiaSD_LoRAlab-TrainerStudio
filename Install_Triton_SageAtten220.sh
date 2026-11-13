@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Triton and SageAttention Installer by Academia SD (Linux)
-# Equivalente Linux de / Linux equivalent of: Install_Triton&SageAtten220.bat
+# Equivalente Linux de / Linux equivalent of: Install_Triton_SageAtten220.bat
 # En Linux no existen los .whl de Windows: Triton viene de PyPI y
 # SageAttention 2.2.0 se compila desde el codigo fuente (hay nvcc + gcc).
 # On Linux the Windows .whl files do not exist: Triton comes from PyPI and

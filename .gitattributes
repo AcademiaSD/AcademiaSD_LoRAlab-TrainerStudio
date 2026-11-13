@@ -1,2 +1,5 @@
 # Los scripts de Linux tienen que conservar LF aunque se editen o se clonen en Windows.
 *.sh text eol=lf
+
+# Los .bat de Windows, con CRLF al sacarlos del repo: cmd.exe puede leer mal etiquetas y bloques con LF.
+*.bat text eol=crlf

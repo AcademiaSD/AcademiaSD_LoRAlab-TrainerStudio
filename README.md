@@ -308,7 +308,7 @@ git clone https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio.git
 Then, inside the folder:
 
 1. Double-click **`Install_LoRAlab-TrainerStudio.bat`**. It installs Git if it is missing (Windows asks for permission), Python 3.13.1 if it is missing, and one `venv` shared by every trainer: PyTorch 2.14 (CUDA 13.0), Diffusers from GitHub, Transformers, PEFT, bitsandbytes, Flask and the rest. It takes a while; at the end it shows the detected GPU and versions.
-2. *(Optional)* Double-click **`Install_Triton&SageAtten220.bat`** for Triton and SageAttention 2.2.
+2. *(Optional)* Double-click **`Install_Triton_SageAtten220.bat`** for Triton and SageAttention 2.2.
 
 Pick a disk with plenty of free space: every model is downloaded into this folder.
 
@@ -938,7 +938,7 @@ venv\Scripts\python tools\smoke_test_ui.py --only sdxl    # one or more trainers
 AcademiaSD_LoRAlab-TrainerStudio/
 ├── Start_LoRAlab-TrainerStudio.bat   # Launcher (.sh on Linux)
 ├── Update_LoRAlab-TrainerStudio.bat  # Updater (.sh on Linux)
-├── Install_LoRAlab-TrainerStudio.bat, Install_Triton&SageAtten220.bat (and their .sh)
+├── Install_LoRAlab-TrainerStudio.bat, Install_Triton_SageAtten220.bat (and their .sh)
 ├── Install_LoRAlab-TrainerStudio_AMD.bat / .sh   # AMD installer (experimental)
 ├── requirements.txt                  # Dependencies, for your own environment (LORALAB_PYTHON)
 ├── code/                             # Run_LoRAlab-<Model>.bat / .sh

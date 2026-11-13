@@ -659,8 +659,8 @@ echo.
 echo El entorno esta listo. Abre los entrenadores con Start_LoRAlab-TrainerStudio.bat
 echo Environment is ready. Open the trainers with Start_LoRAlab-TrainerStudio.bat
 echo.
-echo [AMD] No ejecutes "Install_Triton&SageAtten220.bat": es solo para NVIDIA.
-echo [AMD] Do not run "Install_Triton&SageAtten220.bat": it is NVIDIA only.
+echo [AMD] No ejecutes "Install_Triton_SageAtten220.bat": es solo para NVIDIA.
+echo [AMD] Do not run "Install_Triton_SageAtten220.bat": it is NVIDIA only.
 echo.
 pause
 

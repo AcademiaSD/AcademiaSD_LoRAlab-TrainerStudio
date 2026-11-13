@@ -31,4 +31,4 @@ rotary_embedding_torch
 flask
 psutil
 
-# Optional, faster attention on Windows: Install_Triton&SageAtten220.bat
+# Optional, faster attention on Windows: Install_Triton_SageAtten220.bat
