@@ -226,7 +226,7 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 | **SDXL** | Image LoRAs for SDXL Base, Pony, Illustrious, NoobAI, Juggernaut, RealVis or your own SDXL checkpoint | **4 GB** (NF4) / 12 GB (BF16) |
 | **LTX-2.3** (also LTX-2.5) | Character and style LoRAs for the LTX video model, trained from images | 12 GB |
 | **MiniMax-H3** | Video LoRAs from images, clips and audio, plus training-free **RefMods** | 8 GB |
-| **MiniMax-H3 Image** *(experimental)* | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) on the 6-step distilled MiniMax-H3-Image, trained with a de-distillation adapter | **16 GB** (the NF4 text encoder is 14.9 GB; measured on an RTX 5080) |
+| **MiniMax-H3 Image** *(experimental)* | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) on the 6-step distilled MiniMax-H3-Image, trained with a de-distillation adapter; 33B in NF4 with block swap | 8 GB (image LoRAs) / 10 GB (edit LoRAs), estimated from the VRAM plan with Resident Blocks on 0 |
 | **Wan 2.2 (T2V-A14B)** | Video and image LoRAs from images and clips, for the **high noise** and/or **low noise** expert | **12 GB** (images at 448×448 with image previews), **16 GB** (17-frame clips at 480p), measured |
 | **YuE2-3B** *(experimental / beta)* | Song LoRAs: the AR clones the singer's voice, the NAR learns lyrics and phrasing | ~8 GB (NF4, measured on NAR) |
 
@@ -308,7 +308,7 @@ The automatic captioner adds, only the first time you use it: **nothing** for Kr
 | | Minimum | Recommended |
 | :--- | :--- | :--- |
 | **OS** | Windows 10 / 11, or 64-bit Linux ([docs/Linux.md](docs/Linux.md)) | Windows 11 |
-| **GPU** | NVIDIA **RTX 20xx / GTX 16xx or newer** (compute capability 7.5+) with **8 GB VRAM** (4 GB for Anima and SDXL in NF4, 12 GB for LTX-2.3, FLUX.2 Klein 9B, Ideogram 4, SDXL in BF16 and Wan 2.2 with images at 448×448, 16 GB for Wan 2.2 with video and for MiniMax-H3 Image) | 12–24 GB VRAM |
+| **GPU** | NVIDIA **RTX 20xx / GTX 16xx or newer** (compute capability 7.5+) with **8 GB VRAM** (4 GB for Anima and SDXL in NF4, 10 GB for MiniMax-H3 Image edit LoRAs, 12 GB for LTX-2.3, FLUX.2 Klein 9B, Ideogram 4, SDXL in BF16 and Wan 2.2 with images at 448×448, 16 GB for Wan 2.2 with video) | 12–24 GB VRAM |
 | **AMD GPU** *(experimental)* | Radeon **RX 7000 / RX 9000** or Ryzen AI Max (Strix Halo) with 16 GB of VRAM, using the AMD installer (see *Installation*). Confirmed on an RX 7800 XT 16 GB under Windows with MiniMax-H3 | — |
 | **Driver** | NVIDIA **580 or newer** (CUDA 13). AMD: a recent Adrenalin driver on Windows, or `amdgpu` on Linux | Latest |
 | **RAM** | 16 GB | 32 GB |
