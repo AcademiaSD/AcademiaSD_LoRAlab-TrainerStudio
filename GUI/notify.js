@@ -25,7 +25,7 @@ const NOTIFY_CSS = `
     background: var(--panel-bg, #1e293b); border: 1px solid var(--panel-border, #334155);
     border-radius: 12px; padding: 18px; color: var(--text-main, #f8fafc); font-size: 0.9rem;
     white-space: pre-line; }
-#ask-modal .ask-actions { display: flex; justify-content: flex-end; gap: 8px; }
+#ask-modal .ask-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 `;
 
 function _notifyInit() {
@@ -41,6 +41,7 @@ function _notifyInit() {
     modal.innerHTML = '<div class="ask-box"><div class="ask-text"></div>'
         + '<div class="ask-actions">'
         + '<button type="button" class="btn btn-secondary btn-sm ask-cancel"></button>'
+        + '<button type="button" class="btn btn-secondary btn-sm ask-alt" style="display:none"></button>'
         + '<button type="button" class="btn btn-primary btn-sm ask-ok"></button>'
         + '</div></div>';
     document.body.appendChild(modal);
@@ -65,9 +66,16 @@ function toast(message, type = 'info', timeout = 5000) {
     return box;
 }
 
+// options.altLabel añade un tercer botón, entre Cancelar y Aceptar: entonces devuelve 'alt' al pulsarlo
+// (true / false para los otros dos, como siempre). options.cancelLabel: null oculta Cancelar.
 function askConfirm(message, options = {}) {
     _notifyInit();
     const modal = document.getElementById('ask-modal');
+    const alt = modal.querySelector('.ask-alt');
+    alt.style.display = options.altLabel ? '' : 'none';
+    alt.innerText = options.altLabel || '';
+    // cancelLabel: null deja un solo botón (un aviso que solo se cierra).
+    modal.querySelector('.ask-cancel').style.display = options.cancelLabel === null ? 'none' : '';
     const okLabel = options.okLabel || (typeof t === 'function' ? t('Continue') : 'Continue');
     const cancelLabel = options.cancelLabel || (typeof t === 'function' ? t('Cancel') : 'Cancel');
     modal.querySelector('.ask-text').textContent = String(message);
@@ -79,17 +87,18 @@ function askConfirm(message, options = {}) {
     return new Promise(resolve => {
         const finish = value => {
             modal.classList.remove('active');
-            ok.onclick = cancel.onclick = modal.onclick = null;
+            ok.onclick = cancel.onclick = alt.onclick = modal.onclick = null;
             document.removeEventListener('keydown', onKey);
             resolve(value);
         };
         const onKey = e => { if (e.key === 'Escape') finish(false); };
         ok.onclick = () => finish(true);
         cancel.onclick = () => finish(false);
+        alt.onclick = () => finish('alt');
         modal.onclick = e => { if (e.target === modal) finish(false); };
         document.addEventListener('keydown', onKey);
         modal.classList.add('active');
-        cancel.focus();
+        (cancel.style.display === 'none' ? ok : cancel).focus();
     });
 }
 

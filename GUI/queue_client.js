@@ -8,6 +8,9 @@
 //   «¿Añadir a la cola?» en vez de arrancar; los subtítulos avisan de que compartirán la GPU.
 // - En un entrenador abierto por la cola para un trabajo, un aviso arriba lo dice: lo que se guarde
 //   aquí se aplica solo a ese trabajo, que se pausa y continúa desde la cola.
+// - Start Training sin pre-caché, o con el dataset cambiado después de ella (imágenes o captions nuevos,
+//   editados, quitados): avisa y ofrece hacer la pre-caché y entrenar justo después. Con el lanzador la
+//   cola los encadena (el entrenamiento espera a que la pre-caché acabe bien); sin él, espera esta página.
 // - Editor de un trabajo en espera (✎ en la cola): Start pasa a ser «Guardar cambios en la cola», que
 //   guarda en la copia de ajustes del trabajo y vuelve a la cola; Cancelar lo deja como estaba.
 (function () {
@@ -277,6 +280,8 @@
             if (!['precache', 'train', 'caption'].includes(name)) return original(name, ...rest);
             let gate = null;
             try { gate = (await post('/api/queue-gate', { script: name })).data; } catch (e) { gate = null; }
+            if (name === 'train' && (!gate || gate.mode === 'direct' || gate.mode === 'queue')
+                    && !(await cacheGate(gate, original))) return;
             if (!gate || gate.mode === 'direct') return original(name, ...rest);
 
             if (gate.mode === 'edit') return finishEdit(true);
@@ -308,18 +313,94 @@
         window.startScript = wrapped;
     }
 
-    async function addToQueue(name) {
-        const res = await post('/api/queue-add', { kind: name });
+    // ------------------------------------------------- pre-caché que falta o es vieja
+    // true: entrenar como siempre. false: no (cancelado, o encadenado pre-caché -> entrenamiento).
+    async function cacheGate(gate, original) {
+        let cs = null;
+        try { cs = await (await fetch('/api/cache-check', { cache: 'no-store' })).json(); } catch (e) { cs = null; }
+        if (!cs || (cs.state !== 'missing' && cs.state !== 'stale')) return true;   // la comprobación nunca bloquea
+        const folder = String(cs.cache_dir || '').split(/[\\/]/).filter(Boolean).pop() || '-';
+        let msg;
+        if (cs.state === 'missing') {
+            msg = tr('This project has no pre-cache yet ({dir}). Training needs it.', { dir: folder });
+        } else if (cs.changed_count) {
+            const more = cs.changed_count - (cs.changed || []).length;
+            msg = tr('The dataset changed after the pre-cache ({n} files):', { n: cs.changed_count })
+                + (cs.changed || []).map(f => '\n   • ' + f).join('')
+                + (more > 0 ? '\n   • ' + tr('... and {n} more', { n: more }) : '')
+                + '\n\n' + tr('Training would use the old images and captions.');
+        } else {
+            msg = tr('Files were removed or renamed in the dataset after the pre-cache.')
+                + '\n\n' + tr('Training would use the old images and captions.');
+        }
+        const stale = cs.state === 'stale';
+        if (!cs.precache_matches) {
+            // Start Pre-Cache haría otra caché: no se encadena sin que el usuario lo mire.
+            msg += '\n\n' + tr('The Pre-Cache panel points to another project or dataset: check it and press Start Pre-Cache first.');
+            if (!stale) {
+                await askConfirm(msg, { okLabel: tr('Close'), cancelLabel: null });
+                return false;
+            }
+            return (await askConfirm(msg, { okLabel: tr('Train with the old cache'), cancelLabel: tr('Cancel') })) === true;
+        }
+        msg += '\n\n' + tr('Run the pre-cache now and start training when it finishes?');
+        const choice = await askConfirm(msg, { okLabel: tr('Pre-cache, then train'), cancelLabel: tr('Cancel'),
+                                               altLabel: stale ? tr('Train with the old cache') : '' });
+        if (choice === 'alt') return true;
+        if (choice === true) await precacheThenTrain(gate, original);
+        return false;
+    }
+
+    async function precacheThenTrain(gate, original) {
+        if (typeof savePrecacheSettings === 'function') await savePrecacheSettings();
+        if (gate && gate.mode === 'queue') {
+            // La GPU está ocupada con otro trabajo: los dos a la cola, el entrenamiento detrás de su pre-caché.
+            const pre = await addToQueue('precache', null, true);
+            if (pre) await addToQueue('train', pre.id);
+            return;
+        }
+        if (gate && gate.launcher) {
+            // La pre-caché arranca aquí (la cola la sigue) y el entrenamiento espera en la cola a que acabe bien.
+            await original('precache');
+            const job = await addToQueue('train', 'self_precache', true);
+            if (job) {
+                const note = tr('Training is queued: it starts when the pre-cache finishes.');
+                toast(note, 'success', 8000);
+                if (typeof appendTerminal === 'function') appendTerminal(`\n[SYSTEM] ${note}`, false, 'term-success');
+            }
+            return;
+        }
+        // Sin lanzador no hay cola: esta página espera a que acabe la pre-caché y lanza el entrenamiento.
+        await original('precache');
+        const note = tr('Training will start when the pre-cache finishes. Keep this page open.');
+        toast(note, 'info', 8000);
+        if (typeof appendTerminal === 'function') appendTerminal(`\n[SYSTEM] ${note}`, false, 'term-success');
+        for (;;) {
+            await new Promise(r => setTimeout(r, 3000));
+            let st = null;
+            try { st = await (await fetch('/api/status', { cache: 'no-store' })).json(); } catch (e) { continue; }
+            if (st.running) continue;
+            const last = st.last || {};
+            if (last.script === 'precache' && last.code === 0) return original('train');
+            toast(`[!] ${tr('The pre-cache did not finish: training was not started.')}`, 'error', 0);
+            return;
+        }
+    }
+
+    // after: id del trabajo al que espera (o 'self_precache': la pre-caché que corre en este entrenador).
+    // quiet: sin el aviso de cola pausada (lo da el último de una serie). Devuelve el trabajo o null.
+    async function addToQueue(name, after = null, quiet = false) {
+        const res = await post('/api/queue-add', after ? { kind: name, after } : { kind: name });
         if (!res.ok || res.data.status !== 'ok') {
             toast(`[!] ${res.data.error || tr('Could not add it to the queue.')}`, 'error');
-            return;
+            return null;
         }
         const pos = (res.data.pending || []).findIndex(j => j.id === res.data.job.id) + 1;
         toast(tr('Added to the queue: position {n}.', { n: pos || '?' }), 'success');
         if (typeof appendTerminal === 'function') {
             appendTerminal(`\n[SYSTEM] ${tr('Added to the queue: position {n}.', { n: pos || '?' })}`, false, 'term-success');
         }
-        if (res.data.paused) {
+        if (res.data.paused && !quiet) {
             // Con la cola pausada no arrancaría nunca: se dice, y se ofrece reanudarla aquí mismo.
             const go = await askConfirm(tr('The queue is paused, so this job will not start until you resume it. Resume the queue now?'),
                                         { okLabel: tr('Resume the queue'), cancelLabel: tr('Leave it paused') });
@@ -330,6 +411,7 @@
             }
         }
         refresh();
+        return res.data.job || null;
     }
 
     function init() {

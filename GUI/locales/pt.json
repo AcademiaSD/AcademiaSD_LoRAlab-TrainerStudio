@@ -1519,5 +1519,19 @@
   "{0}: edit pairs train on MiniMax-H3-Image only; trained as a plain image.": "{0}: os pares de edição só treinam sobre o MiniMax-H3-Image; treinado como imagem normal.",
   "{0} samples without a reference left over from a normal pre-cache are skipped: this cache trains an edit LoRA.": "São omitidas {0} amostras sem referência que restam de um pre-cache normal: esta cache treina um LoRA de edição.",
   "Edit LoRA: {0} before / after pairs.": "LoRA de edição: {0} pares antes / depois.",
-  "Vision phase failed ({0}); encoding each pair in one pass.": "A fase de visão falhou ({0}); cada par é codificado numa única passagem."
+  "Vision phase failed ({0}); encoding each pair in one pass.": "A fase de visão falhou ({0}); cada par é codificado numa única passagem.",
+  "This project has no pre-cache yet ({dir}). Training needs it.": "Este projeto ainda não tem pré-cache ({dir}). O treinamento precisa dela.",
+  "The dataset changed after the pre-cache ({n} files):": "O dataset mudou depois da pré-cache ({n} arquivos):",
+  "... and {n} more": "... e mais {n}",
+  "Files were removed or renamed in the dataset after the pre-cache.": "Arquivos do dataset foram removidos ou renomeados depois da pré-cache.",
+  "Training would use the old images and captions.": "O treinamento usaria as imagens e as legendas antigas.",
+  "The Pre-Cache panel points to another project or dataset: check it and press Start Pre-Cache first.": "O painel de Pré-Cache aponta para outro projeto ou dataset: confira e pressione antes Start Pre-Cache.",
+  "Run the pre-cache now and start training when it finishes?": "Fazer a pré-cache agora e iniciar o treinamento quando terminar?",
+  "Pre-cache, then train": "Pré-cache e depois treinar",
+  "Train with the old cache": "Treinar com a cache antiga",
+  "Training is queued: it starts when the pre-cache finishes.": "Treinamento na fila: começa quando a pré-cache terminar.",
+  "Training will start when the pre-cache finishes. Keep this page open.": "O treinamento começará quando a pré-cache terminar. Deixe esta página aberta.",
+  "The pre-cache did not finish: training was not started.": "A pré-cache não terminou: o treinamento não foi iniciado.",
+  "The pre-cache is not running in the queue.": "A pré-cache não está em execução na fila.",
+  "Waits for its pre-cache to finish.": "Aguarda o fim da sua pré-cache."
 }

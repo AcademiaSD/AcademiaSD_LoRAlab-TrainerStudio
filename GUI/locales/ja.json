@@ -1519,5 +1519,19 @@
   "{0}: edit pairs train on MiniMax-H3-Image only; trained as a plain image.": "{0}: 編集ペアは MiniMax-H3-Image でのみ学習します。通常の画像として学習します。",
   "{0} samples without a reference left over from a normal pre-cache are skipped: this cache trains an edit LoRA.": "通常の Pre-Cache から残った参照のないサンプル {0} 件をスキップします。このキャッシュは編集 LoRA を学習します。",
   "Edit LoRA: {0} before / after pairs.": "編集 LoRA: ビフォー / アフターのペア {0} 組。",
-  "Vision phase failed ({0}); encoding each pair in one pass.": "ビジョンフェーズに失敗しました（{0}）。各ペアを 1 回のパスでエンコードします。"
+  "Vision phase failed ({0}); encoding each pair in one pass.": "ビジョンフェーズに失敗しました（{0}）。各ペアを 1 回のパスでエンコードします。",
+  "This project has no pre-cache yet ({dir}). Training needs it.": "このプロジェクトにはまだプリキャッシュがありません（{dir}）。学習に必要です。",
+  "The dataset changed after the pre-cache ({n} files):": "プリキャッシュの後にデータセットが変更されました（{n} ファイル）：",
+  "... and {n} more": "... ほか {n} 件",
+  "Files were removed or renamed in the dataset after the pre-cache.": "プリキャッシュの後にデータセットのファイルが削除または名前変更されました。",
+  "Training would use the old images and captions.": "学習には古い画像とキャプションが使われます。",
+  "The Pre-Cache panel points to another project or dataset: check it and press Start Pre-Cache first.": "Pre-Cache パネルが別のプロジェクトまたはデータセットを指しています。確認してから Start Pre-Cache を押してください。",
+  "Run the pre-cache now and start training when it finishes?": "今すぐプリキャッシュを実行し、終わったら学習を開始しますか？",
+  "Pre-cache, then train": "プリキャッシュ後に学習",
+  "Train with the old cache": "古いキャッシュで学習",
+  "Training is queued: it starts when the pre-cache finishes.": "学習をキューに追加しました。プリキャッシュが終わると開始します。",
+  "Training will start when the pre-cache finishes. Keep this page open.": "プリキャッシュが終わると学習が始まります。このページを開いたままにしてください。",
+  "The pre-cache did not finish: training was not started.": "プリキャッシュが完了しなかったため、学習は開始されませんでした。",
+  "The pre-cache is not running in the queue.": "キューでプリキャッシュが実行されていません。",
+  "Waits for its pre-cache to finish.": "プリキャッシュの完了を待っています。"
 }

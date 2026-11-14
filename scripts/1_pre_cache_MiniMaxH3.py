@@ -889,6 +889,28 @@ def sample_base(filename):
     return stem
 
 
+def _cache_fresh(cache_path, *sources):
+    """
+    True when cache_path exists and is newer than every source that exists. Rerunning the pre-cache
+    after editing a caption or replacing an image re-encodes that sample instead of skipping it.
+    True si cache_path existe y es mas nuevo que todas sus fuentes: relanzar la pre-cache tras editar
+    un caption o cambiar una imagen vuelve a codificar esa muestra en vez de saltarsela.
+    """
+    if not os.path.exists(cache_path):
+        return False
+    stamp = os.path.getmtime(cache_path)
+    return all(stamp >= os.path.getmtime(src) for src in sources if src and os.path.exists(src))
+
+
+def _text_sources(filename):
+    """What a sample's text encoding comes from: its caption and, for an edit pair, the before image."""
+    base = sample_base(filename)
+    out = [os.path.join(DATASET_PATH, base + ".txt")]
+    if EDIT_MODE and filename in EDIT_BEFORE_FILES:
+        out.append(os.path.join(DATASET_PATH, EDIT_BEFORE_FILES[filename]))
+    return out
+
+
 def edit_pairs(files):
     """[(after filename, before filename)] of the complete name_before / name_after pairs."""
     stems = {os.path.splitext(f)[0]: f for f in files}
@@ -3506,7 +3528,7 @@ def preprocess_minimaxh3():
         _jobs = []
         for filename in images:
             _b = sample_base(filename)
-            if not (os.path.exists(os.path.join(CACHE_DIR, "{}_prompt_structure.json".format(_b)))
+            if not (_cache_fresh(os.path.join(CACHE_DIR, "{}_prompt_structure.json".format(_b)), *_text_sources(filename))
                     and os.path.exists(os.path.join(CACHE_DIR, "{}_text_token_tags.pt".format(_b)))):
                 _jobs.append((_b, Image.open(os.path.join(DATASET_PATH, EDIT_BEFORE_FILES[filename])).convert("RGB")))
         if _jobs:
@@ -3528,7 +3550,7 @@ def preprocess_minimaxh3():
         prompt, _ = read_prompt(base)
 
         tags_path = os.path.join(CACHE_DIR, "{}_text_token_tags.pt".format(base))
-        if os.path.exists(struct_path) and (not EDIT_MODE or os.path.exists(tags_path)):
+        if _cache_fresh(struct_path, *_text_sources(filename)) and (not EDIT_MODE or os.path.exists(tags_path)):
             log_dev(L("  [{}/{}] SKIP embeddings {}",
                       "  [{}/{}] OMITIR embeddings {}").format(idx, len(images), filename))
             continue
@@ -3625,7 +3647,8 @@ def preprocess_minimaxh3():
         ref_path = os.path.join(CACHE_DIR, "{}_ref0_latent.pt".format(base))
         if not EDIT_MODE and os.path.exists(ref_path):
             os.remove(ref_path)
-        if os.path.exists(video_path) and not need_audio and (not EDIT_MODE or os.path.exists(ref_path)):
+        if (_cache_fresh(video_path, os.path.join(DATASET_PATH, filename)) and not need_audio
+                and (not EDIT_MODE or _cache_fresh(ref_path, os.path.join(DATASET_PATH, EDIT_BEFORE_FILES.get(filename, ""))))):
             log_dev(L("  [{}/{}] SKIP latents {}",
                       "  [{}/{}] OMITIR latentes {}").format(idx, len(images), filename))
             continue

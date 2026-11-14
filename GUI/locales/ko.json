@@ -1519,5 +1519,19 @@
   "{0}: edit pairs train on MiniMax-H3-Image only; trained as a plain image.": "{0}: 편집 쌍은 MiniMax-H3-Image에서만 학습합니다. 일반 이미지로 학습합니다.",
   "{0} samples without a reference left over from a normal pre-cache are skipped: this cache trains an edit LoRA.": "일반 Pre-Cache에서 남은 참조 없는 샘플 {0}개를 건너뜁니다. 이 캐시는 편집 LoRA를 학습합니다.",
   "Edit LoRA: {0} before / after pairs.": "편집 LoRA: 전 / 후 쌍 {0}개.",
-  "Vision phase failed ({0}); encoding each pair in one pass.": "비전 단계가 실패했습니다({0}). 각 쌍을 한 번에 인코딩합니다."
+  "Vision phase failed ({0}); encoding each pair in one pass.": "비전 단계가 실패했습니다({0}). 각 쌍을 한 번에 인코딩합니다.",
+  "This project has no pre-cache yet ({dir}). Training needs it.": "이 프로젝트에는 아직 프리캐시가 없습니다({dir}). 학습에 필요합니다.",
+  "The dataset changed after the pre-cache ({n} files):": "프리캐시 이후 데이터셋이 변경되었습니다({n}개 파일):",
+  "... and {n} more": "... 외 {n}개",
+  "Files were removed or renamed in the dataset after the pre-cache.": "프리캐시 이후 데이터셋의 파일이 삭제되거나 이름이 바뀌었습니다.",
+  "Training would use the old images and captions.": "학습에 예전 이미지와 캡션이 사용됩니다.",
+  "The Pre-Cache panel points to another project or dataset: check it and press Start Pre-Cache first.": "Pre-Cache 패널이 다른 프로젝트나 데이터셋을 가리킵니다. 확인한 뒤 먼저 Start Pre-Cache를 누르세요.",
+  "Run the pre-cache now and start training when it finishes?": "지금 프리캐시를 실행하고 끝나면 학습을 시작할까요?",
+  "Pre-cache, then train": "프리캐시 후 학습",
+  "Train with the old cache": "예전 캐시로 학습",
+  "Training is queued: it starts when the pre-cache finishes.": "학습이 대기열에 추가되었습니다. 프리캐시가 끝나면 시작합니다.",
+  "Training will start when the pre-cache finishes. Keep this page open.": "프리캐시가 끝나면 학습이 시작됩니다. 이 페이지를 열어 두세요.",
+  "The pre-cache did not finish: training was not started.": "프리캐시가 끝나지 않아 학습을 시작하지 않았습니다.",
+  "The pre-cache is not running in the queue.": "대기열에서 프리캐시가 실행 중이 아닙니다.",
+  "Waits for its pre-cache to finish.": "프리캐시가 끝나기를 기다립니다."
 }

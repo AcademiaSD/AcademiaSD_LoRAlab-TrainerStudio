@@ -51,6 +51,8 @@ KINDS = ("precache", "train")
 WAITING = ("queued", "paused", "failed")
 ACTIVE = ("running",) + WAITING
 HISTORY_MAX = 50
+# Nota de un entrenamiento que espera a su pre-caché (la página la traduce).
+WAITS_PRECACHE = "Waits for its pre-cache to finish."
 POLL = 2.0
 SAVE_EVERY = 10.0        # mientras entrena, el progreso se guarda en disco como mucho cada 10 s
 START_TIMEOUT = 120      # segundos que se espera a que el servidor de un trabajo conteste
@@ -242,6 +244,18 @@ class JobQueue:
     def _job(self, jid):
         return next((j for j in self.data["jobs"] if j["id"] == jid), None)
 
+    def _repoint(self, old_ids, new_id):
+        """Los trabajos que esperaban a uno sustituido esperan ahora al que lo sustituye."""
+        for j in self.data["jobs"]:
+            if old_ids and j.get("after") in old_ids:
+                j["after"] = new_id
+
+    def _blocked(self, job):
+        """True si job espera a otro que aún no ha acabado bien (en cola, en marcha, pausado o fallido).
+        Si ese otro ya no está (quitado de la cola o del historial), no espera."""
+        dep = self._job(job.get("after")) if job.get("after") else None
+        return dep is not None and dep["state"] != "done"
+
     def running(self):
         with self._lock:
             return next((dict(j) for j in self.data["jobs"] if j["state"] == "running"), None)
@@ -259,9 +273,12 @@ class JobQueue:
                     "trainer_port": remote_access.load()["trainer_port"]}
 
     # ------------------------------------------------------------- operaciones
-    def add(self, trainer_id, kind, settings=None):
+    def add(self, trainer_id, kind, settings=None, after=None):
         """Añade un trabajo con una copia de los ajustes (los que manda el entrenador o, si no manda
-        nada, los que tiene guardados). Devuelve (job, None) o (None, error)."""
+        nada, los que tiene guardados). Devuelve (job, None) o (None, error).
+        after: id del trabajo que tiene que acabar bien antes (la pre-caché de un entrenamiento lanzado
+        sin caché). Mientras no acabe, este espera aunque le toque; si falla, sigue esperando a que se
+        reintente."""
         trainer = self._trainer(trainer_id)
         if trainer is None:
             return None, t("Not found: {name}", name=trainer_id)
@@ -274,10 +291,12 @@ class JobQueue:
         train, pre = copies["train"], copies["pre_cache"]
         project = (train.get("project_name") or pre.get("project_name") or "").strip()
         with self._lock:
+            replaced = []
             for j in list(self.data["jobs"]):
                 if (j["state"] in ACTIVE and j["trainer"] == trainer_id and j["project"] == project
                         and j["kind"] == kind):
                     if j["state"] == "failed":
+                        replaced.append(j["id"])
                         self._drop(j)             # el nuevo, ya corregido, sustituye al que falló
                         continue
                     return None, t("{trainer} / {project} is already in the queue.",
@@ -291,7 +310,8 @@ class JobQueue:
                    "project": project, "state": "queued", "external": False, "created": time.time(),
                    "started": None, "finished": None, "port": None, "pid": None, "code": None,
                    "progress": {"step": 0, "total": total} if total else None, "note": "",
-                   "phase": None, "requested": None}
+                   "phase": None, "requested": None, "after": after if after and self._job(after) else None}
+            self._repoint(replaced, jid)
             self.data["jobs"].append(job)
             self._save()
             return dict(job), None
@@ -305,14 +325,19 @@ class JobQueue:
         with self._lock:
             if self.running():
                 return None, t("The GPU is busy with another job.")
+            replaced = []
             for j in list(self.data["jobs"]):
                 # Lanzado otra vez desde su entrenador: es el mismo entrenamiento (mismo proyecto, mismo
                 # checkpoint) que el que falló o se pausó, así que lo sustituye. Si no, cada Stop + Resume
                 # dejaba otro pausado en la cola. Los que esperan turno (queued) no se tocan.
                 if j["state"] in ("failed", "paused") and not j.get("editing") \
                         and (j["trainer"], j["project"], j["kind"]) == (trainer_id, project, kind):
+                    replaced.append(j["id"])
                     self._drop(j)
             jid = time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:6]
+            # Una pre-caché fallida relanzada desde su entrenador: el entrenamiento que la esperaba sigue
+            # esperando a la nueva.
+            self._repoint(replaced, jid)
             if isinstance(settings, dict):
                 for key, name in _settings_names(trainer_id).items():
                     if isinstance(settings.get(key), dict):
@@ -523,7 +548,19 @@ class JobQueue:
         with self._lock:
             if self.data["paused"] or self.hold:
                 return
-            nxt = next((j for j in self.data["jobs"] if j["state"] == "queued" and not j.get("editing")), None)
+            nxt = None
+            for j in self.data["jobs"]:
+                if j["state"] != "queued" or j.get("editing"):
+                    continue
+                if self._blocked(j):
+                    if j.get("note") != WAITS_PRECACHE:
+                        j["note"] = WAITS_PRECACHE
+                        self._save()
+                    continue
+                if j.get("note") == WAITS_PRECACHE:
+                    j["note"] = ""
+                nxt = j
+                break
         if nxt is not None:
             self._launch(nxt)
 
@@ -720,7 +757,8 @@ def register(app, load_trainers):
     @app.route("/api/queue/add", methods=["POST"])
     def queue_add():
         req = request.get_json(force=True) or {}
-        job, err = jq.add(str(req.get("trainer", "")), str(req.get("kind", "")), req.get("settings"))
+        job, err = jq.add(str(req.get("trainer", "")), str(req.get("kind", "")), req.get("settings"),
+                          after=req.get("after") or None)
         if err:
             return jsonify({"status": "error", "error": err}), 400
         return jsonify({"status": "ok", "job": job, **jq.snapshot()})

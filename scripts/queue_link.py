@@ -62,6 +62,112 @@ def _read(path):
         return {}
 
 
+# ------------------------------------------------------------ estado de la pre-caché
+# Start Training avisa si la pre-caché de este proyecto no existe o es anterior a los últimos cambios del
+# dataset (imágenes, clips, audio o captions), y ofrece hacerla antes de entrenar (queue_client.js).
+# Start Training warns when this project's pre-cache is missing or older than the dataset's last changes.
+BASE_DIR = Path(__file__).resolve().parent.parent
+DATASET_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tif", ".tiff", ".mp4", ".mov", ".webm",
+                ".mkv", ".avi", ".m4v", ".wav", ".mp3", ".flac", ".ogg", ".m4a", ".opus", ".txt", ".json")
+# Margen para relojes y sistemas de archivos que guardan la hora con poca resolución (FAT, exFAT: 2 s).
+MTIME_SLACK = 2.0
+WALK_LIMIT = 50000
+
+
+def _project_dir(raw, cache=False):
+    """Ruta de un ajuste (relativa al proyecto). Las cachés viejas en la raíz se movieron a Cache_Data."""
+    raw = str(raw or "").strip()
+    if not raw:
+        return None
+    path = Path(os.path.expandvars(os.path.expanduser(raw)))
+    if not path.is_absolute():
+        path = (BASE_DIR / path).resolve()
+    if cache and not path.exists():
+        moved = BASE_DIR / "Cache_Data" / path.name
+        if moved.exists():
+            return moved
+    return path
+
+
+def _walk(root, depth=3):
+    """(ruta, mtime) de los archivos bajo root, sin carpetas ocultas y hasta depth niveles."""
+    found = 0
+    stack = [(Path(root), 0)]
+    while stack:
+        folder, level = stack.pop()
+        try:
+            entries = list(os.scandir(folder))
+        except OSError:
+            continue
+        for entry in entries:
+            if entry.name.startswith("."):
+                continue
+            try:
+                if entry.is_dir(follow_symlinks=False):
+                    if level < depth:
+                        stack.append((Path(entry.path), level + 1))
+                elif entry.is_file():
+                    yield Path(entry.path), entry.stat().st_mtime
+                    found += 1
+                    if found >= WALK_LIMIT:
+                        return
+            except OSError:
+                continue
+
+
+def _is_cache_data(path):
+    """Lo que escribe la pre-caché por muestra. Fuera: _neg/_custom (también los escribe el servidor al
+    guardar el prompt de las previews), la copia de los ajustes y los .tmp a medio escribir."""
+    name = path.name
+    return not (name.startswith("_") or name.startswith("pre_cache_settings_") or name.endswith(".tmp"))
+
+
+def cache_status(train_config, precache_config):
+    """
+    {"state": "ok" | "missing" | "stale" | "unknown", "cache_dir", "dataset", "changed": [nombres],
+     "changed_count", "removed": bool, "precache_matches": bool}
+    missing: la carpeta de caché no tiene ninguna muestra. stale: algún archivo del dataset es más nuevo
+    que la última muestra cacheada, o la carpeta del dataset cambió después (archivos quitados o
+    renombrados). precache_matches: los ajustes de la pre-caché apuntan a la misma caché y el mismo
+    dataset que el entrenamiento, así que Start Pre-Cache rehace justo la caché que se va a entrenar.
+    """
+    train, pre = _read(train_config), _read(precache_config)
+    cache_dir = _project_dir(train.get("cache_dir") or pre.get("cache_dir"), cache=True)
+    dataset = _project_dir(train.get("dataset_path") or pre.get("dataset_path"))
+    pre_cache = _project_dir(pre.get("cache_dir"), cache=True)
+    pre_dataset = _project_dir(pre.get("dataset_path"))
+
+    def same(a, b):
+        return (a is not None and b is not None
+                and os.path.normcase(str(a)).rstrip("\\/") == os.path.normcase(str(b)).rstrip("\\/"))
+
+    out = {"state": "unknown", "cache_dir": str(cache_dir or ""), "dataset": str(dataset or ""),
+           "changed": [], "changed_count": 0, "removed": False,
+           "precache_matches": same(cache_dir, pre_cache) and same(dataset, pre_dataset)}
+    if cache_dir is None:
+        return out
+    newest = max((m for p, m in _walk(cache_dir) if _is_cache_data(p)), default=None) if cache_dir.is_dir() else None
+    if newest is None:
+        out["state"] = "missing"
+        return out
+    out["state"] = "ok"
+    if dataset is None or not dataset.is_dir():
+        return out
+    # Solo el primer nivel: es lo que leen las pre-cachés (_rejected de Dataset Forge y demás, fuera).
+    changed = sorted((m, p) for p, m in _walk(dataset, depth=0)
+                     if p.suffix.lower() in DATASET_EXTS and m > newest + MTIME_SLACK)
+    out["changed_count"] = len(changed)
+    out["changed"] = [str(p.relative_to(dataset)) for _, p in changed[-5:]][::-1]
+    try:
+        # Quitar o renombrar un archivo no deja nada más nuevo en el dataset, pero sí cambia su carpeta.
+        out["removed"] = not changed and dataset.stat().st_mtime > newest + MTIME_SLACK
+    except OSError:
+        pass
+    if changed or out["removed"]:
+        out["state"] = "stale"
+    return out
+
+
 def register(app, trainer_id, runtime, train_config, precache_config):
     my_port = remote_access.port_of("trainer_port")
 
@@ -158,15 +264,34 @@ def register(app, trainer_id, runtime, train_config, precache_config):
 
     @app.route("/api/queue-add", methods=["POST"])
     def queue_add():
-        kind = (request.get_json(force=True) or {}).get("kind")
+        req = request.get_json(force=True) or {}
+        kind = req.get("kind")
         if kind not in KINDS:
             return jsonify({"status": "error", "error": t("Unknown job type: {name}", name=kind)}), 400
+        after = req.get("after") or None
+        if after == "self_precache":
+            # El entrenamiento espera a la pre-caché que este entrenador acaba de lanzar (Start sin caché).
+            running = (queue_state() or {}).get("running") or {}
+            if running.get("port") != my_port or running.get("kind") != "precache":
+                return jsonify({"status": "error", "error": t("The pre-cache is not running in the queue.")}), 409
+            after = running.get("id")
         code, res = _launcher("/api/queue/add", {
-            "trainer": trainer_id, "kind": kind,
+            "trainer": trainer_id, "kind": kind, "after": after,
             "settings": {"train": _read(train_config), "pre_cache": _read(precache_config)}}, timeout=5)
         if code is None:
             return jsonify({"status": "error", "error": t("The launcher is not running: the queue needs it.")}), 503
         return jsonify(res), code
+
+    @app.route("/api/cache-check")
+    def cache_check():
+        """¿Hay pre-caché para lo que se va a entrenar, y es posterior a los cambios del dataset?"""
+        own = runtime.status()
+        if own.get("running") and own.get("script") == "precache":
+            return jsonify({"state": "running"})
+        try:
+            return jsonify(cache_status(train_config, precache_config))
+        except Exception as exc:              # la comprobación nunca impide entrenar
+            return jsonify({"state": "unknown", "error": str(exc)})
 
     @app.route("/api/queue-info")
     def queue_info():
