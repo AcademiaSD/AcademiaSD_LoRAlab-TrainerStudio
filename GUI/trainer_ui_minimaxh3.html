@@ -506,6 +506,24 @@
                         </div>
                     </div>
 
+                    <!-- MiniMax-H3 Image card only: edit LoRAs from before / after pairs. -->
+                    <div class="form-row" id="row_h3_edit" style="display:none;">
+                        <div class="form-group">
+                            <label>LoRA Type:</label>
+                            <select id="precache_lora_type" onchange="applyH3EditType()" title="Normal: one image and its caption per sample. Edit: before / after pairs, photo_before.png and photo_after.png with the instruction in photo.txt. The after image is what the LoRA learns to produce from the before image, as MiniMax-H3-Image edits: the text encoder sees the before image as Picture 1 and the DiT gets it as a reference. Re-run Pre-Cache after changing it.">
+                                <option value="normal" selected>Normal</option>
+                                <option value="edit">Edit (before / after pairs)</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="grp_edit_ref_size">
+                            <label>Reference Size:</label>
+                            <select id="precache_edit_reference_size" title="Size of the before image as the DiT sees it. Match: the area of the after image at the before image's own aspect, cheapest, like ComfyUI's match. Native: the released pipeline's short edge of 1024 to 2048 px, closest to how MiniMax-H3-Image was trained, but the reference can cost more tokens than the image itself. The text encoder always sees it at a short edge of 1024 px.">
+                                <option value="match" selected>Match (target area)</option>
+                                <option value="native">Native (short edge 1024-2048)</option>
+                            </select>
+                        </div>
+                    </div>
+
                     <div class="form-row-3">
                         <div class="form-group">
                             <label>Multiple:</label>
@@ -1437,6 +1455,9 @@
                 const el = document.getElementById(id);
                 if (el) (el.closest('.form-group') || el).style.display = on ? 'none' : '';
             });
+            const editRow = document.getElementById('row_h3_edit');
+            if (editRow) editRow.style.display = on ? '' : 'none';
+            applyH3EditType();
             ['train_dit', 'train_adapter_strength', 'train_preview_lora_strength'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) (el.closest('.form-group') || el).style.display = on ? '' : 'none';
@@ -1458,6 +1479,12 @@
             if (prof && prof.value !== 'custom') applyVramProfile(prof.value);
             steps.title = on ? 'MiniMax-H3-Image is distilled to 6 steps, one output head per step, with no CFG: the preview always runs 6 steps at CFG 1.'
                              : steps.dataset.videoTitle;
+        }
+
+        function applyH3EditType() {
+            const type = document.getElementById('precache_lora_type');
+            const grp = document.getElementById('grp_edit_ref_size');
+            if (type && grp) grp.style.display = type.value === 'edit' ? '' : 'none';
         }
 
         function updateProjectPaths() {
@@ -2001,6 +2028,9 @@
                     if (p.multiple) document.getElementById('precache_multiple').value = p.multiple;
                     if (p.max_side) document.getElementById('precache_max_side').value = p.max_side;
                     if (p.max_seq_len) document.getElementById('precache_max_seq_len').value = p.max_seq_len;
+                    if (p.lora_type) document.getElementById('precache_lora_type').value = p.lora_type;
+                    if (p.edit_reference_size) document.getElementById('precache_edit_reference_size').value = p.edit_reference_size;
+                    applyH3EditType();
                     if (p.num_frames) document.getElementById('precache_num_frames').value = p.num_frames;
                 }
                 if (data.train) {
@@ -2122,6 +2152,9 @@
                     if (data.multiple !== undefined) document.getElementById('precache_multiple').value = data.multiple;
                     if (data.max_side !== undefined) document.getElementById('precache_max_side').value = data.max_side;
                     if (data.max_seq_len !== undefined) document.getElementById('precache_max_seq_len').value = data.max_seq_len;
+                    if (data.lora_type !== undefined) document.getElementById('precache_lora_type').value = data.lora_type;
+                    if (data.edit_reference_size !== undefined) document.getElementById('precache_edit_reference_size').value = data.edit_reference_size;
+                    applyH3EditType();
                     if (data.num_frames !== undefined) document.getElementById('precache_num_frames').value = data.num_frames;
                     
                     if (data.total_steps !== undefined) document.getElementById('train_total_steps').value = data.total_steps;
@@ -2236,6 +2269,8 @@
                 max_side: parseInt(document.getElementById('precache_max_side').value),
                 max_seq_len: parseInt(document.getElementById('precache_max_seq_len').value),
                 num_frames: parseInt(document.getElementById('precache_num_frames').value),
+                lora_type: window.H3_IMAGE ? document.getElementById('precache_lora_type').value : 'normal',
+                edit_reference_size: document.getElementById('precache_edit_reference_size').value,
                 cache_dir: document.getElementById('precache_cache_dir').value,
                 preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim()
             };

@@ -653,6 +653,19 @@ IMAGE_MODE = os.environ.get("LORALAB_H3_MODEL", "").strip().lower() == "image"
 IMAGE_NF4_DIR = str(resolve_model_dir(cfg_get("image_nf4_dir", "Models/MiniMax-H3-Image-NF4"), "Models/MiniMax-H3-Image-NF4"))
 IMAGE_NF4_REPO = str(cfg_get("image_nf4_repo", "AcademiaSD/MiniMax-H3-Image-NF4-for-LoRA-Training"))
 CACHE_PREFIX = "cached_data_minimaxh3image" if IMAGE_MODE else "cached_data_minimaxh3"
+# Edit LoRA (MiniMax-H3-Image only): pairs name_before / name_after with the instruction in
+# name.txt. The after image is the target; the before image is the reference of the edit, as the
+# released MiniMax-H3-Image edit pipeline packs it: the text encoder sees it ("Picture 1: " and a
+# vision block, short edge 1024) and the DiT gets its VAE latent as reference rows.
+# LoRA de edicion (solo H3-Image): pares nombre_before / nombre_after, instruccion en nombre.txt.
+LORA_TYPE = str(cfg_get("lora_type", "normal")).strip().lower()
+EDIT_MODE = IMAGE_MODE and LORA_TYPE == "edit"
+# Size of the reference latent: "match" = the target's area at the before image's own aspect
+# (cheap, what ComfyUI's "match" does); "native" = the released pipeline's short edge 1024-2048.
+# Tamano del latente de referencia: "match" = area del objetivo; "native" = lado corto 1024-2048.
+EDIT_REFERENCE_SIZE = str(cfg_get("edit_reference_size", "match")).strip().lower()
+if EDIT_REFERENCE_SIZE not in ("match", "native"):
+    EDIT_REFERENCE_SIZE = "match"
 if IMAGE_MODE:
     WRITE_AUDIO_LATENT = False
     ENCODE_AUDIO = False
@@ -861,6 +874,29 @@ def bucket_size(width, height):
 # error -- anchors belong here -- but if it is ALL of them, you forgot to run
 # "Apply to All", which is much better seen before training.
 SIN_TRIGGER = []
+
+
+EDIT_AFTER, EDIT_BEFORE = "_after", "_before"
+# after filename -> before filename, filled when the dataset is listed in edit mode.
+EDIT_BEFORE_FILES = {}
+
+
+def sample_base(filename):
+    """Cache base name of a sample: the pair name for an edit pair (name_after.png -> name)."""
+    stem = os.path.splitext(filename)[0]
+    if EDIT_MODE and stem.endswith(EDIT_AFTER):
+        return stem[: -len(EDIT_AFTER)]
+    return stem
+
+
+def edit_pairs(files):
+    """[(after filename, before filename)] of the complete name_before / name_after pairs."""
+    stems = {os.path.splitext(f)[0]: f for f in files}
+    pairs = []
+    for stem, filename in sorted(stems.items()):
+        if stem.endswith(EDIT_AFTER) and stem[: -len(EDIT_AFTER)] + EDIT_BEFORE in stems:
+            pairs.append((filename, stems[stem[: -len(EDIT_AFTER)] + EDIT_BEFORE]))
+    return pairs
 
 
 def read_prompt(base_name):
@@ -2735,6 +2771,172 @@ def encode_h3image_latent(vae, image):
     return latent[:, :, None].to(torch.bfloat16).contiguous()
 
 
+EDIT_VISION_SHORT_EDGE = 1024
+EDIT_REF_MIN_SHORT_EDGE, EDIT_REF_MAX_SHORT_EDGE = 1024, 2048
+
+
+def _bound_short_edge(width, height, lo, hi, multiple=32):
+    """The released pipeline's resize rule: a short edge inside [lo, hi] keeps the size."""
+    short = min(width, height)
+    if lo <= short <= hi:
+        return width, height
+    scale = (lo if short < lo else hi) / short
+    return (max(multiple, round(width * scale / multiple) * multiple),
+            max(multiple, round(height * scale / multiple) * multiple))
+
+
+def _resized(image, size):
+    return image if image.size == tuple(size) else image.resize(tuple(size), Image.LANCZOS)
+
+
+def edit_vision_image(image):
+    """What the text encoder sees of the reference: short edge 1024, as the released pipeline."""
+    return _resized(image, _bound_short_edge(image.width, image.height, EDIT_VISION_SHORT_EDGE,
+                                             EDIT_VISION_SHORT_EDGE))
+
+
+def edit_reference_image(image, target_w, target_h):
+    """The reference the VAE encodes, at its own aspect (references never take the target's shape)."""
+    if EDIT_REFERENCE_SIZE == "native":
+        size = _bound_short_edge(image.width, image.height, EDIT_REF_MIN_SHORT_EDGE, EDIT_REF_MAX_SHORT_EDGE)
+    else:
+        ar = image.width / image.height
+        h = math.sqrt(target_w * target_h / ar)
+        size = (max(32, round(ar * h / 32) * 32), max(32, round(h / 32) * 32))
+    return _resized(image, size)
+
+
+def _edit_vision_path(base):
+    return os.path.join(CACHE_DIR, "_vision_{}.pt".format(base))
+
+
+def edit_vision_features(text_encoder, processor, jobs, device="cuda"):
+    """
+    Edit pre-cache, phase 1a. The Qwen3-VL vision tower runs on its own, with the 50 language
+    layers (~14 GB in NF4) moved to system RAM, so the vision block of a 1024 px reference never
+    has to share a 16 GB card with them. The features land in _vision_<base>.pt and phase 1b
+    feeds them to the language model, which is back on the GPU and has no vision tower beside it.
+    jobs: [(base, before PIL image)].
+    Fase 1a: la torre de vision corre sola, con las 50 capas de lenguaje en RAM; las features van a
+    _vision_<base>.pt y la fase 1b se las da al modelo de lenguaje, ya de vuelta en la GPU.
+    """
+    inner = text_encoder.model
+    log_dev(L("[1.3a] Vision tower for {} references, language layers parked in RAM...",
+              "[1.3a] Torre de vision para {} referencias, capas de lenguaje aparcadas en RAM...").format(len(jobs)))
+    t0 = time.time()
+    inner.language_model.to("cpu")
+    gc_cuda()
+    log_dev(L("    VRAM with the language layers in RAM: {:.2f} GB",
+              "    VRAM con las capas de lenguaje en RAM: {:.2f} GB").format(vram_gb()))
+    try:
+        for idx, (base, image) in enumerate(jobs, start=1):
+            vision = processor.image_processor(images=[edit_vision_image(image)], return_tensors="pt")
+            torch.cuda.reset_peak_memory_stats()
+            with torch.inference_mode():
+                out = inner.get_image_features(vision["pixel_values"].to(device), vision["image_grid_thw"].to(device))
+            torch.save({"embeds": torch.cat(list(out.pooler_output)).to(torch.bfloat16).cpu(),
+                        "deepstack": [d.to(torch.bfloat16).cpu() for d in (out.deepstack_features or [])],
+                        "grid": vision["image_grid_thw"].cpu()}, _edit_vision_path(base))
+            log_dev("  [{}/{}] {} | {} vision tokens | peak VRAM {:.2f} GB".format(
+                idx, len(jobs), base, int(torch.cat(list(out.pooler_output)).shape[0]), vram_peak_gb()))
+            del out, vision
+            gc_cuda()
+    finally:
+        inner.visual.to("cpu")
+        gc_cuda()
+        inner.language_model.to(device)
+        # The token embedding table (152K x 5120, ~1.5 GB) only looks ids up: it stays in RAM, and
+        # its output goes to the GPU. On a 16 GB card that is the margin that keeps the 1,600-token
+        # edit presentations from spilling into shared memory (31-46 s a pair instead of ~1 s).
+        # La tabla de embeddings solo busca ids: se queda en RAM y su salida va a la GPU.
+        embed = inner.language_model.embed_tokens
+        embed.to("cpu")
+        embed.register_forward_pre_hook(lambda mod, args: tuple(a.to("cpu") if torch.is_tensor(a) else a for a in args))
+        embed.register_forward_hook(lambda mod, args, out: out.to(device))
+        gc_cuda()
+    log_dev(L("    Vision phase {:.1f}s; vision tower parked in RAM, language layers back on the GPU ({:.2f} GB).",
+              "    Fase de vision {:.1f}s; torre de vision en RAM, capas de lenguaje de vuelta en la GPU ({:.2f} GB).")
+            .format(time.time() - t0, vram_gb()))
+
+
+def encode_edit_prompt_minimax(text_encoder, processor, prompt, before_image, device="cuda", base=None):
+    """
+    The presentation of an edit, as the released MiniMax-H3-Image pipeline encodes it:
+    "Picture 1: " + a vision block of the before image + the instruction, no chat template and
+    no special tokens. Returns the same dict as encode_prompt_minimax plus "text_token_tags"
+    (1 = text, 0 = the vision block, which the DiT tags as image).
+    La presentacion de una edicion, como el pipeline oficial: "Picture 1: " + bloque de vision + instruccion.
+    """
+    tokenizer = getattr(processor, "tokenizer", processor)
+    cached = None
+    if base is not None and os.path.isfile(_edit_vision_path(base)):
+        cached = torch.load(_edit_vision_path(base), map_location="cpu", weights_only=True)
+        grid = cached["grid"]
+        vision = {"pixel_values": torch.zeros(1, 1), "image_grid_thw": grid}
+    else:
+        vision = processor.image_processor(images=[edit_vision_image(before_image)], return_tensors="pt")
+    merge = processor.image_processor.merge_size ** 2
+    num_image_tokens = int(vision["image_grid_thw"][0].prod()) // merge
+    label_ids = tokenizer("Picture 1: ", add_special_tokens=False)["input_ids"]
+    vision_ids = ([tokenizer.convert_tokens_to_ids("<|vision_start|>")]
+                  + [tokenizer.convert_tokens_to_ids("<|image_pad|>")] * num_image_tokens
+                  + [tokenizer.convert_tokens_to_ids("<|vision_end|>")])
+    prompt_ids = tokenizer(prompt, add_special_tokens=False)["input_ids"]
+    truncated = len(prompt_ids) > MAX_SEQ_LEN
+    prompt_ids = prompt_ids[:MAX_SEQ_LEN]
+    token_ids = label_ids + vision_ids + prompt_ids
+    tags = [1] * len(label_ids) + [0] * len(vision_ids) + [1] * len(prompt_ids)
+    input_ids = torch.tensor([token_ids], dtype=torch.long, device=device)
+    inputs = {
+        "input_ids": input_ids,
+        "attention_mask": torch.ones_like(input_ids),
+        "mm_token_type_ids": torch.tensor(processor.create_mm_token_type_ids([token_ids]), dtype=torch.long,
+                                          device=device),
+        "pixel_values": vision["pixel_values"].to(device, text_encoder.dtype if cached is None else torch.float32),
+        "image_grid_thw": vision["image_grid_thw"].to(device),
+    }
+    t0 = time.time()
+    torch.cuda.reset_peak_memory_stats()
+    inner = getattr(text_encoder, "model", None)
+    module = inner if isinstance(inner, nn.Module) else text_encoder
+    if cached is not None:
+        # Phase 1b: the vision tower is in RAM; the forward takes the features of phase 1a.
+        from types import SimpleNamespace
+        feats = SimpleNamespace(pooler_output=(cached["embeds"].to(device),),
+                                deepstack_features=[d.to(device) for d in cached["deepstack"]])
+        module.get_image_features = lambda *a, **k: feats
+    # The stack is truncated at layer 50 and its final norm is Identity, so the last hidden state
+    # IS hidden_states[50]: asking for all 51 would keep ~0.8 GB of them at 1,600 tokens.
+    # El stack esta truncado en la capa 50 sin norm final: el ultimo estado ES hidden_states[50].
+    layers = getattr(getattr(module, "language_model", None), "layers", None)
+    last_only = layers is not None and len(layers) == TEXT_ENCODER_HIDDEN_LAYER
+    try:
+        with torch.inference_mode():
+            outputs = module(**inputs, output_hidden_states=not last_only, use_cache=False)
+            if last_only:
+                prompt_embeds = outputs.last_hidden_state
+            else:
+                hidden = outputs.hidden_states
+                if len(hidden) != TEXT_ENCODER_HIDDEN_LAYER + 1:
+                    raise RuntimeError("hidden_states has {} entries, expected {}.".format(len(hidden), TEXT_ENCODER_HIDDEN_LAYER + 1))
+                prompt_embeds = hidden[TEXT_ENCODER_HIDDEN_LAYER]
+    finally:
+        if cached is not None:
+            del module.get_image_features
+    log_dev("    [TEXT] edit | Picture 1: {} vision tokens + {} prompt tokens | {:.2f}s | peak VRAM {:.2f} GB".format(
+        num_image_tokens, len(prompt_ids), time.time() - t0, vram_peak_gb()))
+    if torch.isnan(prompt_embeds).any():
+        diag_error(t("NaN in prompt_embeds: {0}", prompt[:60]))
+    return {
+        "prompt_embeds": prompt_embeds.detach().to(torch.bfloat16).cpu().contiguous(),
+        "attention_mask": torch.ones(len(token_ids), dtype=torch.bool),
+        "prompt": prompt,
+        "hidden_layer_used": TEXT_ENCODER_HIDDEN_LAYER,
+        "num_tokens": len(token_ids),
+        "truncated": truncated,
+    }, torch.tensor(tags, dtype=torch.long)
+
+
 def encode_video_latent(vae, image):
     """One still image = one video frame (T=1) / Una imagen fija = un frame de video (T=1)."""
     vae_dtype = next(vae.parameters()).dtype
@@ -3104,13 +3306,29 @@ def preprocess_minimaxh3():
             log_dev(L("[DATASET] MiniMax-H3-Image trains images only: {} clips / audio files skipped.",
                       "[DATASET] MiniMax-H3-Image solo entrena imagenes: se omiten {} clips / audios.")
                     .format(len(_skipped)))
+    if EDIT_MODE:
+        _pairs = edit_pairs(images)
+        EDIT_BEFORE_FILES.clear()
+        EDIT_BEFORE_FILES.update(dict(_pairs))
+        _loose = len(images) - 2 * len(_pairs)
+        images = [after for after, _ in _pairs]
+        log_dev(L("[DATASET] Edit LoRA: {} name_before / name_after pairs ({} other images skipped). "
+                  "Reference size: {}.",
+                  "[DATASET] LoRA de edicion: {} pares nombre_before / nombre_after ({} imagenes sueltas "
+                  "omitidas). Tamano de referencia: {}.").format(len(_pairs), _loose, EDIT_REFERENCE_SIZE))
+        if not images:
+            raise RuntimeError(L("No name_before / name_after pairs in {}. An edit LoRA trains on pairs: "
+                                 "photo_before.png, photo_after.png and the instruction in photo.txt.",
+                                 "No hay pares nombre_before / nombre_after en {}. Un LoRA de edicion entrena "
+                                 "con pares: foto_before.png, foto_after.png y la instruccion en foto.txt.")
+                               .format(DATASET_PATH))
     if not images:
         raise RuntimeError(L("No images in {}", "No hay imagenes en {}").format(DATASET_PATH))
 
     # ---- caption coverage check / comprobacion de cobertura de captions ----
     missing_caption, empty_caption = [], []
     for filename in images:
-        base = os.path.splitext(filename)[0]
+        base = sample_base(filename)
         prompt, had = read_prompt(base)
         if not had:
             missing_caption.append(filename)
@@ -3284,12 +3502,33 @@ def preprocess_minimaxh3():
     embed_stats = []
     truncated_count = 0
 
+    if EDIT_MODE:
+        _jobs = []
+        for filename in images:
+            _b = sample_base(filename)
+            if not (os.path.exists(os.path.join(CACHE_DIR, "{}_prompt_structure.json".format(_b)))
+                    and os.path.exists(os.path.join(CACHE_DIR, "{}_text_token_tags.pt".format(_b)))):
+                _jobs.append((_b, Image.open(os.path.join(DATASET_PATH, EDIT_BEFORE_FILES[filename])).convert("RGB")))
+        if _jobs:
+            try:
+                edit_vision_features(text_encoder, processor, _jobs)
+            except Exception as exc:
+                # Any failure here falls back to the one-pass encoding, slower on a full card.
+                diag_warn(t("Vision phase failed ({0}); encoding each pair in one pass.", exc))
+                for _b, _ in _jobs:
+                    if os.path.exists(_edit_vision_path(_b)):
+                        os.remove(_edit_vision_path(_b))
+                text_encoder.model.to("cuda")
+                gc_cuda()
+        del _jobs
+
     for idx, filename in enumerate(images, start=1):
-        base = os.path.splitext(filename)[0]
+        base = sample_base(filename)
         struct_path = os.path.join(CACHE_DIR, "{}_prompt_structure.json".format(base))
         prompt, _ = read_prompt(base)
 
-        if os.path.exists(struct_path):
+        tags_path = os.path.join(CACHE_DIR, "{}_text_token_tags.pt".format(base))
+        if os.path.exists(struct_path) and (not EDIT_MODE or os.path.exists(tags_path)):
             log_dev(L("  [{}/{}] SKIP embeddings {}",
                       "  [{}/{}] OMITIR embeddings {}").format(idx, len(images), filename))
             continue
@@ -3299,8 +3538,18 @@ def preprocess_minimaxh3():
         log_dev("    Prompt: {}".format(
             prompt[:110] + ("..." if len(prompt) > 110 else "")))
 
-        with torch.inference_mode():
-            prompt_result = encode_prompt_minimax(text_encoder, processor, prompt, "cuda")
+        if EDIT_MODE:
+            before = Image.open(os.path.join(DATASET_PATH, EDIT_BEFORE_FILES[filename])).convert("RGB")
+            prompt_result, edit_tags = encode_edit_prompt_minimax(text_encoder, processor, prompt, before, "cuda", base=base)
+            torch.save(edit_tags, tags_path)
+            if os.path.exists(_edit_vision_path(base)):
+                os.remove(_edit_vision_path(base))
+            del before
+        else:
+            if os.path.exists(tags_path):
+                os.remove(tags_path)
+            with torch.inference_mode():
+                prompt_result = encode_prompt_minimax(text_encoder, processor, prompt, "cuda")
 
         if prompt_result["truncated"]:
             truncated_count += 1
@@ -3368,12 +3617,15 @@ def preprocess_minimaxh3():
     latent_shapes = []
 
     for idx, filename in enumerate(images, start=1):
-        base = os.path.splitext(filename)[0]
+        base = sample_base(filename)
         video_path = os.path.join(CACHE_DIR, "{}_video_latent.pt".format(base))
         audio_path = os.path.join(CACHE_DIR, "{}_audio_latent.pt".format(base))
 
         need_audio = WRITE_AUDIO_LATENT and not os.path.exists(audio_path)
-        if os.path.exists(video_path) and not need_audio:
+        ref_path = os.path.join(CACHE_DIR, "{}_ref0_latent.pt".format(base))
+        if not EDIT_MODE and os.path.exists(ref_path):
+            os.remove(ref_path)
+        if os.path.exists(video_path) and not need_audio and (not EDIT_MODE or os.path.exists(ref_path)):
             log_dev(L("  [{}/{}] SKIP latents {}",
                       "  [{}/{}] OMITIR latentes {}").format(idx, len(images), filename))
             continue
@@ -3451,6 +3703,15 @@ def preprocess_minimaxh3():
 
             with torch.inference_mode():
                 video_latent = encode_h3image_latent(vae, image) if IMAGE_MODE else encode_video_latent(vae, image)
+            if EDIT_MODE:
+                before = Image.open(os.path.join(DATASET_PATH, EDIT_BEFORE_FILES[filename])).convert("RGB")
+                before = edit_reference_image(before, bw, bh)
+                with torch.inference_mode():
+                    ref_latent = encode_h3image_latent(vae, before)
+                torch.save(ref_latent, ref_path)
+                log_dev("    Reference: {} -> {}x{} | latent {}".format(
+                    EDIT_BEFORE_FILES[filename], before.width, before.height, tuple(ref_latent.shape)))
+                del before, ref_latent
 
         torch.save(video_latent, video_path)
 
@@ -3547,7 +3808,8 @@ def preprocess_minimaxh3():
                                   (h3_pixel_frames(video_latent.shape[2])
                                    if video_latent.shape[2] > 1 else 1)),
                 "kind": ("audio" if is_audio(filename)
-                         else ("video" if is_video(filename) else "image")),
+                         else ("video" if is_video(filename) else ("edit" if EDIT_MODE else "image"))),
+                "reference": EDIT_BEFORE_FILES.get(filename) if EDIT_MODE else None,
                 "prompt_structure": prompt_structure,
             },
             os.path.join(CACHE_DIR, "{}_info.json".format(base)),
@@ -3654,6 +3916,8 @@ def preprocess_minimaxh3():
         "trigger_word": TRIGGER_WORD,
         "audio_latent_channels": audio_channels,
         "vae": "minimaxh3image" if IMAGE_MODE else "minimaxh3video",
+        "lora_type": "edit" if EDIT_MODE else "normal",
+        "edit_reference_size": EDIT_REFERENCE_SIZE if EDIT_MODE else None,
         "text_encoder_hidden_layer": TEXT_ENCODER_HIDDEN_LAYER,
         "prompt_encoding": "Qwen3-VL raw layer-50 output, NO final norm, no special tokens",
         "rope_rebuilt_modules": DIAG["rope"].get("rebuilt_modules", []),

@@ -1500,7 +1500,6 @@
   "MiniMax-H3-Image is distilled to 6 steps, one output head per step, with no CFG: the preview always runs 6 steps at CFG 1.": "MiniMax-H3-Image는 6스텝으로 증류되었고 스텝마다 출력 헤드가 있으며 CFG가 없습니다. 미리보기는 항상 6스텝, CFG 1로 실행됩니다.",
   "This cache was not made with the MiniMax-H3-Image VAE ({0}). Run Pre-Cache from the MiniMax-H3 Image card: it writes its own cache folder.": "이 캐시는 MiniMax-H3-Image VAE로 만들어지지 않았습니다({0}). MiniMax-H3 Image 카드에서 Pre-Cache를 실행하세요. 자체 캐시 폴더에 기록합니다.",
   "No MiniMax-H3-Image cache in {0}. Run Pre-Cache first.": "{0}에 MiniMax-H3-Image 캐시가 없습니다. 먼저 Pre-Cache를 실행하세요.",
-  "{0}: edit pairs are not supported yet; trained as a plain image.": "{0}: 편집 쌍은 아직 지원되지 않습니다. 일반 이미지로 학습합니다.",
   "MiniMax-H3 DiT the LoRA trains on ({0}/transformers, ~17 GB) -> {1}": "LoRA를 학습할 MiniMax-H3 DiT({0}/transformers, 약 17 GB) -> {1}",
   "Which DiT the LoRA trains on. MiniMax-H3-Image + adapter (default): it trains on the image model itself, with a frozen de-distillation adapter that is NOT used when generating; it gives clearly more likeness. MiniMax-H3 (video): it trains on the non-distilled video DiT and is transferred to H3-Image, with less likeness.": "LoRA를 학습할 DiT. MiniMax-H3-Image + 어댑터(기본값): 이미지 모델 자체에서 학습하며, 생성 시에는 사용하지 않는 고정된 역증류 어댑터를 씁니다. 유사도가 확실히 높아집니다. MiniMax-H3(비디오): 증류되지 않은 비디오 DiT에서 학습한 뒤 H3-Image로 옮기며, 유사도는 낮습니다.",
   "Strength of the frozen de-distillation adapter while training. Only used with MiniMax-H3-Image + adapter. Default 1.5.": "학습 중 고정된 역증류 어댑터의 강도. MiniMax-H3-Image + 어댑터에서만 사용됩니다. 기본값 1.5.",
@@ -1510,5 +1509,15 @@
   "MiniMax-H3-Image VAE unavailable ({0}); decoding with the video VAE.": "MiniMax-H3-Image VAE를 사용할 수 없습니다({0}). 비디오 VAE로 디코딩합니다.",
   "Strength of the LoRA in the previews, like the LoRA strength in ComfyUI. Only the previews change: training and the saved LoRAs do not. It can be changed while training.": "미리보기에서의 LoRA 강도(ComfyUI의 LoRA 강도와 같음). 미리보기만 바뀌며 학습과 저장된 LoRA는 바뀌지 않습니다. 학습 중에도 바꿀 수 있습니다.",
   "The step peaked at {0} GB and other programs use {1} GB, on a {2} GB card: {3} resident blocks moved back to RAM, {4} remain. Set Resident Blocks to {4} or less next time.": "스텝 최대 사용량 {0} GB, 다른 프로그램 사용량 {1} GB ({2} GB 카드): 상주 블록 {3}개를 RAM으로 되돌렸고 {4}개가 남았습니다. 다음에는 Resident Blocks를 {4} 이하로 설정하세요.",
-  "The steps leave {0} GB of VRAM unused: about {1} more resident blocks fit. Set Resident Blocks to {2} next time for faster steps.": "스텝에서 VRAM {0} GB가 사용되지 않습니다. 상주 블록을 약 {1}개 더 둘 수 있습니다. 다음에는 Resident Blocks를 {2}(으)로 설정하면 스텝이 빨라집니다."
+  "The steps leave {0} GB of VRAM unused: about {1} more resident blocks fit. Set Resident Blocks to {2} next time for faster steps.": "스텝에서 VRAM {0} GB가 사용되지 않습니다. 상주 블록을 약 {1}개 더 둘 수 있습니다. 다음에는 Resident Blocks를 {2}(으)로 설정하면 스텝이 빨라집니다.",
+  "Edit (before / after pairs)": "편집 (전 / 후 쌍)",
+  "Reference Size:": "참조 크기:",
+  "Match (target area)": "Match (대상 면적)",
+  "Native (short edge 1024-2048)": "네이티브 (짧은 변 1024-2048)",
+  "Normal: one image and its caption per sample. Edit: before / after pairs, photo_before.png and photo_after.png with the instruction in photo.txt. The after image is what the LoRA learns to produce from the before image, as MiniMax-H3-Image edits: the text encoder sees the before image as Picture 1 and the DiT gets it as a reference. Re-run Pre-Cache after changing it.": "Normal: 샘플마다 이미지 한 장과 그 캡션. 편집: 전 / 후 쌍, photo_before.png와 photo_after.png, 지시문은 photo.txt에 넣습니다. 후 이미지는 LoRA가 전 이미지로부터 만들어 내도록 배우는 결과입니다. MiniMax-H3-Image의 편집 방식대로 텍스트 인코더는 전 이미지를 Picture 1로 보고, DiT는 이를 참조로 받습니다. 바꾼 뒤에는 Pre-Cache를 다시 실행하세요.",
+  "Size of the before image as the DiT sees it. Match: the area of the after image at the before image's own aspect, cheapest, like ComfyUI's match. Native: the released pipeline's short edge of 1024 to 2048 px, closest to how MiniMax-H3-Image was trained, but the reference can cost more tokens than the image itself. The text encoder always sees it at a short edge of 1024 px.": "DiT가 보는 전 이미지의 크기입니다. Match: 후 이미지의 면적을 전 이미지 자체의 비율로 사용합니다. 가장 가볍고 ComfyUI의 match와 같습니다. 네이티브: 공식 파이프라인의 짧은 변 1024~2048 px로, MiniMax-H3-Image의 학습 방식에 가장 가깝지만 참조가 이미지 자체보다 더 많은 토큰을 쓸 수 있습니다. 텍스트 인코더는 항상 짧은 변 1024 px로 봅니다.",
+  "{0}: edit pairs train on MiniMax-H3-Image only; trained as a plain image.": "{0}: 편집 쌍은 MiniMax-H3-Image에서만 학습합니다. 일반 이미지로 학습합니다.",
+  "{0} samples without a reference left over from a normal pre-cache are skipped: this cache trains an edit LoRA.": "일반 Pre-Cache에서 남은 참조 없는 샘플 {0}개를 건너뜁니다. 이 캐시는 편집 LoRA를 학습합니다.",
+  "Edit LoRA: {0} before / after pairs.": "편집 LoRA: 전 / 후 쌍 {0}개.",
+  "Vision phase failed ({0}); encoding each pair in one pass.": "비전 단계가 실패했습니다({0}). 각 쌍을 한 번에 인코딩합니다."
 }

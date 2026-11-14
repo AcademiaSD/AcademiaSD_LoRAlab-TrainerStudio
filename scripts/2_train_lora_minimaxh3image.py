@@ -320,17 +320,27 @@ def load_entries(cache_dir):
         tags_path = os.path.join(cache_dir, base + "_text_token_tags.pt")
         tags = (torch.load(tags_path, map_location="cpu", weights_only=True).long() if os.path.isfile(tags_path)
                 else torch.full((embeds.shape[1],), M.TEXT_TAG, dtype=torch.long))
-        if refs:
-            log("[DATASET][!] " + t("{0}: edit pairs are not supported yet; trained as a plain image.", base))
+        if refs and not TRAIN_ON_IMAGE:
+            log("[DATASET][!] " + t("{0}: edit pairs train on MiniMax-H3-Image only; trained as a plain image.", base))
             refs = []
         if TRAIN_ON_IMAGE:
-            layout = M.build_packed_sequence(tags, [], latent.shape[-2], latent.shape[-1])
+            layout = M.build_packed_sequence(tags, [tuple(r.shape[-2:]) for r in refs], latent.shape[-2], latent.shape[-1])
         else:
             layout = M.build_video_packed_sequence(embeds.shape[1], latent.shape[-2], latent.shape[-1], tags)
         entries.append({"name": base, "latent": latent, "embeds": embeds, "refs": refs, "tags": tags,
                         "layout": layout, "prompt": info.get("prompt", ""), "tokens": int(layout[0].shape[0])})
     if not entries:
         raise RuntimeError(t("No valid entries found in the cache.") + " " + cache_dir)
+    # An edit cache holds only pairs; plain images left over from an earlier normal pre-cache in
+    # the same folder would teach the LoRA to ignore the reference.
+    # Una cache de edicion solo lleva pares: las imagenes sueltas de un pre-cache anterior se descartan.
+    edits = [e for e in entries if e["refs"]]
+    if edits and len(edits) < len(entries):
+        log("[DATASET][!] " + t("{0} samples without a reference left over from a normal pre-cache are skipped: "
+                                "this cache trains an edit LoRA.", len(entries) - len(edits)))
+        entries = edits
+    if edits:
+        log("[DATASET] " + t("Edit LoRA: {0} before / after pairs.", len(edits)))
     return entries
 
 
@@ -371,9 +381,14 @@ VRAM_GUARD_GB = 0.1
 VRAM_BASE_GB = 4.2
 VRAM_PER_TOKEN_GB = 0.0006
 VRAM_BLOCK_GB = 0.32
+# The vision block of an edit's reference rides in the text stream (~1,000-1,800 rows) and costs
+# far more than the caption rows the constants above were measured with: a 4-pair edit run at
+# 2,248 tokens (1,570 of them vision rows) peaked ~2.9 GB above the plan on an RTX 5080.
+# El bloque de vision de una edicion va en el texto y cuesta mucho mas que las filas de un caption.
+VRAM_PER_VISION_ROW_GB = 0.0018
 
 
-def plan_resident_blocks(num_blocks, max_tokens):
+def plan_resident_blocks(num_blocks, max_tokens, vision_rows=0):
     total = torch.cuda.get_device_properties(0).total_memory / 2**30
     budget = min(float(cfg("vram_budget_gb") or 0) or total, total) - VRAM_SLACK_GB
     # Measured on an RTX 5080 (allocated peak, GiB, rank 16): 1,104 tokens -> 7.07 with 8 resident
@@ -384,7 +399,8 @@ def plan_resident_blocks(num_blocks, max_tokens):
     # (30 blocks at 1,145 tokens spilled into shared memory and ran 3 times slower); 2.0 matches the
     # runs measured there. vram_guard() corrects whatever is still off once training runs.
     # Medido en una RTX 5080. La GUI (perfiles de VRAM) usa las mismas constantes.
-    floor = VRAM_BASE_GB + VRAM_PER_TOKEN_GB * max_tokens + VRAM_LORA_GB_PER_RANK * (RANK - 16)
+    floor = (VRAM_BASE_GB + VRAM_PER_TOKEN_GB * max_tokens + VRAM_PER_VISION_ROW_GB * vision_rows
+             + VRAM_LORA_GB_PER_RANK * (RANK - 16))
     fit = int(max(0, min(num_blocks, (budget - floor) // VRAM_BLOCK_GB)))
     # A manual value wins, even above the plan: whoever types one is measuring.
     # Un valor manual manda, incluso por encima del plan: quien lo escribe esta midiendo.
@@ -533,7 +549,7 @@ def ensure_adapter():
     return local
 
 
-def build_model(max_tokens):
+def build_model(max_tokens, vision_rows=0):
     ensure_nf4()
     if not TRAIN_ON_IMAGE:
         ensure_train_dit()
@@ -550,7 +566,7 @@ def build_model(max_tokens):
         mod.add_lora(RANK, ALPHA, USE_RSLORA, DEVICE)
         targets.append(name)
     blocks = list(model.transformer_blocks)
-    resident = plan_resident_blocks(len(blocks), max_tokens)
+    resident = plan_resident_blocks(len(blocks), max_tokens, vision_rows)
     for block in blocks[:resident]:
         for mod in block.modules():
             if isinstance(mod, M.LazyNF4Linear):
@@ -749,8 +765,20 @@ def train_step_image(model, entry, step, empty_caption=None):
     noise = torch.randn(x0.shape, generator=generator, dtype=torch.float32)
     noised = (1.0 - sigma) * x0 + sigma * noise
     target = (x0 - noise).to(DEVICE)
+    refs = entry["refs"]
+    if refs:
+        # An edit: the before image rides in front as reference rows, noised to t = 0.999 and
+        # never denoised, as the released sampler packs it. The empty caption has no vision block
+        # of the reference, so edit pairs never drop the caption.
+        # Una edicion: la imagen "antes" va delante como filas de referencia a t = 0.999.
+        drop = False
+        ref_sigma = 1.0 - M.REFERENCE_T
+        rows = [M.patchify((1.0 - ref_sigma) * r + ref_sigma * torch.randn(r.shape, generator=generator,
+                                                                          dtype=torch.float32)) for r in refs]
+        noised = torch.cat(rows + [noised])
     pred = forward_velocity_image(model, entry, noised, step_index, empty_caption if drop else None)
-    return F.mse_loss(pred, target), sigma
+    n_ref = entry["layout"][4] if refs else 0
+    return F.mse_loss(pred[n_ref:], target), sigma
 
 
 def train_step(model, entry, step, empty_caption=None):
@@ -802,7 +830,7 @@ def run_preview(model, entries, step):
             with lora_strength(model, strength):
                     latent = M.sample(model, entry["embeds"], width, height,
                                   seed=(lambda v: v if v >= 0 else step_seed(step, 11) % 2**31)(int(cfg("preview_seed"))),
-                                  text_token_tags=entry["tags"], device=DEVICE)
+                                  text_token_tags=entry["tags"], reference_latents=entry["refs"], device=DEVICE)
         finally:
             M.set_frozen_enabled(model, True)
             gc_cuda()
@@ -825,6 +853,15 @@ def run_preview(model, entries, step):
     vae = M.load_vae(NF4_DIR, vae_device)
     try:
         image = M.decode_latent(vae, latent)
+        if entry["refs"]:
+            # before | after, the before at the height of the result.
+            before = M.decode_latent(vae, entry["refs"][0])
+            before = before.resize((max(1, round(before.width * image.height / before.height)), image.height))
+            from PIL import Image as _Image
+            pair = _Image.new("RGB", (before.width + image.width, image.height))
+            pair.paste(before, (0, 0))
+            pair.paste(image, (before.width, 0))
+            image = pair
     finally:
         del vae
         gc_cuda()
@@ -895,7 +932,7 @@ def main():
     log("[DATASET] {} samples ({} edit pairs) | longest sequence {} tokens | caption dropout {}".format(
         len(entries), edits, max_tokens, cfg("caption_dropout") if empty_caption else "off (no empty caption in the cache)"))
 
-    model = build_model(max_tokens)
+    model = build_model(max_tokens, max(int((e["tags"] == M.IMAGE_TAG).sum()) for e in entries))
     model.train()
     params = [p for p in model.parameters() if p.requires_grad]
     if cfg_bool("use_loraplus"):

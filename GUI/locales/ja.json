@@ -1500,7 +1500,6 @@
   "MiniMax-H3-Image is distilled to 6 steps, one output head per step, with no CFG: the preview always runs 6 steps at CFG 1.": "MiniMax-H3-Image は 6 ステップに蒸留され、ステップごとに出力ヘッドがあり、CFG はありません。プレビューは常に 6 ステップ、CFG 1 で実行されます。",
   "This cache was not made with the MiniMax-H3-Image VAE ({0}). Run Pre-Cache from the MiniMax-H3 Image card: it writes its own cache folder.": "このキャッシュは MiniMax-H3-Image の VAE で作成されていません（{0}）。MiniMax-H3 Image カードから Pre-Cache を実行してください。専用のキャッシュフォルダーに書き込みます。",
   "No MiniMax-H3-Image cache in {0}. Run Pre-Cache first.": "{0} に MiniMax-H3-Image のキャッシュがありません。先に Pre-Cache を実行してください。",
-  "{0}: edit pairs are not supported yet; trained as a plain image.": "{0}：編集ペアはまだサポートされていません。通常の画像として学習します。",
   "MiniMax-H3 DiT the LoRA trains on ({0}/transformers, ~17 GB) -> {1}": "LoRA を学習する MiniMax-H3 DiT（{0}/transformers、約 17 GB）-> {1}",
   "Which DiT the LoRA trains on. MiniMax-H3-Image + adapter (default): it trains on the image model itself, with a frozen de-distillation adapter that is NOT used when generating; it gives clearly more likeness. MiniMax-H3 (video): it trains on the non-distilled video DiT and is transferred to H3-Image, with less likeness.": "LoRA を学習する DiT。MiniMax-H3-Image + アダプター（既定）：画像モデル自体で学習し、凍結した脱蒸留アダプターを使います（生成時には使用しません）。似ている度合いが明らかに高くなります。MiniMax-H3（動画）：蒸留されていない動画 DiT で学習して H3-Image に転用しますが、似ている度合いは低くなります。",
   "Strength of the frozen de-distillation adapter while training. Only used with MiniMax-H3-Image + adapter. Default 1.5.": "学習中の凍結した脱蒸留アダプターの強さ。MiniMax-H3-Image + アダプターでのみ使用。既定値 1.5。",
@@ -1510,5 +1509,15 @@
   "MiniMax-H3-Image VAE unavailable ({0}); decoding with the video VAE.": "MiniMax-H3-Image VAE が使えません（{0}）。動画 VAE でデコードします。",
   "Strength of the LoRA in the previews, like the LoRA strength in ComfyUI. Only the previews change: training and the saved LoRAs do not. It can be changed while training.": "プレビューでの LoRA の強さ（ComfyUI の LoRA 強度と同じ）。変わるのはプレビューだけで、学習や保存される LoRA は変わりません。学習中にも変更できます。",
   "The step peaked at {0} GB and other programs use {1} GB, on a {2} GB card: {3} resident blocks moved back to RAM, {4} remain. Set Resident Blocks to {4} or less next time.": "ステップのピークは {0} GB、他のプログラムが {1} GB 使用（カードは {2} GB）：常駐ブロック {3} 個を RAM に戻し、残りは {4} 個です。次回は Resident Blocks を {4} 以下にしてください。",
-  "The steps leave {0} GB of VRAM unused: about {1} more resident blocks fit. Set Resident Blocks to {2} next time for faster steps.": "ステップで {0} GB の VRAM が使われていません。常駐ブロックをあと約 {1} 個増やせます。次回は Resident Blocks を {2} にするとステップが速くなります。"
+  "The steps leave {0} GB of VRAM unused: about {1} more resident blocks fit. Set Resident Blocks to {2} next time for faster steps.": "ステップで {0} GB の VRAM が使われていません。常駐ブロックをあと約 {1} 個増やせます。次回は Resident Blocks を {2} にするとステップが速くなります。",
+  "Edit (before / after pairs)": "編集（ビフォー / アフターのペア）",
+  "Reference Size:": "参照サイズ:",
+  "Match (target area)": "Match（ターゲットの面積）",
+  "Native (short edge 1024-2048)": "ネイティブ（短辺 1024-2048）",
+  "Normal: one image and its caption per sample. Edit: before / after pairs, photo_before.png and photo_after.png with the instruction in photo.txt. The after image is what the LoRA learns to produce from the before image, as MiniMax-H3-Image edits: the text encoder sees the before image as Picture 1 and the DiT gets it as a reference. Re-run Pre-Cache after changing it.": "Normal: サンプルごとに画像 1 枚とそのキャプション。編集: ビフォー / アフターのペア。photo_before.png と photo_after.png、指示は photo.txt に書きます。アフター画像は、LoRA がビフォー画像から作り出すことを学ぶものです。MiniMax-H3-Image の編集と同じく、テキストエンコーダはビフォー画像を Picture 1 として見て、DiT はそれを参照として受け取ります。変更したら Pre-Cache をもう一度実行してください。",
+  "Size of the before image as the DiT sees it. Match: the area of the after image at the before image's own aspect, cheapest, like ComfyUI's match. Native: the released pipeline's short edge of 1024 to 2048 px, closest to how MiniMax-H3-Image was trained, but the reference can cost more tokens than the image itself. The text encoder always sees it at a short edge of 1024 px.": "DiT が見るビフォー画像のサイズ。Match: アフター画像の面積を、ビフォー画像の縦横比で使います。最も軽く、ComfyUI の match と同じです。ネイティブ: 公式パイプラインの短辺 1024〜2048 px。MiniMax-H3-Image の学習に最も近いですが、参照が画像そのものより多くのトークンを使うことがあります。テキストエンコーダは常に短辺 1024 px で見ます。",
+  "{0}: edit pairs train on MiniMax-H3-Image only; trained as a plain image.": "{0}: 編集ペアは MiniMax-H3-Image でのみ学習します。通常の画像として学習します。",
+  "{0} samples without a reference left over from a normal pre-cache are skipped: this cache trains an edit LoRA.": "通常の Pre-Cache から残った参照のないサンプル {0} 件をスキップします。このキャッシュは編集 LoRA を学習します。",
+  "Edit LoRA: {0} before / after pairs.": "編集 LoRA: ビフォー / アフターのペア {0} 組。",
+  "Vision phase failed ({0}); encoding each pair in one pass.": "ビジョンフェーズに失敗しました（{0}）。各ペアを 1 回のパスでエンコードします。"
 }
