@@ -175,7 +175,7 @@ ALPHA = float(cfg("lora_alpha"))
 USE_RSLORA = cfg_bool("use_rslora")
 SEED = int(cfg("seed"))
 SAVE_EVERY = int(cfg("save_every"))
-PREVIEW_EVERY = int(cfg("preview_every"))
+PREVIEW_EVERY = int(cfg("preview_every") or 0)
 DEBUG = cfg_bool("debug_training")
 TRAIN_ON_IMAGE = str(cfg("train_dit")).strip().lower() == "image"
 DEVICE = "cuda"
@@ -249,7 +249,7 @@ def reload_live_settings():
         CFG[key] = fresh[key]
     if changed:
         TOTAL_STEPS, LR = int(cfg("total_steps")), float(cfg("lr"))
-        SAVE_EVERY, PREVIEW_EVERY = int(cfg("save_every")), int(cfg("preview_every"))
+        SAVE_EVERY, PREVIEW_EVERY = int(cfg("save_every")), int(cfg("preview_every") or 0)
         log("[LIVE] " + ", ".join("{}={}".format(k, CFG[k]) for k in changed))
 
 

@@ -1533,5 +1533,7 @@
   "Training will start when the pre-cache finishes. Keep this page open.": "Das Training startet, wenn der Pre-Cache fertig ist. Lass diese Seite geöffnet.",
   "The pre-cache did not finish: training was not started.": "Der Pre-Cache wurde nicht abgeschlossen: das Training wurde nicht gestartet.",
   "The pre-cache is not running in the queue.": "Der Pre-Cache läuft nicht in der Warteschlange.",
-  "Waits for its pre-cache to finish.": "Wartet, bis sein Pre-Cache fertig ist."
+  "Waits for its pre-cache to finish.": "Wartet, bis sein Pre-Cache fertig ist.",
+  "every {n} steps": "alle {n} Schritte",
+  "off": "aus"
 }

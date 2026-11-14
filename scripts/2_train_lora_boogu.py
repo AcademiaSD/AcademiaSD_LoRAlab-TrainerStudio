@@ -126,7 +126,7 @@ def main():
             "--lr_scheduler", str(train_cfg.get("lr_scheduler", "cosine")),
             "--warmup_steps", str(max(0, int(train_cfg.get("warmup_steps", 0)))),
             "--lr_cycles", str(max(1, int(train_cfg.get("lr_cycles", 1)))),
-            "--preview_every", str(max(0, int(train_cfg.get("preview_every", 0)))),
+            "--preview_every", str(max(0, int(train_cfg.get("preview_every", 0) or 0))),
             "--preview_steps", str(max(1, int(train_cfg.get("preview_steps", 30)))),
             "--preview_cfg", str(float(train_cfg.get("preview_cfg", 4.0))),
             "--preview_size", str(max(0, int(train_cfg.get("preview_size", 0)))),

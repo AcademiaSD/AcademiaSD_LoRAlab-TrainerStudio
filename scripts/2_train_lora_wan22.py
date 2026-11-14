@@ -144,7 +144,7 @@ SEED              = cfg.get("seed",              DEFAULTS["seed"])
 TIMESTEP_SAMPLING = cfg.get("timestep_sampling", DEFAULTS["timestep_sampling"])
 TRAIN_SHIFT       = float(cfg.get("train_shift", DEFAULTS["train_shift"]))
 ACTIVATION_OFFLOAD = bool(cfg.get("activation_offload", DEFAULTS["activation_offload"]))
-PREVIEW_EVERY     = cfg.get("preview_every",     DEFAULTS["preview_every"])
+PREVIEW_EVERY     = int(cfg.get("preview_every", DEFAULTS["preview_every"]) or 0)   # null (campo vacío) = 0, sin previews
 PREVIEW_STEPS     = cfg.get("preview_steps",     DEFAULTS["preview_steps"])
 # Previews de vídeo: menos pasos dejan bloques en los fotogramas de los extremos (ver denoise).
 MIN_VIDEO_PREVIEW_STEPS = 40

@@ -625,8 +625,8 @@
                 <div class="panel-body">
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Preview Every:</label>
-                            <input type="number" id="train_preview_every" value="0">
+                            <label>Preview Every (0 = off):</label>
+                            <input type="number" id="train_preview_every" value="0" min="0" title="How many steps between previews. 0 turns them off completely and costs nothing.">
                         </div>
                         <div class="form-group">
                             <label>Caption Mode:</label>
@@ -1032,7 +1032,7 @@
                     if (t.grad_accum_steps) document.getElementById('train_grad_accum').value = t.grad_accum_steps;
                     if (t.save_every) document.getElementById('train_save_every').value = t.save_every;
                     if (t.seed !== undefined) document.getElementById('train_seed').value = t.seed;
-                    if (t.preview_every) document.getElementById('train_preview_every').value = t.preview_every;
+                    if (t.preview_every !== undefined && t.preview_every !== null) document.getElementById('train_preview_every').value = t.preview_every;
                     if (t.preview_caption_mode) {
                         document.getElementById('train_preview_caption_mode').value = t.preview_caption_mode;
                         toggleCaptionMode(t.preview_caption_mode);
@@ -1292,7 +1292,7 @@
                 grad_accum_steps: parseInt(document.getElementById('train_grad_accum').value),
                 save_every: parseInt(document.getElementById('train_save_every').value),
                 seed: parseInt(document.getElementById('train_seed').value),
-                preview_every: parseInt(document.getElementById('train_preview_every').value),
+                preview_every: parseInt(document.getElementById('train_preview_every').value) || 0,
                 preview_caption_mode: document.getElementById('train_preview_caption_mode').value,
                 preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim(),
                 preview_steps: parseInt(document.getElementById('train_preview_steps').value),

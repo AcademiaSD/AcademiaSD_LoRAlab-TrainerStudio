@@ -120,7 +120,7 @@ MAX_GRAD_NORM     = cfg.get("max_grad_norm",     DEFAULTS["max_grad_norm"])
 MIN_SNR_GAMMA     = cfg.get("min_snr_gamma",     DEFAULTS["min_snr_gamma"])
 SAVE_EVERY        = cfg.get("save_every",        DEFAULTS["save_every"])
 SEED              = cfg.get("seed",              DEFAULTS["seed"])
-PREVIEW_EVERY     = cfg.get("preview_every",     DEFAULTS["preview_every"])
+PREVIEW_EVERY     = int(cfg.get("preview_every", DEFAULTS["preview_every"]) or 0)   # null (campo vacío) = 0, sin previews
 PREVIEW_STEPS     = cfg.get("preview_steps",     DEFAULTS["preview_steps"])
 # 0 = el CFG recomendado para el modelo del preset.
 PREVIEW_CFG       = cfg.get("preview_cfg",       DEFAULTS["preview_cfg"])

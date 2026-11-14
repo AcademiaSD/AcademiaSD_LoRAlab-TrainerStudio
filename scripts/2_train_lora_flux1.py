@@ -125,7 +125,7 @@ SEED              = cfg.get("seed",              DEFAULTS["seed"])
 TIMESTEP_SAMPLING = cfg.get("timestep_sampling", DEFAULTS["timestep_sampling"])
 # Valor de la entrada de guía de FLUX.1 dev durante el entrenamiento (ver predict).
 TRAIN_GUIDANCE    = float(cfg.get("train_guidance", DEFAULTS["train_guidance"]))
-PREVIEW_EVERY     = cfg.get("preview_every",     DEFAULTS["preview_every"])
+PREVIEW_EVERY     = int(cfg.get("preview_every", DEFAULTS["preview_every"]) or 0)   # null (campo vacío) = 0, sin previews
 PREVIEW_STEPS     = cfg.get("preview_steps",     DEFAULTS["preview_steps"])
 PREVIEW_CFG       = cfg.get("preview_cfg",       DEFAULTS["preview_cfg"])
 # Lado de la preview en píxeles (área size², proporción de la muestra); 0 = tamaño de entrenamiento.

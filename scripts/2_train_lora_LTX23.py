@@ -225,7 +225,7 @@ LORA_ONLY_ATTN = _cfg_bool("lora_only_attn", DEFAULTS["lora_only_attn"])
 CAST_FROZEN_BF16 = _cfg_bool("cast_frozen_bf16", DEFAULTS["cast_frozen_bf16"])
 USE_AUDIO_LOSS = _cfg_bool("use_audio_loss", DEFAULTS["use_audio_loss"])
 
-PREVIEW_EVERY = int(cfg_get("preview_every", DEFAULTS["preview_every"]))
+PREVIEW_EVERY = int(cfg_get("preview_every", DEFAULTS["preview_every"]) or 0)
 PREVIEW_SIZE = int(cfg_get("preview_size", DEFAULTS["preview_size"]) or 0)
 PREVIEW_WIDTH = int(cfg_get("preview_width", DEFAULTS["preview_width"]) or 0)
 PREVIEW_HEIGHT = int(cfg_get("preview_height", DEFAULTS["preview_height"]) or 0)

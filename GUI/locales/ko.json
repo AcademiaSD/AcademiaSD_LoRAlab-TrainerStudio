@@ -1533,5 +1533,7 @@
   "Training will start when the pre-cache finishes. Keep this page open.": "프리캐시가 끝나면 학습이 시작됩니다. 이 페이지를 열어 두세요.",
   "The pre-cache did not finish: training was not started.": "프리캐시가 끝나지 않아 학습을 시작하지 않았습니다.",
   "The pre-cache is not running in the queue.": "대기열에서 프리캐시가 실행 중이 아닙니다.",
-  "Waits for its pre-cache to finish.": "프리캐시가 끝나기를 기다립니다."
+  "Waits for its pre-cache to finish.": "프리캐시가 끝나기를 기다립니다.",
+  "every {n} steps": "{n} 스텝마다",
+  "off": "꺼짐"
 }

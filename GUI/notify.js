@@ -132,3 +132,37 @@ function liveChangesText(previous, saved, apply) {
     }
     return blocks.length ? blocks.join('\n\n') : t('Training is running: nothing has changed since the last save.');
 }
+
+// Previews: la cabecera de «2b. Training Previews» dice si están activas («every 50 steps») o no («off»),
+// también con el panel cerrado. Preview Every = 0 no genera ninguna. El valor lo pone a veces el código
+// (cargar ajustes, Load JSON) sin evento, así que además de input/change se mira cada segundo.
+(function () {
+    const tr = (k, v) => (typeof t === 'function' ? t(k, v) : k.replace(/\{(\w+)\}/g, (m, n) => (v && n in v ? v[n] : m)));
+    function init() {
+        const input = document.getElementById('train_preview_every');
+        const title = input && input.closest('.panel') && input.closest('.panel').querySelector('.panel-title > span');
+        if (!title || document.getElementById('pe-badge')) return;
+        const badge = document.createElement('span');
+        badge.id = 'pe-badge';
+        badge.className = 'no-i18n';
+        badge.style.cssText = 'margin-left: 8px; font-size: 0.72rem; font-weight: 600; padding: 2px 8px; border-radius: 999px;'
+            + ' border: 1px solid #334155; vertical-align: middle; white-space: nowrap;';
+        title.appendChild(badge);
+        let shown = null;
+        const update = () => {
+            const n = Math.max(0, parseInt(input.value, 10) || 0);
+            const key = n + '|' + ((window.I18N && I18N.lang) || '');
+            if (key === shown) return;
+            shown = key;
+            badge.textContent = n > 0 ? tr('every {n} steps', { n }) : tr('off');
+            badge.style.color = n > 0 ? '#86efac' : '#94a3b8';
+            badge.style.background = n > 0 ? 'rgba(22, 163, 74, 0.15)' : 'rgba(15, 23, 42, 0.6)';
+        };
+        input.addEventListener('input', update);
+        input.addEventListener('change', update);
+        update();
+        setInterval(update, 1000);
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+    else init();
+})();

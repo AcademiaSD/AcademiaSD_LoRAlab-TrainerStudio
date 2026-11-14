@@ -39,7 +39,7 @@ STEPS=int(cfg.get("total_steps",1000)); BATCH=int(cfg.get("batch_size",1)); ACCU
 LR=float(cfg.get("lr",3e-4)); WARMUP=int(cfg.get("warmup_steps",100)); MIN_LR_RATIO=float(cfg.get("min_lr_ratio",.1)); LR_SCHEDULER=cfg.get("lr_scheduler","cosine"); LR_CYCLES=int(cfg.get("lr_cycles",3)); SAVE_EVERY=int(cfg.get("save_every",100))
 RANK=int(cfg.get("lora_rank",16)); ALPHA=float(cfg.get("lora_alpha",16)); USE_RSLORA=bool(cfg.get("use_rslora",False)); USE_LORAPLUS=bool(cfg.get("use_loraplus",False)); LORAPLUS_RATIO=float(cfg.get("loraplus_ratio",16)); USE_LOKR=bool(cfg.get("use_lokr",False)); LOKR_FACTOR=max(1,int(cfg.get("lokr_factor",16)))
 LORA_TARGETS="all" if cfg.get("lora_targets","blocks")=="all" else "blocks"
-WEIGHT_DECAY=float(cfg.get("weight_decay",0)); MAX_GRAD_NORM=float(cfg.get("max_grad_norm",1.0)); PREVIEW_EVERY=int(cfg.get("preview_every",0))
+WEIGHT_DECAY=float(cfg.get("weight_decay",0)); MAX_GRAD_NORM=float(cfg.get("max_grad_norm",1.0)); PREVIEW_EVERY=int(cfg.get("preview_every",0) or 0)
 PREVIEW_STEPS=int(cfg.get("preview_steps",28)); PREVIEW_CFG=float(cfg.get("preview_cfg",4)); PREVIEW_SIZE=int(cfg.get("preview_size",0)); PREVIEW_WIDTH=int(cfg.get("preview_width",0)); PREVIEW_HEIGHT=int(cfg.get("preview_height",0))
 PREVIEW_MODE=cfg.get("preview_caption_mode","first")
 SEED=int(cfg.get("seed",42)); TRIGGER=cfg.get("trigger_word","").strip(); CUSTOM=cfg.get("preview_custom_prompt","").strip()

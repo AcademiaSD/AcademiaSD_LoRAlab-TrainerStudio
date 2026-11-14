@@ -183,7 +183,7 @@ SEED             = int(_g("seed"))
 T_SAMPLING       = str(_g("timestep_sampling"))
 REGULARIZER_ON   = bool(_g("regularizer"))
 REGULARIZER_RATIO = float(_g("regularizer_ratio"))
-PREVIEW_EVERY    = int(_g("preview_every"))
+PREVIEW_EVERY    = int(_g("preview_every") or 0)
 PREVIEW_CAPTION_MODE = str(_g("preview_caption_mode")).strip().lower()
 if PREVIEW_CAPTION_MODE not in ("first", "random", "rotate4", "custom"):
     PREVIEW_CAPTION_MODE = "first"

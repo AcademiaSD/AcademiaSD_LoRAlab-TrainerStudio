@@ -1533,5 +1533,7 @@
   "Training will start when the pre-cache finishes. Keep this page open.": "プリキャッシュが終わると学習が始まります。このページを開いたままにしてください。",
   "The pre-cache did not finish: training was not started.": "プリキャッシュが完了しなかったため、学習は開始されませんでした。",
   "The pre-cache is not running in the queue.": "キューでプリキャッシュが実行されていません。",
-  "Waits for its pre-cache to finish.": "プリキャッシュの完了を待っています。"
+  "Waits for its pre-cache to finish.": "プリキャッシュの完了を待っています。",
+  "every {n} steps": "{n} ステップごと",
+  "off": "オフ"
 }
