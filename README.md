@@ -8,6 +8,14 @@
 
 What was added, newest first. Each entry links to its commit.
 
+**2026-11-14**
+
+- <img src="https://img.shields.io/badge/MAJOR%20UPDATE-7c3aed?style=for-the-badge" alt="MAJOR UPDATE" height="22"> **MiniMax-H3 Image, edit LoRAs** — pairs `name_before` / `name_after` with the instruction in `name.txt`, packed as the official MiniMax-H3-Image edit pipeline does: the text encoder sees the before image as Picture 1 and the DiT gets it as a reference. Choose **LoRA Type → Edit** in the Pre-Cache panel. The edit pre-cache fits 16 GB by parking the language layers in RAM while the vision tower runs: ~0.7 s per pair instead of 30-46 s ([details](#minimax-h3-image--image-and-edit-loras---experimental)) [`565bfcc`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/565bfcc)
+- **MiniMax-H3 Image: new defaults** from the first run with good likeness: LR 4e-4, rank 16 / alpha 32, constant with 50 warmup steps, 1500 steps. On a face dataset the previews averaged 45 % face match over the last 300 steps, with a best of 53.6 % [`4131db8`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/4131db8) [`0e54da5`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/0e54da5)
+- **MiniMax-H3 Image: Preview LoRA Strength**, like the LoRA strength in ComfyUI, changeable while training [`a562106`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/a562106)
+- **MiniMax-H3 Image: VRAM guard** measured on the step's real peak, so it no longer reports a full card that is not full; after 20 steps the log says how many more resident blocks fit [`f2dfbf4`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/f2dfbf4)
+- New launcher image [`fffe716`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/fffe716)
+
 **2026-11-13**
 
 - <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **MiniMax-H3 Image, image LoRAs (experimental)** — for the 6-step distilled MiniMax-H3-Image. The LoRA trains on MiniMax-H3-Image itself with a frozen de-distillation adapter that is not used when generating, downloaded by itself from `AcademiaSD/MiniMax-H3-Image-NF4-for-LoRA-Training`. On a face dataset it reached 40% face likeness at strength 1.0 and 44.5% at 1.3, against 28% when the LoRA is trained on the MiniMax-H3 video model and used on H3-Image. 1500 steps by default; Stop halts at once, and when the VRAM runs short training moves blocks back to RAM instead of slowing down. The LoRAs load in ComfyUI [`b608eeb`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/b608eeb) [`297fedc`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/297fedc) [`db7622b`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/db7622b)
@@ -241,6 +249,8 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 **Linux:** ya tiene soporte para Linux. Cada `.bat` tiene su `.sh` equivalente; la instalación y el uso están en [docs/Linux.md](docs/Linux.md). Gracias a **[Jonathan Hecl (@jonathanhecl)](https://github.com/jonathanhecl)** por aportarlo.
 
 **FLUX.1 Dev:** nuevo entrenador de LoRAs de imagen para **FLUX.1 [dev]** de Black Forest Labs (FLUX.1 [dev] Non-Commercial License). Se descarga ya en **NF4** (13,5 GB, sin token) y los dos text encoders solo se usan en el pre-caché. Detalles en la sección *FLUX.1 Dev*.
+
+**MiniMax-H3 Image:** nuevo entrenador (experimental) de LoRAs de imagen y de edición (antes → después) para **MiniMax-H3-Image**, el modelo de imagen destilado a 6 pasos. El LoRA se entrena sobre el propio H3-Image con un adaptador de des-destilación congelado, que no se usa al generar. Para editar, elige **LoRA Type → Edit** en el panel de Pre-Cache y usa pares `nombre_before` / `nombre_after` con la instrucción en `nombre.txt`, por ejemplo `Edit <Picture 1>. Make it TOSTIOK style.`. El pre-caché de edición cabe en 16 GB porque aparca las capas de lenguaje en la RAM mientras corre la torre de visión. Detalles en la sección *MiniMax-H3 Image*.
 
 **FLUX.3 Image Klein:** nuevo entrenador de LoRAs normales y de edición (antes → después) para FLUX.3 Image Klein Base, desde 8 GB de VRAM. El captioner escribe en los formatos propios de FLUX.3 (prosa detallada, y opcionalmente con tabla de cajas `<id>`; en edición, la instrucción con `<ref_image_0>`). Necesita la versión nueva de diffusers: ejecuta **`Update_LoRAlab-TrainerStudio.bat`** antes de abrirlo. Detalles en la sección *FLUX.3 Image Klein*.
 
@@ -849,6 +859,45 @@ MiniMax-H3 is a 33B model that generates **video and audio together**. The offic
 | Steps | 600 (~37 min on 16 GB) | 600 (~1 h 10 min on 16 GB) |
 
 Rank 16 matters for characters: with rank 8 the likeness is just as good, but the model starts ignoring the prompt (ask for a beach, get a bedroom). On an 8 GB card the same image run takes ~80 minutes instead of 37.
+
+### MiniMax-H3 Image — image and edit LoRAs · ⚠ Experimental
+
+> **New and experimental:** pre-cache, training, previews, edit mode and resume verified. The defaults come from the first run with good likeness and will move as more people test it.
+
+MiniMax-H3-Image is the image model of the MiniMax-H3 family, **distilled to 6 steps** with one output head per step and no CFG. The trainer uses its NF4 build, downloaded the first time from `AcademiaSD/MiniMax-H3-Image-NF4-for-LoRA-Training` (~19 GB), plus the text encoder alone from the MiniMax-H3 NF4 repo (~18 GB).
+
+- **Why an adapter:** plain flow matching on a distilled model turns the high-noise heads into the dataset's average (blotches). So the LoRA trains on MiniMax-H3-Image itself, one distilled step and its head at a time, with a frozen **de-distillation adapter** on top (`adapter/` in the NF4 repo, 489 MB, downloaded by itself). The adapter absorbs what training does to the distilled heads, so the LoRA learns only your subject. It is **not used when generating**: previews and ComfyUI run without it. **Adapter Strength** (default x1.5) sets how hard it pushes while training.
+- **Normal LoRAs** (characters, objects, styles): one image + one caption each.
+- **Edit LoRAs:** pairs `name_before.png` / `name_after.png` with the instruction in `name.txt`. Choose **LoRA Type → Edit** in the Pre-Cache panel. MiniMax-H3-Image edits on its own, and the pairs are packed the way its official pipeline does it:
+  - the text encoder sees the before image as `Picture 1: ` plus a vision block (short edge 1024 px), followed by the instruction;
+  - the DiT gets its latent as reference rows held at t = 0.999, and the loss is computed only on the after image.
+
+  Write the instruction the way you will prompt it, for example `Edit <Picture 1>. Make it TOSTIOK style.` A trigger word is optional: an edit LoRA only acts when it is loaded. **Reference Size** sets how big the DiT sees the before image:
+  - **Match** (default): the area of the after image, at the before image's own aspect;
+  - **Native**: the official short edge of 1024 to 2048 px, closer to how the model was trained, but the reference can cost more tokens than the image itself.
+- **Edit pre-cache on 16 GB:** the text encoder is 14.9 GB in NF4. The vision tower runs first, with the 50 language layers parked in RAM; then the language model runs with those features, with the token embedding table in RAM. About 0.7 s per pair instead of 30-46 s spilling into shared memory.
+- **Previews:** always 6 steps at CFG 1, the distilled schedule, rendered by MiniMax-H3-Image with the LoRA being trained attached. **Preview Size** goes from 1024² (1 MP, fast) to 4096² (16.8 MP, native, very slow). **Preview LoRA Strength** works like the LoRA strength in ComfyUI and can be changed while training: the saved LoRAs do not change. Edit previews are saved as `before | after`.
+- **VRAM:** the NF4 blocks live in RAM and are uploaded one by one. **Resident Blocks** keeps some of them on the GPU for speed; 0 picks them from your card, the resolution and the longest sequence. If a step comes close to the card's limit, training moves blocks back to RAM instead of spilling into shared memory. After 20 steps the log says how many more blocks would fit.
+- **Face likeness:** the face match score of the previews is the quickest way to follow a character run (see [Face likeness in the previews](#-face-likeness-in-the-previews)). Previews use the dataset captions, so try new prompts in ComfyUI before judging a run.
+- **The LoRA is exported for ComfyUI** (`diffusion_model.*`, with `qkv_proj` as [q; k; v], the layout ComfyUI loads). Load it with the standard LoRA loader on the MiniMax-H3-Image checkpoint.
+- Default settings: 1500 steps, LR 4e-4, constant with 50 warmup steps, rank 16 / alpha 32, adapter x1.5, previews every 40 steps at 1024².
+
+| Face dataset, 14 images at 768² (face match of the previews, average) | Steps 800-1200 | Steps 1200-1500 | Best |
+| :--- | :--- | :--- | :--- |
+| Rank 16 / alpha 16, LR 2e-4 | 33.9 % | 37.3 % | 46.5 % |
+| Rank 16 / alpha 32, LR 4e-4 (**defaults**) | 35.0 % | 44.9 % | 53.6 % |
+| Rank 8 / alpha 8, LR 4e-4, cosine, adapter x1.0 | — | — | 25.1 % |
+
+With the defaults the likeness was still rising at step 1500 and the loss still falling: a longer run (1800-2000 steps) may give more.
+
+| Measured on an RTX 5080 16 GB | |
+| :--- | :--- |
+| Training, image 768², rank 16 | ~4.3 s/step with 28 resident blocks · 1500 steps + 37 previews at 1024² in ~2 h |
+| Training, edit ~576² (sequence of ~2,250 tokens) | ~10 s/step with 17 resident blocks |
+| Previews | 1024²: ~17 s · edit at ~576²: ~22 s |
+| Pre-cache | text encoder NF4 14.9 GB · edit: ~2.4 s per pair for the vision tower + ~0.7 s per pair for the text |
+
+An edit sample costs two to three times a normal one: the vision block of the reference rides in the text (~1,000-1,800 rows) and its latent adds as many rows as the image itself. Train edit LoRAs at 576² or below on 16 GB, with Resident Blocks on 0.
 
 ---
 
