@@ -1961,7 +1961,21 @@
                     model.value = 'image';
                     (model.closest('.form-group') || model).style.display = 'none';
                     if (!(data.pre_cache && data.pre_cache.target_area)) applyResolution(1048576);
-                    if (!(data.train && data.train.lr)) document.getElementById('train_lr').value = '0.0002';
+                    // Defaults of the first run that gave good likeness (H3-Im_morri_v7), until settings are saved.
+                    // Valores del primer entrenamiento con buen parecido (v7), hasta que se guarden ajustes.
+                    if (!(data.train && data.train.lr)) {
+                        const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+                        set('train_lr', '0.0004');
+                        set('train_lora_rank', 16);
+                        set('train_lora_alpha', 32);
+                        set('train_lr_scheduler', 'constant_with_warmup');
+                        set('train_warmup_steps', 50);
+                        set('train_save_every', 200);
+                        set('train_preview_every', 40);
+                        set('train_preview_caption_mode', 'random');
+                        if (typeof updateLrSchedulerFields === 'function') updateLrSchedulerFields();
+                        if (typeof toggleCaptionMode === 'function') toggleCaptionMode('random');
+                    }
                     if (!(data.train && data.train.total_steps)) document.getElementById('train_total_steps').value = 1500;
                     // MiniMax-H3-Image works at 4-20 MP and is best at ~16 MP: the video sizes (360-640) are
                     // below its 0.65 MP minimum. Area sides, at the preview aspect; 21:9 at 16 MP is 6272 wide.
@@ -1974,6 +1988,7 @@
                         '<option value="3072">3072 x 3072 (9.4 MP, slow)</option>' +
                         '<option value="4096">4096 x 4096 (16.8 MP, native, very slow)</option>';
                     if (window.PreviewSize) PreviewSize.configure({ step: 32, maxSide: 6272 });
+                    if (!(data.train && data.train.preview_size)) document.getElementById('train_preview_size').value = '1024';
                     if (!(data.pre_cache && data.pre_cache.max_side)) document.getElementById('precache_max_side').value = 2048;
                 }
                 if (data.export && data.export.export_models_dir) document.getElementById('export_models_dir').value = data.export.export_models_dir;
