@@ -890,14 +890,18 @@ MiniMax-H3-Image is the image model of the MiniMax-H3 family, **distilled to 6 s
 
 With the defaults the likeness was still rising at step 1500 and the loss still falling: a longer run (1800-2000 steps) may give more.
 
-| Measured on an RTX 5080 16 GB | |
-| :--- | :--- |
-| Training, image 768², rank 16 | ~4.3 s/step with 28 resident blocks · 1500 steps + 37 previews at 1024² in ~2 h |
-| Training, edit ~576² (sequence of ~2,250 tokens) | ~10 s/step with 17 resident blocks |
-| Previews | 1024²: ~17 s · edit at ~576²: ~22 s |
-| Pre-cache | text encoder NF4 14.9 GB · edit: ~2.4 s per pair for the vision tower + ~0.7 s per pair for the text |
+Image and edit LoRAs do not cost the same: an edit sample also carries the before image, so each step takes about twice as long.
 
-An edit sample costs two to three times a normal one: the vision block of the reference rides in the text (~1,000-1,800 rows) and its latent adds as many rows as the image itself. Train edit LoRAs at 576² or below on 16 GB, with Resident Blocks on 0.
+| Measured on an RTX 5080 16 GB, 768², rank 16 | Image LoRA (character, style, object) | Edit LoRA (before / after pairs) |
+| :--- | :--- | :--- |
+| Sequence | image only | ~2,200 tokens: vision block of the before image in the text + its reference latent + the after image |
+| Resident blocks (auto) | 28 | 19 |
+| Training | ~4.3 s/step | ~8.2 s/step |
+| Preview at 1024² | ~17 s | ~24 s (`before \| after`) |
+| 1500 steps + 37 previews | ~2 h | ~3 h 40 min |
+| Pre-cache | text encoder NF4 14.9 GB | + ~2.4 s per pair for the vision tower and ~0.7 s per pair for the text |
+
+The edit column comes from a 30-pair style run stopped at step 629 (1 h 32 min, already working) and is extrapolated to 1500 steps. The edit sequence is longer because the vision block of the reference rides in the text (~1,000-1,800 rows) and its latent adds as many rows as the image itself; 768² fits on 16 GB with Resident Blocks on 0.
 
 ---
 
