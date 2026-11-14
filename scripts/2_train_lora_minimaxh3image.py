@@ -95,7 +95,7 @@ DEFAULTS = {
     "sigma_resolution_shift": True,
     "cache_dir": "./Cache_Data/cached_data_minimaxh3image",
     "output_dir": "./Outputs/minimaxh3image_lora_output",
-    "total_steps": 1200,
+    "total_steps": 1500,
     "grad_accum_steps": 1,
     "lr": 2e-4,
     "lr_scheduler": "constant_with_warmup",
