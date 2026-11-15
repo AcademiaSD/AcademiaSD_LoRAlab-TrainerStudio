@@ -29,6 +29,7 @@ from diffusers.pipelines.ideogram4.pipeline_ideogram4 import _logit_normal_sigma
 from peft import LoraConfig, get_peft_model, get_peft_model_state_dict, set_peft_model_state_dict
 from safetensors import safe_open
 from safetensors.torch import save_file, load
+import cache_names
 from i18n import t
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import lora_options
@@ -755,7 +756,7 @@ def train_ideogram4():
     check_custom_prompt("_custom" in cache_data)
     custom_mtime = [os.path.getmtime(f"{CACHE_DIR}/_custom_embed.pt") if "_custom" in cache_data else None]
 
-    all_preview_names = sorted(k for k in cache_data.keys() if not k.startswith("_"))
+    all_preview_names = sorted(k for k in cache_data.keys() if not cache_names.is_reserved(k))
 
     def get_preview_sample(step):
         if PREVIEW_CAPTION_MODE == "custom" and "_custom" in cache_data:

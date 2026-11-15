@@ -28,6 +28,7 @@ from peft import LoraConfig, get_peft_model, get_peft_model_state_dict, set_peft
 from safetensors import safe_open
 from safetensors.torch import save_file, load
 from bitsandbytes.nn import Linear4bit, Params4bit
+import cache_names
 from i18n import t
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import lora_options
@@ -780,7 +781,7 @@ def train_anima():
 
     neg = load_tensor(f"{CACHE_DIR}/_neg_embed.pt")
 
-    all_preview_names = sorted(k for k in cache_data.keys() if not k.startswith("_"))
+    all_preview_names = sorted(k for k in cache_data.keys() if not cache_names.is_reserved(k))
 
     def get_preview_sample(step):
         if PREVIEW_CAPTION_MODE == "custom" and "_custom" in cache_data:

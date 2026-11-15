@@ -27,6 +27,7 @@ from diffusers.pipelines.bria_fibo2.pipeline_bria_fibo2 import (
 from diffusers.pipelines.bria_fibo2.image_processor import BriaFibo2ImageProcessor
 import logging
 import sys
+import cache_names
 from i18n import t
 import gpu_stats
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
@@ -518,7 +519,7 @@ def preprocess_fibo2():
     # dataset y, al pasar de edición a normal, los antes (_ref).
     suffixes = ("latent", "embed", "mask") + (("ref",) if edit else ())
     expected = {f"{name}_{suffix}.pt" for name, _, _ in samples for suffix in suffixes}
-    stale = [f for f in os.listdir(CACHE_DIR) if f.endswith(".pt") and not f.startswith("_") and f not in expected]
+    stale = [f for f in os.listdir(CACHE_DIR) if f.endswith(".pt") and not cache_names.is_reserved(f) and f not in expected]
     for f in stale:
         os.remove(os.path.join(CACHE_DIR, f))
     if stale:
@@ -668,7 +669,7 @@ def encode_preview_prompt(cache_dir, prompt, image_path, device):
     image = None
     proc = proc_or_default()
     samples = find_samples()
-    if any(f.endswith("_ref.pt") and not f.startswith("_") for f in os.listdir(cache_dir)):
+    if any(f.endswith("_ref.pt") and not cache_names.is_reserved(f) for f in os.listdir(cache_dir)):
         src = preview_edit_source(samples, image_path)
         width, height = image_size_capped(_aspect(src), TARGET_AREA, MAX_SIDE, MULTIPLE)
         vae_images, images = preprocess_images(proc, [load_image(src)], width, height, TARGET_AREA)

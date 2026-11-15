@@ -17,6 +17,7 @@ from diffusers import DiffusionPipeline, AutoencoderKLQwenImage
 from transformers import Qwen3VLModel
 import logging
 import sys
+import cache_names
 from i18n import t
 from text_io import read_text_file
 import gpu_stats
@@ -262,7 +263,7 @@ def preprocess_krea2():
 
     # El trainer carga todo lo que haya en la caché: se quitan las muestras que ya no están en el dataset.
     expected = {f"{name}_{suffix}.pt" for name, _ in samples for suffix in ("latent", "embed", "mask")}
-    stale = [f for f in os.listdir(CACHE_DIR) if f.endswith(".pt") and not f.startswith("_") and f not in expected]
+    stale = [f for f in os.listdir(CACHE_DIR) if f.endswith(".pt") and not cache_names.is_reserved(f) and f not in expected]
     for f in stale:
         os.remove(os.path.join(CACHE_DIR, f))
     if stale:

@@ -20,6 +20,7 @@ from safetensors.torch import save_file, load, load_file
 from bitsandbytes.nn import Linear4bit, Params4bit
 from safetensors import safe_open
 from bitsandbytes.functional import QuantState
+import cache_names
 from i18n import t
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import lora_options
@@ -1337,7 +1338,7 @@ def train_krea2():
 
     def load_custom():
         # El prompt manual no tiene imagen: la preview toma el tamaño de la primera muestra.
-        first_ref = next(v[0] for k, v in cache_data.items() if not k.startswith("_"))
+        first_ref = next(v[0] for k, v in cache_data.items() if not cache_names.is_reserved(k))
         c_emb = torch.load(f"{CACHE_DIR}/_custom_embed.pt", weights_only=True).to(torch.bfloat16)
         c_msk = torch.load(f"{CACHE_DIR}/_custom_mask.pt",  weights_only=True).bool()
         if pin:
@@ -1361,7 +1362,7 @@ def train_krea2():
             pos_cache[key] = prepare_position_ids(text_len, lh // 2, lw // 2, "cuda")
         return pos_cache[key]
 
-    all_preview_names = sorted(k for k in cache_data.keys() if not k.startswith("_"))
+    all_preview_names = sorted(k for k in cache_data.keys() if not cache_names.is_reserved(k))
 
     def get_preview_sample(step):
         if PREVIEW_CAPTION_MODE == "custom" and "_custom" in cache_data:

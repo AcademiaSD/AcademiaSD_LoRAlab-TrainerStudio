@@ -48,6 +48,7 @@ import json
 import logging
 
 import numpy as np
+import cache_names
 from i18n import t
 from text_io import read_text_file
 from project_layout import resolve_cache_dir, resolve_model_dir
@@ -542,7 +543,7 @@ def main():
     # en el dataset no puede seguir influyendo.
     expected = {f"{name}_{suf}.pt" for name, _ in samples for suf in ("latent", "prompt")}
     stale = [f for f in os.listdir(CACHE_DIR)
-             if f.endswith(".pt") and not f.startswith("_") and f not in expected]
+             if f.endswith(".pt") and not cache_names.is_reserved(f) and f not in expected]
     for f in stale:
         os.remove(os.path.join(CACHE_DIR, f))
     if stale:

@@ -32,6 +32,7 @@ from safetensors import safe_open
 from safetensors.torch import save_file, load, load_file
 from bitsandbytes.functional import QuantState
 from bitsandbytes.nn import Linear4bit, Params4bit
+import cache_names
 from i18n import t
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import lora_options
@@ -663,7 +664,7 @@ def train_flux3klein():
     # Atención (q, k, v, salida) + MLP de los bloques de imagen y de texto y de los 28 simples: las
     # mismas capas que el entrenador de diffusers y que mapea ComfyUI. Los bloques de la imagen de
     # referencia (image_cond) solo se usan al editar. Embedders, modulaciones y salida no se tocan.
-    edit_cache = any(f.endswith("_ctrl.pt") and not f.startswith("_") for f in os.listdir(CACHE_DIR))
+    edit_cache = any(f.endswith("_ctrl.pt") and not cache_names.is_reserved(f) for f in os.listdir(CACHE_DIR))
     blocks = ("mode_blocks.image.", "txt_mode_blocks.", "single_transformer_blocks.") + (("mode_blocks.image_cond.",) if edit_cache else ())
     target_modules = [name for name, m in transformer.named_modules()
                       if isinstance(m, (torch.nn.Linear, Linear4bit)) and name.startswith(blocks)]
@@ -856,7 +857,7 @@ def train_flux3klein():
     if os.path.exists(f"{CACHE_DIR}/_neg_embed.pt"):
         neg = torch.load(f"{CACHE_DIR}/_neg_embed.pt", weights_only=True).to(torch.bfloat16)
 
-    all_preview_names = sorted(k for k in cache_data.keys() if not k.startswith("_"))
+    all_preview_names = sorted(k for k in cache_data.keys() if not cache_names.is_reserved(k))
 
     def get_preview_sample(step):
         if PREVIEW_CAPTION_MODE == "custom" and "_custom" in cache_data:

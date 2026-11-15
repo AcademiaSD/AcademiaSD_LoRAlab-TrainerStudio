@@ -32,6 +32,7 @@ from peft import LoraConfig, get_peft_model, get_peft_model_state_dict, set_peft
 from safetensors import safe_open
 from safetensors.torch import save_file, load
 from bitsandbytes.nn import Linear4bit
+import cache_names
 from i18n import t
 import lora_options
 import training_metrics
@@ -761,7 +762,7 @@ def train_mingimage():
     check_custom_prompt(has_custom)
     custom_mtime = [os.path.getmtime(custom_path) if has_custom else None]
 
-    all_preview_names = sorted(k for k in cache_data.keys() if not k.startswith("_"))
+    all_preview_names = sorted(k for k in cache_data.keys() if not cache_names.is_reserved(k))
 
     def get_preview_sample(step):
         if PREVIEW_CAPTION_MODE == "custom" and "_custom" in cache_data:

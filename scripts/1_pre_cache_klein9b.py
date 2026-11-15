@@ -18,6 +18,7 @@ from diffusers import AutoencoderKLFlux2, Flux2KleinPipeline
 from transformers import AutoTokenizer, Qwen3Model
 import logging
 import sys
+import cache_names
 from i18n import t
 from text_io import read_text_file
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
@@ -343,7 +344,7 @@ def preprocess_klein9b():
     # dataset y, al pasar de edición a normal, los antes (_ctrl).
     suffixes = ("latent", "embed") + (("ctrl",) if edit else ())
     expected = {f"{name}_{suffix}.pt" for name, _, _ in samples for suffix in suffixes}
-    stale = [f for f in os.listdir(CACHE_DIR) if f.endswith(".pt") and not f.startswith("_") and f not in expected]
+    stale = [f for f in os.listdir(CACHE_DIR) if f.endswith(".pt") and not cache_names.is_reserved(f) and f not in expected]
     for f in stale:
         os.remove(os.path.join(CACHE_DIR, f))
     if stale:
@@ -451,7 +452,7 @@ def encode_preview_prompt(cache_dir, prompt, images_arg, device):
     CACHE_DIR = cache_dir
     where = device.upper().replace("CUDA", "GPU")
     requested = parse_preview_images_arg(images_arg)
-    has_image = any(f.endswith("_ctrl.pt") and not f.startswith("_") for f in os.listdir(cache_dir))
+    has_image = any(f.endswith("_ctrl.pt") and not cache_names.is_reserved(f) for f in os.listdir(cache_dir))
     sources = preview_edit_sources(find_samples(), requested) if has_image else []
     buckets = []
     area = preview_image_area(len(sources))

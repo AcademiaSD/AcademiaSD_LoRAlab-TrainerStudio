@@ -16,6 +16,7 @@ from PIL import Image
 from diffusers import AutoencoderKL, StableDiffusionXLPipeline
 import logging
 import sys
+import cache_names
 from i18n import t
 from text_io import read_text_file
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
@@ -312,7 +313,7 @@ def preprocess_sdxl():
         print("  " + t("Model changed: cache cleared"))
 
     expected = {f"{name}_{suffix}.pt" for name, _ in samples for suffix in ("latent", "embed")}
-    stale = [f for f in os.listdir(CACHE_DIR) if f.endswith(".pt") and not f.startswith("_") and f not in expected]
+    stale = [f for f in os.listdir(CACHE_DIR) if f.endswith(".pt") and not cache_names.is_reserved(f) and f not in expected]
     for f in stale:
         os.remove(os.path.join(CACHE_DIR, f))
     if stale:

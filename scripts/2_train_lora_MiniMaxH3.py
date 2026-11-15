@@ -88,6 +88,7 @@ except Exception:
 ACTIVATION_OFFLOAD_ACTIVE = False
 
 import psutil
+import cache_names
 from i18n import t
 import gpu_stats
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
@@ -4950,7 +4951,7 @@ def cache_sequence_tokens(cache_dir):
     mayor = 0
     try:
         for nombre in os.listdir(cache_dir):
-            if not nombre.endswith("_info.json") or nombre.startswith("_"):
+            if not nombre.endswith("_info.json") or cache_names.is_reserved(nombre):
                 continue
             if nombre == "cache_info.json":
                 continue

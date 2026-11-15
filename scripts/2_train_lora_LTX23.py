@@ -53,6 +53,7 @@ from bitsandbytes.nn import (
 from safetensors import safe_open
 from safetensors.torch import save_file, load_file
 from PIL import Image
+import cache_names
 from i18n import t
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import lora_options
@@ -2237,7 +2238,7 @@ def run_preview_diagnostic(
     vae = None
 
     try:
-        valid_entries = [e for e in entries if not e["name"].startswith("_")]
+        valid_entries = [e for e in entries if not cache_names.is_reserved(e["name"])]
         if not valid_entries:
             valid_entries = entries
 

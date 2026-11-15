@@ -6,6 +6,7 @@ import torchvision.transforms.functional as VF
 from PIL import Image
 from diffusers import AutoencoderKLFlux2, ErnieImagePipeline
 from transformers import AutoTokenizer, Mistral3Model
+import cache_names
 from project_layout import resolve_cache_dir, resolve_model_dir
 from text_io import read_text_file
 
@@ -123,7 +124,7 @@ def main():
     expected|={"_neg_embed.pt"}
     if CUSTOM: expected|={"_custom_embed.pt","_custom_prompt.txt"}
     for f in os.listdir(CACHE):
-        if f.endswith(("_latent.pt","_embed.pt")) and not f.startswith("_") and f not in expected: os.remove(os.path.join(CACHE,f))
+        if f.endswith(("_latent.pt","_embed.pt")) and not cache_names.is_reserved(f) and f not in expected: os.remove(os.path.join(CACHE,f))
     te=Mistral3Model.from_pretrained(os.path.join(MODEL_ID,"text_encoder"),torch_dtype=torch.bfloat16,device_map="cuda").eval()
     tok=AutoTokenizer.from_pretrained(os.path.join(MODEL_ID,"tokenizer"))
     for i,(name,path,prompt) in enumerate(samples,1):

@@ -64,6 +64,7 @@ import torch
 import torch.nn.functional as F
 from peft import LoraConfig, get_peft_model, get_peft_model_state_dict, set_peft_model_state_dict
 from safetensors.torch import save_file, load, safe_open
+import cache_names
 from i18n import t
 from text_io import read_text_file
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
@@ -750,7 +751,7 @@ def load_cache():
                          v=META.get("cache_format_version")))
         sys.exit(2)
     names = {f[:-len("_latent.pt")] for f in os.listdir(CACHE_DIR)
-             if f.endswith("_latent.pt") and not f.startswith("_")}
+             if f.endswith("_latent.pt") and not cache_names.is_reserved(f)}
     if not names:
         print(f"\n[!] ERROR: " + t("No latents in '{path}': run Pre-Cache first!", path=CACHE_DIR))
         sys.exit(2)

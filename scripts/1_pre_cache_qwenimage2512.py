@@ -22,6 +22,7 @@ import torchvision.transforms.functional as F_vision
 from PIL import Image
 from diffusers import AutoencoderKLQwenImage
 from transformers import AutoModel, AutoProcessor, AutoTokenizer
+import cache_names
 from i18n import t
 from text_io import read_text_file
 import gpu_stats
@@ -403,7 +404,7 @@ def preprocess_qwenimage2512():
     # dataset y, al pasar de edición a normal, los antes (_ctrl).
     suffixes = ("latent", "embed", "mask") + (("ctrl",) if edit else ())
     expected = {f"{name}_{suffix}.pt" for name, _, _ in samples for suffix in suffixes}
-    stale = [f for f in os.listdir(CACHE_DIR) if f.endswith(".pt") and not f.startswith("_") and f not in expected]
+    stale = [f for f in os.listdir(CACHE_DIR) if f.endswith(".pt") and not cache_names.is_reserved(f) and f not in expected]
     for f in stale:
         os.remove(os.path.join(CACHE_DIR, f))
     if stale:
@@ -519,7 +520,7 @@ def encode_preview_prompt(cache_dir, prompt, images_arg, device):
     CACHE_DIR = cache_dir
     where = device.upper().replace("CUDA", "GPU")
     requested = parse_preview_images_arg(images_arg)
-    edit = any(f.endswith("_ctrl.pt") and not f.startswith("_") for f in os.listdir(cache_dir))
+    edit = any(f.endswith("_ctrl.pt") and not cache_names.is_reserved(f) for f in os.listdir(cache_dir))
     sources = preview_edit_sources(find_samples(), requested) if edit else []
     buckets = []
     area = preview_image_area(len(sources))

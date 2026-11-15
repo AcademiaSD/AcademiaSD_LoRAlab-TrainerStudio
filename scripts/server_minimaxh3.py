@@ -19,6 +19,7 @@ import webbrowser
 
 from console_stream import read_console
 from trainer_stream import TrainerStream
+import cache_names
 import i18n
 from text_io import read_text_file
 import project_layout
@@ -613,7 +614,7 @@ def cache_info():
     max_text = 0
     images = 0
     for f in cache_dir.glob("*_prompt_structure.json"):
-        if f.name.startswith("_"):
+        if cache_names.is_reserved(f.name):
             continue
         try:
             d = json.loads(f.read_text(encoding="utf-8"))
@@ -667,7 +668,7 @@ def cache_info():
     max_frames = 0
     max_audio = 0
     for f in cache_dir.glob("*_info.json"):
-        if f.name.startswith("_") or f.name == "cache_info.json":
+        if cache_names.is_reserved(f.name) or f.name == "cache_info.json":
             continue
         try:
             d = json.loads(f.read_text(encoding="utf-8"))

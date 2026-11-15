@@ -40,6 +40,7 @@ from diffusers import AutoencoderKLWan, UniPCMultistepScheduler
 from peft import LoraConfig, get_peft_model, get_peft_model_state_dict, set_peft_model_state_dict
 from safetensors import safe_open
 from safetensors.torch import save_file, load
+import cache_names
 from i18n import t
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import lora_options
@@ -932,7 +933,7 @@ def train_wan22():
 
     neg = load_tensor(f"{CACHE_DIR}/_neg_embed.pt")
 
-    all_preview_names = sorted(k for k in cache_data.keys() if not k.startswith("_"))
+    all_preview_names = sorted(k for k in cache_data.keys() if not cache_names.is_reserved(k))
     n_video = sum(1 for k in all_preview_names if cache_data[k]["lat"].shape[2] > 1)
 
     def get_preview_sample(step):

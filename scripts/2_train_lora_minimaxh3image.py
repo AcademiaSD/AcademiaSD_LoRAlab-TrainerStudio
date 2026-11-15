@@ -59,6 +59,7 @@ try:
 except Exception:
     pass
 
+import cache_names
 from i18n import t
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import lora_options
@@ -291,7 +292,7 @@ def load_entries(cache_dir):
     check_cache_vae(cache_dir)
     entries = []
     for filename in sorted(os.listdir(cache_dir)):
-        if not filename.endswith("_video_latent.pt") or filename.startswith("_"):
+        if not filename.endswith("_video_latent.pt") or cache_names.is_reserved(filename):
             continue
         base = filename[: -len("_video_latent.pt")]
         embeds_path = os.path.join(cache_dir, base + "_prompt_root_prompt_embeds.pt")

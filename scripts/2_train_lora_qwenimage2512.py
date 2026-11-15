@@ -25,6 +25,7 @@ from peft import LoraConfig, get_peft_model, get_peft_model_state_dict, set_peft
 from safetensors import safe_open
 from safetensors.torch import save_file, load
 from bitsandbytes.nn import Linear4bit
+import cache_names
 from i18n import t
 import gpu_stats
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
@@ -601,7 +602,7 @@ def train_qwenimage2512():
         print("[!] " + t("Please run Pre-Cache first!"))
         sys.exit(2)  # la GUI muestra este código como "falta la pre-caché"
 
-    edit_cache = any(f.endswith("_ctrl.pt") and not f.startswith("_") for f in os.listdir(CACHE_DIR))
+    edit_cache = any(f.endswith("_ctrl.pt") and not cache_names.is_reserved(f) for f in os.listdir(CACHE_DIR))
     if edit_cache and BASE_MODEL != "edit2511":
         print("\n[!] ERROR: " + t("The cache has before/after pairs: an edit LoRA needs Qwen-Image-Edit-2511 as the base model."))
         sys.exit(1)
@@ -678,7 +679,7 @@ def train_qwenimage2512():
     resident = BLOCKS_ON_GPU
     if resident < 0:
         largest = max(int(np.prod(torch.load(os.path.join(CACHE_DIR, f), weights_only=True).shape[-2:]))
-                      for f in os.listdir(CACHE_DIR) if f.endswith("_latent.pt") and not f.startswith("_"))
+                      for f in os.listdir(CACHE_DIR) if f.endswith("_latent.pt") and not cache_names.is_reserved(f))
         # VRAM libre de verdad: el escritorio y otros programas también ocupan la GPU.
         resident = qm.auto_resident_blocks(transformer, gpu_stats.mem_get_info()[0] / 1e9,
                                            qm.training_reserve_gb(largest, edit_cache, LORA_RANK))
@@ -793,7 +794,7 @@ def train_qwenimage2512():
         neg = (torch.load(f"{CACHE_DIR}/_neg_embed.pt", weights_only=True).to(torch.bfloat16),
                torch.load(f"{CACHE_DIR}/_neg_mask.pt",  weights_only=True).bool())
 
-    all_preview_names = sorted(k for k in cache_data.keys() if not k.startswith("_"))
+    all_preview_names = sorted(k for k in cache_data.keys() if not cache_names.is_reserved(k))
 
     def get_preview_sample(step):
         # Edición: siempre la imagen de antes de la preview, que es donde se ve el efecto y la única
