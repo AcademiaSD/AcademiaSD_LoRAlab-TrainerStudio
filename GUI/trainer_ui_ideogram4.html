@@ -345,7 +345,7 @@
                         <input type="text" id="precache_cache_dir" value="./Cache_Data/cached_data_ideogram4" readonly title="Path generated automatically, for information">
                     </div>
 
-                    <div class="form-group">
+                    <div class="form-group" title="Area of every sample, not a fixed size: each one keeps its own aspect ratio and is scaled until width × height is about this area, rounded to Multiple. 512 x 512 turns a 3:2 image into about 624×416. More area means more detail, more VRAM and slower steps. Custom takes the area in px² (width × height).">
                         <label>Resolution (px²):</label>
                         <select id="target_area_select" onchange="syncResolution(this.value)">
                             <option value="262144">512 x 512 (262,144 px²)</option>
@@ -365,7 +365,7 @@
                                 <option value="64">64</option>
                             </select>
                         </div>
-                        <div class="form-group">
+                        <div class="form-group" title="Cap on the longer side, applied after Resolution. Only elongated images reach it, and they end up with less area than the rest: a 4:1 panorama that Resolution would make 2048×512 becomes 1536×384 with Max Side 1536.">
                             <label>Max Side:</label>
                             <input type="number" id="precache_max_side" value="2048">
                         </div>

@@ -359,7 +359,7 @@
                         <small style="color:var(--text-muted);">Raw temporal (se borra tras validar NF4): <code>Models/Boogu-image-edit-Raw</code></small>
                     </div>
 
-                    <div class="form-group">
+                    <div class="form-group" title="Largest area of every sample, not a fixed size: each one keeps its own aspect ratio and is scaled down until width × height fits in this area, rounded down to Multiple. Smaller images are not enlarged. More area means more detail, more VRAM and slower steps. Custom takes the area in px² (width × height), between 262,144 and 1,048,576.">
                         <label>Resolution (px²):</label>
                         <select id="target_area_select" onchange="syncResolution(this.value)">
                             <option value="262144">512 x 512 (262,144 px²)</option>
@@ -379,7 +379,7 @@
                                 <option value="64">64</option>
                             </select>
                         </div>
-                        <div class="form-group">
+                        <div class="form-group" title="Cap on the longer side, applied after Resolution. Only elongated images reach it, and they end up with less area than the rest: a 4:1 panorama that Resolution would make 2048×512 becomes 1536×384 with Max Side 1536.">
                             <label>Max Side:</label>
                             <input type="number" id="precache_max_side" value="1280">
                         </div>
