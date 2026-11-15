@@ -1535,5 +1535,7 @@
   "The pre-cache is not running in the queue.": "キューでプリキャッシュが実行されていません。",
   "Waits for its pre-cache to finish.": "プリキャッシュの完了を待っています。",
   "every {n} steps": "{n} ステップごと",
-  "off": "オフ"
+  "off": "オフ",
+  "hidden · click to show": "非表示 · クリックで表示",
+  "Click to hide or show the Dataset Manager.": "クリックで Dataset Manager の表示/非表示を切り替えます。"
 }

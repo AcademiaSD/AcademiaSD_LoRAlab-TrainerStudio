@@ -1535,5 +1535,7 @@
   "The pre-cache is not running in the queue.": "La pre-cache non è in corso nella coda.",
   "Waits for its pre-cache to finish.": "Attende la fine della sua pre-cache.",
   "every {n} steps": "ogni {n} passi",
-  "off": "disattivate"
+  "off": "disattivate",
+  "hidden · click to show": "nascosto · clicca per mostrarlo",
+  "Click to hide or show the Dataset Manager.": "Clicca per nascondere o mostrare il Dataset Manager."
 }

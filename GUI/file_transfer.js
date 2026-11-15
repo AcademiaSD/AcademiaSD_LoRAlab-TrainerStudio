@@ -255,3 +255,67 @@ window.addEventListener('DOMContentLoaded', () => {
         ftSend(e.dataTransfer.files);
     });
 });
+
+// Dataset Manager plegable, como el Training Chart: pulsar su título lo cierra o lo abre (▶ / ▼) y la
+// página lo recuerda. Cerrado deja a la vista solo el título con los contadores de imágenes y captions.
+// Collapsible Dataset Manager, like the Training Chart: click its title to close or open it; remembered.
+(function () {
+    const KEY = 'datasetManager.open';
+    const tr = k => (typeof t === 'function' ? t(k) : k);
+    const CSS = `
+    .dsm-wrap > .ds-title { cursor: pointer !important; user-select: none; }
+    .dsm-wrap > .ds-title:hover { background: rgba(56, 189, 248, 0.05); }
+    .dsm-caret { color: #38bdf8; display: inline-block; transition: transform .2s; margin-right: 8px; }
+    .dsm-wrap:not(.dsm-collapsed) .dsm-caret { transform: rotate(90deg); }
+    .dsm-off { font-size: 0.72rem; color: #64748b; font-weight: 500; margin-left: 8px; white-space: nowrap; }
+    .dsm-wrap:not(.dsm-collapsed) .dsm-off { display: none; }
+    .dsm-collapsed > :not(.ds-title), .dsm-collapsed .ds-toolbar { display: none !important; }
+    .dsm-collapsed > .ds-title { margin-bottom: 0; }
+    #btn-toggle-ds { display: none !important; }`;
+
+    function read() {
+        try { const v = localStorage.getItem(KEY); return v === null ? true : v === '1'; } catch (e) { return true; }
+    }
+
+    function write(open) {
+        try { localStorage.setItem(KEY, open ? '1' : '0'); } catch (e) { /* sin almacenamiento: solo esta visita */ }
+    }
+
+    function init() {
+        const title = document.querySelector('.ds-title');
+        const wrap = title && title.parentElement;
+        if (!wrap || wrap.classList.contains('dsm-wrap')) return;
+        const style = document.createElement('style');
+        style.textContent = CSS;
+        document.head.appendChild(style);
+        wrap.classList.add('dsm-wrap');
+        const label = title.firstElementChild;
+        const caret = document.createElement('span');
+        caret.className = 'dsm-caret no-i18n';
+        caret.textContent = '▶';
+        label.prepend(caret);
+        const off = document.createElement('span');
+        off.className = 'dsm-off';
+        off.textContent = tr('hidden · click to show');
+        label.appendChild(off);
+        title.title = tr('Click to hide or show the Dataset Manager.');
+
+        const setOpen = open => {
+            wrap.classList.toggle('dsm-collapsed', !open);
+            write(open);
+        };
+        // Solo el título: los botones, campos y menús de la barra hacen lo suyo.
+        title.addEventListener('click', e => {
+            if (e.target.closest('button, input, select, textarea, label, a')) return;
+            setOpen(wrap.classList.contains('dsm-collapsed'));
+        });
+        // Una subida (botón o arrastrar) lo abre, para ver cómo va.
+        wrap.addEventListener('drop', () => setOpen(true), true);
+        const upload = document.getElementById('ds-upload');
+        if (upload) upload.addEventListener('change', () => setOpen(true));
+        setOpen(read());
+    }
+
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+    else init();
+})();
