@@ -100,8 +100,12 @@
             }
             if (!info.job_id) {
                 // Borrador: otro entrenamiento del mismo modelo, preparado mientras el primero entrena.
-                banner.innerHTML = `<span>➕ <b>${escapeHtml(tr('New training for the queue'))}</b></span>`
-                    + `<span class="qc-note">${escapeHtml(tr('What you save here applies only to this new job, not to the training in progress nor to your trainer settings. Press Start / Resume to add it to the queue.'))}</span>`
+                // Plantilla: el borrador parte de los ajustes de un trabajo del historial (⧉ en la cola).
+                banner.innerHTML = (info.template
+                    ? `<span>⧉ <b>${escapeHtml(tr('New training from a finished job'))}</b></span>`
+                        + `<span class="qc-note">${escapeHtml(tr('These are the settings of that job, in a copy of their own: what you change here does not touch your trainer settings. Give it another Project Name to train a new LoRA: with the same name, Start / Resume continues the one already trained.'))}</span>`
+                    : `<span>➕ <b>${escapeHtml(tr('New training for the queue'))}</b></span>`
+                        + `<span class="qc-note">${escapeHtml(tr('What you save here applies only to this new job, not to the training in progress nor to your trainer settings. Press Start / Resume to add it to the queue.'))}</span>`)
                     + (queueUrl() ? `<a href="${queueUrl()}">${escapeHtml(tr('Open the queue'))}</a>` : '');
                 return;
             }

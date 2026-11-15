@@ -32,6 +32,8 @@ KINDS = ("precache", "train")
 JOB_ID = os.environ.get("LORALAB_JOB_ID") or None
 # Borrador abierto con «Nuevo entrenamiento en cola»: guarda en su propia copia de los ajustes.
 DRAFT = os.environ.get("LORALAB_DRAFT") == "1"
+# Ese borrador parte de los ajustes de un trabajo del historial (⧉ en la cola).
+TEMPLATE = DRAFT and os.environ.get("LORALAB_TEMPLATE") == "1"
 # Editor de un trabajo en espera (✎ en la cola): guarda en la copia de ajustes de ese trabajo; Start pasa
 # a ser «Guardar cambios en la cola» y aquí nunca se entrena.
 EDIT_JOB = os.environ.get("LORALAB_EDIT_JOB") or None
@@ -297,10 +299,11 @@ def register(app, trainer_id, runtime, train_config, precache_config):
     def queue_info():
         st = queue_state()
         if st is None:
-            return jsonify({"launcher": False, "job_id": JOB_ID, "draft": DRAFT, "edit_job": EDIT_JOB})
+            return jsonify({"launcher": False, "job_id": JOB_ID, "draft": DRAFT, "template": TEMPLATE, "edit_job": EDIT_JOB})
         pending = [j for j in st.get("pending", []) if j.get("state") != "failed"]
         own = runtime.status()
-        return jsonify({"launcher": True, "job_id": JOB_ID, "draft": DRAFT, "edit_job": EDIT_JOB, "job": own_job(st), "port": my_port,
+        return jsonify({"launcher": True, "job_id": JOB_ID, "draft": DRAFT, "template": TEMPLATE, "edit_job": EDIT_JOB,
+                        "job": own_job(st), "port": my_port,
                         "running": st.get("running"), "queued": len(pending),
                         "self_script": own.get("script") if own.get("running") else None})
 

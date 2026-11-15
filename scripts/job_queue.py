@@ -256,6 +256,23 @@ class JobQueue:
         dep = self._job(job.get("after")) if job.get("after") else None
         return dep is not None and dep["state"] != "done"
 
+    def _has_settings(self, job):
+        return (JOBS_DIR / job["id"] / _settings_names(job["trainer"])["train"]).is_file()
+
+    def template(self, jid):
+        """Los ajustes de un trabajo, para preparar otro a partir de ellos (⧉ en el historial).
+        Devuelve (id del entrenador, {"train", "pre_cache"}, None) o (None, None, error)."""
+        with self._lock:
+            job = self._job(jid)
+            if job is None:
+                return None, None, t("Job not found.")
+            if not self._has_settings(job):
+                # Lanzado desde su entrenador con una versión que aún no guardaba la copia.
+                return None, None, t("This job did not keep a copy of its settings.")
+            settings = {key: _read_json(JOBS_DIR / jid / name)
+                        for key, name in _settings_names(job["trainer"]).items()}
+            return job["trainer"], settings, None
+
     def running(self):
         with self._lock:
             return next((dict(j) for j in self.data["jobs"] if j["state"] == "running"), None)
@@ -265,7 +282,8 @@ class JobQueue:
         with self._lock:
             jobs = self.data["jobs"]
             pending = [j for j in jobs if j["state"] in WAITING]
-            history = sorted((j for j in jobs if j["state"] not in ACTIVE),
+            # template: conserva su copia de los ajustes, así que se puede usar como plantilla.
+            history = sorted((dict(j, template=self._has_settings(j)) for j in jobs if j["state"] not in ACTIVE),
                              key=lambda j: j.get("finished") or 0, reverse=True)
             return {"paused": self.data["paused"], "stop_on_failure": self.data["stop_on_failure"],
                     "running": next((j for j in jobs if j["state"] == "running"), None),

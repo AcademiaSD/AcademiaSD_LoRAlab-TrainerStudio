@@ -456,7 +456,9 @@ def launch():
     # entrenamiento del mismo modelo mientras este entrena (el que entrena relee los ajustes normales).
     # Draft: the same trainer on another port with its own settings copy, to prepare another training.
     if req.get("draft"):
-        extra = next((i for i in extra_instances() if i["id"] == trainer_id and i.get("draft")), None)
+        # Uno abierto como plantilla de un trabajo del historial parte de otros ajustes: no vale.
+        extra = next((i for i in extra_instances()
+                      if i["id"] == trainer_id and i.get("draft") and not i.get("template")), None)
         if extra:
             return jsonify({"status": "ok", "url": url_for_port(extra["port"]), "port": extra["port"], "already": True})
         return launch_second(trainer_id, run, draft=req.get("settings") or {})
@@ -558,12 +560,30 @@ def queue_edit_done(jid):
     return jsonify({"status": "ok"})
 
 
-def launch_second(trainer_id, run, draft=None, edit=None):
+@app.route("/api/queue-template/<jid>", methods=["POST"])
+def queue_template(jid):
+    """Un trabajo del historial como plantilla: su entrenador en otro puerto, como borrador que parte de
+    los ajustes de ese trabajo. Lo que se cambie ahí no toca ni el trabajo ni los ajustes del entrenador."""
+    extra = next((i for i in extra_instances() if i.get("template") == jid), None)
+    if extra:
+        return jsonify({"status": "ok", "url": url_for_port(extra["port"]), "port": extra["port"], "already": True})
+    trainer_id, settings, error = QUEUE.template(jid)
+    if error:
+        return jsonify({"status": "error", "error": error}), 404
+    trainer = next((x for x in load_config()["trainers"] if x["id"] == trainer_id), None)
+    run, error = _run_script(trainer) if trainer else (None, t("Not found: {name}", name=trainer_id))
+    if error:
+        return jsonify({"status": "error", "error": error}), 404
+    return launch_second(trainer_id, run, draft=settings, template=jid)
+
+
+def launch_second(trainer_id, run, draft=None, edit=None, template=None):
     """Abre el entrenador en un puerto libre (trainer_port + 1...), con su consola, sin cerrar el del
     puerto principal, que está entrenando. Lo que se prepare ahí va a la cola.
     draft (dict con "train" / "pre_cache"): borrador con su propia copia de los ajustes, que parte de esos
     valores; lo que se guarde en él no toca los ajustes normales del entrenador.
-    edit (id de un trabajo en espera): editor de ese trabajo, que guarda en su copia de los ajustes."""
+    edit (id de un trabajo en espera): editor de ese trabajo, que guarda en su copia de los ajustes.
+    template (id de un trabajo del historial): el borrador parte de los ajustes de ese trabajo."""
     port = QUEUE._free_port(exclude={i["port"] for i in extra_instances()})
     if port is None:
         return jsonify({"status": "error", "error": t("No free port for the job.")}), 409
@@ -579,7 +599,7 @@ def launch_second(trainer_id, run, draft=None, edit=None):
                 src = BASE_DIR / "settings" / name
                 data = json.loads(src.read_text(encoding="utf-8")) if src.exists() else {}
             (folder / name).write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-        env.update(LORALAB_DRAFT="1",
+        env.update(LORALAB_DRAFT="1", LORALAB_TEMPLATE="1" if template else "",
                    LORALAB_TRAIN_CONFIG=str(folder / f"train_settings_{trainer_id}.json"),
                    LORALAB_PRECACHE_CONFIG=str(folder / f"pre_cache_settings_{trainer_id}.json"))
     elif edit is not None:
@@ -593,7 +613,8 @@ def launch_second(trainer_id, run, draft=None, edit=None):
         pid = _launch_linux(run, env)
     _save_instances(extra_instances() + [{"id": trainer_id, "port": port, "pid": pid, "started": time.time(),
                                           "draft": draft is not None,
-                                          **({"edit": edit} if edit else {})}])
+                                          **({"edit": edit} if edit else {}),
+                                          **({"template": template} if template else {})}])
     if edit:
         QUEUE.begin_edit(edit, port)
     return jsonify({"status": "ok", "url": url_for_port(port), "port": port, "second": True})

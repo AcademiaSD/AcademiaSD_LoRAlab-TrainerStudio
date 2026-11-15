@@ -453,6 +453,7 @@
                 </div>
                 <span class="state ${job.state}">${esc(STATE[job.state] ? STATE[job.state]() : job.state)}</span>
                 <div class="icons">
+                    ${job.template ? `<button type="button" class="ib" title="${esc(t('Use as a template: opens its trainer with the settings of this job, to change what you want and train again.'))}" onclick="templateJob('${job.id}')">⧉</button>` : ''}
                     ${job.state === 'failed' && !job.external ? `<button type="button" class="ib" title="${esc(t('Try again'))}" onclick="resumeJob('${job.id}')">↻</button>` : ''}
                     <button type="button" class="ib del" title="${esc(t('Remove from the history'))}" onclick="removeJobId('${job.id}', true)">✕</button>
                 </div>
@@ -515,7 +516,13 @@
         if (d) { state = d; render(); }
     }
     async function editJob(id) {
-        const d = await api(`/api/queue-edit/${id}`, {});
+        openTrainer(await api(`/api/queue-edit/${id}`, {}));
+    }
+    // ⧉ en el historial: su entrenador en otro puerto, con los ajustes de ese trabajo como punto de partida.
+    async function templateJob(id) {
+        openTrainer(await api(`/api/queue-template/${id}`, {}));
+    }
+    async function openTrainer(d) {
         if (!d) return;
         toast(t('Opening the job in its trainer...'));
         const end = Date.now() + 120000;
