@@ -143,12 +143,22 @@ def _port_open(port):
         return s.connect_ex(("127.0.0.1", int(port))) == 0
 
 
+def _instance_alive(inst):
+    """Su consola sigue abierta y su servidor contesta. Recién lanzado tarda unos segundos en escuchar:
+    ese rato basta con la consola. Si no, cualquier consulta hecha mientras arranca (la portada del
+    lanzador abierta en otra pestaña pregunta cada 2 s) lo daba por cerrado, borraba la copia de ajustes
+    de su borrador y cancelaba la edición de su trabajo."""
+    if not _pid_alive(int(inst.get("pid") or 0)):
+        return False
+    return _port_open(inst.get("port") or 0) or time.time() - (inst.get("started") or 0) < job_queue.START_TIMEOUT
+
+
 def extra_instances():
     try:
         data = json.loads(INSTANCES_FILE.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         data = []
-    alive = [i for i in data if isinstance(i, dict) and _pid_alive(int(i.get("pid") or 0)) and _port_open(i.get("port") or 0)]
+    alive = [i for i in data if isinstance(i, dict) and _instance_alive(i)]
     if len(alive) != len(data):
         # Un borrador cerrado ya no necesita su copia de ajustes (lo que se añadió a la cola tiene la suya).
         for gone in (i for i in data if isinstance(i, dict) and i not in alive and i.get("draft")):
@@ -455,7 +465,9 @@ def launch():
     # Already open on another port (to prepare a queue job): jump back to it.
     extra = next((i for i in extra_instances() if i["id"] == trainer_id and not i.get("edit")), None)
     if extra:
-        return jsonify({"status": "ok", "url": url_for_port(extra["port"]), "already": True})
+        # Si aún está arrancando, la página espera a que su puerto conteste antes de ir.
+        return jsonify({"status": "ok", "url": url_for_port(extra["port"]), "port": extra["port"],
+                        "already": _port_open(extra["port"])})
     if req.get("second"):
         return launch_second(trainer_id, run)
 
@@ -579,7 +591,8 @@ def launch_second(trainer_id, run, draft=None, edit=None):
         pid = _launch_windows(run, env)
     else:
         pid = _launch_linux(run, env)
-    _save_instances(extra_instances() + [{"id": trainer_id, "port": port, "pid": pid, "draft": draft is not None,
+    _save_instances(extra_instances() + [{"id": trainer_id, "port": port, "pid": pid, "started": time.time(),
+                                          "draft": draft is not None,
                                           **({"edit": edit} if edit else {})}])
     if edit:
         QUEUE.begin_edit(edit, port)
