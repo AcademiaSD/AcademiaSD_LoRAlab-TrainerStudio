@@ -1537,5 +1537,7 @@
   "every {n} steps": "tous les {n} pas",
   "off": "désactivées",
   "hidden · click to show": "masqué · cliquez pour l'afficher",
-  "Click to hide or show the Dataset Manager.": "Cliquez pour masquer ou afficher le Dataset Manager."
+  "Click to hide or show the Dataset Manager.": "Cliquez pour masquer ou afficher le Dataset Manager.",
+  "DoRA: each layer learns the size (magnitude) of every output row apart from its direction, which is the usual LoRA. It often follows the dataset more closely at the same rank, but every step is slower and uses some more VRAM, because the 4-bit weight of each layer is unpacked to measure it. Works with rsLoRA and LoRA+, not with LoKr. ComfyUI and Forge load it like any LoRA, and Send to Models adds _dora to its name. Fixed for the whole training: to change it, start a new one.": "DoRA : chaque couche apprend la taille (magnitude) de chaque ligne de sortie séparément de sa direction, qui est le LoRA habituel. Il suit souvent le dataset de plus près au même rank, mais chaque pas est plus lent et utilise un peu plus de VRAM, car le poids 4 bits de chaque couche est décompressé pour le mesurer. Fonctionne avec rsLoRA et LoRA+, pas avec LoKr. ComfyUI et Forge le chargent comme n'importe quel LoRA, et Send to Models ajoute _dora à son nom. Fixé pour tout l'entraînement : pour le changer, lancez-en un nouveau.",
+  "Resuming with the checkpoint's DoRA: {a} (settings ask for {b}; it applies to new trainings).": "Reprise avec le DoRA du checkpoint : {a} (les réglages demandent {b} ; cela s'applique aux nouveaux entraînements)."
 }

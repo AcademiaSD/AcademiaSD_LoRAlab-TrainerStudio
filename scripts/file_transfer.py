@@ -92,11 +92,11 @@ def _strip_options_suffix(stem, opts):
     duplicarlos. _AR / _NAR solo en los LoRA de YuE2 y _high_noise / _low_noise solo en los de Wan 2.2:
     en otro trainer pueden ser parte del nombre."""
     if opts.endswith(("_AR", "_NAR")):
-        pattern = r"(_rs)?(_plus)?(_lokr)?(_n?ar)?$"
+        pattern = r"(_rs)?(_plus)?(_dora)?(_lokr)?(_n?ar)?$"
     elif opts.endswith(("_high_noise", "_low_noise")):
-        pattern = r"(_rs)?(_plus)?(_lokr)?(_(high|low)_noise)?$"
+        pattern = r"(_rs)?(_plus)?(_dora)?(_lokr)?(_(high|low)_noise)?$"
     else:
-        pattern = r"(_rs)?(_plus)?(_lokr)?$"
+        pattern = r"(_rs)?(_plus)?(_dora)?(_lokr)?$"
     return re.sub(pattern, "", stem, flags=re.IGNORECASE) or stem
 
 
@@ -111,7 +111,7 @@ def lora_options_suffix(path):
             meta = json.loads(f.read(n)).get("__metadata__") or {}
     except (OSError, ValueError, struct.error):
         return ""
-    return (("_rs" if meta.get("rslora") == "true" else "") + ("_plus" if meta.get("loraplus_ratio") else "")
+    return (("_rs" if meta.get("rslora") == "true" else "") + ("_plus" if meta.get("loraplus_ratio") else "") + ("_dora" if meta.get("dora") == "true" else "")
             + ("_lokr" if meta.get("lokr_factor") else "")
             + {"ar": "_AR", "nar": "_NAR"}.get(meta.get("yue2_stage"), "")
             + {"high_noise": "_high_noise", "low_noise": "_low_noise"}.get(meta.get("wan_expert"), ""))

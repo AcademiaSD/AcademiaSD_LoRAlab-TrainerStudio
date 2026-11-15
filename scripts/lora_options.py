@@ -70,6 +70,49 @@ def lr_scheduler_label(scheduler, warmup, cycles):
     return f"{scheduler} (warmup {warmup})"
 
 
+def dora_scales(model, adapter="default"):
+    """
+    DoRA (Liu et al., 2024) para exportar: {nombre del módulo PEFT: dora_scale [out, 1]}.
+    PEFT entrena W' = m / ||W + s·B·A|| · (W + s·B·A), con la norma por fila de salida. ComfyUI lee
+    <capa>.dora_scale, pero con un dora_scale por fila de salida divide por ||W|| (el peso sin el LoRA),
+    no por ||W + s·B·A|| (comfy/weight_adapter/base.py, weight_decompose). Para que dé lo mismo que el
+    entrenamiento se guarda m · ||W|| / ||W + s·B·A||, calculado aquí con el peso base (NF4 descomprimido:
+    la norma de una fila apenas cambia con la cuantización).
+    DoRA for export. ComfyUI divides a per-output-row dora_scale by ||W||, not ||W + s·B·A||, so the
+    exported scale is m · ||W|| / ||W + s·B·A||, which makes ComfyUI reproduce the trained weight.
+    """
+    from peft.utils.integrations import dequantize_module_weight
+    out = {}
+    with torch.no_grad():
+        for name, module in model.named_modules():
+            magnitudes = getattr(module, "lora_magnitude_vector", None)
+            if not magnitudes or adapter not in magnitudes:
+                continue
+            base = module.get_base_layer()
+            weight = dequantize_module_weight(base).float()
+            a = module.lora_A[adapter].weight.float().to(weight.device)
+            b = module.lora_B[adapter].weight.float().to(weight.device)
+            merged = weight + (b @ a) * module.scaling[adapter]
+            m = magnitudes[adapter].weight.float().to(weight.device).view(-1)
+            scale = m * weight.norm(dim=1) / merged.norm(dim=1).clamp_min(torch.finfo(torch.float32).eps)
+            out[name] = scale.view(-1, 1).cpu().contiguous()     # FP32: un valor por fila, apenas ocupa
+            del weight, merged
+    return out
+
+
+def dora_export(model, key_of, swapped=()):
+    """Claves <capa>.dora_scale que leen ComfyUI y Forge (vacío si el LoRA no es DoRA). key_of convierte el
+    nombre de la capa en el prefijo que espera el cargador del modelo, el mismo de sus lora_A / lora_B.
+    swapped: capas donde el cargador intercambia las dos mitades de filas (scale/shift de Flux)."""
+    out = {}
+    for name, scale in dora_scales(model).items():
+        name = name.replace("base_model.model.", "", 1)
+        if name in swapped:
+            scale = torch.cat(scale.chunk(2)[::-1]).contiguous()
+        out[key_of(name) + ".dora_scale"] = scale
+    return out
+
+
 def lokr_export(model, key_of, alpha):
     """Claves LyCORIS que lee ComfyUI: <capa>.lokr_w1 / lokr_w2_a / lokr_w2_b / alpha (escala alpha/rank).
     key_of convierte el nombre de la capa en el prefijo que espera el cargador del modelo."""

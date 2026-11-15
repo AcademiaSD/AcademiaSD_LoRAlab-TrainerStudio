@@ -61,6 +61,7 @@ DEFAULTS = {
     "use_rslora": False,
     "use_loraplus": False,
     "loraplus_ratio": 16.0,
+    "use_dora": False,
     "lora_targets": "blocks",
     "blocks_on_gpu": -1,
     "weight_decay": 0.0,
@@ -111,6 +112,10 @@ LORA_TARGETS      = "all" if cfg.get("lora_targets", DEFAULTS["lora_targets"]) =
 USE_RSLORA        = bool(cfg.get("use_rslora",   DEFAULTS["use_rslora"]))
 USE_LORAPLUS      = bool(cfg.get("use_loraplus", DEFAULTS["use_loraplus"]))
 LORAPLUS_RATIO    = float(cfg.get("loraplus_ratio", DEFAULTS["loraplus_ratio"]))
+# DoRA (Liu et al., 2024): cada fila de salida aprende su magnitud aparte de la dirección (la de B·A).
+# Es una variante de LoRA (PEFT, use_dora): convive con rsLoRA y LoRA+. Cada paso descomprime
+# el peso NF4 de cada capa para su norma, así que es más lento y pide algo más de VRAM.
+USE_DORA          = bool(cfg.get("use_dora",     DEFAULTS["use_dora"]))
 # Bloques que se quedan en la GPU (de 60); el resto se sube de la RAM bloque a bloque. -1 = automático.
 BLOCKS_ON_GPU     = int(cfg.get("blocks_on_gpu", DEFAULTS["blocks_on_gpu"]))
 WEIGHT_DECAY      = cfg.get("weight_decay",      DEFAULTS["weight_decay"])
@@ -151,6 +156,7 @@ print(f"  {t('Learning Rate'):<22}: {LR}")
 print(f"  {t('LR Scheduler'):<22}: {lora_options.lr_scheduler_label(LR_SCHEDULER, WARMUP_STEPS, LR_CYCLES)}")
 print(f"  {'LoRA Rank/Alpha':<22}: {LORA_RANK}/{LORA_ALPHA}")
 print(f"  {'rsLoRA / LoRA+':<22}: {'on' if USE_RSLORA else 'off'} / {f'x{LORAPLUS_RATIO:g}' if USE_LORAPLUS else 'off'}")
+print(f"  {'DoRA':<22}: {'on' if USE_DORA else 'off'}")
 print(f"  {t('LoRA Targets'):<22}: {LORA_TARGETS}")
 print(f"  {'Batch / Grad Accum':<22}: {BATCH_SIZE}/{GRAD_ACCUM_STEPS}")
 print(f"  {t('Blocks on GPU'):<22}: {t('auto') if BLOCKS_ON_GPU < 0 else BLOCKS_ON_GPU}")
@@ -295,9 +301,13 @@ def build_lora_metadata(step):
         meta["rslora_train_alpha"] = LORA_ALPHA
     if USE_LORAPLUS:
         meta["loraplus_ratio"] = LORAPLUS_RATIO
-    if USE_RSLORA or USE_LORAPLUS:
-        meta["ss_network_args"] = json.dumps({"rslora": USE_RSLORA,
-                                              "loraplus_lr_ratio": LORAPLUS_RATIO if USE_LORAPLUS else None})
+    if USE_DORA:
+        meta["dora"] = "true"
+    if USE_RSLORA or USE_LORAPLUS or USE_DORA:
+        args = {"rslora": USE_RSLORA, "loraplus_lr_ratio": LORAPLUS_RATIO if USE_LORAPLUS else None}
+        if USE_DORA:
+            args["dora_wd"] = True          # convención de kohya / LyCORIS
+        meta["ss_network_args"] = json.dumps(args)
 
     trigger = TRIGGER_WORD.strip()
     if trigger:
@@ -329,10 +339,14 @@ def _export_lora(model, path, step):
     # por capa: sin él, ComfyUI aplicaría el LoRA con escala 1 en lugar de alpha/rank.
     clean = {}
     for k, v in get_peft_model_state_dict(model).items():
+        if "lora_magnitude_vector" in k:
+            continue                        # DoRA: va como dora_scale, abajo
         k = "transformer." + k.replace("base_model.model.", "")
         clean[k] = v.to(torch.bfloat16).cpu().contiguous()
         if k.endswith(".lora_A.weight"):
             clean[k[:-len(".lora_A.weight")] + ".alpha"] = torch.tensor(float(export_alpha()))
+    # DoRA: <capa>.dora_scale, la clave que leen ComfyUI y Forge (ver lora_options.dora_scales).
+    clean.update(lora_options.dora_export(model, lambda name: "transformer." + name))
     save_file(clean, path, metadata=build_lora_metadata(step))
 
 
@@ -578,7 +592,7 @@ def collate_text(embeds, masks):
 
 
 def train_qwenimage2512():
-    global LORA_RANK, LORA_ALPHA, USE_RSLORA, USE_LORAPLUS, LORAPLUS_RATIO  # al reanudar se toman del checkpoint
+    global LORA_RANK, LORA_ALPHA, USE_RSLORA, USE_LORAPLUS, LORAPLUS_RATIO, USE_DORA  # al reanudar se toman del checkpoint
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.benchmark = True
 
@@ -642,10 +656,16 @@ def train_qwenimage2512():
                               "(settings ask for rsLoRA {a2}, LoRA+ {b2}; they apply to new trainings).",
                               a=saved_opts[0], b=saved_opts[1], a2=USE_RSLORA, b2=USE_LORAPLUS))
         USE_RSLORA, USE_LORAPLUS, LORAPLUS_RATIO = saved_opts
+        # DoRA también lo guarda PEFT en adapter_config.json; el checkpoint manda, como con rsLoRA.
+        saved_dora = bool(saved_cfg.get("use_dora", False))
+        if saved_dora != USE_DORA:
+            print("\n[!] " + t("Resuming with the checkpoint's DoRA: {a} (settings ask for {b}; it applies to new trainings).",
+                              a=saved_dora, b=USE_DORA))
+        USE_DORA = saved_dora
 
     lora_config = LoraConfig(
         r=LORA_RANK, lora_alpha=LORA_ALPHA, lora_dropout=0.0,
-        target_modules=target_modules, use_dora=False, init_lora_weights=True, use_rslora=USE_RSLORA
+        target_modules=target_modules, use_dora=USE_DORA, init_lora_weights=True, use_rslora=USE_RSLORA
     )
     model = get_peft_model(transformer, lora_config)
     # LoRA y estados del optimizador en FP32: en 8/16 bits se pierde el detalle fino (caras).

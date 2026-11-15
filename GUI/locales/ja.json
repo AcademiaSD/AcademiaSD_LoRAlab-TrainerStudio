@@ -1537,5 +1537,7 @@
   "every {n} steps": "{n} ステップごと",
   "off": "オフ",
   "hidden · click to show": "非表示 · クリックで表示",
-  "Click to hide or show the Dataset Manager.": "クリックで Dataset Manager の表示/非表示を切り替えます。"
+  "Click to hide or show the Dataset Manager.": "クリックで Dataset Manager の表示/非表示を切り替えます。",
+  "DoRA: each layer learns the size (magnitude) of every output row apart from its direction, which is the usual LoRA. It often follows the dataset more closely at the same rank, but every step is slower and uses some more VRAM, because the 4-bit weight of each layer is unpacked to measure it. Works with rsLoRA and LoRA+, not with LoKr. ComfyUI and Forge load it like any LoRA, and Send to Models adds _dora to its name. Fixed for the whole training: to change it, start a new one.": "DoRA：各レイヤーが出力行ごとの大きさ（マグニチュード）を、通常の LoRA である方向とは別に学習します。同じ rank でもデータセットにより忠実になりやすい一方、各レイヤーの 4 ビット重みを展開して測るため、1 ステップが遅くなり VRAM も少し多く使います。rsLoRA と LoRA+ とは併用でき、LoKr とは併用できません。ComfyUI と Forge は通常の LoRA と同じように読み込み、Send to Models は名前に _dora を付けます。学習全体で固定です。変更するには新しい学習を開始してください。",
+  "Resuming with the checkpoint's DoRA: {a} (settings ask for {b}; it applies to new trainings).": "チェックポイントの DoRA で再開します：{a}（設定は {b}。新しい学習に適用されます）。"
 }
