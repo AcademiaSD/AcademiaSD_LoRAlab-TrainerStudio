@@ -51,6 +51,10 @@ except Exception:
 # el mismo resultado, solo es más lenta, y aquí codifica unos pocos cientos de tokens por caption.
 logging.getLogger("transformers.integrations.hub_kernels").addFilter(
     lambda record: "falling back to its reference PyTorch implementation" not in record.getMessage())
+# LLM.int8 (Text Encoder INT8) avisa en cada matmul de que pasa las entradas de bf16 a fp16: miles de
+# líneas por caption.
+logging.getLogger("bitsandbytes.autograd._functions").addFilter(
+    lambda record: "MatMul8bitLt" not in record.getMessage())
 
 HF_REPO_ID = "AcademiaSD/MOSS-Image-NF4-for-LoRA-Training"
 

@@ -34,8 +34,11 @@ try:
 except Exception:
     pass
 
-# LLM.int8 avisa en cada matmul de que pasa las entradas de bf16 a fp16.
+# LLM.int8 avisa en cada matmul de que pasa las entradas de bf16 a fp16: miles de líneas por caption.
+# bitsandbytes lo emitía por warnings y ahora por logging; se silencian las dos vías.
 warnings.filterwarnings("ignore", message=".*MatMul8bitLt.*")
+logging.getLogger("bitsandbytes.autograd._functions").addFilter(
+    lambda record: "MatMul8bitLt" not in record.getMessage())
 
 HF_REPO_ID = "AcademiaSD/Qwen-Image-2512-NF4-for-LoRA-Training"
 

@@ -29,8 +29,11 @@ try:
 except Exception:
     pass
 
-# LLM.int8 avisa en cada matmul de que pasa las entradas de bf16 a fp16.
+# LLM.int8 avisa en cada matmul de que pasa las entradas de bf16 a fp16: miles de líneas por caption.
+# bitsandbytes lo emitía por warnings y ahora por logging; se silencian las dos vías.
 warnings.filterwarnings("ignore", message=".*MatMul8bitLt.*")
+logging.getLogger("bitsandbytes.autograd._functions").addFilter(
+    lambda record: "MatMul8bitLt" not in record.getMessage())
 # NF4: las capas de visión (4304) no son múltiplo de 64 y usan el kernel general; solo cambia la velocidad.
 warnings.filterwarnings("ignore", message=".*is not aligned for fast kernel.*")
 
