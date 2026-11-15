@@ -528,6 +528,15 @@
                         </div>
                     </div>
 
+                    <div class="form-row">
+                        <div class="form-group" title="DoRA: each layer learns the size (magnitude) of every output row apart from its direction, which is the usual LoRA. It often follows the dataset more closely at the same rank, but every step is slower and uses some more VRAM, because the 4-bit weight of each layer is unpacked to measure it. Works with rsLoRA and LoRA+, not with LoKr. ComfyUI and Forge load it like any LoRA, and Send to Models adds _dora to its name. Fixed for the whole training: to change it, start a new one.">
+                            <label style="display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer;" for="train_use_dora">
+                                <input type="checkbox" id="train_use_dora" onchange="updateFinalNameSuffix()" style="width: 18px; height: 18px; cursor: pointer;">
+                                DoRA
+                            </label>
+                        </div>
+                    </div>
+
                     <div class="form-group">
                         <label>LoRA Targets:</label>
                         <select id="train_lora_targets"
@@ -960,6 +969,7 @@
                     if (t.lora_alpha) document.getElementById('train_lora_alpha').value = t.lora_alpha;
                     if (t.use_rslora !== undefined) document.getElementById('train_use_rslora').checked = t.use_rslora;
                     if (t.use_loraplus !== undefined) document.getElementById('train_use_loraplus').checked = t.use_loraplus;
+                    if (t.use_dora !== undefined) document.getElementById('train_use_dora').checked = t.use_dora;
                     if (t.lora_targets) document.getElementById('train_lora_targets').value = t.lora_targets;
                     if (t.precision) document.getElementById('train_precision').value = t.precision;
                     if (t.batch_size) document.getElementById('train_batch_size').value = t.batch_size;
@@ -1029,6 +1039,7 @@
                     if (data.lora_alpha !== undefined) document.getElementById('train_lora_alpha').value = data.lora_alpha;
                     if (data.use_rslora !== undefined) document.getElementById('train_use_rslora').checked = data.use_rslora;
                     if (data.use_loraplus !== undefined) document.getElementById('train_use_loraplus').checked = data.use_loraplus;
+                    if (data.use_dora !== undefined) document.getElementById('train_use_dora').checked = data.use_dora;
                     if (data.lora_targets !== undefined) document.getElementById('train_lora_targets').value = data.lora_targets;
                     if (data.precision !== undefined) document.getElementById('train_precision').value = data.precision;
                     if (data.batch_size !== undefined) document.getElementById('train_batch_size').value = data.batch_size;
@@ -1150,16 +1161,17 @@
             updateFinalNameSuffix();
         }
 
-        // El nombre final lleva _rs / _plus / _lokr según las casillas; al exportar o descargar, el
+        // El nombre final lleva _rs / _plus / _dora / _lokr según las casillas; al exportar o descargar, el
         // servidor lo corrige con lo que dicen los metadatos del LoRA entrenado.
         function updateFinalNameSuffix() {
             const el = document.getElementById('export_final_name');
-            const base = el.value.trim().replace(/(_rs)?(_plus)?(_lokr)?(\.safetensors)?$/i, '');
+            const base = el.value.trim().replace(/(_rs)?(_plus)?(_dora)?(_lokr)?(\.safetensors)?$/i, '');
             if (!base) return;
             const lk = document.getElementById('train_use_lokr');
             const sfx = lk && lk.checked ? '_lokr'
                 : (document.getElementById('train_use_rslora').checked ? '_rs' : '')
-                + (document.getElementById('train_use_loraplus').checked ? '_plus' : '');
+                + (document.getElementById('train_use_loraplus').checked ? '_plus' : '')
+                + (document.getElementById('train_use_dora').checked ? '_dora' : '');
             el.value = base + sfx + '.safetensors';
         }
 
@@ -1182,7 +1194,7 @@
                       warmup_steps: 'train_warmup_steps', lr_cycles: 'train_lr_cycles', precision: 'train_precision',
                       batch_size: 'train_batch_size', grad_accum_steps: 'train_grad_accum' },
             new: { lora_rank: 'train_lora_rank', lora_alpha: 'train_lora_alpha', use_rslora: 'train_use_rslora',
-                   use_loraplus: 'train_use_loraplus', lora_targets: 'train_lora_targets' },
+                   use_loraplus: 'train_use_loraplus', use_dora: 'train_use_dora', lora_targets: 'train_lora_targets' },
         };
 
         async function saveTrainSettings() {
@@ -1202,6 +1214,7 @@
                 lora_alpha: parseInt(document.getElementById('train_lora_alpha').value),
                 use_rslora: document.getElementById('train_use_rslora').checked,
                 use_loraplus: document.getElementById('train_use_loraplus').checked,
+                use_dora: document.getElementById('train_use_dora').checked,
                 lora_targets: document.getElementById('train_lora_targets').value,
                 precision: document.getElementById('train_precision').value,
                 batch_size: parseInt(document.getElementById('train_batch_size').value),

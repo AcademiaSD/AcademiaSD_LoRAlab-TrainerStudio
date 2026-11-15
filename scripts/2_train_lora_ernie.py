@@ -38,6 +38,8 @@ OUT=str(resolve_output_dir(f"./ernie_lora_output_{PROJECT}" if PROJECT else cfg.
 STEPS=int(cfg.get("total_steps",1000)); BATCH=int(cfg.get("batch_size",1)); ACCUM=max(1,int(cfg.get("grad_accum_steps",4)))
 LR=float(cfg.get("lr",3e-4)); WARMUP=int(cfg.get("warmup_steps",100)); MIN_LR_RATIO=float(cfg.get("min_lr_ratio",.1)); LR_SCHEDULER=cfg.get("lr_scheduler","cosine"); LR_CYCLES=int(cfg.get("lr_cycles",3)); SAVE_EVERY=int(cfg.get("save_every",100))
 RANK=int(cfg.get("lora_rank",16)); ALPHA=float(cfg.get("lora_alpha",16)); USE_RSLORA=bool(cfg.get("use_rslora",False)); USE_LORAPLUS=bool(cfg.get("use_loraplus",False)); LORAPLUS_RATIO=float(cfg.get("loraplus_ratio",16)); USE_LOKR=bool(cfg.get("use_lokr",False)); LOKR_FACTOR=max(1,int(cfg.get("lokr_factor",16)))
+# DoRA (Liu et al., 2024): cada fila de salida aprende su magnitud aparte de la dirección (PEFT use_dora). No con LoKr.
+USE_DORA=bool(cfg.get("use_dora",False)) and not USE_LOKR
 LORA_TARGETS="all" if cfg.get("lora_targets","blocks")=="all" else "blocks"
 WEIGHT_DECAY=float(cfg.get("weight_decay",0)); MAX_GRAD_NORM=float(cfg.get("max_grad_norm",1.0)); PREVIEW_EVERY=int(cfg.get("preview_every",0) or 0)
 PREVIEW_STEPS=int(cfg.get("preview_steps",28)); PREVIEW_CFG=float(cfg.get("preview_cfg",4)); PREVIEW_SIZE=int(cfg.get("preview_size",0)); PREVIEW_WIDTH=int(cfg.get("preview_width",0)); PREVIEW_HEIGHT=int(cfg.get("preview_height",0))
@@ -74,12 +76,16 @@ def export(model,path,step):
         return
     state={}
     for k,v in get_peft_model_state_dict(model).items():
+        if "lora_magnitude_vector" in k: continue   # DoRA: va como dora_scale, abajo
         key="transformer."+k.replace("base_model.model.","")
         state[key]=v.to(torch.bfloat16).cpu().contiguous()
         if key.endswith(".lora_A.weight"): state[key[:-len(".lora_A.weight")]+".alpha"]=torch.tensor(float(lora_options.export_alpha(ALPHA,RANK,USE_RSLORA)),dtype=torch.float32)
+    state.update(lora_options.dora_export(model,lambda name:"transformer."+name))   # DoRA: <capa>.dora_scale
     trigger=TRIGGER or ""
     meta={"format":"pt","trained_with":"AcademiaSD LoRAlab ERNIE-Image","ss_sd_model_name":"baidu/ERNIE-Image","ss_base_model_version":"ERNIE-Image","ss_network_module":"peft.LoraModel","ss_lr_scheduler":LR_SCHEDULER,"ss_network_dim":str(RANK),"ss_network_alpha":str(lora_options.export_alpha(ALPHA,RANK,USE_RSLORA)),"ss_steps":str(step),"ss_max_train_steps":str(STEPS),"ss_learning_rate":str(LR),"ss_mixed_precision":"bf16","ss_optimizer":"AdamW","ss_weight_decay":str(WEIGHT_DECAY)}
     if trigger: meta["trigger_word"]=trigger; meta["ss_tag_frequency"]=json.dumps({"dataset":{trigger:1}})
+    if USE_DORA:
+        meta["dora"]="true"; meta["ss_network_args"]=json.dumps({"rslora":USE_RSLORA,"dora_wd":True})
     save_file(state,path,metadata=meta)
 
 def pad_text(embeds,device):
@@ -128,7 +134,7 @@ def preview(model,scheduler,emb,shape,step):
     model.train()
 
 def main():
-    global RANK, ALPHA, USE_RSLORA, USE_LORAPLUS, LORAPLUS_RATIO, USE_LOKR, LOKR_FACTOR
+    global RANK, ALPHA, USE_RSLORA, USE_LORAPLUS, LORAPLUS_RATIO, USE_LOKR, LOKR_FACTOR, USE_DORA
     if not torch.cuda.is_available(): raise RuntimeError("CUDA is required for ERNIE training")
     if not os.path.isfile(os.path.join(CACHE,"_neg_embed.pt")): raise RuntimeError("Run ERNIE Pre-Cache first")
     model=load_nf4(MODEL).to("cuda"); model.enable_gradient_checkpointing()
@@ -147,15 +153,21 @@ def main():
         with safe_open(os.path.join(RESUME,lora_options.LOKR_WEIGHTS),framework="pt",device="cpu") as f: targets=sorted({k.rpartition(".")[0] for k in f.keys() if k.endswith(".lokr_w1")})
     elif resume_lora:
         ac=json.load(open(os.path.join(RESUME,"adapter_config.json"),encoding="utf-8")); RANK=int(ac["r"]); ALPHA=float(ac["lora_alpha"]); USE_RSLORA=bool(ac.get("use_rslora",False))
+        # DoRA también lo guarda PEFT en adapter_config.json; el checkpoint manda, como con rsLoRA.
+        saved_dora=bool(ac.get("use_dora",False))
+        if saved_dora!=USE_DORA:
+            print(f"\n[!] Resuming with the checkpoint's DoRA: {saved_dora} (settings ask for {USE_DORA}; it applies to new trainings).",flush=True)
+        USE_DORA=saved_dora
         with safe_open(os.path.join(RESUME,"adapter_model.safetensors"),framework="pt",device="cpu") as f: targets=sorted({k.split(".lora_")[0].replace("base_model.model.","",1) for k in f.keys()})
         opts=os.path.join(RESUME,"lora_options.json")
         if os.path.isfile(opts):
             o=json.load(open(opts,encoding="utf-8")); USE_LORAPLUS=bool(o.get("use_loraplus",False)); LORAPLUS_RATIO=float(o.get("loraplus_ratio",LORAPLUS_RATIO))
     if USE_LOKR:
-        USE_RSLORA=USE_LORAPLUS=False; model=lora_options.LoKrModel(model,targets,RANK,ALPHA,LOKR_FACTOR)
+        USE_RSLORA=USE_LORAPLUS=USE_DORA=False; model=lora_options.LoKrModel(model,targets,RANK,ALPHA,LOKR_FACTOR)
     else:
-        lconf=LoraConfig(r=RANK,lora_alpha=ALPHA,target_modules=targets,bias="none",init_lora_weights=True,use_rslora=USE_RSLORA)
+        lconf=LoraConfig(r=RANK,lora_alpha=ALPHA,target_modules=targets,bias="none",init_lora_weights=True,use_rslora=USE_RSLORA,use_dora=USE_DORA)
         model=get_peft_model(model,lconf)
+    print(f"  {'DoRA':<22}: {'on' if USE_DORA else 'off'}",flush=True)
     model.train()
     trainable=[p for p in model.parameters() if p.requires_grad]
     if USE_LORAPLUS:

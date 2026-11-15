@@ -70,16 +70,21 @@ def lr_scheduler_label(scheduler, warmup, cycles):
     return f"{scheduler} (warmup {warmup})"
 
 
-def dora_scales(model, adapter="default"):
+def dora_scales(model, adapter="default", base_norms=None):
     """
-    DoRA (Liu et al., 2024) para exportar: {nombre del módulo PEFT: dora_scale [out, 1]}.
+    DoRA (Liu et al., 2024) para exportar: {nombre del módulo PEFT: dora_scale [out, 1]} ([out, 1, 1, 1]
+    en una convolución).
     PEFT entrena W' = m / ||W + s·B·A|| · (W + s·B·A), con la norma por fila de salida. ComfyUI lee
     <capa>.dora_scale, pero con un dora_scale por fila de salida divide por ||W|| (el peso sin el LoRA),
     no por ||W + s·B·A|| (comfy/weight_adapter/base.py, weight_decompose). Para que dé lo mismo que el
-    entrenamiento se guarda m · ||W|| / ||W + s·B·A||, calculado aquí con el peso base (NF4 descomprimido:
-    la norma de una fila apenas cambia con la cuantización).
+    entrenamiento se guarda m · ||W|| / ||W + s·B·A||.
+    ||W|| es la del peso con el que se entrenó (NF4 descomprimido). ComfyUI usa la del peso que carga, y
+    la de una fila NF4 se aparta de la original lo bastante para notarse junto a lo que aprende DoRA: el
+    trainer que tiene el peso original al cargar pasa sus normas en base_norms ({nombre de la capa sin
+    base_model.model.: norma por fila}) y entonces el resultado es exacto.
     DoRA for export. ComfyUI divides a per-output-row dora_scale by ||W||, not ||W + s·B·A||, so the
     exported scale is m · ||W|| / ||W + s·B·A||, which makes ComfyUI reproduce the trained weight.
+    base_norms: row norms of the original (unquantized) weights, when the trainer has them.
     """
     from peft.utils.integrations import dequantize_module_weight
     out = {}
@@ -90,22 +95,30 @@ def dora_scales(model, adapter="default"):
                 continue
             base = module.get_base_layer()
             weight = dequantize_module_weight(base).float()
+            shape = weight.shape
+            weight = weight.reshape(shape[0], -1)            # una convolución: cada canal de salida es una fila
             a = module.lora_A[adapter].weight.float().to(weight.device)
             b = module.lora_B[adapter].weight.float().to(weight.device)
-            merged = weight + (b @ a) * module.scaling[adapter]
+            merged = weight + (b.reshape(shape[0], -1) @ a.reshape(a.shape[0], -1)) * module.scaling[adapter]
             m = magnitudes[adapter].weight.float().to(weight.device).view(-1)
-            scale = m * weight.norm(dim=1) / merged.norm(dim=1).clamp_min(torch.finfo(torch.float32).eps)
-            out[name] = scale.view(-1, 1).cpu().contiguous()     # FP32: un valor por fila, apenas ocupa
+            norm = weight.norm(dim=1)
+            own = (base_norms or {}).get(name.replace("base_model.model.", "", 1))
+            if own is not None:
+                norm = own.float().to(weight.device).view(-1)
+            scale = m * norm / merged.norm(dim=1).clamp_min(torch.finfo(torch.float32).eps)
+            # FP32: un valor por fila, apenas ocupa
+            out[name] = scale.view(shape[0], *[1] * (len(shape) - 1)).cpu().contiguous()
             del weight, merged
     return out
 
 
-def dora_export(model, key_of, swapped=()):
+def dora_export(model, key_of, swapped=(), base_norms=None):
     """Claves <capa>.dora_scale que leen ComfyUI y Forge (vacío si el LoRA no es DoRA). key_of convierte el
     nombre de la capa en el prefijo que espera el cargador del modelo, el mismo de sus lora_A / lora_B.
-    swapped: capas donde el cargador intercambia las dos mitades de filas (scale/shift de Flux)."""
+    swapped: capas donde el cargador intercambia las dos mitades de filas (scale/shift de Flux).
+    base_norms: ver dora_scales."""
     out = {}
-    for name, scale in dora_scales(model).items():
+    for name, scale in dora_scales(model, base_norms=base_norms).items():
         name = name.replace("base_model.model.", "", 1)
         if name in swapped:
             scale = torch.cat(scale.chunk(2)[::-1]).contiguous()

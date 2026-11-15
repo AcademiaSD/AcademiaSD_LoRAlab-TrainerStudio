@@ -180,6 +180,44 @@ def build_lora(pairs, alpha):
     return out, skipped
 
 
+def build_dora(scales):
+    """
+    Los dora_scale de un DoRA ({ruta de diffusers: [salida, 1]}) en las capas de ComfyUI. Son uno por
+    fila de salida, así que en una capa fusionada van seguidos en el orden de sus partes, como los
+    bloques de up en build_lora. En w13 las filas de relleno de ComfyUI son cero en el peso y en el
+    LoRA: su dora_scale es 0 y la fila sigue a cero.
+    Devuelve {clave del fichero: tensor} y las capas fusionadas a las que les falta una parte (las
+    mismas que se salta build_lora).
+    """
+    out = {}
+    skipped = []
+    groups = {}
+    for module, scale in scales.items():
+        old, new, group = classify(module)
+        comfy = (module[: -len(old)] + new) if old else module
+        if group is None:
+            out[f"diffusion_model.{comfy}.dora_scale"] = scale
+        else:
+            groups.setdefault(comfy, {"group": group, "parts": {}})["parts"][module] = scale
+
+    for comfy, info in groups.items():
+        group = info["group"]
+        pieces = []
+        for name in GROUP_ORDER[group]:
+            scale = next((s for module, s in info["parts"].items() if module.endswith("." + name)), None)
+            if scale is None:
+                break
+            pieces.append(scale)
+            pad = ffn_padding(scale.shape[0]) if group == "w13" else 0
+            if pad:
+                pieces.append(torch.zeros((pad, 1), dtype=scale.dtype))
+        else:
+            out[f"diffusion_model.{comfy}.dora_scale"] = torch.cat(pieces).contiguous()
+            continue
+        skipped.append(comfy)
+    return out, skipped
+
+
 def build_lokr(lokr_layers, key_of_layer, alpha):
     """
     El LoKr solo se puede exportar para las capas que se mapean 1:1: las fusionadas no se

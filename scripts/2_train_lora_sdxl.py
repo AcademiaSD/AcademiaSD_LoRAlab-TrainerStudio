@@ -63,6 +63,7 @@ DEFAULTS = {
     "loraplus_ratio": 16.0,
     "use_lokr": False,
     "lokr_factor": 16,
+    "use_dora": False,
     "lora_targets": "blocks",
     "precision": "bf16",
     "weight_decay": 0.0,
@@ -113,8 +114,12 @@ USE_LORAPLUS      = bool(cfg.get("use_loraplus", DEFAULTS["use_loraplus"]))
 LORAPLUS_RATIO    = float(cfg.get("loraplus_ratio", DEFAULTS["loraplus_ratio"]))
 USE_LOKR          = False  # LoKr no está disponible en este entrenador
 LOKR_FACTOR       = DEFAULTS["lokr_factor"]
+# DoRA (Liu et al., 2024): cada fila de salida aprende su magnitud aparte de la dirección (la de B·A).
+# Es una variante de LoRA (PEFT, use_dora): convive con rsLoRA y LoRA+, no con LoKr. Cada paso descomprime
+# el peso NF4 de cada capa para su norma, así que es más lento y pide algo más de VRAM.
+USE_DORA          = bool(cfg.get("use_dora",     DEFAULTS["use_dora"]))
 if USE_LOKR:
-    USE_RSLORA = USE_LORAPLUS = False
+    USE_RSLORA = USE_LORAPLUS = USE_DORA = False
 WEIGHT_DECAY      = cfg.get("weight_decay",      DEFAULTS["weight_decay"])
 MAX_GRAD_NORM     = cfg.get("max_grad_norm",     DEFAULTS["max_grad_norm"])
 MIN_SNR_GAMMA     = cfg.get("min_snr_gamma",     DEFAULTS["min_snr_gamma"])
@@ -150,6 +155,7 @@ print(f"  {t('Learning Rate'):<22}: {LR}")
 print(f"  {t('LR Scheduler'):<22}: {lora_options.lr_scheduler_label(LR_SCHEDULER, WARMUP_STEPS, LR_CYCLES)}")
 print(f"  {'LoRA Rank/Alpha':<22}: {LORA_RANK}/{LORA_ALPHA}")
 print(f"  {'rsLoRA / LoRA+':<22}: {'on' if USE_RSLORA else 'off'} / {f'x{LORAPLUS_RATIO:g}' if USE_LORAPLUS else 'off'}")
+print(f"  {'DoRA':<22}: {'on' if USE_DORA else 'off'}")
 print(f"  {'LoKr':<22}: {f'factor {LOKR_FACTOR}' if USE_LOKR else 'off'}")
 print(f"  {t('LoRA Targets'):<22}: {LORA_TARGETS}")
 print(f"  {t('Precision'):<22}: {PRECISION.upper()}")
@@ -227,9 +233,13 @@ def build_lora_metadata(step):
         meta["rslora_train_alpha"] = LORA_ALPHA
     if USE_LORAPLUS:
         meta["loraplus_ratio"] = LORAPLUS_RATIO
-    if USE_RSLORA or USE_LORAPLUS:
-        meta["ss_network_args"] = json.dumps({"rslora": USE_RSLORA,
-                                              "loraplus_lr_ratio": LORAPLUS_RATIO if USE_LORAPLUS else None})
+    if USE_DORA:
+        meta["dora"] = "true"
+    if USE_RSLORA or USE_LORAPLUS or USE_DORA:
+        args = {"rslora": USE_RSLORA, "loraplus_lr_ratio": LORAPLUS_RATIO if USE_LORAPLUS else None}
+        if USE_DORA:
+            args["dora_wd"] = True          # convención de kohya / LyCORIS
+        meta["ss_network_args"] = json.dumps(args)
     if USE_LOKR:
         meta["lokr_factor"] = LOKR_FACTOR
         meta["ss_network_args"] = json.dumps({"algo": "lokr", "factor": LOKR_FACTOR})
@@ -264,10 +274,15 @@ def _export_lora(model, path, step):
     """
     clean = {}
     for k, v in get_peft_model_state_dict(model).items():
+        if "lora_magnitude_vector" in k:
+            continue                        # DoRA: va como dora_scale, abajo
         name, part = k.replace("base_model.model.", "").rsplit(".lora_", 1)
         key = "lora_unet_" + name.replace(".", "_")
         clean[f"{key}.lora_{'down' if part.startswith('A') else 'up'}.weight"] = v.to(torch.bfloat16).cpu().contiguous()
         clean[f"{key}.alpha"] = torch.tensor(float(export_alpha()))
+    # DoRA: lora_unet_<capa>.dora_scale, con la norma del peso original de las capas NF4.
+    clean.update(lora_options.dora_export(model, lambda name: "lora_unet_" + name.replace(".", "_"),
+                                          base_norms=DORA_BASE_NORMS))
     save_file(clean, path, metadata=build_lora_metadata(step))
 
 
@@ -427,6 +442,8 @@ def load_unet():
         quantized = 0
         for name, module in list(unet.named_modules()):
             if isinstance(module, torch.nn.Linear) and ".attentions." in name:
+                # Siempre: un checkpoint reanudado puede activar DoRA después de cargar el UNet.
+                DORA_BASE_NORMS[name] = module.weight.data.float().norm(dim=1).cpu()
                 layer = Linear4bit(module.in_features, module.out_features, bias=module.bias is not None,
                                    quant_type="nf4", compute_dtype=torch.bfloat16)
                 # bitsandbytes cuantiza al mover a la GPU.
@@ -438,6 +455,10 @@ def load_unet():
                 quantized += 1
         print("[OK] " + t("NF4 layers: {n} (transformer blocks)", n=quantized))
     return unet.to("cuda")
+
+
+# DoRA: norma por fila de los pesos originales de las capas que se pasan a NF4 (ver lora_options.dora_scales).
+DORA_BASE_NORMS = {}
 
 
 def lora_target_names(unet):
@@ -456,7 +477,7 @@ def lora_target_names(unet):
 
 
 def train_sdxl():
-    global LORA_RANK, LORA_ALPHA, USE_RSLORA, USE_LORAPLUS, LORAPLUS_RATIO, USE_LOKR, LOKR_FACTOR
+    global LORA_RANK, LORA_ALPHA, USE_RSLORA, USE_LORAPLUS, LORAPLUS_RATIO, USE_LOKR, LOKR_FACTOR, USE_DORA
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.benchmark = True
 
@@ -529,13 +550,20 @@ def train_sdxl():
                               "(settings ask for rsLoRA {a2}, LoRA+ {b2}; they apply to new trainings).",
                               a=saved_opts[0], b=saved_opts[1], a2=USE_RSLORA, b2=USE_LORAPLUS))
         USE_RSLORA, USE_LORAPLUS, LORAPLUS_RATIO = saved_opts
+        # DoRA también lo guarda PEFT en adapter_config.json; el checkpoint manda, como con rsLoRA.
+        saved_dora = bool(saved_cfg.get("use_dora", False))
+        if saved_dora != USE_DORA:
+            print("\n[!] " + t("Resuming with the checkpoint's DoRA: {a} (settings ask for {b}; it applies to new trainings).",
+                              a=saved_dora, b=USE_DORA))
+        USE_DORA = saved_dora
 
     if USE_LOKR:
-        USE_RSLORA = USE_LORAPLUS = False
+        USE_RSLORA = USE_LORAPLUS = USE_DORA = False
         model = lora_options.LoKrModel(unet, target_modules, LORA_RANK, LORA_ALPHA, LOKR_FACTOR)
     else:
         lora_config = LoraConfig(r=LORA_RANK, lora_alpha=LORA_ALPHA, lora_dropout=0.0,
-                                 target_modules=target_modules, init_lora_weights=True, use_rslora=USE_RSLORA)
+                                 target_modules=target_modules, init_lora_weights=True, use_rslora=USE_RSLORA,
+                                 use_dora=USE_DORA)
         model = get_peft_model(unet, lora_config)
     for p in model.parameters():
         if p.requires_grad:
