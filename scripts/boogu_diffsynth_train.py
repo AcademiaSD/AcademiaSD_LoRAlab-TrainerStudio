@@ -54,6 +54,7 @@ class BooguImageTrainingModule(DiffusionTrainingModule):
         use_rslora=False,
         use_lokr=False,
         lokr_factor=16,
+        use_dora=False,
         lora_checkpoint=None,
         preset_lora_path=None,
         preset_lora_model=None,
@@ -89,6 +90,8 @@ class BooguImageTrainingModule(DiffusionTrainingModule):
         self.lora_alpha = int(lora_alpha if lora_alpha is not None else lora_rank)
         self.use_lokr = bool(use_lokr)
         self.use_rslora = bool(use_rslora and not self.use_lokr)
+        # DoRA (Liu et al., 2024): cada fila de salida aprende su magnitud aparte de la dirección (PEFT use_dora).
+        self.use_dora = bool(use_dora and not self.use_lokr)
         self.lokr_factor = max(1, int(lokr_factor))
         self.switch_pipe_to_training_mode(
             self.pipe,
@@ -146,6 +149,7 @@ class BooguImageTrainingModule(DiffusionTrainingModule):
             lora_alpha=alpha,
             target_modules=target_modules,
             use_rslora=self.use_rslora,
+            use_dora=self.use_dora,
         )
         model = inject_adapter_in_model(config, model)
         if upcast_dtype is not None:
@@ -257,6 +261,7 @@ def boogu_image_parser():
     parser.add_argument("--lora_alpha", type=int, default=None)
     parser.add_argument("--use_rslora", action="store_true")
     parser.add_argument("--use_lokr", action="store_true")
+    parser.add_argument("--use_dora", action="store_true")
     parser.add_argument("--lokr_factor", type=int, default=16)
     parser.add_argument("--lora_batch_size", type=int, default=1)
     parser.add_argument("--total_steps", type=int, default=500)
@@ -593,7 +598,7 @@ def run_boogu_preview(model, dataset, args, step):
 class BooguModelLogger(ModelLogger):
     def __init__(self, *args, use_lokr=False, lokr_alpha=16, lora_rank=32,
                  lokr_factor=16,
-                 lora_alpha=32, use_rslora=False, use_loraplus=False,
+                 lora_alpha=32, use_rslora=False, use_loraplus=False, use_dora=False,
                  loraplus_ratio=16, output_name="boogu_lora", trigger_word="",
                  train_args=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -604,6 +609,7 @@ class BooguModelLogger(ModelLogger):
         self.lora_alpha = lora_alpha
         self.use_rslora = use_rslora
         self.use_loraplus = use_loraplus
+        self.use_dora = use_dora
         self.loraplus_ratio = loraplus_ratio
         self.output_name = output_name
         self.trigger_word = trigger_word
@@ -637,6 +643,10 @@ class BooguModelLogger(ModelLogger):
             metadata["rslora_train_alpha"] = str(self.lora_alpha)
         if self.use_loraplus and not self.use_lokr:
             metadata["loraplus_ratio"] = str(self.loraplus_ratio)
+        if self.use_dora and not self.use_lokr:
+            import json
+            metadata["dora"] = "true"
+            metadata["ss_network_args"] = json.dumps({"rslora": bool(self.use_rslora), "dora_wd": True})
         if self.use_lokr:
             metadata["lokr_factor"] = str(self.lokr_factor)
         if self.trigger_word:
@@ -661,10 +671,14 @@ class BooguModelLogger(ModelLogger):
             else:
                 state = {}
                 for key, value in get_peft_model_state_dict(unwrapped.pipe.dit).items():
+                    if "lora_magnitude_vector" in key:
+                        continue            # DoRA: va como dora_scale, abajo
                     key = "diffusion_model." + key.replace("base_model.model.", "")
                     state[key] = value.to(torch.bfloat16).cpu().contiguous()
                     if key.endswith(".lora_A.weight"):
                         state[key[:-len(".lora_A.weight")] + ".alpha"] = torch.tensor(float(alpha))
+                # DoRA: diffusion_model.<capa>.dora_scale (ver lora_options.dora_scales).
+                state.update(lora_options.dora_export(unwrapped.pipe.dit, lambda name: "diffusion_model." + name))
                 metadata = self._metadata("peft.LoraModel", alpha)
             os.makedirs(self.output_path, exist_ok=True)
             save_file(state, os.path.join(self.output_path, file_name),
@@ -706,6 +720,7 @@ def main():
             use_rslora=args.use_rslora and not args.use_lokr,
             use_lokr=args.use_lokr,
             lokr_factor=args.lokr_factor,
+            use_dora=args.use_dora and not args.use_lokr,
             lora_checkpoint=args.lora_checkpoint,
             preset_lora_path=args.preset_lora_path,
             preset_lora_model=args.preset_lora_model,
@@ -736,6 +751,7 @@ def main():
         use_rslora=args.use_rslora and not args.use_lokr,
         use_loraplus=args.use_loraplus,
         loraplus_ratio=args.loraplus_ratio,
+        use_dora=args.use_dora and not args.use_lokr,
         output_name=args.output_path.rstrip("/\\").split("/")[-1].split("\\")[-1],
         trigger_word=args.trigger_word,
         train_args=args,

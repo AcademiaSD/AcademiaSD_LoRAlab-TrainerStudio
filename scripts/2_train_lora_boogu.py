@@ -146,6 +146,8 @@ def main():
             args += ["--extra_inputs", "edit_image"]
         if train_cfg.get("use_rslora", False) and not train_cfg.get("use_lokr", False):
             args.append("--use_rslora")
+        if train_cfg.get("use_dora", False) and not train_cfg.get("use_lokr", False):
+            args.append("--use_dora")
         if train_cfg.get("use_lokr", False):
             args += ["--use_lokr", "--lokr_factor", str(max(1, int(train_cfg.get("lokr_factor", 16))))]
         elif train_cfg.get("use_loraplus", False):
@@ -182,6 +184,7 @@ def main():
         print(f"  {t('LR Scheduler'):<22}: {lora_options.lr_scheduler_label(train_cfg.get('lr_scheduler', 'cosine'), int(train_cfg.get('warmup_steps', 0)), int(train_cfg.get('lr_cycles', 1)))}")
         print(f"  {'LoRA Rank/Alpha':<22}: {args[args.index('--lora_rank') + 1]}/{args[args.index('--lora_alpha') + 1]}")
         print(f"  {'rsLoRA / LoRA+ / LoKr':<22}: {'on' if '--use_rslora' in args else 'off'} / {'on' if '--use_loraplus' in args else 'off'} / {'on' if '--use_lokr' in args else 'off'}")
+        print(f"  {'DoRA':<22}: {'on' if '--use_dora' in args else 'off'}")
         print(f"  {'Batch / Grad Accum':<22}: {batch_size}/{grad_accum}")
         print(f"  {t('Save Every'):<22}: {save_every}")
         print(f"  {t('Preview Every'):<22}: {train_cfg.get('preview_every', 0)}", flush=True)

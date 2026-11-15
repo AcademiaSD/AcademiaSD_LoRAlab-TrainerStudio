@@ -104,6 +104,7 @@ DEFAULTS = {
     "use_rslora": False,
     "use_loraplus": False,
     "loraplus_ratio": 16.0,
+    "use_dora": False,
     "weight_decay": 0.0,
     "max_grad_norm": 1.0,
 
@@ -211,6 +212,10 @@ LORA_ALPHA = int(cfg_get("lora_alpha", DEFAULTS["lora_alpha"]))
 USE_RSLORA = bool(cfg_get("use_rslora", DEFAULTS["use_rslora"]))
 USE_LORAPLUS = bool(cfg_get("use_loraplus", DEFAULTS["use_loraplus"]))
 LORAPLUS_RATIO = float(cfg_get("loraplus_ratio", DEFAULTS["loraplus_ratio"]))
+# DoRA (Liu et al., 2024): cada fila de salida aprende su magnitud aparte de la dirección (la de B·A).
+# Es una variante de LoRA (PEFT, use_dora): convive con rsLoRA y LoRA+. Cada paso descomprime el peso NF4
+# de cada capa para su norma, así que es más lento y pide algo más de VRAM.
+USE_DORA = bool(cfg_get("use_dora", DEFAULTS["use_dora"]))
 WEIGHT_DECAY = float(cfg_get("weight_decay", DEFAULTS["weight_decay"]))
 MAX_GRAD_NORM = float(cfg_get("max_grad_norm", DEFAULTS["max_grad_norm"]))
 
@@ -291,6 +296,7 @@ print(f"  {t('Learning Rate'):<28}: {LR}")
 print(f"  {t('LR Scheduler'):<28}: {lora_options.lr_scheduler_label(LR_SCHEDULER, WARMUP_STEPS, LR_CYCLES)}")
 print("  LoRA Rank/Alpha             : {}/{}".format(LORA_RANK, LORA_ALPHA))
 print("  rsLoRA / LoRA+              : {} / {}".format("on" if USE_RSLORA else "off", "x{:g}".format(LORAPLUS_RATIO) if USE_LORAPLUS else "off"))
+print("  DoRA                        : {}".format("on" if USE_DORA else "off"))
 print("  Batch / Grad Accum          : {}/{}".format(BATCH_SIZE, GRAD_ACCUM_STEPS))
 print("  Max Text Tokens             : {}".format(MAX_TEXT_TOKENS))
 print("  LoRA Only Attention         : {}".format("ON" if LORA_ONLY_ATTN else "OFF"))
@@ -1443,9 +1449,13 @@ def build_lora_metadata(step):
         meta["rslora_train_alpha"] = LORA_ALPHA
     if USE_LORAPLUS:
         meta["loraplus_ratio"] = LORAPLUS_RATIO
-    if USE_RSLORA or USE_LORAPLUS:
-        meta["ss_network_args"] = json.dumps({"rslora": USE_RSLORA,
-                                              "loraplus_lr_ratio": LORAPLUS_RATIO if USE_LORAPLUS else None})
+    if USE_DORA:
+        meta["dora"] = "true"
+    if USE_RSLORA or USE_LORAPLUS or USE_DORA:
+        args = {"rslora": USE_RSLORA, "loraplus_lr_ratio": LORAPLUS_RATIO if USE_LORAPLUS else None}
+        if USE_DORA:
+            args["dora_wd"] = True          # convención de kohya / LyCORIS
+        meta["ss_network_args"] = json.dumps(args)
 
     if TRIGGER_WORD:
         meta["trigger_word"] = TRIGGER_WORD
@@ -1475,8 +1485,8 @@ def save_lora(model, path, step):
     state = {}
 
     for name, tensor in model.state_dict().items():
-        if "lora_" not in name:
-            continue
+        if "lora_" not in name or "lora_magnitude_vector" in name:
+            continue                        # DoRA: la magnitud va como dora_scale, abajo
 
         clean = name.replace("base_model.model.", "")
         clean = clean.replace(".default.", ".")
@@ -1489,6 +1499,10 @@ def save_lora(model, path, step):
         t = t.to(torch.bfloat16).contiguous()
 
         state[prefix + clean] = t
+
+    # DoRA: <capa>.dora_scale (ver lora_options.dora_scales). No depende de dónde va la escala alpha/rank
+    # (aquí horneada en lora_B): sale del peso final de cada fila.
+    state.update(lora_options.dora_export(model, lambda name: prefix + name))
 
     save_file(
         state,
@@ -2494,7 +2508,7 @@ def train_ltx23():
     global CURRENT_TRANSFORMER
     global CURRENT_AUDIO_CHANNELS
     global ACTIVATION_OFFLOAD_ACTIVE
-    global LORA_RANK, LORA_ALPHA, USE_RSLORA, USE_LORAPLUS, LORAPLUS_RATIO  # al reanudar se toman del checkpoint
+    global LORA_RANK, LORA_ALPHA, USE_RSLORA, USE_LORAPLUS, LORAPLUS_RATIO, USE_DORA  # al reanudar se toman del checkpoint
 
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.benchmark = True
@@ -2638,6 +2652,12 @@ def train_ltx23():
                               "(settings ask for rsLoRA {a2}, LoRA+ {b2}; they apply to new trainings).",
                               a=saved_opts[0], b=saved_opts[1], a2=USE_RSLORA, b2=USE_LORAPLUS))
         USE_RSLORA, USE_LORAPLUS, LORAPLUS_RATIO = saved_opts
+        # DoRA también lo guarda PEFT en adapter_config.json; el checkpoint manda, como con rsLoRA.
+        saved_dora = bool(saved_cfg.get("use_dora", False))
+        if saved_dora != USE_DORA:
+            print("\n[!] " + t("Resuming with the checkpoint's DoRA: {a} (settings ask for {b}; it applies to new trainings).",
+                              a=saved_dora, b=USE_DORA))
+        USE_DORA = saved_dora
 
     lora_config = LoraConfig(
         r=LORA_RANK,
@@ -2648,6 +2668,7 @@ def train_ltx23():
         task_type=None,
         init_lora_weights=True,
         use_rslora=USE_RSLORA,
+        use_dora=USE_DORA,
     )
 
     model = get_peft_model(transformer, lora_config)
