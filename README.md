@@ -8,6 +8,10 @@
 
 What was added, newest first. Each entry links to its commit.
 
+**2026-11-15**
+
+- **Dataset Manager folds like the Training Chart** in every trainer: click its title to hide or show it (▶ / ▼), and the page remembers it. Closed, only the title with the image and caption counts stays [`64cba83`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/64cba83)
+
 **2026-11-14**
 
 - **Preview Every = 0 stays off** in every trainer: a saved 0 was replaced by the field's default when the trainer opened (50 in Fibo 2.0). The label now reads *Preview Every (0 = off)* and the **2b. Training Previews** header shows *every N steps* or *off*, also while collapsed [`b80d1f5`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/b80d1f5) ([#78](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/issues/78))
