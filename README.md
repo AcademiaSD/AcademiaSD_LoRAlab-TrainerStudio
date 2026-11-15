@@ -10,6 +10,7 @@ What was added, newest first. Each entry links to its commit.
 
 **2026-11-15**
 
+- <img src="https://img.shields.io/badge/MAJOR%20UPDATE-7c3aed?style=for-the-badge" alt="MAJOR UPDATE" height="22"> **DoRA in 11 trainers** — a **DoRA** checkbox under LoRA Rank / Alpha in Z-Image, FLUX.1 Dev, FLUX.2 Klein 9B, FLUX.3 Image Klein, Krea 2, Qwen-Image 2.1, Qwen-Image 2512, Ming-Image, MOSS-Image, Anima and Wan 2.2. Each layer also learns the size of every output row, apart from the usual LoRA: it often follows the dataset more closely at the same rank, with slower steps. It works with rsLoRA and LoRA+, and the file loads in ComfyUI like any LoRA, with `_dora` in its name. Trained and checked so far in Z-Image, MOSS-Image and FLUX.1 Dev ([details](#️-lora-options-rslora-lora-dora-and-lokr)) [`cf599ab`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/cf599ab)
 - **Dataset Manager folds like the Training Chart** in every trainer: click its title to hide or show it (▶ / ▼), and the page remembers it. Closed, only the title with the image and caption counts stays [`64cba83`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/64cba83)
 
 **2026-11-14**
@@ -396,7 +397,7 @@ Queue trainings and pre-caches, from one trainer or several, and they run one af
 
 ---
 
-## 🎛️ LoRA options: rsLoRA, LoRA+ and LoKr
+## 🎛️ LoRA options: rsLoRA, LoRA+, DoRA and LoKr
 
 Under **LoRA Rank / Alpha**, the trainers have extra checkboxes. They change **how** the LoRA learns, so they are fixed for the whole training (to change them, *Delete Training* and start again; the pre-cache is reused).
 
@@ -404,11 +405,13 @@ Under **LoRA Rank / Alpha**, the trainers have extra checkboxes. They change **h
 | :--- | :--- | :--- |
 | **rsLoRA** | Scales the LoRA by `alpha/√rank` instead of `alpha/rank`, so high ranks keep learning. Ticking it lowers alpha to keep the same strength. | Z-Image, FLUX.2 Klein 9B, Qwen-Image 2.1, Qwen-Image 2512, Krea 2, Anima, Ideogram 4, ERNIE-Image, MOSS-Image, SDXL, LTX-2.3, MiniMax-H3 |
 | **LoRA+** | The `B` matrix of every layer learns 16× faster than `A`: usually the same quality in fewer steps. Lower the LR if it burns early. | same as rsLoRA |
-| **LoKr** + **Factor** | Replaces LoRA with a Kronecker product (LyCORIS). Much smaller files (~3 MB instead of ~40 MB at rank 8), good for characters with small datasets, more sensitive to the LR. rsLoRA and LoRA+ turn off. | Z-Image, FLUX.2 Klein 9B, Qwen-Image 2.1, Krea 2, Anima, ERNIE-Image, MOSS-Image |
+| **DoRA** | Each layer also learns the size (magnitude) of every output row, apart from its direction, which is the usual LoRA. It often follows the dataset more closely at the same rank. Every step is slower and uses some more VRAM, because the 4-bit weight of each layer is unpacked to measure it. Works with rsLoRA and LoRA+. | Z-Image, FLUX.1 Dev, FLUX.2 Klein 9B, FLUX.3 Image Klein, Krea 2, Qwen-Image 2.1, Qwen-Image 2512, Ming-Image, MOSS-Image, Anima, Wan 2.2 |
+| **LoKr** + **Factor** | Replaces LoRA with a Kronecker product (LyCORIS). Much smaller files (~3 MB instead of ~40 MB at rank 8), good for characters with small datasets, more sensitive to the LR. rsLoRA, LoRA+ and DoRA turn off. | Z-Image, FLUX.2 Klein 9B, Qwen-Image 2.1, Krea 2, Anima, ERNIE-Image, MOSS-Image |
 
-- The exported file is a **standard LoRA / LyCORIS file** that ComfyUI and Forge load as usual (with rsLoRA, the alpha is converted so it acts exactly as trained).
-- **Send to Models** and **⬇ Download LoRA** add **`_rs`**, **`_plus`** or **`_lokr`** to the name, taken from the file's own metadata, so you always know how it was trained. The *Final LoRA Filename* field shows the suffix as you tick the boxes.
-- No extra VRAM: LoKr never builds the full weight matrix, and the other two only change the scaling and the optimizer.
+- The exported file is a **standard LoRA / LyCORIS file** that ComfyUI and Forge load as usual (with rsLoRA, the alpha is converted so it acts exactly as trained; with DoRA, every layer carries a `dora_scale`, stored the way ComfyUI applies it).
+- **Send to Models** and **⬇ Download LoRA** add **`_rs`**, **`_plus`**, **`_dora`** or **`_lokr`** to the name, taken from the file's own metadata, so you always know how it was trained. The *Final LoRA Filename* field shows the suffix as you tick the boxes.
+- No extra VRAM with rsLoRA, LoRA+ or LoKr: LoKr never builds the full weight matrix, and the other two only change the scaling and the optimizer. DoRA is the exception: slower steps and some more VRAM.
+- **Testing a DoRA in ComfyUI:** use a full caption like the ones in your dataset. A very short prompt with a high CFG and a long negative loses the likeness with a DoRA and with a plain LoRA alike.
 
 **Which one to use.** All of them are optional: with no box ticked the trainer works exactly as before. Train the same dataset with the same steps, seed and LR to compare them; the pre-cache is shared, so only *Delete Training* is needed between runs.
 
@@ -418,6 +421,7 @@ Under **LoRA Rank / Alpha**, the trainers have extra checkboxes. They change **h
 | **rsLoRA** | rsLoRA | Higher ranks (32-64) for styles or many concepts: with plain LoRA, raising the rank adds little | Rank 32; the alpha it sets for you (≈ alpha/√rank) | `_rs` |
 | **LoRA+** | LoRA+ | Reaching the same result in fewer steps | Same LR; check the intermediate checkpoints, and lower the LR if it burns early | `_plus` |
 | **rsLoRA + LoRA+** | both | The two together: stable high ranks that also learn faster. They do not conflict: one changes the scaling, the other the optimizer | Rank 32, the alpha rsLoRA sets, and an LR about 2× lower than usual, because both make the training stronger | `_rs_plus` |
+| **DoRA** | DoRA | Likeness that a plain LoRA does not reach at the same rank, when slower steps are acceptable. Can be combined with rsLoRA and LoRA+ | The trainer's defaults: same rank, alpha and LR as LoRA | `_dora` |
 | **LoKr** | LoKr (+ Factor) | Characters and objects with small datasets, or when file size matters | Rank 8, alpha 8, factor 16, same LR as LoRA; factor 8 or a higher LR if it learns too little | `_lokr` |
 
 ### LR scheduler
@@ -1088,6 +1092,7 @@ Code adapted or copied from other projects, and the work it builds on:
 | [ADLX](https://github.com/GPUOpen-LibrariesAndSDKs/ADLX) by AMD | AMD GPU VRAM and temperature on Windows (`scripts/gpu_stats.py`, through the `amd-adlx` package the AMD installer installs) | ADLX SDK License |
 | [LyCORIS](https://github.com/KohakuBlueleaf/LyCORIS) by KohakuBlueleaf | The LoKr method in `scripts/lora_options.py`: Kronecker factorization, initialization and `lokr_*` key layout (reimplemented for NF4 layers) | Apache-2.0 |
 | [rsLoRA](https://arxiv.org/abs/2312.03732) (Kalajdzievski) and [LoRA+](https://arxiv.org/abs/2402.12354) (Hayou, Ghosh, Yu) | The `alpha/√rank` scaling and the separate learning rate for `lora_B` | papers |
+| [DoRA](https://arxiv.org/abs/2402.09353) (Liu et al.) | The magnitude / direction decomposition, trained through PEFT's `use_dora` | paper |
 | [Diffusers FLUX.1 LoRA trainer](https://github.com/huggingface/diffusers/blob/main/examples/dreambooth/train_dreambooth_lora_flux.py) | FLUX.1 training recipe: velocity target and guidance input, followed in `scripts/2_train_lora_flux1.py` | Apache-2.0 |
 | [Diffusers FLUX.3 Klein LoRA trainer](https://github.com/huggingface/diffusers/blob/main/examples/dreambooth/train_dreambooth_lora_flux3_klein.py) | FLUX.3 Klein training recipe: timestep shift, position ids, text window and LoRA targets, followed in `scripts/2_train_lora_flux3klein.py` | Apache-2.0 |
 | [MOSS-Image](https://github.com/OpenMOSS/MOSS-Image) by the OpenMOSS Team | The MOSS-Image transformer of `pipeline_moss_image.py`, adapted in `scripts/moss_image_model.py` (NF4 layers, gradient checkpointing); prompt encoding, preview guidance, training noise schedule (technical report) and caption guide | Apache-2.0 |
