@@ -8,6 +8,10 @@
 
 What was added, newest first. Each entry links to its commit.
 
+**2026-11-16**
+
+- **DoRA NormFix** — a **NormFix** checkbox next to DoRA, on by default, in the 17 DoRA trainers. A DoRA trained on the 4-bit model could lose the likeness in ComfyUI even with good previews, because ComfyUI measures the layers on the full model; with NormFix the file is saved with the original model's sizes, and the likeness is the same as in the previews. The trainer downloads the small `dora_norms.safetensors` it needs (5–20 MB) before training if your model folder does not have it ([details](#️-lora-options-rslora-lora-dora-and-lokr)) [`3922b7e`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/3922b7e)
+
 **2026-11-15**
 
 - **A finished job as a template** — in the **History** of the queue page, the ⧉ button opens that job's trainer with the settings it trained with, in a copy of their own: change what you want, give it another Project Name and train again. Your trainer settings are not touched ([how it works](#-job-queue)) [`0b9fd27`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/0b9fd27) ([#84](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/issues/84))
@@ -409,6 +413,7 @@ Under **LoRA Rank / Alpha**, the trainers have extra checkboxes. They change **h
 | **rsLoRA** | Scales the LoRA by `alpha/√rank` instead of `alpha/rank`, so high ranks keep learning. Ticking it lowers alpha to keep the same strength. | Z-Image, FLUX.2 Klein 9B, Qwen-Image 2.1, Qwen-Image 2512, Krea 2, Anima, Ideogram 4, ERNIE-Image, MOSS-Image, SDXL, LTX-2.3, MiniMax-H3 |
 | **LoRA+** | The `B` matrix of every layer learns 16× faster than `A`: usually the same quality in fewer steps. Lower the LR if it burns early. | same as rsLoRA |
 | **DoRA** | Each layer also learns the size (magnitude) of every output row, apart from its direction, which is the usual LoRA. It often follows the dataset more closely at the same rank. Every step is slower and uses some more VRAM, because the 4-bit weight of each layer is unpacked to measure it. Works with rsLoRA and LoRA+. | Z-Image, FLUX.1 Dev, FLUX.2 Klein 9B, FLUX.3 Image Klein, Krea 2, Qwen-Image 2.1, Qwen-Image 2512, Ming-Image, MOSS-Image, Anima, Wan 2.2, ERNIE-Image, Fibo 2.0, Ideogram 4, SDXL, LTX 2.3, Boogu |
+| **NormFix** (with DoRA, on by default) | Saves the `dora_scale` with the row sizes of the original model instead of those of the 4-bit copy it trains on. ComfyUI measures them on the model it loads, and the 4-bit copy is off by more than what DoRA learns: without NormFix a DoRA can lose the likeness in ComfyUI even when the previews look right. Only the saved file changes, not the training. The sizes come from `dora_norms.safetensors` in the NF4 model folder, downloaded before training when it is missing (SDXL and Anima take them from the original weights when loading). | every DoRA trainer |
 | **LoKr** + **Factor** | Replaces LoRA with a Kronecker product (LyCORIS). Much smaller files (~3 MB instead of ~40 MB at rank 8), good for characters with small datasets, more sensitive to the LR. rsLoRA, LoRA+ and DoRA turn off. | Z-Image, FLUX.2 Klein 9B, Qwen-Image 2.1, Krea 2, Anima, ERNIE-Image, MOSS-Image |
 
 - The exported file is a **standard LoRA / LyCORIS file** that ComfyUI and Forge load as usual (with rsLoRA, the alpha is converted so it acts exactly as trained; with DoRA, every layer carries a `dora_scale`, stored the way ComfyUI applies it).
