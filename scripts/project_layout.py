@@ -97,6 +97,7 @@ OUTPUT_NAME_PREFIXES = (
     "klein9b_lora_output",
     "krea2_lora_output",
     "ltx23_lora_output",
+    "ltx25_lora_output",
     "minimaxh3_lora_output",
     "minimaxh3image_lora_output",
     "mingimage_lora_output",

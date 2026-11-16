@@ -12,6 +12,13 @@
       "run": "Run_LoRAlab-LTX23.bat"
     },
     {
+      "id": "ltx25",
+      "name": "LTX 2.5",
+      "description": "Video LoRAs (8 GB with block swap)",
+      "image": "assets/ltx25/portada.jpg",
+      "run": "Run_LoRAlab-LTX25.bat"
+    },
+    {
       "id": "krea2",
       "name": "Krea 2",
       "description": "Image LoRAs",
