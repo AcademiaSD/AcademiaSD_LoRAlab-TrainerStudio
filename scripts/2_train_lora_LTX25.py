@@ -1176,18 +1176,29 @@ def load_cached_entries(cache_dir, audio_channels, max_text_tokens=0):
         audio_latent = pin_cpu_tensor(audio_latent)
 
         has_audio = False
+        ref_downscale = 1
         info_path = os.path.join(cache_dir, "{}_info.json".format(base))
         if os.path.exists(info_path):
             try:
                 with open(info_path, "r", encoding="utf-8") as f:
-                    has_audio = bool(json.load(f).get("has_audio", False))
+                    info = json.load(f)
+                has_audio = bool(info.get("has_audio", False))
+                ref_downscale = int((info.get("reference") or {}).get("downscale", 1) or 1)
             except Exception:
                 pass
+
+        # IC-LoRA (edición): latente limpio de la referencia ("before").
+        ref_path = os.path.join(cache_dir, "{}_ref_latent.pt".format(base))
+        ref_latent = None
+        if os.path.exists(ref_path):
+            ref_latent = pin_cpu_tensor(torch.load(ref_path, map_location="cpu", weights_only=True).to(COMPUTE_DTYPE))
 
         entries.append(
             {
                 "name": base,
                 "has_audio": has_audio,
+                "ref": ref_latent,
+                "ref_downscale": ref_downscale,
                 "video": video_latent,
                 "audio": audio_latent,
                 "prompt": prompt_result,
@@ -1674,12 +1685,18 @@ def preview_forward(
         "return_dict": False,
     }
 
+    n_tgt = None
+    if PREVIEW_REF is not None:
+        n_tgt = ic_extend(forward_kwargs, PREVIEW_REF[0], PREVIEW_REF[1], device=video_tokens.device)
+
     if CURRENT_TRANSFORMER is not None:
         forward_kwargs = filter_forward_kwargs(forward_kwargs, CURRENT_TRANSFORMER.forward)
     else:
         forward_kwargs = filter_forward_kwargs(forward_kwargs, model.forward)
 
     output = model(**forward_kwargs)
+    if n_tgt is not None and isinstance(output, tuple) and len(output) > 0:
+        output = (output[0][:, :n_tgt],) + tuple(output[1:])
 
     if isinstance(output, tuple):
         if len(output) == 0:
@@ -2366,6 +2383,11 @@ def run_preview_diagnostic(
         patch_size_t = int(getattr(CURRENT_CONFIG, "patch_size_t", 1))
 
         video_clean, audio_clean = prepare_preview_tensors(entry, device)
+        # Edición: la preview genera el "after" a partir del "before" de esta muestra.
+        global PREVIEW_REF
+        PREVIEW_REF = (entry["ref"], entry.get("ref_downscale", 1)) if entry.get("ref") is not None else None
+        if PREVIEW_REF is not None:
+            print("  [Preview-Diag] " + t("Edit: reference of {name}", name=entry.get("name", "")))
         video_clean = align_video_latent_to_patch(video_clean, patch_size, patch_size_t)
 
         video_text = video_text.to(device, dtype=COMPUTE_DTYPE)
@@ -2631,6 +2653,38 @@ CURRENT_AUDIO_CHANNELS = None
 # ===========================================================================
 # TRAIN
 # ===========================================================================
+def ic_extend(forward_kwargs, ref_latent, ref_downscale, device="cuda"):
+    """
+    IC-LoRA, como LTX2Pipeline IC-LoRA (VideoConditionByReferenceLatent): los tokens de la referencia van LIMPIOS
+    al final de la secuencia, [objetivo | referencia], con timestep 0, y con las coordenadas de posición del espacio
+    del objetivo (las espaciales x ref_downscale si la referencia está reducida). Devuelve cuántos tokens son del
+    objetivo, para cortar la predicción.
+    """
+    hs = forward_kwargs["hidden_states"]
+    B, n_tgt = hs.shape[0], hs.shape[1]
+    ref = ref_latent.to(device, dtype=hs.dtype, non_blocking=True)
+    if ref.ndim == 4:
+        ref = ref.unsqueeze(0)
+    ref_tokens = patch_video_latent(ref).expand(B, -1, -1)
+    rope = CURRENT_TRANSFORMER.rope
+    tgt_coords = rope.prepare_video_coords(B, forward_kwargs["num_frames"], forward_kwargs["height"],
+                                           forward_kwargs["width"], device, fps=FRAME_RATE)
+    ref_coords = rope.prepare_video_coords(B, ref.shape[2], ref.shape[3], ref.shape[4], device, fps=FRAME_RATE)
+    if ref_downscale != 1:
+        ref_coords[:, 1] = ref_coords[:, 1] * ref_downscale
+        ref_coords[:, 2] = ref_coords[:, 2] * ref_downscale
+    ts = forward_kwargs["timestep"]
+    if ts.ndim == 1:
+        ts = ts.view(B, 1).expand(B, n_tgt)
+    forward_kwargs["hidden_states"] = torch.cat([hs, ref_tokens], dim=1)
+    forward_kwargs["timestep"] = torch.cat([ts, torch.zeros((B, ref_tokens.shape[1]), device=device, dtype=ts.dtype)], dim=1)
+    forward_kwargs["video_coords"] = torch.cat([tgt_coords, ref_coords.to(tgt_coords.dtype)], dim=2)
+    return n_tgt
+
+
+PREVIEW_REF = None   # (latente de referencia, downscale) de la muestra de la preview, si es un par de edición
+
+
 def sample_sigma(batch, seq_len, device="cuda"):
     """
     Sigma por muestra. "shifted_logit_normal" es el muestreador por defecto de ltx-trainer (timestep_samplers.py):
@@ -2686,9 +2740,12 @@ def enable_reentrant_checkpointing(transformer):
 def _max_tokens(entries):
     best = 0
     for e in entries:
-        lat = e.get("video")
-        if torch.is_tensor(lat) and lat.ndim >= 4:
-            best = max(best, int(lat.shape[-3] * lat.shape[-2] * lat.shape[-1]))
+        n = 0
+        for key in ("video", "ref"):   # la referencia de un par de edición alarga la secuencia
+            lat = e.get(key)
+            if torch.is_tensor(lat) and lat.ndim >= 4:
+                n += int(lat.shape[-3] * lat.shape[-2] * lat.shape[-1])
+        best = max(best, n)
     return best
 
 
@@ -3176,6 +3233,10 @@ def train_ltx25():
                 "return_dict": False,
             }
 
+            n_tgt = None
+            if entry.get("ref") is not None:
+                n_tgt = ic_extend(forward_kwargs, entry["ref"], entry.get("ref_downscale", 1))
+
             forward_kwargs = filter_forward_kwargs(forward_kwargs, transformer.forward)
 
             if ACTIVATION_OFFLOAD_ACTIVE:
@@ -3217,6 +3278,9 @@ def train_ltx25():
 
             if pred_video is None:
                 raise RuntimeError(t("Could not get the video prediction."))
+
+            if n_tgt is not None:
+                pred_video = pred_video[:, :n_tgt]   # la pérdida, solo sobre el objetivo
 
             output = None
 

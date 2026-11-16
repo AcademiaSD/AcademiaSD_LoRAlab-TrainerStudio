@@ -88,6 +88,15 @@ DEFAULTS = {
         "the setting, the lighting and the colors. Do not invent a name and do not mention "
         "that this is a video or a clip."
     ),
+    # Edición (LoRA Type = Edit en el pre-cache): de cada par nombre_before / nombre_after se escribe nombre.txt con
+    # la INSTRUCCIÓN que convierte el antes en el después (como el captioner de Qwen-Image 2512).
+    "caption_edit_prompt": (
+        "The first image is the original and the second image is the edited result. Write ONE "
+        "imperative instruction, in at most 40 words, that turns the first image into the second. "
+        "Start with a verb such as Colorize, Remove, Replace, Change, Add or Make. Say what changes "
+        "and, briefly, what must stay the same. Do not describe content that does not change, do "
+        "not mention 'first image' or 'second image', and write no preamble."
+    ),
     # Fotogramas que ve el captioner, repartidos por el tramo entrenable del clip.
     "caption_video_frames": 8,
     "max_new_tokens": 300,
@@ -121,6 +130,7 @@ def load_config():
     # En LTX-2.5 num_frames del pre-cache es el de las imágenes (1); el de los clips es max_frames.
     if precache.get("max_frames"):
         cfg["num_frames"] = int(precache["max_frames"])
+    cfg["lora_type"] = str(precache.get("lora_type", "normal")).strip().lower()
     cfg.update({k: v for k, v in read_json(CONFIG_PATH).items() if v != ""})
     return cfg
 
@@ -214,6 +224,72 @@ def with_trigger(trigger, caption):
     return f"{trigger}, {caption}"
 
 
+def first_frame(path, side):
+    """Una imagen de la muestra: la propia imagen o el fotograma central del tramo entrenable del clip."""
+    if path.lower().endswith(wan.VIDEO_EXTS):
+        info = wan.video_info(path)
+        if info is None:
+            raise RuntimeError(t("ffprobe could not read the video"))
+        w, h, _, duration = info
+        window = wan.clip_frames(duration, 49)
+        scale = min(1.0, side / max(w, h)) if side else 1.0
+        vw, vh = max(32, round(w * scale / 32) * 32), max(32, round(h * scale / 32) * 32)
+        clip = wan.read_video(path, window, vw, vh)
+        return Image.fromarray(clip[len(clip) // 2])
+    with Image.open(path) as img:
+        return shrink(img.convert("RGB"), side)
+
+
+def caption_pair(model, processor, before, after, cfg):
+    images = [before, after]
+    messages = [{"role": "user", "content": [{"type": "image", "image": im} for im in images]
+                 + [{"type": "text", "text": cfg["caption_edit_prompt"]}]}]
+    text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    return generate(model, processor, processor(text=[text], images=images, return_tensors="pt"), cfg)
+
+
+def main_edit(cfg, dataset):
+    files = sorted(f for f in os.listdir(dataset) if f.lower().endswith(wan.IMAGE_EXTS + wan.VIDEO_EXTS))
+    stems = {os.path.splitext(f)[0]: f for f in files}
+    pairs = [(s[:-len("_before")], f, stems[s[:-len("_before")] + "_after"]) for s, f in stems.items()
+             if s.endswith("_before") and s[:-len("_before")] + "_after" in stems]
+    pending = [p for p in pairs if cfg["overwrite"] or not (os.path.isfile(os.path.join(dataset, p[0] + ".txt"))
+                                                           and read_text_file(os.path.join(dataset, p[0] + ".txt")).strip())]
+    print(f"  {t('Dataset'):<22}: {os.path.abspath(dataset)}")
+    print(f"  {t('Samples'):<22}: {len(pairs)} {t('before/after pairs')}, {t('{n} to caption', n=len(pending))}")
+    if not pairs:
+        print("[!] " + t("No pairs found. Name them name_before.ext and name_after.ext."))
+        return 1
+    if not pending:
+        print(t("Nothing to do: every file already has a caption."))
+        return 0
+    model, processor = load_captioner(cfg["captioner_dir"])
+    side = int(cfg["max_image_side"])
+    started = time.time()
+    done, failed = 0, []
+    for i, (name, before, after) in enumerate(pending, 1):
+        t0 = time.time()
+        try:
+            caption = caption_pair(model, processor, first_frame(os.path.join(dataset, before), side),
+                                   first_frame(os.path.join(dataset, after), side), cfg)
+            if not caption:
+                raise RuntimeError(t("empty caption"))
+            final = with_trigger(cfg["trigger_word"], caption)
+            with open(os.path.join(dataset, name + ".txt"), "w", encoding="utf-8") as f:
+                f.write(final)
+            done += 1
+            print(f"[{i}/{len(pending)}] {name} | {time.time() - t0:.1f}s", flush=True)
+            print(f"    {final[:200]}{'...' if len(final) > 200 else ''}", flush=True)
+        except Exception as e:
+            failed.append(name)
+            print(f"[{i}/{len(pending)}] {name} {t('FAILED')}: {e}", flush=True)
+    total = time.time() - started
+    print("\n✓ " + t("{n} captions in {time} ({per:.1f}s per file).", n=done, time=f"{int(total // 60)}m{int(total % 60):02d}s", per=total / max(done, 1)))
+    if failed:
+        print("[!] " + t("{n} failed: {names}", n=len(failed), names=', '.join(failed[:10])))
+    return 0
+
+
 def main():
     cfg = load_config()
     dataset = cfg["dataset_path"]
@@ -221,6 +297,9 @@ def main():
     if not os.path.isdir(dataset):
         print("[!] " + t("Dataset folder does not exist: {path}", path=dataset))
         return 1
+
+    if cfg.get("lora_type") == "edit":
+        return main_edit(cfg, dataset)
 
     files = sorted(f for f in os.listdir(dataset) if f.lower().endswith(wan.IMAGE_EXTS + wan.VIDEO_EXTS))
     pending = []

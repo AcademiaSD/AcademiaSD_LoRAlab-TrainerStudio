@@ -410,6 +410,23 @@
                         </label>
                     </div>
 
+                    <div class="form-row">
+                        <div class="form-group" title="Normal: every image or clip with its .txt teaches a character, a style or a motion. Edit (IC-LoRA): pairs name_before / name_after (images or clips) with the instruction in name.txt; the LoRA learns to turn the before into the after. The before goes to the model clean, as a reference, and only the after is learned, as Lightricks' IC-LoRAs. Create Captions writes the instruction of each pair.">
+                            <label>LoRA Type:</label>
+                            <select id="precache_lora_type" class="no-i18n">
+                                <option value="normal" selected>Normal</option>
+                                <option value="edit">Edit (IC-LoRA)</option>
+                            </select>
+                        </div>
+                        <div class="form-group" title="Edit only. Size of the reference (the before) next to the result. x2 encodes it at half the side: a quarter of its tokens, so pairs fit better in 8 GB, at the cost of fine detail from the reference. Use the same value in ComfyUI.">
+                            <label>Reference Downscale:</label>
+                            <select id="precache_ref_downscale" class="no-i18n">
+                                <option value="1" selected>x1 (full size)</option>
+                                <option value="2">x2 (half side)</option>
+                            </select>
+                        </div>
+                    </div>
+
                     <!-- Botones Load JSON y Save JSON -->
                     <div class="btn-row" style="margin-top:12px;">
                         <button type="button" class="btn btn-secondary btn-tall" onclick="triggerLoadJson('precache')">
@@ -1056,6 +1073,8 @@
                     if (p.max_frames) document.getElementById('precache_max_frames').value = String(p.max_frames);
                     if (p.video_target_area) document.getElementById('precache_video_area').value = String(p.video_target_area);
                     if (p.use_audio !== undefined) document.getElementById('precache_use_audio').checked = !!p.use_audio;
+                    if (p.lora_type) document.getElementById('precache_lora_type').value = p.lora_type;
+                    if (p.reference_downscale) document.getElementById('precache_ref_downscale').value = String(p.reference_downscale);
                 }
                 if (data.train) {
                     const t = data.train;
@@ -1138,6 +1157,8 @@
                     if (data.max_frames !== undefined) document.getElementById('precache_max_frames').value = String(data.max_frames);
                     if (data.video_target_area !== undefined) document.getElementById('precache_video_area').value = String(data.video_target_area);
                     if (data.use_audio !== undefined) document.getElementById('precache_use_audio').checked = !!data.use_audio;
+                    if (data.lora_type) document.getElementById('precache_lora_type').value = data.lora_type;
+                    if (data.reference_downscale) document.getElementById('precache_ref_downscale').value = String(data.reference_downscale);
                     
                     if (data.total_steps !== undefined) document.getElementById('train_total_steps').value = data.total_steps;
                     if (data.lr !== undefined) document.getElementById('train_lr').value = data.lr;
@@ -1244,6 +1265,8 @@
                 max_frames: parseInt(document.getElementById('precache_max_frames').value),
                 video_target_area: parseInt(document.getElementById('precache_video_area').value),
                 use_audio: document.getElementById('precache_use_audio').checked,
+                lora_type: document.getElementById('precache_lora_type').value,
+                reference_downscale: parseInt(document.getElementById('precache_ref_downscale').value) || 1,
                 vram_profile: document.getElementById('train_vram_profile').value,
                 cache_dir: document.getElementById('precache_cache_dir').value,
                 preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim()

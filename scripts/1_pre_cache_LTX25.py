@@ -119,6 +119,11 @@ DEFAULTS = {
     # Pista de audio de los clips (Fase 3): se codifica con el VAE de audio. Un clip mudo lleva el latente de un
     # silencio real y queda marcado sin audio (no entra en la pérdida de audio).
     "use_audio": True,
+    # Fase 4, IC-LoRA de edición: pares nombre_before / nombre_after (imágenes o clips) + nombre.txt con la
+    # instrucción. El "after" es el objetivo; el "before" se guarda como referencia limpia. reference_downscale 2
+    # codifica la referencia a la mitad de lado (1/4 de tokens), como los IC-LoRA oficiales de LTX.
+    "lora_type": "normal",
+    "reference_downscale": 1,
     "project_name": "",
     "trigger_word": "",
     "preview_custom_prompt": "",
@@ -205,6 +210,8 @@ NUM_FRAMES = int(cfg_get("num_frames", DEFAULTS["num_frames"]))
 VIDEO_TARGET_AREA = int(cfg_get("video_target_area", DEFAULTS["video_target_area"]))
 MAX_FRAMES = int(cfg_get("max_frames", DEFAULTS["max_frames"]))
 USE_AUDIO = _cfg_bool("use_audio", DEFAULTS["use_audio"])
+LORA_TYPE = str(cfg_get("lora_type", DEFAULTS["lora_type"])).strip().lower()
+REF_DOWNSCALE = max(1, int(cfg_get("reference_downscale", DEFAULTS["reference_downscale"])))
 TRIGGER_WORD = str(cfg_get("trigger_word", DEFAULTS["trigger_word"])).strip()
 PROJECT_NAME = str(cfg_get("project_name", DEFAULTS["project_name"])).strip()
 PREVIEW_CUSTOM_PROMPT = str(cfg_get("preview_custom_prompt", DEFAULTS["preview_custom_prompt"])).strip()
@@ -1143,6 +1150,25 @@ def preprocess_ltx25():
         if f.lower().endswith((".png", ".jpg", ".jpeg", ".webp") + ltx25_model.VIDEO_EXTS)
     )
 
+    # Edición: cada muestra es un par; se recorre el "after" (objetivo) y la referencia sale de REF_FILES.
+    REF_FILES = {}
+    if LORA_TYPE == "edit":
+        stems = {os.path.splitext(f)[0]: f for f in images}
+        pairs = [(s[:-len("_after")], f) for s, f in stems.items()
+                 if s.endswith("_after") and s[:-len("_after")] + "_before" in stems]
+        if not pairs:
+            raise RuntimeError(t("Edit LoRA but there are no name_before / name_after pairs in '{path}'.", path=DATASET_PATH))
+        REF_FILES = {name: stems[name + "_before"] for name, _ in pairs}
+        loose = len(images) - 2 * len(pairs)
+        images = sorted(f for _, f in pairs)
+        print(t("Edit LoRA: {n} before/after pairs", n=len(images)) +
+              (" · " + t("{n} files outside any pair are ignored", n=loose) if loose else "") +
+              " · reference downscale x{}".format(REF_DOWNSCALE))
+
+    def sample_base(filename):
+        stem = os.path.splitext(filename)[0]
+        return stem[:-len("_after")] if LORA_TYPE == "edit" and stem.endswith("_after") else stem
+
     if not images:
         raise RuntimeError(t("No images found in '{path}'. Please add images.", path=DATASET_PATH))
 
@@ -1271,7 +1297,7 @@ def preprocess_ltx25():
     # ------------------------------------------------------------------
     structures = {}
     for idx, filename in enumerate(images, start=1):
-        base = os.path.splitext(filename)[0]
+        base = sample_base(filename)
         prompt_structure_path = os.path.join(CACHE_DIR, f"{base}_prompt_structure.json")
         prompt = read_prompt(base)
         if os.path.exists(prompt_structure_path):
@@ -1304,7 +1330,7 @@ def preprocess_ltx25():
     # DATASET, pasada 2: latentes (VAE)
     # ------------------------------------------------------------------
     for idx, filename in enumerate(images, start=1):
-        base = os.path.splitext(filename)[0]
+        base = sample_base(filename)
 
         video_path = os.path.join(CACHE_DIR, f"{base}_video_latent.pt")
         audio_path = os.path.join(CACHE_DIR, f"{base}_audio_latent.pt")
@@ -1360,6 +1386,37 @@ def preprocess_ltx25():
             with torch.inference_mode():
                 video_latent = encode_video_latent(pipe.vae, image)
         torch.save(video_latent, video_path)
+
+        # Referencia del par (edición): el "before" al tamaño del objetivo (o 1/REF_DOWNSCALE de lado).
+        ref_info = None
+        if base in REF_FILES:
+            ref_src = os.path.join(DATASET_PATH, REF_FILES[base])
+            rw = max(32, (bw // REF_DOWNSCALE) // 32 * 32)
+            rh = max(32, (bh // REF_DOWNSCALE) // 32 * 32)
+            if ref_src.lower().endswith(ltx25_model.VIDEO_EXTS):
+                rinfo = ltx25_model.video_info(ref_src)
+                rframes = min(frames, ltx25_model.clip_frames(rinfo["duration"], MAX_FRAMES)) if rinfo else 1
+                rpix = ltx25_model.read_video(ref_src, rframes, rw, rh)
+                rpix = torch.from_numpy(rpix.copy()).permute(3, 0, 1, 2).unsqueeze(0).float() / 127.5 - 1.0
+            else:
+                rimg = Image.open(ref_src).convert("RGB")
+                sc = max(rw / rimg.width, rh / rimg.height)
+                rimg = rimg.resize((math.ceil(rimg.width * sc), math.ceil(rimg.height * sc)), Image.LANCZOS)
+                l, tp = (rimg.width - rw) // 2, (rimg.height - rh) // 2
+                rimg = rimg.crop((l, tp, l + rw, tp + rh))
+                rpix = (F_vision.pil_to_tensor(rimg).float() / 127.5 - 1.0).unsqueeze(0).unsqueeze(2)
+            if hasattr(pipe.vae, "enable_tiling") and rpix.shape[2] > 1:
+                pipe.vae.enable_tiling()
+            try:
+                with torch.inference_mode():
+                    ref_latent = encode_pixels(pipe.vae, rpix)
+            finally:
+                if hasattr(pipe.vae, "disable_tiling"):
+                    pipe.vae.disable_tiling()
+            torch.save(ref_latent, os.path.join(CACHE_DIR, f"{base}_ref_latent.pt"))
+            ref_info = {"file": REF_FILES[base], "downscale": REF_DOWNSCALE, "shape": list(ref_latent.shape)}
+            print("Reference:", REF_FILES[base], f"{rw}x{rh}", tuple(ref_latent.shape))
+            del rpix
         print("Video latent:", tuple(video_latent.shape))
 
         # Audio: latente de la duración del clip (25 por segundo, como LTX2Pipeline). Con pista se codifica la pista;
@@ -1393,6 +1450,7 @@ def preprocess_ltx25():
                 "num_frames": frames,
                 "media": "video" if is_video else "image",
                 "has_audio": bool(has_audio),
+                "reference": ref_info,
                 "frame_rate": FRAME_RATE,
                 "prompt": prompt,
                 "video_latent": os.path.basename(video_path),
@@ -1429,6 +1487,8 @@ def preprocess_ltx25():
         "video_target_area": VIDEO_TARGET_AREA,
         "max_frames": MAX_FRAMES,
         "use_audio": USE_AUDIO,
+        "lora_type": LORA_TYPE,
+        "reference_downscale": REF_DOWNSCALE,
         "note": "Images and video clips (24 fps, 8n+1 frames). Clip audio encoded with the audio VAE (ltx-core mel).",
     }
 
