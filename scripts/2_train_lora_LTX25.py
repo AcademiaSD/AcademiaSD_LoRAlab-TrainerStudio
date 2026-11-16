@@ -1790,6 +1790,21 @@ def predict_velocity_cfg(
     return guided_v, guided_a
 
 
+def _vae_tiling(vae, on):
+    """Clips: el VAE decodifica en tiles espaciales y por tramos de 16 fotogramas con solape (framewise), en vez
+    de los N fotogramas de golpe. Las imágenes se decodifican enteras, como siempre."""
+    if on:
+        if hasattr(vae, "enable_tiling"):
+            vae.enable_tiling()
+        if hasattr(vae, "use_framewise_decoding"):
+            vae.use_framewise_decoding = True
+    else:
+        if hasattr(vae, "disable_tiling"):
+            vae.disable_tiling()
+        if hasattr(vae, "use_framewise_decoding"):
+            vae.use_framewise_decoding = False
+
+
 def decode_preview_latent(vae, latent, frame_index=-1, all_frames=False):
     dtype = next(vae.parameters()).dtype
     latent = latent.detach().to("cuda", dtype=dtype)
@@ -2062,6 +2077,14 @@ def run_fullgen_flow_preview(
         scale = float(preview_area) / vae_scale / math.sqrt(max(1, H * W))
         H = max(1, int(round(H * scale)))
         W = max(1, int(round(W * scale)))
+    # Preview de vídeo: como mucho los tokens de los clips con que se entrena (Wan 2.2 hace lo mismo con 0.5 MP).
+    # Un Preview Size mayor solo multiplica el coste (97 fotogramas a 768 son ~3 veces los tokens de 384) y lleva
+    # al VAE a decodificar decenas de fotogramas grandes; no enseña más del efecto.
+    if Fm > 1 and MAX_TRAIN_TOKENS > 0 and Fm * H * W > MAX_TRAIN_TOKENS:
+        k = math.sqrt(MAX_TRAIN_TOKENS / float(Fm * H * W))
+        H, W = max(1, int(H * k)), max(1, int(W * k))
+        print("  [Preview] " + t("Video preview limited to the training size: {w}x{h} px, {n} tokens.",
+                                  w=W * 32, h=H * 32, n=Fm * H * W))
     patch_size = max(1, int(patch_size))
     patch_size_t = max(1, int(patch_size_t))
     H = max(patch_size, (H // patch_size) * patch_size)
@@ -2132,6 +2155,7 @@ def run_fullgen_flow_preview(
 
 
 LAST_PREVIEW_AUDIO = None
+MAX_TRAIN_TOKENS = 0   # tokens de la muestra más larga del caché; lo fija setup_block_swap()
 
 
 class LTXAudioHolder:
@@ -2522,14 +2546,14 @@ def run_preview_diagnostic(
                 if applied_local:
                     restore_preview_lora_scale(model)
 
-        def _vae_on_gpu():
+        def _vae_on_gpu(clip=False):
             # Con block swap no caben a la vez los bloques residentes y el VAE: los bloques bajan a RAM
             # mientras se decodifica (como el experto de Wan 2.2) y vuelven en el finally.
             # Sin swap (perfil grande) también, si no cabe: VAE en FP32 (~3 GB) + decodificación (~1.5 GB)
             # sobre lo ya asignado, contra lo que el perfil deja a PyTorch.
             sw = ltx25_model.ACTIVE_SWAP
             need_gb = torch.cuda.memory_allocated() / (1024 ** 3) + 4.5
-            if sw is not None and (sw.swapping or need_gb > VRAM_USABLE_GB):
+            if sw is not None and (clip or sw.swapping or need_gb > VRAM_USABLE_GB):
                 sw.offload_resident()
             return LTXVaeHolder.get().to("cuda")
 
@@ -2543,10 +2567,10 @@ def run_preview_diagnostic(
             if latents_base is None or latents_lora is None:
                 return
 
-            vae = _vae_on_gpu()
             is_clip = latents_lora.ndim == 5 and latents_lora.shape[2] > 1
-            if is_clip and hasattr(vae, "enable_tiling"):
-                vae.enable_tiling()
+            vae = _vae_on_gpu(clip=is_clip)
+            if is_clip:
+                _vae_tiling(vae, True)
             try:
                 with torch.no_grad():
                     img_base = decode_preview_latent(
@@ -2563,8 +2587,8 @@ def run_preview_diagnostic(
                         all_frames=is_clip,
                     )
             finally:
-                if is_clip and hasattr(vae, "disable_tiling"):
-                    vae.disable_tiling()
+                if is_clip:
+                    _vae_tiling(vae, False)
 
             # Lado a lado: en un clip, fotograma a fotograma (eje del ancho).
             img = np.concatenate([img_base, img_lora], axis=2 if is_clip else 1)
@@ -2591,10 +2615,10 @@ def run_preview_diagnostic(
             if latents is None:
                 return
 
-            vae = _vae_on_gpu()
             is_clip = latents.ndim == 5 and latents.shape[2] > 1
-            if is_clip and hasattr(vae, "enable_tiling"):
-                vae.enable_tiling()
+            vae = _vae_on_gpu(clip=is_clip)
+            if is_clip:
+                _vae_tiling(vae, True)
             try:
                 with torch.no_grad():
                     img = decode_preview_latent(
@@ -2604,8 +2628,8 @@ def run_preview_diagnostic(
                         all_frames=is_clip,
                     )
             finally:
-                if is_clip and hasattr(vae, "disable_tiling"):
-                    vae.disable_tiling()
+                if is_clip:
+                    _vae_tiling(vae, False)
 
             vae.to("cpu")
 
@@ -2762,6 +2786,8 @@ def setup_block_swap(transformer, entries, card_gb):
     in_use = torch.cuda.memory_reserved() / (1024 ** 3)
     fixed_gb = in_use                # bloques aún en RAM; el contexto CUDA ya se descontó en apply_vram_profile
     tokens = _max_tokens(entries)
+    global MAX_TRAIN_TOKENS
+    MAX_TRAIN_TOKENS = tokens
     act_gb = 0.8 + tokens * 0.0007
     if RESIDENT_BLOCKS >= 0:
         resident = min(RESIDENT_BLOCKS, n)
