@@ -108,7 +108,7 @@ pre-cache de latentes de LTX 2.3 y su decodificación para previews (decoder con
 - Uso libre para particulares y empresas de **menos de 10 M$** de ingresos anuales; por encima, licencia comercial de pago.
 - **Redistribuir derivados está permitido** (sección 3) con condiciones: incluir copia completa del acuerdo,
   trasladar las restricciones de uso (sección 4 y Anexo A), marcar los ficheros modificados y conservar avisos.
-  Un NF4 es un derivado: el repo `AcademiaSD/LTX25-NF4` debe llevar el `LICENSE` y una nota de modificación (como el de 2.3).
+  Un NF4 es un derivado: el repo `AcademiaSD/LTX25-NF4-for-LoRA-Training` debe llevar el `LICENSE` y una nota de modificación (como el de 2.3).
 - Sección 3.5: transferir un derivado (LoRAs incluidos) no da derechos comerciales al receptor. Conviene decirlo en el README.
 - El gate de Hugging Face exige aceptar los términos con la cuenta del token: **solo lo necesita quien convierte a NF4**
   (una vez); los usuarios bajan el NF4 de AcademiaSD.
@@ -192,7 +192,7 @@ code/Run_LoRAlab-LTX25.bat / .sh
 GUI/launcher.json                 tarjeta "LTX 2.5": "Image, video and audio LoRAs"
 assets/ltx25/portada.jpg
 GUI/locales/*.json                cadenas nuevas en los 8 idiomas
-tools/Run_Conversor_LTX25.bat     conversor a NF4 → repo AcademiaSD/LTX25-NF4 (con LICENSE)
+tools/Run_Conversor_LTX25.bat     conversor a NF4 → repo AcademiaSD/LTX25-NF4-for-LoRA-Training (con LICENSE)
 docs/README_LTX25.md, README.md   guía, tabla de VRAM, changelog; corregir la nota "(2.5)" de LTX 2.3
 ```
 

@@ -22,7 +22,7 @@ The trainer uses `transformer_full/` of `Lightricks/LTX-2.5-Diffusers` (the full
 
 ## The model in NF4
 
-`Models/LTX25-NF4/`, same layout as `LTX23-NF4/`:
+`Models/LTX25-NF4/`, same layout as `LTX23-NF4/`. The trainer downloads it the first time from [`AcademiaSD/LTX25-NF4-for-LoRA-Training`](https://huggingface.co/AcademiaSD/LTX25-NF4-for-LoRA-Training) (~25 GB):
 
 - `weights/`: one file per Linear. The 1,632 Linear of the 48 blocks in NF4 (double quantization): **9.6 GB**, **0.19 GB per block**. The 28 Linear outside the blocks (input/output projections, AdaLN, timestep embeddings) stay in **BF16** (0.85 GB): quantization error there disturbs the final modulation (lesson from MiniMax-H3).
 - `text_encoder_NF4/`: Gemma 4 in NF4 (7.2 GB). After the connectors, its embeddings match BF16 at cosine ≥ 0.998 (video) / ≥ 0.997 (audio).

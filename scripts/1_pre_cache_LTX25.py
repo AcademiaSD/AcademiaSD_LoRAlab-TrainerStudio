@@ -146,7 +146,7 @@ DEFAULTS = {
 CONFIG_PATH = os.environ.get("LORALAB_PRECACHE_CONFIG") or "settings/pre_cache_settings_ltx25.json"
 
 HF_BASE_REPO_ID = "Lightricks/LTX-2.5-Diffusers"  # gated; solo lo usa tools/ltx25
-HF_NF4_REPO_ID = "AcademiaSD/LTX25-NF4"
+HF_NF4_REPO_ID = "AcademiaSD/LTX25-NF4-for-LoRA-Training"
 
 os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "0")
 os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "0")

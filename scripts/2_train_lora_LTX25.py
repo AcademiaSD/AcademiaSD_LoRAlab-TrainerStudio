@@ -182,7 +182,7 @@ DEFAULTS = {
 CONFIG_PATH = os.environ.get("LORALAB_TRAIN_CONFIG") or "settings/train_settings_ltx25.json"
 
 HF_BASE_REPO_ID = "Lightricks/LTX-2.5-Diffusers"  # gated; solo lo usa tools/ltx25
-HF_NF4_REPO_ID = "AcademiaSD/LTX25-NF4"
+HF_NF4_REPO_ID = "AcademiaSD/LTX25-NF4-for-LoRA-Training"
 
 
 if os.path.exists(CONFIG_PATH):
