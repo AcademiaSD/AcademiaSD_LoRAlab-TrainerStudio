@@ -84,6 +84,7 @@ DEFAULTS = {
     "lokr_factor": 16,
     "use_dora": False,
     "dora_normfix": True,
+    "precision": "auto",
     "lora_targets": "all",
     "weight_decay": 0.01,
     "max_grad_norm": 1.0,
@@ -142,6 +143,12 @@ USE_DORA          = bool(cfg.get("use_dora",     DEFAULTS["use_dora"]))
 # transformer NF4) en vez de la del NF4, que es la que divide ComfyUI. Sin esto el LoRA pierde el parecido
 # en ComfyUI aunque las previews salgan bien. Solo cambia la exportación.
 DORA_NORMFIX      = bool(cfg.get("dora_normfix", DEFAULTS["dora_normfix"]))
+# Precisión de cálculo (Auto / BF16 / FP16): ver lora_options.resolve_precision. FP16_OK: las activaciones
+# del modelo caben en FP16 (medido), si no Auto se queda en BF16.
+FP16_OK           = True
+PRECISION_CFG     = str(cfg.get("precision", DEFAULTS["precision"]) or "auto").lower()
+PRECISION         = lora_options.resolve_precision(PRECISION_CFG, FP16_OK)
+COMPUTE_DTYPE, ADAPTER_DTYPE = lora_options.precision_dtypes(PRECISION)
 if USE_LOKR:
     USE_RSLORA = USE_LORAPLUS = USE_DORA = False
 WEIGHT_DECAY      = cfg.get("weight_decay",      DEFAULTS["weight_decay"])
@@ -181,6 +188,7 @@ print(f"  {t('LR Scheduler'):<22}: {lora_options.lr_scheduler_label(LR_SCHEDULER
 print(f"  {'LoRA Rank/Alpha':<22}: {LORA_RANK}/{LORA_ALPHA}")
 print(f"  {'rsLoRA / LoRA+':<22}: {'on' if USE_RSLORA else 'off'} / {f'x{LORAPLUS_RATIO:g}' if USE_LORAPLUS else 'off'}")
 print(f"  {'DoRA':<22}: {('on, NormFix' if DORA_NORMFIX else 'on') if USE_DORA else 'off'}")
+print(f"  {'Precision':<22}: {PRECISION.upper()}{' (auto)' if PRECISION_CFG not in ('bf16', 'fp16') else ''}")
 print(f"  {'LoKr':<22}: {f'factor {LOKR_FACTOR}' if USE_LOKR else 'off'}")
 print(f"  {t('LoRA Targets'):<22}: {LORA_TARGETS}")
 print(f"  {'Batch / Grad Accum':<22}: {BATCH_SIZE}/{GRAD_ACCUM_STEPS}")
@@ -344,16 +352,16 @@ def load_nf4_transformer(model_dir):
         # en la línea siguiente.
         with torch.device("meta"):
             layer = Linear4bit(info["in_features"], info["out_features"], bias=info.get("bias", False),
-                                quant_type="nf4", compute_dtype=torch.bfloat16)
+                                quant_type="nf4", compute_dtype=COMPUTE_DTYPE)
         layer.weight = weight
         if bias_data is not None:
-            layer.bias = torch.nn.Parameter(bias_data.to(torch.bfloat16), requires_grad=False)
+            layer.bias = torch.nn.Parameter(bias_data.to(COMPUTE_DTYPE), requires_grad=False)
         set_module(name, layer)
 
     for name, info in index["unquantized"].items():
         with torch.device("meta"):
             layer = torch.nn.Linear(info["in_features"], info["out_features"], bias=info.get("bias", False),
-                                    dtype=torch.bfloat16)
+                                    dtype=COMPUTE_DTYPE)
         layer.load_state_dict(load_file(os.path.join(weights_dir, info["file"])), assign=True)
         layer.requires_grad_(False)
         set_module(name, layer)
@@ -398,7 +406,7 @@ def build_lora_metadata(step):
         "ss_batch_size_per_device": BATCH_SIZE,
         "ss_gradient_accumulation_steps": GRAD_ACCUM_STEPS,
         "ss_seed": SEED,
-        "ss_mixed_precision": "bf16",
+        "ss_mixed_precision": PRECISION,
     }
 
     # La GUI lee estas claves al exportar o descargar para poner el sufijo _rs / _plus / _lokr al nombre.
@@ -485,7 +493,7 @@ class VaeHolder:
     def get(cls):
         if cls.vae is None:
             cls.vae = AutoencoderKLFlux2.from_pretrained(
-                MODEL_ID, subfolder="vae", dtype=torch.bfloat16)
+                MODEL_ID, subfolder="vae", dtype=(torch.bfloat16 if PRECISION == "bf16" else torch.float32))
         return cls.vae
 
 
@@ -526,7 +534,7 @@ def denoise(model, scheduler, sample, neg, size, generator):
     refs = sample.get("ref")
     # El latente de la imagen de antes ya viene con su lote (1, canales, alto, ancho).
     # El transformer lo espera en bf16, como los tokens de la imagen.
-    context = None if refs is None else [refs.to(device=device, dtype=torch.bfloat16)]
+    context = None if refs is None else [refs.to(device=device, dtype=COMPUTE_DTYPE)]
 
     steps = int(TURBO_LORA_STRENGTH) if USE_TURBO else int(PREVIEW_STEPS)
     steps = max(1, steps)
@@ -544,7 +552,7 @@ def denoise(model, scheduler, sample, neg, size, generator):
         timestep = t.expand(1).to(torch.float32) / 1000
         use_text_images = base_embed is None or float(t) / 1000 <= TEXT_IMAGES_MAX_SIGMA
         pred = model(
-            hidden_states=latents.to(torch.bfloat16),
+            hidden_states=latents.to(COMPUTE_DTYPE),
             timestep=timestep,
             encoder_hidden_states=embed if use_text_images else base_embed,
             encoder_attention_mask=mask if use_text_images else base_mask,
@@ -553,7 +561,7 @@ def denoise(model, scheduler, sample, neg, size, generator):
         )[0].float()
         if use_cfg:
             neg_pred = model(
-                hidden_states=latents.to(torch.bfloat16),
+                hidden_states=latents.to(COMPUTE_DTYPE),
                 timestep=timestep,
                 encoder_hidden_states=neg[0].unsqueeze(0).to(device),
                 encoder_attention_mask=neg[1].unsqueeze(0).to(device) if neg[1] is not None else None,
@@ -734,6 +742,7 @@ def train_fibo2():
     print(t("Loading {name}...", name="Fibo 2.0 Transformer (NF4)"))
     t0 = time.time()
     transformer = load_nf4_transformer(MODEL_ID)
+    lora_options.to_compute_dtype(transformer, COMPUTE_DTYPE)
     transformer.to("cuda")
     free_vram()
     print(t("Transformer loaded in {s:.1f}s.", s=time.time() - t0) + f" VRAM: {torch.cuda.memory_allocated()/1e9:.1f} GB", flush=True)
@@ -843,6 +852,7 @@ def train_fibo2():
                                       lr=LR, weight_decay=WEIGHT_DECAY)
     else:
         optimizer = torch.optim.AdamW(trainable, lr=LR, weight_decay=WEIGHT_DECAY)
+    scaler = lora_options.grad_scaler(PRECISION)   # FP16: loss escalada; BF16: no hace nada
 
     def lr_at(step):
         return LR * lora_options.lr_factor(LR_SCHEDULER, step, TOTAL_STEPS, WARMUP_STEPS, MIN_LR_RATIO, LR_CYCLES)
@@ -913,9 +923,9 @@ def train_fibo2():
         # lat: objetivo (en _custom no existe: solo aporta el tamaño). En edición además
         # ref (latente de la imagen de antes) y, si el caption lleva textos, sus embeddings sin ellos.
         sample = {}
-        for key, suffix, cast in (("lat", "latent", torch.float32), ("emb", "embed", torch.bfloat16),
+        for key, suffix, cast in (("lat", "latent", torch.float32), ("emb", "embed", COMPUTE_DTYPE),
                                   ("msk", "mask", torch.bool), ("ref", "ref", torch.float32),
-                                  ("base_emb", "base_embed", torch.bfloat16), ("base_msk", "base_mask", torch.bool)):
+                                  ("base_emb", "base_embed", COMPUTE_DTYPE), ("base_msk", "base_mask", torch.bool)):
             path = f"{CACHE_DIR}/{nombre}_{suffix}.pt"
             if os.path.exists(path):
                 t = torch.load(path, weights_only=True).to(cast)
@@ -938,11 +948,11 @@ def train_fibo2():
 
     neg = None
     if os.path.exists(f"{CACHE_DIR}/_negcfg_embed.pt"):
-        neg = (torch.load(f"{CACHE_DIR}/_negcfg_embed.pt", weights_only=True).to(torch.bfloat16),
+        neg = (torch.load(f"{CACHE_DIR}/_negcfg_embed.pt", weights_only=True).to(COMPUTE_DTYPE),
                torch.load(f"{CACHE_DIR}/_negcfg_mask.pt", weights_only=True).bool())
     null_embed = None
     if os.path.exists(f"{CACHE_DIR}/_neg_embed.pt"):
-        null_embed = (torch.load(f"{CACHE_DIR}/_neg_embed.pt", weights_only=True).to(torch.bfloat16),
+        null_embed = (torch.load(f"{CACHE_DIR}/_neg_embed.pt", weights_only=True).to(COMPUTE_DTYPE),
                       torch.load(f"{CACHE_DIR}/_neg_mask.pt", weights_only=True).bool())
 
     all_preview_names = sorted(k for k in cache_data.keys() if not cache_names.is_reserved(k))
@@ -1011,7 +1021,7 @@ def train_fibo2():
             noise  = torch.randn_like(latents)
             t_exp  = sigma.view(-1, 1, 1, 1)
 
-            noisy = (t_exp * noise + (1 - t_exp) * latents).to(torch.bfloat16)
+            noisy = (t_exp * noise + (1 - t_exp) * latents).to(COMPUTE_DTYPE)
             target = noise - latents
 
             # El caption vacío sustituye al caption en el 10% de las muestras (text dropout).
@@ -1027,7 +1037,7 @@ def train_fibo2():
             if edit_mode:
                 refs = torch.cat([cache_data[n]["ref"] for n in names]).to("cuda", non_blocking=True)
                 if random.random() >= CONTEXT_DROPOUT:
-                    context = [refs.to(torch.bfloat16)]
+                    context = [refs.to(COMPUTE_DTYPE)]
 
             pred = model(
                 hidden_states=noisy,
@@ -1039,16 +1049,18 @@ def train_fibo2():
             )[0]
 
             loss = F.mse_loss(pred.float(), target.float()) / GRAD_ACCUM_STEPS
-            loss.backward()
+            scaler.scale(loss).backward()
             step_loss = loss.item() * GRAD_ACCUM_STEPS
             running_loss += step_loss
 
             # La norma solo existe al aplicar el optimizador: entre medias se muestra la última.
             if step % GRAD_ACCUM_STEPS == 0:
+                scaler.unscale_(optimizer)
                 grad_norm = torch.nn.utils.clip_grad_norm_(trainable, MAX_GRAD_NORM).item()
                 for gparam in optimizer.param_groups:
                     gparam["lr"] = lr_at(step) * gparam.get("lr_mult", 1.0)
-                optimizer.step()
+                scaler.step(optimizer)      # en FP16 se salta si hubo inf
+                scaler.update()
                 optimizer.zero_grad(set_to_none=True)
 
             t_step     = time.time() - t0

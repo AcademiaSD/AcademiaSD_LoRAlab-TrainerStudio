@@ -78,6 +78,7 @@ DEFAULTS = {
     "lokr_factor": 16,
     "use_dora": False,
     "dora_normfix": True,
+    "precision": "auto",
     "lora_targets": "blocks",
     "weight_decay": 0.0,
     "max_grad_norm": 1.0,
@@ -146,6 +147,12 @@ USE_DORA          = bool(cfg.get("use_dora",     DEFAULTS["use_dora"]))
 # transformer NF4) en vez de la del NF4, que es la que divide ComfyUI. Sin esto el LoRA pierde el parecido
 # en ComfyUI aunque las previews salgan bien. Solo cambia la exportación.
 DORA_NORMFIX      = bool(cfg.get("dora_normfix", DEFAULTS["dora_normfix"]))
+# Precisión de cálculo (Auto / BF16 / FP16): ver lora_options.resolve_precision. FP16_OK: las activaciones
+# del modelo caben en FP16 (medido), si no Auto se queda en BF16.
+FP16_OK           = True
+PRECISION_CFG     = str(cfg.get("precision", DEFAULTS["precision"]) or "auto").lower()
+PRECISION         = lora_options.resolve_precision(PRECISION_CFG, FP16_OK)
+COMPUTE_DTYPE, ADAPTER_DTYPE = lora_options.precision_dtypes(PRECISION)
 if USE_LOKR:
     USE_RSLORA = USE_LORAPLUS = USE_DORA = False
 WEIGHT_DECAY      = cfg.get("weight_decay",      DEFAULTS["weight_decay"])
@@ -195,6 +202,7 @@ print(f"  {'LoRA Rank/Alpha':<22}: {LORA_RANK}/{LORA_ALPHA}")
 print(f"  {'rsLoRA / LoRA+':<22}: {'on' if USE_RSLORA else 'off'} / {f'x{LORAPLUS_RATIO:g}' if USE_LORAPLUS else 'off'}")
 print(f"  {'LoKr':<22}: {f'factor {LOKR_FACTOR}' if USE_LOKR else 'off'}")
 print(f"  {'DoRA':<22}: {('on, NormFix' if DORA_NORMFIX else 'on') if USE_DORA else 'off'}")
+print(f"  {'Precision':<22}: {PRECISION.upper()}{' (auto)' if PRECISION_CFG not in ('bf16', 'fp16') else ''}")
 print(f"  {t('LoRA Targets'):<22}: {LORA_TARGETS}")
 print(f"  {'Batch / Grad Accum':<22}: {BATCH_SIZE}/{GRAD_ACCUM_STEPS}")
 print(f"  {'Timesteps / Shift':<22}: {TIMESTEP_SAMPLING} / {TRAIN_SHIFT}")
@@ -264,7 +272,7 @@ def predict(model, latents, sigma, embeds):
     En autocast BF16 PEFT no copia la entrada de cada capa a FP32 para el LoRA (los pesos del LoRA y
     del optimizador siguen en FP32): con vídeo son varios GB menos en cada bloque que se recalcula.
     """
-    with torch.autocast("cuda", dtype=torch.bfloat16):
+    with torch.autocast("cuda", dtype=COMPUTE_DTYPE):
         return model(hidden_states=latents, timestep=sigma * 1000, encoder_hidden_states=embeds, return_dict=False)[0]
 
 
@@ -292,7 +300,7 @@ def build_lora_metadata(step, expert):
         "ss_batch_size_per_device": BATCH_SIZE,
         "ss_gradient_accumulation_steps": GRAD_ACCUM_STEPS,
         "ss_seed": SEED,
-        "ss_mixed_precision": "bf16",
+        "ss_mixed_precision": PRECISION,
     }
 
     # La GUI lee estas claves al exportar o descargar para poner el sufijo _rs / _plus / _lokr al nombre.
@@ -365,7 +373,7 @@ class VaeHolder:
     @classmethod
     def get(cls):
         if cls.vae is None:
-            cls.vae = AutoencoderKLWan.from_pretrained(MODEL_ID, subfolder="vae", dtype=torch.bfloat16)
+            cls.vae = AutoencoderKLWan.from_pretrained(MODEL_ID, subfolder="vae", dtype=(torch.bfloat16 if PRECISION == "bf16" else torch.float32))
         return cls.vae
 
 
@@ -427,7 +435,7 @@ def denoise(experts, scheduler, embed, neg, shape, generator):
         model = experts.use(expert)
         cfg_scale = PREVIEW_CFG_HIGH if t_ >= boundary else PREVIEW_CFG
         use_cfg = cfg_scale > 1.0
-        x = latents.to(torch.bfloat16)
+        x = latents.to(COMPUTE_DTYPE)
         if use_cfg and shape[0] > 1:
             # Vídeo: cond y negativo por separado. Mismo cálculo con la mitad de activaciones; juntos,
             # 17 fotogramas a 768 px no caben al lado del experto en 16 GB.
@@ -499,7 +507,7 @@ def denoise_turbo(experts, embed, neg, shape, generator):
         cfg_scale = PREVIEW_CFG_HIGH if expert == "high" else PREVIEW_CFG
         if expert not in experts.models:
             expert = next(iter(experts.models))
-        model, x = experts.use(expert), latents.to(torch.bfloat16)
+        model, x = experts.use(expert), latents.to(COMPUTE_DTYPE)
         sigma = torch.tensor([sigmas[i]], device="cuda")
         v = predict(model, x, sigma, texts[:1]).float()
         if cfg_scale > 1.0:
@@ -749,7 +757,7 @@ def train_wan22():
     for e in TRAINED:
         print(t("Loading {name}...", name=f"Wan 2.2 Transformer ({'high' if e == 'high' else 'low'} noise, NF4)"))
         t0 = time.time()
-        transformer = wan.load_expert(MODEL_ID, e)
+        transformer = lora_options.to_compute_dtype(wan.load_expert(MODEL_ID, e), COMPUTE_DTYPE)
         print(t("Transformer loaded in {s:.1f}s.", s=time.time() - t0), flush=True)
 
         # Checkpoint reentrante en dos mitades por bloque (ver wan.split_block_checkpoint): guarda la entrada
@@ -820,7 +828,7 @@ def train_wan22():
     if other and PREVIEW_EVERY > 0:
         if wan.expert_ready(MODEL_ID, other):
             print(t("Loading {name}...", name=f"Wan 2.2 Transformer ({other} noise, NF4, previews)"))
-            experts.models[other] = wan.load_expert(MODEL_ID, other).eval()
+            experts.models[other] = lora_options.to_compute_dtype(wan.load_expert(MODEL_ID, other), COMPUTE_DTYPE).eval()
         else:
             preview_note = t("The {other} noise expert is not converted: previews use the trained expert for every step "
                              "(rougher than the final result in ComfyUI).", other=other)
@@ -839,6 +847,7 @@ def train_wan22():
         optimizer = torch.optim.AdamW(lora_options.loraplus_groups(named, LORAPLUS_RATIO), lr=LR, weight_decay=WEIGHT_DECAY)
     else:
         optimizer = torch.optim.AdamW(trainable, lr=LR, weight_decay=WEIGHT_DECAY)
+    scaler = lora_options.grad_scaler(PRECISION)   # FP16: loss escalada; BF16: no hace nada
 
     def lr_at(step):
         return LR * lora_options.lr_factor(LR_SCHEDULER, step, TOTAL_STEPS, WARMUP_STEPS, MIN_LR_RATIO, LR_CYCLES)
@@ -919,7 +928,7 @@ def train_wan22():
     pin = torch.cuda.is_available()
 
     def load_tensor(path):
-        t_ = torch.load(path, weights_only=True).to(torch.bfloat16)
+        t_ = torch.load(path, weights_only=True).to(COMPUTE_DTYPE)
         return t_.pin_memory() if pin else t_
 
     cache_data, buckets = {}, defaultdict(list)
@@ -998,7 +1007,7 @@ def train_wan22():
             noise = torch.randn_like(latents)
             t_exp = sigma.view(-1, 1, 1, 1, 1)
 
-            noisy = ((1 - t_exp) * latents + t_exp * noise).to(torch.bfloat16)
+            noisy = ((1 - t_exp) * latents + t_exp * noise).to(COMPUTE_DTYPE)
             target = noise - latents
 
             try:
@@ -1009,7 +1018,7 @@ def train_wan22():
                     pred = predict(model, noisy, sigma, embeds)
 
                 loss = F.mse_loss(pred.float(), target) / GRAD_ACCUM_STEPS
-                loss.backward()
+                scaler.scale(loss).backward()
             except torch.OutOfMemoryError:
                 # El tamaño de este bucket no cabe: se aparta y el paso se repite con otro. Se tiran los
                 # gradientes que llevaba acumulados el grupo.
@@ -1032,10 +1041,12 @@ def train_wan22():
 
             # La norma solo existe al aplicar el optimizador: entre medias se muestra la última.
             if step % GRAD_ACCUM_STEPS == 0:
+                scaler.unscale_(optimizer)
                 grad_norm = torch.nn.utils.clip_grad_norm_([p for p in trainable if p.grad is not None], MAX_GRAD_NORM).item()
                 for gparam in optimizer.param_groups:
                     gparam["lr"] = lr_at(step) * gparam.get("lr_mult", 1.0)
-                optimizer.step()
+                scaler.step(optimizer)      # en FP16 se salta si hubo inf
+                scaler.update()
                 optimizer.zero_grad(set_to_none=True)
 
             t_step     = time.time() - t0

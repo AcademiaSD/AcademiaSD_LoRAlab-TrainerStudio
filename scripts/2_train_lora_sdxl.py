@@ -66,6 +66,7 @@ DEFAULTS = {
     "lokr_factor": 16,
     "use_dora": False,
     "dora_normfix": True,
+    "compute_precision": "auto",
     "lora_targets": "blocks",
     "precision": "bf16",
     "weight_decay": 0.0,
@@ -124,6 +125,12 @@ USE_DORA          = bool(cfg.get("use_dora",     DEFAULTS["use_dora"]))
 # de los pesos originales) en vez de la del NF4, que es la que divide ComfyUI. Sin esto el LoRA pierde el parecido
 # en ComfyUI aunque las previews salgan bien. Solo cambia la exportación.
 DORA_NORMFIX      = bool(cfg.get("dora_normfix", DEFAULTS["dora_normfix"]))
+# Precisión de cálculo (Compute: Auto / BF16 / FP16), aparte de "precision" (modelo en NF4 o BF16):
+# ver lora_options.resolve_precision. FP16_OK: las activaciones caben en FP16 (medido).
+FP16_OK           = True
+COMPUTE_CFG       = str(cfg.get("compute_precision", DEFAULTS["compute_precision"]) or "auto").lower()
+COMPUTE_PRECISION = lora_options.resolve_precision(COMPUTE_CFG, FP16_OK)
+COMPUTE_DTYPE, ADAPTER_DTYPE = lora_options.precision_dtypes(COMPUTE_PRECISION)
 if USE_LOKR:
     USE_RSLORA = USE_LORAPLUS = USE_DORA = False
 WEIGHT_DECAY      = cfg.get("weight_decay",      DEFAULTS["weight_decay"])
@@ -162,6 +169,7 @@ print(f"  {t('LR Scheduler'):<22}: {lora_options.lr_scheduler_label(LR_SCHEDULER
 print(f"  {'LoRA Rank/Alpha':<22}: {LORA_RANK}/{LORA_ALPHA}")
 print(f"  {'rsLoRA / LoRA+':<22}: {'on' if USE_RSLORA else 'off'} / {f'x{LORAPLUS_RATIO:g}' if USE_LORAPLUS else 'off'}")
 print(f"  {'DoRA':<22}: {('on, NormFix' if DORA_NORMFIX else 'on') if USE_DORA else 'off'}")
+print(f"  {'Compute':<22}: {COMPUTE_PRECISION.upper()}{' (auto)' if COMPUTE_CFG not in ('bf16', 'fp16') else ''}")
 print(f"  {'LoKr':<22}: {f'factor {LOKR_FACTOR}' if USE_LOKR else 'off'}")
 print(f"  {t('LoRA Targets'):<22}: {LORA_TARGETS}")
 print(f"  {t('Precision'):<22}: {PRECISION.upper()}")
@@ -191,7 +199,7 @@ def free_vram():
 
 def time_ids(orig, crop, target, device):
     # Condiciones de tamaño de SDXL: (alto, ancho) original, esquina del recorte, (alto, ancho) final.
-    return torch.tensor([list(orig) + list(crop) + list(target)], device=device, dtype=torch.bfloat16)
+    return torch.tensor([list(orig) + list(crop) + list(target)], device=device, dtype=COMPUTE_DTYPE)
 
 
 def pad_text(embs, pad_emb):
@@ -229,7 +237,7 @@ def build_lora_metadata(step):
         "ss_gradient_accumulation_steps": GRAD_ACCUM_STEPS,
         "ss_min_snr_gamma": MIN_SNR_GAMMA,
         "ss_seed": SEED,
-        "ss_mixed_precision": "bf16",
+        "ss_mixed_precision": COMPUTE_PRECISION,
         "precision": PRECISION,
     }
 
@@ -297,7 +305,7 @@ class VaeHolder:
     @classmethod
     def get(cls):
         if cls.vae is None:
-            cls.vae = AutoencoderKL.from_single_file(MODEL["checkpoint"], torch_dtype=torch.bfloat16)
+            cls.vae = AutoencoderKL.from_single_file(MODEL["checkpoint"], torch_dtype=(torch.bfloat16 if COMPUTE_PRECISION == "bf16" else torch.float32))
         return cls.vae
 
 
@@ -317,11 +325,11 @@ def run_preview(model, sample, neg, pad_emb, size, step):
             sched.set_timesteps(PREVIEW_STEPS, device="cuda")
             g = torch.Generator(device="cuda").manual_seed(actual_seed)
             latents = torch.randn((1, 4, H, W), generator=g, device="cuda") * sched.init_noise_sigma
-            emb = pad_text([neg["emb"], sample["emb"]], pad_emb).to("cuda", torch.bfloat16)
-            pooled = torch.stack([neg["pooled"], sample["pooled"]]).to("cuda", torch.bfloat16)
+            emb = pad_text([neg["emb"], sample["emb"]], pad_emb).to("cuda", COMPUTE_DTYPE)
+            pooled = torch.stack([neg["pooled"], sample["pooled"]]).to("cuda", COMPUTE_DTYPE)
             ids = time_ids((H * 8, W * 8), (0, 0), (H * 8, W * 8), "cuda").repeat(2, 1)
             for ts in sched.timesteps:
-                x = sched.scale_model_input(torch.cat([latents] * 2), ts).to(torch.bfloat16)
+                x = sched.scale_model_input(torch.cat([latents] * 2), ts).to(COMPUTE_DTYPE)
                 out = model(x, ts, encoder_hidden_states=emb, added_cond_kwargs={"text_embeds": pooled, "time_ids": ids},
                             return_dict=False)[0].float()
                 uncond, cond = out.chunk(2)
@@ -451,7 +459,7 @@ def load_unet():
                 # Siempre: un checkpoint reanudado puede activar DoRA después de cargar el UNet.
                 DORA_BASE_NORMS[name] = module.weight.data.float().norm(dim=1).cpu()
                 layer = Linear4bit(module.in_features, module.out_features, bias=module.bias is not None,
-                                   quant_type="nf4", compute_dtype=torch.bfloat16)
+                                   quant_type="nf4", compute_dtype=COMPUTE_DTYPE)
                 # bitsandbytes cuantiza al mover a la GPU.
                 layer.weight = Params4bit(module.weight.data,requires_grad=False, quant_type="nf4")
                 if module.bias is not None:
@@ -460,7 +468,7 @@ def load_unet():
                 setattr(unet.get_submodule(parent), child, layer)
                 quantized += 1
         print("[OK] " + t("NF4 layers: {n} (transformer blocks)", n=quantized))
-    return unet.to("cuda")
+    return lora_options.to_compute_dtype(unet, COMPUTE_DTYPE).to("cuda")
 
 
 # DoRA: norma por fila de los pesos originales de las capas que se pasan a NF4 (ver lora_options.dora_scales).
@@ -586,6 +594,7 @@ def train_sdxl():
                                       lr=LR, weight_decay=WEIGHT_DECAY)
     else:
         optimizer = torch.optim.AdamW(trainable, lr=LR, weight_decay=WEIGHT_DECAY)
+    scaler = lora_options.grad_scaler(COMPUTE_PRECISION)   # FP16: loss escalada; BF16: no hace nada
 
     def lr_at(step):
         return LR * lora_options.lr_factor(LR_SCHEDULER, step, TOTAL_STEPS, WARMUP_STEPS, MIN_LR_RATIO, LR_CYCLES)
@@ -710,14 +719,14 @@ def train_sdxl():
             size = random.choice(list(buckets))
             names = [random.choice(buckets[size]) for _ in range(BATCH_SIZE)]
             latents = torch.stack([cache_data[n]["lat"] for n in names]).to("cuda", torch.float32)
-            emb = pad_text([cache_data[n]["emb"] for n in names], pad_emb).to("cuda", torch.bfloat16)
-            pooled = torch.stack([cache_data[n]["pooled"] for n in names]).to("cuda", torch.bfloat16)
+            emb = pad_text([cache_data[n]["emb"] for n in names], pad_emb).to("cuda", COMPUTE_DTYPE)
+            pooled = torch.stack([cache_data[n]["pooled"] for n in names]).to("cuda", COMPUTE_DTYPE)
             H, W = size
             ids = torch.cat([time_ids(cache_data[n]["orig"], cache_data[n]["crop"], (H * 8, W * 8), "cuda") for n in names])
 
             noise = torch.randn_like(latents)
             ts = torch.randint(0, noise_scheduler.config.num_train_timesteps, (len(names),), device="cuda")
-            noisy = noise_scheduler.add_noise(latents, noise, ts).to(torch.bfloat16)
+            noisy = noise_scheduler.add_noise(latents, noise, ts).to(COMPUTE_DTYPE)
 
             pred = model(noisy, ts, encoder_hidden_states=emb,
                          added_cond_kwargs={"text_embeds": pooled, "time_ids": ids}, return_dict=False)[0]
@@ -728,15 +737,17 @@ def train_sdxl():
                 snr = alphas_cumprod[ts] / (1 - alphas_cumprod[ts])
                 loss = loss * torch.clamp(snr, max=MIN_SNR_GAMMA) / snr
             loss = loss.mean() / GRAD_ACCUM_STEPS
-            loss.backward()
+            scaler.scale(loss).backward()
             step_loss = loss.item() * GRAD_ACCUM_STEPS
             running_loss += step_loss
 
             if step % GRAD_ACCUM_STEPS == 0:
+                scaler.unscale_(optimizer)
                 grad_norm = torch.nn.utils.clip_grad_norm_(trainable, MAX_GRAD_NORM).item()
                 for gparam in optimizer.param_groups:
                     gparam["lr"] = lr_at(step) * gparam.get("lr_mult", 1.0)
-                optimizer.step()
+                scaler.step(optimizer)      # en FP16 se salta si hubo inf
+                scaler.update()
                 optimizer.zero_grad(set_to_none=True)
 
             t_step     = time.time() - t0

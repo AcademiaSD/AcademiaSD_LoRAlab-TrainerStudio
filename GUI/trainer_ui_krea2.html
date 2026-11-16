@@ -544,7 +544,7 @@
                     </div>
 
                     <div class="form-row">
-                        <div class="form-group" title="Precision: the number type the GPU computes with. Auto picks BF16 on RTX 30 or newer, and FP16 on GPUs without BF16 in hardware (RTX 20, Quadro RTX, GTX 16), which emulate BF16 and train several times slower with it. Both give the same quality on Krea 2; with FP16 the trainer scales the loss so small gradients are not lost, and skips the rare step that overflows. The model stays in 4 bits either way. Applies when the training starts or resumes.">
+                        <div class="form-group" title="Precision: the number type the GPU computes with. Auto picks BF16 on RTX 30 or newer, and FP16 on GPUs without BF16 in hardware (RTX 20, Quadro RTX, GTX 16), which emulate BF16 and train several times slower with it. Both give the same quality; with FP16 the trainer scales the loss so small gradients are not lost, and skips the rare step that overflows. If a model does not fit in FP16, Auto stays on BF16. The model stays in 4 bits either way. Applies when the training starts or resumes.">
                             <label>Precision:</label>
                             <select id="train_precision" class="no-i18n">
                                 <option value="auto" selected>Auto</option>

@@ -114,6 +114,56 @@ def dora_scales(model, adapter="default", base_norms=None):
     return out
 
 
+# ---------------------------------------------------------------------------------------------------------
+# Precisión de cálculo (selector Precision). Las GPUs sin BF16 por hardware (RTX 20 / Quadro RTX / Turing,
+# GTX 16) lo emulan y entrenan varias veces más lento: ahí FP16, con la loss escalada (GradScaler) y el LoRA
+# en FP32 (GradScaler no desescala gradientes FP16). El modelo sigue en NF4 en los dos casos.
+# Compute precision. GPUs without BF16 in hardware emulate it; there FP16 with loss scaling is used.
+# ---------------------------------------------------------------------------------------------------------
+def gpu_has_bf16():
+    try:
+        return not torch.cuda.is_available() or torch.cuda.get_device_capability(0)[0] >= 8
+    except Exception:
+        return True
+
+
+def resolve_precision(value, fp16_ok=True):
+    """'auto' | 'bf16' | 'fp16' → 'bf16' o 'fp16'. Auto: FP16 solo si la GPU no tiene BF16 y el modelo cabe
+    en FP16 (fp16_ok: sus activaciones no pasan de 65504)."""
+    value = str(value or "auto").lower()
+    if value in ("bf16", "fp16"):
+        return value
+    return "fp16" if fp16_ok and not gpu_has_bf16() else "bf16"
+
+
+def precision_dtypes(precision):
+    """(dtype de cálculo, dtype del LoRA entrenable)."""
+    return (torch.float16, torch.float32) if precision == "fp16" else (torch.bfloat16, torch.bfloat16)
+
+
+def to_compute_dtype(module, dtype):
+    """Pasa a dtype los pesos BF16 del modelo base (no los del LoRA), el compute_dtype de las capas NF4 y el
+    dtype al que descomprimen (quant_state.dtype; si no, la ruta gemv de una sola fila sale en BF16).
+    Llamar antes de añadir el LoRA. Las normas en FP32 se quedan como están."""
+    if dtype == torch.bfloat16:
+        return module
+    for name, tensor in list(module.named_parameters()) + list(module.named_buffers()):
+        if tensor.dtype == torch.bfloat16 and "lora_" not in name:
+            tensor.data = tensor.data.to(dtype)
+    for m in module.modules():
+        if getattr(m, "compute_dtype", None) == torch.bfloat16:
+            m.compute_dtype = dtype
+        qs = getattr(getattr(m, "weight", None), "quant_state", None)
+        if qs is not None and getattr(qs, "dtype", None) == torch.bfloat16:
+            qs.dtype = dtype
+    return module
+
+
+def grad_scaler(precision):
+    """GradScaler activo solo en FP16; en BF16 scale/unscale_/step/update no hacen nada."""
+    return torch.amp.GradScaler("cuda", init_scale=2.0 ** 12, enabled=precision == "fp16")
+
+
 DORA_NORMS_FILE = "dora_norms.safetensors"
 
 

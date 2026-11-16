@@ -106,6 +106,7 @@ DEFAULTS = {
     "loraplus_ratio": 16.0,
     "use_dora": False,
     "dora_normfix": True,
+    "precision": "auto",
     "weight_decay": 0.0,
     "max_grad_norm": 1.0,
 
@@ -221,6 +222,12 @@ USE_DORA = bool(cfg_get("use_dora", DEFAULTS["use_dora"]))
 # transformer NF4) en vez de la del NF4, que es la que divide ComfyUI. Sin esto el LoRA pierde el parecido
 # en ComfyUI aunque las previews salgan bien. Solo cambia la exportación.
 DORA_NORMFIX = bool(cfg_get("dora_normfix", DEFAULTS["dora_normfix"]))
+# Precisión de cálculo (Auto / BF16 / FP16): ver lora_options.resolve_precision. FP16_OK: las activaciones
+# del modelo caben en FP16 (medido), si no Auto se queda en BF16.
+FP16_OK           = True
+PRECISION_CFG     = str(cfg_get("precision", DEFAULTS["precision"]) or "auto").lower()
+PRECISION         = lora_options.resolve_precision(PRECISION_CFG, FP16_OK)
+COMPUTE_DTYPE, ADAPTER_DTYPE = lora_options.precision_dtypes(PRECISION)
 WEIGHT_DECAY = float(cfg_get("weight_decay", DEFAULTS["weight_decay"]))
 MAX_GRAD_NORM = float(cfg_get("max_grad_norm", DEFAULTS["max_grad_norm"]))
 
@@ -272,8 +279,8 @@ LOSS_CHUNK_ELEMENTS = int(cfg_get("loss_chunk_elements", DEFAULTS["loss_chunk_el
 if PREVIEW_MODE not in ("gen", "recon", "onestep"):
     PREVIEW_MODE = "gen"
 
-CACHE_DIR = str(resolve_cache_dir(f"./cached_data_ltx23_{PROJECT_NAME}" if PROJECT_NAME else cfg_get("cache_dir"), DEFAULTS["cache_dir"]))
-OUTPUT_DIR = str(resolve_output_dir(f"./ltx23_lora_output_{PROJECT_NAME}" if PROJECT_NAME else cfg_get("output_dir"), DEFAULTS["output_dir"]))
+CACHE_DIR = str(resolve_cache_dir(f"./cached_data_ltx23_{PROJECT_NAME}" if PROJECT_NAME else cfg_get("cache_dir", None), DEFAULTS["cache_dir"]))
+OUTPUT_DIR = str(resolve_output_dir(f"./ltx23_lora_output_{PROJECT_NAME}" if PROJECT_NAME else cfg_get("output_dir", None), DEFAULTS["output_dir"]))
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -302,6 +309,7 @@ print(f"  {t('LR Scheduler'):<28}: {lora_options.lr_scheduler_label(LR_SCHEDULER
 print("  LoRA Rank/Alpha             : {}/{}".format(LORA_RANK, LORA_ALPHA))
 print("  rsLoRA / LoRA+              : {} / {}".format("on" if USE_RSLORA else "off", "x{:g}".format(LORAPLUS_RATIO) if USE_LORAPLUS else "off"))
 print("  DoRA                        : {}".format(("on, NormFix" if DORA_NORMFIX else "on") if USE_DORA else "off"))
+print("  Precision                   : {}{}".format(PRECISION.upper(), " (auto)" if PRECISION_CFG not in ("bf16", "fp16") else ""))
 print("  Batch / Grad Accum          : {}/{}".format(BATCH_SIZE, GRAD_ACCUM_STEPS))
 print("  Max Text Tokens             : {}".format(MAX_TEXT_TOKENS))
 print("  LoRA Only Attention         : {}".format("ON" if LORA_ONLY_ATTN else "OFF"))
@@ -550,7 +558,7 @@ def load_nf4_transformer(cache_dir):
                 int(info["out_features"]),
                 bias=info.get("bias", False),
                 quant_type="nf4",
-                compute_dtype=torch.bfloat16,
+                compute_dtype=COMPUTE_DTYPE,
             )
 
         new_weight = Params4bit.from_prequantized(
@@ -565,7 +573,7 @@ def load_nf4_transformer(cache_dir):
 
         if bias_data is not None:
             new_layer.bias = torch.nn.Parameter(
-                bias_data.to("cuda", dtype=torch.bfloat16),
+                bias_data.to("cuda", dtype=COMPUTE_DTYPE),
                 requires_grad=False,
             )
 
@@ -795,7 +803,7 @@ def run_text_connectors(prompt_result, connectors, max_text_tokens=0):
 
     embeds, mask = get_prompt_pair(prompt_result)
 
-    embeds = embeds.to("cuda", dtype=torch.bfloat16)
+    embeds = embeds.to("cuda", dtype=COMPUTE_DTYPE)
     if embeds.ndim == 2:
         embeds = embeds.unsqueeze(0)
 
@@ -1002,8 +1010,8 @@ def prepare_text_conditioning(entries, connectors, max_text_tokens=0):
                 max_text_tokens=max_text_tokens,
             )
 
-            video_text = video_text.detach().to("cpu", dtype=torch.bfloat16).contiguous()
-            audio_text = audio_text.detach().to("cpu", dtype=torch.bfloat16).contiguous()
+            video_text = video_text.detach().to("cpu", dtype=COMPUTE_DTYPE).contiguous()
+            audio_text = audio_text.detach().to("cpu", dtype=COMPUTE_DTYPE).contiguous()
 
             torch.save(video_text, entry["_video_text_path"])
             torch.save(audio_text, entry["_audio_text_path"])
@@ -1015,10 +1023,10 @@ def prepare_text_conditioning(entries, connectors, max_text_tokens=0):
 
     for entry in entries:
         entry["video_text"] = pin_cpu_tensor(
-            torch.load(entry["_video_text_path"], map_location="cpu", weights_only=True).to(torch.bfloat16)
+            torch.load(entry["_video_text_path"], map_location="cpu", weights_only=True).to(COMPUTE_DTYPE)
         )
         entry["audio_text"] = pin_cpu_tensor(
-            torch.load(entry["_audio_text_path"], map_location="cpu", weights_only=True).to(torch.bfloat16)
+            torch.load(entry["_audio_text_path"], map_location="cpu", weights_only=True).to(COMPUTE_DTYPE)
         )
         entry.pop("prompt", None)
 
@@ -1079,8 +1087,8 @@ def prepare_special_text_conditioning(connectors, max_text_tokens, preview_custo
                 max_text_tokens=max_text_tokens,
             )
 
-            video_text = video_text.detach().to("cpu", dtype=torch.bfloat16).contiguous()
-            audio_text = audio_text.detach().to("cpu", dtype=torch.bfloat16).contiguous()
+            video_text = video_text.detach().to("cpu", dtype=COMPUTE_DTYPE).contiguous()
+            audio_text = audio_text.detach().to("cpu", dtype=COMPUTE_DTYPE).contiguous()
 
             torch.save(video_text, paths[prefix][0])
             torch.save(audio_text, paths[prefix][1])
@@ -1096,10 +1104,10 @@ def prepare_special_text_conditioning(connectors, max_text_tokens, preview_custo
         if os.path.exists(video_text_path) and os.path.exists(audio_text_path):
             special[prefix] = (
                 pin_cpu_tensor(
-                    torch.load(video_text_path, map_location="cpu", weights_only=True).to(torch.bfloat16)
+                    torch.load(video_text_path, map_location="cpu", weights_only=True).to(COMPUTE_DTYPE)
                 ),
                 pin_cpu_tensor(
-                    torch.load(audio_text_path, map_location="cpu", weights_only=True).to(torch.bfloat16)
+                    torch.load(audio_text_path, map_location="cpu", weights_only=True).to(COMPUTE_DTYPE)
                 ),
             )
 
@@ -1141,7 +1149,7 @@ def load_cached_entries(cache_dir, audio_channels, max_text_tokens=0):
         if video_latent is None:
             continue
 
-        video_latent = pin_cpu_tensor(video_latent.to(torch.bfloat16))
+        video_latent = pin_cpu_tensor(video_latent.to(COMPUTE_DTYPE))
 
         audio_latent_raw = torch.load(audio_path, map_location="cpu", weights_only=True)
 
@@ -1153,10 +1161,10 @@ def load_cached_entries(cache_dir, audio_channels, max_text_tokens=0):
 
             audio_latent = torch.zeros(
                 (bsz, audio_channels, 1),
-                dtype=torch.bfloat16,
+                dtype=COMPUTE_DTYPE,
             )
         else:
-            audio_latent = audio_latent_raw.to(torch.bfloat16)
+            audio_latent = audio_latent_raw.to(COMPUTE_DTYPE)
 
         audio_latent = pin_cpu_tensor(audio_latent)
 
@@ -1343,15 +1351,15 @@ def cast_frozen_to_bf16(root):
         if param.requires_grad:
             continue
 
-        if param.is_floating_point() and param.dtype != torch.bfloat16:
-            param.data = param.data.to(torch.bfloat16)
+        if param.is_floating_point() and param.dtype != COMPUTE_DTYPE:
+            param.data = param.data.to(COMPUTE_DTYPE)
 
     for name, buf in root.named_buffers():
-        if buf.is_floating_point() and buf.dtype != torch.bfloat16:
+        if buf.is_floating_point() and buf.dtype != COMPUTE_DTYPE:
             lower = name.lower()
             if any(k in lower for k in ("norm", "ln", "layernorm")):
                 continue
-            buf.data = buf.data.to(torch.bfloat16)
+            buf.data = buf.data.to(COMPUTE_DTYPE)
 
 
 # ===========================================================================
@@ -1445,7 +1453,7 @@ def build_lora_metadata(step):
         "ss_batch_size_per_device": BATCH_SIZE,
         "ss_gradient_accumulation_steps": GRAD_ACCUM_STEPS,
         "ss_seed": SEED,
-        "ss_mixed_precision": "bf16",
+        "ss_mixed_precision": PRECISION,
     }
 
     # La GUI lee estas claves al exportar o descargar para poner el sufijo _rs / _plus al nombre.
@@ -1531,7 +1539,7 @@ class LTXVaeHolder:
     def get(cls):
         if cls.vae is None:
             use_fp32 = globals().get("PREVIEW_VAE_FP32", True)
-            dtype = torch.float32 if use_fp32 else torch.bfloat16
+            dtype = torch.float32 if use_fp32 else (torch.bfloat16 if PRECISION == "bf16" else torch.float32)
 
             pipe = DiffusionPipeline.from_pretrained(
                 MODEL_ID,
@@ -1626,7 +1634,7 @@ def preview_forward(
         ts,
         video_tokens.shape[1],
         video_tokens.device,
-        torch.bfloat16,
+        COMPUTE_DTYPE,
     )
 
     forward_kwargs = {
@@ -1814,12 +1822,12 @@ def make_preview_sigmas(steps, sigma_start=1.0, shift=1.0, device="cuda"):
 
 
 def prepare_preview_tensors(entry, device):
-    video = entry["video"].to(device, dtype=torch.bfloat16, non_blocking=True)
+    video = entry["video"].to(device, dtype=COMPUTE_DTYPE, non_blocking=True)
     if video.ndim == 4:
         video = video.unsqueeze(0)
     video = video[:1].contiguous()
 
-    audio = entry["audio"].to(device, dtype=torch.bfloat16, non_blocking=True)
+    audio = entry["audio"].to(device, dtype=COMPUTE_DTYPE, non_blocking=True)
     if audio.ndim == 2:
         audio = audio.unsqueeze(0)
     audio = audio[:1].contiguous()
@@ -2288,8 +2296,8 @@ def run_preview_diagnostic(
         video_clean, audio_clean = prepare_preview_tensors(entry, device)
         video_clean = align_video_latent_to_patch(video_clean, patch_size, patch_size_t)
 
-        video_text = video_text.to(device, dtype=torch.bfloat16)
-        audio_text = audio_text.to(device, dtype=torch.bfloat16)
+        video_text = video_text.to(device, dtype=COMPUTE_DTYPE)
+        audio_text = audio_text.to(device, dtype=COMPUTE_DTYPE)
 
         if video_text.ndim == 2:
             video_text = video_text.unsqueeze(0)
@@ -2306,8 +2314,8 @@ def run_preview_diagnostic(
         if eff_cfg > 1.0 and "_neg" in special_texts:
             neg_video_text, neg_audio_text = special_texts["_neg"]
 
-            neg_video_text = neg_video_text.to(device, dtype=torch.bfloat16)
-            neg_audio_text = neg_audio_text.to(device, dtype=torch.bfloat16)
+            neg_video_text = neg_video_text.to(device, dtype=COMPUTE_DTYPE)
+            neg_audio_text = neg_audio_text.to(device, dtype=COMPUTE_DTYPE)
 
             if neg_video_text.ndim == 2:
                 neg_video_text = neg_video_text.unsqueeze(0)
@@ -2565,7 +2573,7 @@ def train_ltx23():
         tokenizer=None,
         processor=None,
         vocoder=None,
-        torch_dtype=torch.bfloat16,
+        torch_dtype=COMPUTE_DTYPE,
         low_cpu_mem_usage=True,
     )
 
@@ -2609,6 +2617,7 @@ def train_ltx23():
 
     if CAST_FROZEN_BF16:
         cast_frozen_to_bf16(transformer)
+        lora_options.to_compute_dtype(transformer, COMPUTE_DTYPE)
 
     transformer.to("cuda")
     free_vram()
@@ -2683,11 +2692,11 @@ def train_ltx23():
     for module in model.modules():
         if hasattr(module, "lora_A"):
             for adapter in module.lora_A.values():
-                adapter.to(dtype=torch.bfloat16)
+                adapter.to(dtype=ADAPTER_DTYPE)
 
         if hasattr(module, "lora_B"):
             for adapter in module.lora_B.values():
-                adapter.to(dtype=torch.bfloat16)
+                adapter.to(dtype=ADAPTER_DTYPE)
 
     enable_gradient_checkpointing_safe(transformer, model)
 
@@ -2726,6 +2735,7 @@ def train_ltx23():
         lr=LR,
         weight_decay=WEIGHT_DECAY,
     )
+    scaler = lora_options.grad_scaler(PRECISION)   # FP16: loss escalada; BF16: no hace nada
 
     # ------------------------------------------------------------
     # Resume checkpoint
@@ -2872,8 +2882,8 @@ def train_ltx23():
 
             entry = random.choice(entries)
 
-            video_clean = entry["video"].to("cuda", dtype=torch.bfloat16, non_blocking=True)
-            audio_clean = entry["audio"].to("cuda", dtype=torch.bfloat16, non_blocking=True)
+            video_clean = entry["video"].to("cuda", dtype=COMPUTE_DTYPE, non_blocking=True)
+            audio_clean = entry["audio"].to("cuda", dtype=COMPUTE_DTYPE, non_blocking=True)
 
             if video_clean.ndim == 4:
                 video_clean = video_clean.unsqueeze(0)
@@ -2881,8 +2891,8 @@ def train_ltx23():
             if audio_clean.ndim == 2:
                 audio_clean = audio_clean.unsqueeze(0)
 
-            video_text = entry["video_text"].to("cuda", dtype=torch.bfloat16, non_blocking=True)
-            audio_text = entry["audio_text"].to("cuda", dtype=torch.bfloat16, non_blocking=True)
+            video_text = entry["video_text"].to("cuda", dtype=COMPUTE_DTYPE, non_blocking=True)
+            audio_text = entry["audio_text"].to("cuda", dtype=COMPUTE_DTYPE, non_blocking=True)
 
             if video_text.ndim == 2:
                 video_text = video_text.unsqueeze(0)
@@ -2929,12 +2939,12 @@ def train_ltx23():
                 sigma,
                 video_seq_len,
                 "cuda",
-                torch.bfloat16,
+                COMPUTE_DTYPE,
             )
 
             audio_timestep = (
                 sigma * float(getattr(CURRENT_CONFIG, "timestep_scale_multiplier", 1000))
-            ).to(torch.bfloat16)
+            ).to(COMPUTE_DTYPE)
 
             del video_clean, audio_clean, video_tokens, audio_tokens
             del noise_video, noise_audio, t_video, t_audio
@@ -3022,7 +3032,7 @@ def train_ltx23():
                 loss = mse_loss_chunked(pred_video, target_video)
 
             loss = loss / GRAD_ACCUM_STEPS
-            loss.backward()
+            scaler.scale(loss).backward()
 
             step_loss = loss.item() * GRAD_ACCUM_STEPS
             running_loss += step_loss
@@ -3030,13 +3040,15 @@ def train_ltx23():
             loss = None
 
             if step % GRAD_ACCUM_STEPS == 0:
+                scaler.unscale_(optimizer)
                 grad_norm = torch.nn.utils.clip_grad_norm_(trainable, MAX_GRAD_NORM).item()
                 current_lr = lr_at(step)
 
                 for group in optimizer.param_groups:
                     group["lr"] = current_lr * group.get("lr_mult", 1.0)
 
-                optimizer.step()
+                scaler.step(optimizer)      # en FP16 se salta si hubo inf
+                scaler.update()
                 optimizer.zero_grad(set_to_none=True)
             else:
                 # La norma solo existe al aplicar el optimizador: entre medias se muestra la última.

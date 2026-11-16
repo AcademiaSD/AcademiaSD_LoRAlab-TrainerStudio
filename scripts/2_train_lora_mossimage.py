@@ -105,6 +105,7 @@ DEFAULTS = {
     "lokr_factor": 16,
     "use_dora": False,
     "dora_normfix": True,
+    "precision": "auto",
     "weight_decay": 0.0,
     "max_grad_norm": 1.0,
     "save_every": 100,
@@ -165,6 +166,12 @@ USE_DORA          = bool(cfg.get("use_dora",     DEFAULTS["use_dora"]))
 # transformer NF4) en vez de la del NF4, que es la que divide ComfyUI. Sin esto el LoRA pierde el parecido
 # en ComfyUI aunque las previews salgan bien. Solo cambia la exportación.
 DORA_NORMFIX      = bool(cfg.get("dora_normfix", DEFAULTS["dora_normfix"]))
+# Precisión de cálculo (Auto / BF16 / FP16): ver lora_options.resolve_precision. FP16_OK: las activaciones
+# del modelo caben en FP16 (medido), si no Auto se queda en BF16.
+FP16_OK           = True
+PRECISION_CFG     = str(cfg.get("precision", DEFAULTS["precision"]) or "auto").lower()
+PRECISION         = lora_options.resolve_precision(PRECISION_CFG, FP16_OK)
+COMPUTE_DTYPE, ADAPTER_DTYPE = lora_options.precision_dtypes(PRECISION)
 if USE_LOKR:
     USE_RSLORA = USE_LORAPLUS = USE_DORA = False
 WEIGHT_DECAY      = cfg.get("weight_decay",      DEFAULTS["weight_decay"])
@@ -203,6 +210,7 @@ print(f"  {'LoRA Rank/Alpha':<22}: {LORA_RANK}/{LORA_ALPHA}")
 print(f"  {'rsLoRA / LoRA+':<22}: {'on' if USE_RSLORA else 'off'} / {f'x{LORAPLUS_RATIO:g}' if USE_LORAPLUS else 'off'}")
 print(f"  {'LoKr':<22}: {f'factor {LOKR_FACTOR}' if USE_LOKR else 'off'}")
 print(f"  {'DoRA':<22}: {('on, NormFix' if DORA_NORMFIX else 'on') if USE_DORA else 'off'}")
+print(f"  {'Precision':<22}: {PRECISION.upper()}{' (auto)' if PRECISION_CFG not in ('bf16', 'fp16') else ''}")
 print(f"  {'Batch / Grad Accum':<22}: {BATCH_SIZE}/{GRAD_ACCUM_STEPS}")
 print(f"  {t('Preview'):<22}: {t('Mode')}={PREVIEW_CAPTION_MODE} | Prompt='{PREVIEW_CUSTOM_PROMPT}'")
 print(f"  {t('Preview Every'):<22}: {PREVIEW_EVERY} | {t('Preview Steps')} {PREVIEW_STEPS} | CFG {PREVIEW_CFG} | {t('Preview Size')} {PREVIEW_SIZE or t('Training')}")
@@ -326,7 +334,7 @@ def sample_sigma(batch_size, device):
 def stack_embeds(embeds, device):
     """Embeddings de distinta longitud -> [B, S, 4096] rellenados con ceros + máscara [B, S]."""
     n = max(e.shape[0] for e in embeds)
-    out = torch.zeros(len(embeds), n, embeds[0].shape[-1], dtype=torch.bfloat16, device=device)
+    out = torch.zeros(len(embeds), n, embeds[0].shape[-1], dtype=COMPUTE_DTYPE, device=device)
     mask = torch.zeros(len(embeds), n, dtype=torch.long, device=device)
     for i, e in enumerate(embeds):
         out[i, :e.shape[0]] = e.to(device, non_blocking=True)
@@ -369,7 +377,7 @@ def load_nf4_transformer(model_dir):
         # En meta: nn.Linear.__init__ reserva y rellena con kaiming una matriz FP32 que se tira
         # en la línea siguiente.
         with torch.device("meta"):
-            layer = Linear4bit(info["in_features"], info["out_features"], bias=False, quant_type="nf4", compute_dtype=torch.bfloat16)
+            layer = Linear4bit(info["in_features"], info["out_features"], bias=False, quant_type="nf4", compute_dtype=COMPUTE_DTYPE)
         layer.weight = weight
         set_module(name, layer)
 
@@ -405,7 +413,7 @@ def build_lora_metadata(step):
         "ss_batch_size_per_device": BATCH_SIZE,
         "ss_gradient_accumulation_steps": GRAD_ACCUM_STEPS,
         "ss_seed": SEED,
-        "ss_mixed_precision": "bf16",
+        "ss_mixed_precision": PRECISION,
     }
 
     # La GUI lee estas claves al exportar o descargar para poner el sufijo _rs / _plus / _lokr al nombre.
@@ -491,7 +499,7 @@ class VaeHolder:
     @classmethod
     def get(cls):
         if cls.vae is None:
-            cls.vae = AutoencoderKLFlux2.from_pretrained(MODEL_ID, subfolder="vae", torch_dtype=torch.bfloat16)
+            cls.vae = AutoencoderKLFlux2.from_pretrained(MODEL_ID, subfolder="vae", torch_dtype=(torch.bfloat16 if PRECISION == "bf16" else torch.float32))
         return cls.vae
 
 
@@ -547,7 +555,7 @@ def denoise(model, scheduler, emb, H, W, generator, neg=None, refs=None):
         timestep = t.expand(1)
         preds = []
         for (text, mask), skip in conds:
-            preds.append(model(latents.to(torch.bfloat16), timestep, text, mask, skip_layers=skip,
+            preds.append(model(latents.to(COMPUTE_DTYPE), timestep, text, mask, skip_layers=skip,
                                references=references).float())
         pred = preds[0] if not use_cfg else preds[1] + PREVIEW_CFG * (preds[0] - preds[1])
         latents = scheduler.step(pred, t, latents, return_dict=False)[0]
@@ -633,7 +641,7 @@ def denoise_turbo(model, emb, H, W, generator, refs=None):
     references = [refs] if refs else None
     for code in codes[:max(1, PREVIEW_STEPS)]:
         x = z + torch.einsum("oc,bchw->bohw", Q, x0)
-        x0 = z - model(x.to(torch.bfloat16), torch.tensor([code], device="cuda"), text, mask,
+        x0 = z - model(x.to(COMPUTE_DTYPE), torch.tensor([code], device="cuda"), text, mask,
                        references=references).float()
     return x0
 
@@ -800,6 +808,7 @@ def train_mossimage():
     print(t("Loading {name}...", name=f"MOSS-Image {BASE_MODEL.upper()} Transformer (NF4)"))
     t0 = time.time()
     transformer = load_nf4_transformer(MODEL_ID)
+    lora_options.to_compute_dtype(transformer, COMPUTE_DTYPE)
     transformer.to("cuda")
     VRAM_TOTAL = torch.cuda.get_device_properties(0).total_memory
     free_vram()
@@ -904,6 +913,7 @@ def train_mossimage():
                                       lr=LR, weight_decay=WEIGHT_DECAY)
     else:
         optimizer = torch.optim.AdamW(trainable, lr=LR, weight_decay=WEIGHT_DECAY)
+    scaler = lora_options.grad_scaler(PRECISION)   # FP16: loss escalada; BF16: no hace nada
 
     def lr_at(step):
         return LR * lora_options.lr_factor(LR_SCHEDULER, step, TOTAL_STEPS, WARMUP_STEPS, MIN_LR_RATIO, LR_CYCLES)
@@ -978,12 +988,12 @@ def train_mossimage():
         for key, suffix in (("lat", "latent"), ("emb", "embed"), ("uncond", "uncond")):
             path = f"{CACHE_DIR}/{nombre}_{suffix}.pt"
             if os.path.exists(path):
-                t = torch.load(path, weights_only=True).to(torch.bfloat16)
+                t = torch.load(path, weights_only=True).to(COMPUTE_DTYPE)
                 sample[key] = t.pin_memory() if pin else t
         ctrls, index = [], 1
         path = f"{CACHE_DIR}/{nombre}_ctrl.pt"
         while os.path.exists(path):
-            t = torch.load(path, weights_only=True).to(torch.bfloat16)
+            t = torch.load(path, weights_only=True).to(COMPUTE_DTYPE)
             ctrls.append(t.pin_memory() if pin else t)
             index += 1
             path = f"{CACHE_DIR}/{nombre}_ctrl_{index}.pt"
@@ -1005,7 +1015,7 @@ def train_mossimage():
 
     neg = None
     if os.path.exists(f"{CACHE_DIR}/_neg_embed.pt"):
-        neg = torch.load(f"{CACHE_DIR}/_neg_embed.pt", weights_only=True).to(torch.bfloat16)
+        neg = torch.load(f"{CACHE_DIR}/_neg_embed.pt", weights_only=True).to(COMPUTE_DTYPE)
 
     all_preview_names = sorted(k for k in cache_data.keys() if not cache_names.is_reserved(k))
 
@@ -1054,7 +1064,7 @@ def train_mossimage():
             noise  = torch.randn_like(latents)
             t_exp  = sigma.view(-1, 1, 1, 1)
 
-            noisy = ((1 - t_exp) * latents + t_exp * noise).to(torch.bfloat16)
+            noisy = ((1 - t_exp) * latents + t_exp * noise).to(COMPUTE_DTYPE)
             # El transformer predice la velocidad (ruido - x0); el timestep va en escala 0-1000.
             target = noise - latents
 
@@ -1064,16 +1074,18 @@ def train_mossimage():
             pred = model(noisy, sigma * 1000, text, mask, references=references)
 
             loss = F.mse_loss(pred.float(), target) / GRAD_ACCUM_STEPS
-            loss.backward()
+            scaler.scale(loss).backward()
             step_loss = loss.item() * GRAD_ACCUM_STEPS
             running_loss += step_loss
 
             # La norma solo existe al aplicar el optimizador: entre medias se muestra la última.
             if step % GRAD_ACCUM_STEPS == 0:
+                scaler.unscale_(optimizer)
                 grad_norm = torch.nn.utils.clip_grad_norm_(trainable, MAX_GRAD_NORM).item()
                 for gparam in optimizer.param_groups:
                     gparam["lr"] = lr_at(step) * gparam.get("lr_mult", 1.0)
-                optimizer.step()
+                scaler.step(optimizer)      # en FP16 se salta si hubo inf
+                scaler.update()
                 optimizer.zero_grad(set_to_none=True)
 
             # Con 8 GB, los distintos tamaños de imagen fragmentan la caché de CUDA hasta llenarla; en
