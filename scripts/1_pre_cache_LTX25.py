@@ -1358,14 +1358,18 @@ def preprocess_ltx25():
             pixels = ltx25_model.read_video(src, frames, bw, bh)
             pixels = torch.from_numpy(pixels.copy()).permute(3, 0, 1, 2).unsqueeze(0).float() / 127.5 - 1.0
             print(t("Encoding video latent..."))
-            # Tiles en el VAE solo para clips (en 8 GB un clip entero no cabe de una vez); las imágenes como antes.
-            if hasattr(pipe.vae, "enable_tiling"):
-                pipe.vae.enable_tiling()
+            # Entero (los tiles cambian el latente ~3 %); con tiles solo si el clip entero no cabe en la VRAM.
             try:
                 with torch.inference_mode():
                     video_latent = encode_pixels(pipe.vae, pixels)
-            finally:
-                if hasattr(pipe.vae, "disable_tiling"):
+            except torch.OutOfMemoryError:
+                free_vram()
+                print("[VRAM] " + t("The whole clip does not fit: encoding it in tiles."))
+                pipe.vae.enable_tiling()
+                try:
+                    with torch.inference_mode():
+                        video_latent = encode_pixels(pipe.vae, pixels)
+                finally:
                     pipe.vae.disable_tiling()
             del pixels
         else:
@@ -1405,13 +1409,16 @@ def preprocess_ltx25():
                 l, tp = (rimg.width - rw) // 2, (rimg.height - rh) // 2
                 rimg = rimg.crop((l, tp, l + rw, tp + rh))
                 rpix = (F_vision.pil_to_tensor(rimg).float() / 127.5 - 1.0).unsqueeze(0).unsqueeze(2)
-            if hasattr(pipe.vae, "enable_tiling") and rpix.shape[2] > 1:
-                pipe.vae.enable_tiling()
             try:
                 with torch.inference_mode():
                     ref_latent = encode_pixels(pipe.vae, rpix)
-            finally:
-                if hasattr(pipe.vae, "disable_tiling"):
+            except torch.OutOfMemoryError:
+                free_vram()
+                pipe.vae.enable_tiling()
+                try:
+                    with torch.inference_mode():
+                        ref_latent = encode_pixels(pipe.vae, rpix)
+                finally:
                     pipe.vae.disable_tiling()
             torch.save(ref_latent, os.path.join(CACHE_DIR, f"{base}_ref_latent.pt"))
             ref_info = {"file": REF_FILES[base], "downscale": REF_DOWNSCALE, "shape": list(ref_latent.shape)}

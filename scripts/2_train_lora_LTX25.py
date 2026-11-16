@@ -1790,19 +1790,23 @@ def predict_velocity_cfg(
     return guided_v, guided_a
 
 
+_CUDNN_BENCH = None
+
+
 def _vae_tiling(vae, on):
-    """Clips: el VAE decodifica en tiles espaciales y por tramos de 16 fotogramas con solape (framewise), en vez
-    de los N fotogramas de golpe. Las imágenes se decodifican enteras, como siempre."""
+    """
+    Decodificación de clips. El entrenamiento activa cudnn.benchmark, que con las convoluciones 3D del VAE prueba
+    algoritmos con espacios de trabajo enormes: medido, 97 fotogramas a 576x320 piden +9.9 GB con benchmark y
+    +3.2 GB sin él. Se apaga solo mientras decodifica. Los tiles del VAE NO se usan: no ahorran casi nada y
+    cambian la imagen (con tiles y tramos de 16 fotogramas la salida difería de la decodificación entera).
+    """
+    global _CUDNN_BENCH
     if on:
-        if hasattr(vae, "enable_tiling"):
-            vae.enable_tiling()
-        if hasattr(vae, "use_framewise_decoding"):
-            vae.use_framewise_decoding = True
-    else:
-        if hasattr(vae, "disable_tiling"):
-            vae.disable_tiling()
-        if hasattr(vae, "use_framewise_decoding"):
-            vae.use_framewise_decoding = False
+        _CUDNN_BENCH = torch.backends.cudnn.benchmark
+        torch.backends.cudnn.benchmark = False
+    elif _CUDNN_BENCH is not None:
+        torch.backends.cudnn.benchmark = _CUDNN_BENCH
+        _CUDNN_BENCH = None
 
 
 def decode_preview_latent(vae, latent, frame_index=-1, all_frames=False):
