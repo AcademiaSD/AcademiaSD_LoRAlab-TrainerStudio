@@ -108,6 +108,7 @@ DEFAULTS = {
     "output_dir": "./Outputs/yue2_lora_output",
     "stage": "ar",               # ar | nar | both (ar: la etapa que clona la voz en las pruebas reales)
     "precision": "bf16",         # bf16 | nf4 (el NF4 se valida contra BF16 en Fase 6)
+    "compute_precision": "auto", # auto | bf16 | fp16: tipo de cálculo (aparte de cómo va el modelo)
     "total_steps": 600,          # columna AR del README (la etapa por defecto)
     "batch_size": 1,             # reservado: los clips cambian de longitud; usa grad_accum_steps
     "grad_accum_steps": 4,
@@ -161,6 +162,11 @@ if STAGE not in ("nar", "ar", "both"):
     print("[!] " + t("Unknown stage '{s}': must be nar, ar or both. Using ar.", s=STAGE))
     STAGE = "ar"
 PRECISION        = "nf4" if _g("precision") == "nf4" else "bf16"
+# Precisión de cálculo (Compute: Auto / BF16 / FP16), aparte de "precision" (modelo en NF4 o BF16):
+# ver lora_options.resolve_precision.
+COMPUTE_CFG       = str(_g("compute_precision") or "auto").lower()
+COMPUTE_PRECISION = lora_options.resolve_precision(COMPUTE_CFG, True)
+COMPUTE_DTYPE, ADAPTER_DTYPE = lora_options.precision_dtypes(COMPUTE_PRECISION)
 TOTAL_STEPS      = int(_g("total_steps"))
 BATCH_SIZE       = max(1, int(_g("batch_size")))
 GRAD_ACCUM_STEPS = max(1, int(_g("grad_accum_steps")))
@@ -214,6 +220,7 @@ STAGES_TO_RUN = ["nar", "ar"] if STAGE == "both" else [STAGE]
 _os = os.path.basename(MODEL_DIR)
 print(f"  {t('Model ID'):<22}: {_os}")
 print(f"  {t('Precision'):<22}: {PRECISION.upper()}")
+print(f"  {'Compute':<22}: {COMPUTE_PRECISION.upper()}{' (auto)' if COMPUTE_CFG not in ('bf16', 'fp16') else ''}")
 _stages_note = " + ".join(STAGES_TO_RUN) if STAGE == "both" else STAGE
 print(f"  {t('Stage'):<22}: {_stages_note}")
 print(f"  {t('Project Name'):<22}: {PROJECT_NAME if PROJECT_NAME else t('(Default)')}")
@@ -284,7 +291,7 @@ def build_lora_metadata(step, stage):
         "ss_batch_size_per_device": BATCH_SIZE,
         "ss_gradient_accumulation_steps": GRAD_ACCUM_STEPS,
         "ss_seed": SEED,
-        "ss_mixed_precision": "bf16",
+        "ss_mixed_precision": COMPUTE_PRECISION,
         "yue2_protocol": "yue2-native-v1",
     }
     if USE_LOKR:
@@ -1065,6 +1072,7 @@ def train_stage(stage, base):
             lr=LR, weight_decay=WEIGHT_DECAY)
     else:
         optimizer = torch.optim.AdamW(trainable, lr=LR, weight_decay=WEIGHT_DECAY)
+    scaler = lora_options.grad_scaler(COMPUTE_PRECISION)   # FP16: loss escalada; BF16: no hace nada
 
     def lr_at(idx):
         return LR * lora_options.lr_factor(LR_SCHEDULER, idx, TOTAL_STEPS,
@@ -1184,15 +1192,17 @@ def train_stage(stage, base):
                 else:
                     loss = ar_loss_step(model, info["base_ids"], info["codes"])
 
-            (loss / GRAD_ACCUM_STEPS).backward()
+            scaler.scale(loss / GRAD_ACCUM_STEPS).backward()
             step_loss = loss.item()
             running_loss += step_loss
 
             if step % GRAD_ACCUM_STEPS == 0:
+                scaler.unscale_(optimizer)
                 grad_norm = torch.nn.utils.clip_grad_norm_(trainable, MAX_GRAD_NORM).item()
                 for group in optimizer.param_groups:
                     group["lr"] = lr_at(step) * group.get("lr_mult", 1.0)
-                optimizer.step()
+                scaler.step(optimizer)      # en FP16 se salta si hubo inf
+                scaler.update()
                 optimizer.zero_grad(set_to_none=True)
 
             elapsed = time.time() - t0
@@ -1275,7 +1285,7 @@ def main():
         print("\n" + "=" * 65)
         print(t("Loading {name}...", name=f"YuE2-3B backbone ({PRECISION.upper()})"))
         t0 = time.time()
-        base = load_model()
+        base = lora_options.to_compute_dtype(load_model(), COMPUTE_DTYPE)
         base.cuda()
         free_vram()
         print(t("Model loaded in {s:.1f}s.", s=time.time() - t0)
