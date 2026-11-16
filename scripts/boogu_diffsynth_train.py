@@ -19,7 +19,7 @@ import accelerate
 import torch
 from torch.utils.data import DataLoader, Dataset
 from boogu_dataset import CACHE_VERSION, cache_path
-from boogu_model import NF4_DIR, quiet
+from boogu_model import NF4_DIR, NF4_REPO, quiet
 from i18n import t
 import training_metrics
 from diffsynth.core.data.operators import *  # noqa: F401,F403
@@ -55,6 +55,7 @@ class BooguImageTrainingModule(DiffusionTrainingModule):
         use_lokr=False,
         lokr_factor=16,
         use_dora=False,
+        dora_normfix=True,
         lora_checkpoint=None,
         preset_lora_path=None,
         preset_lora_model=None,
@@ -92,6 +93,8 @@ class BooguImageTrainingModule(DiffusionTrainingModule):
         self.use_rslora = bool(use_rslora and not self.use_lokr)
         # DoRA (Liu et al., 2024): cada fila de salida aprende su magnitud aparte de la dirección (PEFT use_dora).
         self.use_dora = bool(use_dora and not self.use_lokr)
+        # NormFix: la exportación usa la norma por fila del peso original (dora_norms.safetensors del NF4).
+        self.dora_normfix = bool(dora_normfix)
         self.lokr_factor = max(1, int(lokr_factor))
         self.switch_pipe_to_training_mode(
             self.pipe,
@@ -152,6 +155,10 @@ class BooguImageTrainingModule(DiffusionTrainingModule):
             use_dora=self.use_dora,
         )
         model = inject_adapter_in_model(config, model)
+        if self.use_dora:
+            import lora_options
+            lora_options.attach_dora_norms(model, [str(NF4_DIR / "transformer"), str(NF4_DIR)], self.dora_normfix,
+                                           repo_id=NF4_REPO, root=str(NF4_DIR))
         if upcast_dtype is not None:
             for param in model.parameters():
                 if param.requires_grad:
@@ -262,6 +269,7 @@ def boogu_image_parser():
     parser.add_argument("--use_rslora", action="store_true")
     parser.add_argument("--use_lokr", action="store_true")
     parser.add_argument("--use_dora", action="store_true")
+    parser.add_argument("--no_dora_normfix", action="store_true")
     parser.add_argument("--lokr_factor", type=int, default=16)
     parser.add_argument("--lora_batch_size", type=int, default=1)
     parser.add_argument("--total_steps", type=int, default=500)
@@ -721,6 +729,7 @@ def main():
             use_lokr=args.use_lokr,
             lokr_factor=args.lokr_factor,
             use_dora=args.use_dora and not args.use_lokr,
+            dora_normfix=not args.no_dora_normfix,
             lora_checkpoint=args.lora_checkpoint,
             preset_lora_path=args.preset_lora_path,
             preset_lora_model=args.preset_lora_model,

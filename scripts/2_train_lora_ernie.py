@@ -40,6 +40,10 @@ LR=float(cfg.get("lr",3e-4)); WARMUP=int(cfg.get("warmup_steps",100)); MIN_LR_RA
 RANK=int(cfg.get("lora_rank",16)); ALPHA=float(cfg.get("lora_alpha",16)); USE_RSLORA=bool(cfg.get("use_rslora",False)); USE_LORAPLUS=bool(cfg.get("use_loraplus",False)); LORAPLUS_RATIO=float(cfg.get("loraplus_ratio",16)); USE_LOKR=bool(cfg.get("use_lokr",False)); LOKR_FACTOR=max(1,int(cfg.get("lokr_factor",16)))
 # DoRA (Liu et al., 2024): cada fila de salida aprende su magnitud aparte de la dirección (PEFT use_dora). No con LoKr.
 USE_DORA=bool(cfg.get("use_dora",False)) and not USE_LOKR
+# DoRA NormFix: la exportación usa la norma por fila del peso original (dora_norms.safetensors junto al
+# transformer NF4) en vez de la del NF4, que es la que divide ComfyUI. Sin esto el LoRA pierde el parecido
+# en ComfyUI aunque las previews salgan bien. Solo cambia la exportación.
+DORA_NORMFIX=bool(cfg.get("dora_normfix",True))
 LORA_TARGETS="all" if cfg.get("lora_targets","blocks")=="all" else "blocks"
 WEIGHT_DECAY=float(cfg.get("weight_decay",0)); MAX_GRAD_NORM=float(cfg.get("max_grad_norm",1.0)); PREVIEW_EVERY=int(cfg.get("preview_every",0) or 0)
 PREVIEW_STEPS=int(cfg.get("preview_steps",28)); PREVIEW_CFG=float(cfg.get("preview_cfg",4)); PREVIEW_SIZE=int(cfg.get("preview_size",0)); PREVIEW_WIDTH=int(cfg.get("preview_width",0)); PREVIEW_HEIGHT=int(cfg.get("preview_height",0))
@@ -167,7 +171,8 @@ def main():
     else:
         lconf=LoraConfig(r=RANK,lora_alpha=ALPHA,target_modules=targets,bias="none",init_lora_weights=True,use_rslora=USE_RSLORA,use_dora=USE_DORA)
         model=get_peft_model(model,lconf)
-    print(f"  {'DoRA':<22}: {'on' if USE_DORA else 'off'}",flush=True)
+        if USE_DORA: lora_options.attach_dora_norms(model,os.path.join(MODEL,"transformer"),DORA_NORMFIX,repo_id="AcademiaSD/Ernie-NF4-for-LoRA-Training",root=MODEL)
+    print(f"  {'DoRA':<22}: {('on, NormFix' if DORA_NORMFIX else 'on') if USE_DORA else 'off'}",flush=True)
     model.train()
     trainable=[p for p in model.parameters() if p.requires_grad]
     if USE_LORAPLUS:

@@ -63,6 +63,7 @@ DEFAULTS = {
     "use_loraplus": False,
     "loraplus_ratio": 16.0,
     "use_dora": False,
+    "dora_normfix": True,
     "lora_targets": "blocks",
     "blocks_on_gpu": -1,
     "weight_decay": 0.0,
@@ -117,6 +118,10 @@ LORAPLUS_RATIO    = float(cfg.get("loraplus_ratio", DEFAULTS["loraplus_ratio"]))
 # Es una variante de LoRA (PEFT, use_dora): convive con rsLoRA y LoRA+. Cada paso descomprime
 # el peso NF4 de cada capa para su norma, así que es más lento y pide algo más de VRAM.
 USE_DORA          = bool(cfg.get("use_dora",     DEFAULTS["use_dora"]))
+# DoRA NormFix: la exportación usa la norma por fila del peso original (dora_norms.safetensors junto al
+# transformer NF4) en vez de la del NF4, que es la que divide ComfyUI. Sin esto el LoRA pierde el parecido
+# en ComfyUI aunque las previews salgan bien. Solo cambia la exportación.
+DORA_NORMFIX      = bool(cfg.get("dora_normfix", DEFAULTS["dora_normfix"]))
 # Bloques que se quedan en la GPU (de 60); el resto se sube de la RAM bloque a bloque. -1 = automático.
 BLOCKS_ON_GPU     = int(cfg.get("blocks_on_gpu", DEFAULTS["blocks_on_gpu"]))
 WEIGHT_DECAY      = cfg.get("weight_decay",      DEFAULTS["weight_decay"])
@@ -157,7 +162,7 @@ print(f"  {t('Learning Rate'):<22}: {LR}")
 print(f"  {t('LR Scheduler'):<22}: {lora_options.lr_scheduler_label(LR_SCHEDULER, WARMUP_STEPS, LR_CYCLES)}")
 print(f"  {'LoRA Rank/Alpha':<22}: {LORA_RANK}/{LORA_ALPHA}")
 print(f"  {'rsLoRA / LoRA+':<22}: {'on' if USE_RSLORA else 'off'} / {f'x{LORAPLUS_RATIO:g}' if USE_LORAPLUS else 'off'}")
-print(f"  {'DoRA':<22}: {'on' if USE_DORA else 'off'}")
+print(f"  {'DoRA':<22}: {('on, NormFix' if DORA_NORMFIX else 'on') if USE_DORA else 'off'}")
 print(f"  {t('LoRA Targets'):<22}: {LORA_TARGETS}")
 print(f"  {'Batch / Grad Accum':<22}: {BATCH_SIZE}/{GRAD_ACCUM_STEPS}")
 print(f"  {t('Blocks on GPU'):<22}: {t('auto') if BLOCKS_ON_GPU < 0 else BLOCKS_ON_GPU}")
@@ -669,6 +674,8 @@ def train_qwenimage2512():
         target_modules=target_modules, use_dora=USE_DORA, init_lora_weights=True, use_rslora=USE_RSLORA
     )
     model = get_peft_model(transformer, lora_config)
+    if USE_DORA:
+        lora_options.attach_dora_norms(model, TRANSFORMER_DIR, DORA_NORMFIX, repo_id=HF_REPO_ID, root=MODEL_ID)
     # LoRA y estados del optimizador en FP32: en 8/16 bits se pierde el detalle fino (caras).
     for p in model.parameters():
         if p.requires_grad:

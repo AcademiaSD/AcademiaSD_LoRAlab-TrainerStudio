@@ -538,6 +538,12 @@
                                 DoRA
                             </label>
                         </div>
+                        <div class="form-group" title="NormFix: when the LoRA is saved, DoRA uses the row sizes of the original model instead of those of the 4-bit copy it trains on. ComfyUI measures them on the model it loads, and the 4-bit copy is off by more than what DoRA learns, so without NormFix the LoRA can lose the likeness in ComfyUI even when the previews look right. It only changes how the file is saved, not the training. The sizes come from dora_norms.safetensors in the NF4 model folder (SDXL and Anima take them from the original weights when loading); if it is missing, the console says so and the LoRA is saved as before.">
+                            <label style="display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer;" for="train_dora_normfix">
+                                <input type="checkbox" id="train_dora_normfix" checked style="width: 18px; height: 18px; cursor: pointer;">
+                                NormFix
+                            </label>
+                        </div>
                     </div>
 
                     <div class="form-row">
@@ -952,6 +958,7 @@
                     if (t.use_loraplus !== undefined) document.getElementById('train_use_loraplus').checked = t.use_loraplus;
                     if (t.lokr_factor !== undefined) document.getElementById('train_lokr_factor').value = t.lokr_factor;
                     if (t.use_dora !== undefined) document.getElementById('train_use_dora').checked = t.use_dora;
+                    if (t.dora_normfix !== undefined) document.getElementById('train_dora_normfix').checked = t.dora_normfix;
                     if (t.use_lokr !== undefined) { document.getElementById('train_use_lokr').checked = t.use_lokr; setLokrState(t.use_lokr); }
                     if (t.batch_size) document.getElementById('train_batch_size').value = t.batch_size;
                     if (t.grad_accum_steps) document.getElementById('train_grad_accum').value = t.grad_accum_steps;
@@ -1021,6 +1028,7 @@
                     if (data.use_loraplus !== undefined) document.getElementById('train_use_loraplus').checked = data.use_loraplus;
                     if (data.lokr_factor !== undefined) document.getElementById('train_lokr_factor').value = data.lokr_factor;
                     if (data.use_dora !== undefined) document.getElementById('train_use_dora').checked = data.use_dora;
+                    if (data.dora_normfix !== undefined) document.getElementById('train_dora_normfix').checked = data.dora_normfix;
                     if (data.use_lokr !== undefined) { document.getElementById('train_use_lokr').checked = data.use_lokr; setLokrState(data.use_lokr); }
                     if (data.batch_size !== undefined) document.getElementById('train_batch_size').value = data.batch_size;
                     if (data.grad_accum_steps !== undefined) document.getElementById('train_grad_accum').value = data.grad_accum_steps;
@@ -1127,7 +1135,14 @@
 
         // El nombre final lleva _rs / _plus / _dora / _lokr según las casillas; al exportar, el servidor lo
         // corrige con lo que dicen los metadatos del LoRA entrenado.
+        // NormFix solo tiene sentido con DoRA.
+        function syncDoraNormfix() {
+            const dora = document.getElementById('train_use_dora');
+            const nf = document.getElementById('train_dora_normfix');
+            if (dora && nf) nf.disabled = !dora.checked || dora.disabled;
+        }
         function updateFinalNameSuffix() {
+            syncDoraNormfix();
             const el = document.getElementById('export_final_name');
             const base = el.value.trim().replace(/(_rs)?(_plus)?(_dora)?(_lokr)?(\.safetensors)?$/i, '');
             if (!base) return;
@@ -1176,7 +1191,7 @@
                       grad_accum_steps: 'train_grad_accum', train_guidance: 'train_guidance' },
             new: { lora_rank: 'train_lora_rank', lora_alpha: 'train_lora_alpha', lora_targets: 'train_lora_targets',
                    use_rslora: 'train_use_rslora', use_loraplus: 'train_use_loraplus', use_lokr: 'train_use_lokr',
-                   lokr_factor: 'train_lokr_factor', use_dora: 'train_use_dora' },
+                   lokr_factor: 'train_lokr_factor', use_dora: 'train_use_dora', dora_normfix: 'train_dora_normfix' },
         };
 
         async function saveTrainSettings() {
@@ -1199,6 +1214,7 @@
                 use_loraplus: document.getElementById('train_use_loraplus').checked,
                 use_lokr: document.getElementById('train_use_lokr').checked,
                 use_dora: document.getElementById('train_use_dora').checked,
+                dora_normfix: document.getElementById('train_dora_normfix').checked,
                 lokr_factor: parseInt(document.getElementById('train_lokr_factor').value) || 16,
                 batch_size: parseInt(document.getElementById('train_batch_size').value),
                 grad_accum_steps: parseInt(document.getElementById('train_grad_accum').value),

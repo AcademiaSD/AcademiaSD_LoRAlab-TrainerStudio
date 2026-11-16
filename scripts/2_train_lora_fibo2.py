@@ -83,6 +83,7 @@ DEFAULTS = {
     "use_lokr": False,
     "lokr_factor": 16,
     "use_dora": False,
+    "dora_normfix": True,
     "lora_targets": "all",
     "weight_decay": 0.01,
     "max_grad_norm": 1.0,
@@ -137,6 +138,10 @@ LOKR_FACTOR       = max(1, int(cfg.get("lokr_factor", DEFAULTS["lokr_factor"])))
 # Es una variante de LoRA (PEFT, use_dora): convive con rsLoRA y LoRA+, no con LoKr. Cada paso descomprime
 # el peso NF4 de cada capa para su norma, así que es más lento y pide algo más de VRAM.
 USE_DORA          = bool(cfg.get("use_dora",     DEFAULTS["use_dora"]))
+# DoRA NormFix: la exportación usa la norma por fila del peso original (dora_norms.safetensors junto al
+# transformer NF4) en vez de la del NF4, que es la que divide ComfyUI. Sin esto el LoRA pierde el parecido
+# en ComfyUI aunque las previews salgan bien. Solo cambia la exportación.
+DORA_NORMFIX      = bool(cfg.get("dora_normfix", DEFAULTS["dora_normfix"]))
 if USE_LOKR:
     USE_RSLORA = USE_LORAPLUS = USE_DORA = False
 WEIGHT_DECAY      = cfg.get("weight_decay",      DEFAULTS["weight_decay"])
@@ -175,7 +180,7 @@ print(f"  {t('Learning Rate'):<22}: {LR}")
 print(f"  {t('LR Scheduler'):<22}: {lora_options.lr_scheduler_label(LR_SCHEDULER, WARMUP_STEPS, LR_CYCLES)}")
 print(f"  {'LoRA Rank/Alpha':<22}: {LORA_RANK}/{LORA_ALPHA}")
 print(f"  {'rsLoRA / LoRA+':<22}: {'on' if USE_RSLORA else 'off'} / {f'x{LORAPLUS_RATIO:g}' if USE_LORAPLUS else 'off'}")
-print(f"  {'DoRA':<22}: {'on' if USE_DORA else 'off'}")
+print(f"  {'DoRA':<22}: {('on, NormFix' if DORA_NORMFIX else 'on') if USE_DORA else 'off'}")
 print(f"  {'LoKr':<22}: {f'factor {LOKR_FACTOR}' if USE_LOKR else 'off'}")
 print(f"  {t('LoRA Targets'):<22}: {LORA_TARGETS}")
 print(f"  {'Batch / Grad Accum':<22}: {BATCH_SIZE}/{GRAD_ACCUM_STEPS}")
@@ -820,6 +825,8 @@ def train_fibo2():
         )
 
         model = get_peft_model(transformer, lora_config)
+        if USE_DORA:
+            lora_options.attach_dora_norms(model, os.path.join(MODEL_ID, "transformer"), DORA_NORMFIX, repo_id=HF_REPO_ID, root=MODEL_ID)
     # LoRA y estados del optimizador en FP32: en 8/16 bits se pierde el detalle fino (caras).
     for p in model.parameters():
         if p.requires_grad:

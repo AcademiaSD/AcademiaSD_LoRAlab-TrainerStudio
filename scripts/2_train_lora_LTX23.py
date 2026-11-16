@@ -105,6 +105,7 @@ DEFAULTS = {
     "use_loraplus": False,
     "loraplus_ratio": 16.0,
     "use_dora": False,
+    "dora_normfix": True,
     "weight_decay": 0.0,
     "max_grad_norm": 1.0,
 
@@ -216,6 +217,10 @@ LORAPLUS_RATIO = float(cfg_get("loraplus_ratio", DEFAULTS["loraplus_ratio"]))
 # Es una variante de LoRA (PEFT, use_dora): convive con rsLoRA y LoRA+. Cada paso descomprime el peso NF4
 # de cada capa para su norma, así que es más lento y pide algo más de VRAM.
 USE_DORA = bool(cfg_get("use_dora", DEFAULTS["use_dora"]))
+# DoRA NormFix: la exportación usa la norma por fila del peso original (dora_norms.safetensors junto al
+# transformer NF4) en vez de la del NF4, que es la que divide ComfyUI. Sin esto el LoRA pierde el parecido
+# en ComfyUI aunque las previews salgan bien. Solo cambia la exportación.
+DORA_NORMFIX = bool(cfg_get("dora_normfix", DEFAULTS["dora_normfix"]))
 WEIGHT_DECAY = float(cfg_get("weight_decay", DEFAULTS["weight_decay"]))
 MAX_GRAD_NORM = float(cfg_get("max_grad_norm", DEFAULTS["max_grad_norm"]))
 
@@ -296,7 +301,7 @@ print(f"  {t('Learning Rate'):<28}: {LR}")
 print(f"  {t('LR Scheduler'):<28}: {lora_options.lr_scheduler_label(LR_SCHEDULER, WARMUP_STEPS, LR_CYCLES)}")
 print("  LoRA Rank/Alpha             : {}/{}".format(LORA_RANK, LORA_ALPHA))
 print("  rsLoRA / LoRA+              : {} / {}".format("on" if USE_RSLORA else "off", "x{:g}".format(LORAPLUS_RATIO) if USE_LORAPLUS else "off"))
-print("  DoRA                        : {}".format("on" if USE_DORA else "off"))
+print("  DoRA                        : {}".format(("on, NormFix" if DORA_NORMFIX else "on") if USE_DORA else "off"))
 print("  Batch / Grad Accum          : {}/{}".format(BATCH_SIZE, GRAD_ACCUM_STEPS))
 print("  Max Text Tokens             : {}".format(MAX_TEXT_TOKENS))
 print("  LoRA Only Attention         : {}".format("ON" if LORA_ONLY_ATTN else "OFF"))
@@ -2672,6 +2677,8 @@ def train_ltx23():
     )
 
     model = get_peft_model(transformer, lora_config)
+    if USE_DORA:
+        lora_options.attach_dora_norms(model, MODEL_ID, DORA_NORMFIX, repo_id=HF_NF4_REPO_ID, root=MODEL_ID)
 
     for module in model.modules():
         if hasattr(module, "lora_A"):

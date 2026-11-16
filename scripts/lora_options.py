@@ -103,13 +103,128 @@ def dora_scales(model, adapter="default", base_norms=None):
             m = magnitudes[adapter].weight.float().to(weight.device).view(-1)
             norm = weight.norm(dim=1)
             own = (base_norms or {}).get(name.replace("base_model.model.", "", 1))
-            if own is not None:
+            if own is None:
+                own = getattr(base, "_dora_row_norm", None)  # de attach_dora_norms (NormFix)
+            if own is not None and own.numel() == shape[0]:
                 norm = own.float().to(weight.device).view(-1)
             scale = m * norm / merged.norm(dim=1).clamp_min(torch.finfo(torch.float32).eps)
             # FP32: un valor por fila, apenas ocupa
             out[name] = scale.view(shape[0], *[1] * (len(shape) - 1)).cpu().contiguous()
             del weight, merged
     return out
+
+
+DORA_NORMS_FILE = "dora_norms.safetensors"
+
+
+def _hf_token():
+    token = os.environ.get("HF_TOKEN", "").strip()
+    if not token and os.path.exists("settings/HF_token.json"):
+        try:
+            with open("settings/HF_token.json", "r", encoding="utf-8") as f:
+                token = str(json.load(f).get("token", "")).strip()
+        except Exception:
+            token = ""
+    return token or None
+
+
+DORA_NORMS_REPO = "AcademiaSD/dora_norms_for_training"   # normas de los NF4 de repos de terceros
+
+
+def ensure_dora_norms(folders, repo_id=None, root=None, prefix=None):
+    """
+    Devuelve la ruta de dora_norms.safetensors en la primera carpeta que lo tenga; si no está en ninguna,
+    lo descarga del repo NF4 (modelos bajados antes de que el repo lo tuviera). root: carpeta local del
+    repo; la ruta dentro del repo es la de la carpeta relativa a root. prefix: carpeta del modelo dentro
+    de un repo de normas aparte (DORA_NORMS_REPO), para los NF4 de terceros. None si no hay.
+    Returns the local dora_norms.safetensors, downloading it from the NF4 repo when it is missing.
+    """
+    if isinstance(folders, (str, os.PathLike)):
+        folders = [folders]
+    folders = [str(f) for f in folders if f]
+    for f in folders:
+        if os.path.isfile(os.path.join(f, DORA_NORMS_FILE)):
+            return os.path.join(f, DORA_NORMS_FILE)
+    if not repo_id or not root:
+        return None
+    try:
+        from huggingface_hub import hf_hub_download
+        from huggingface_hub.utils import EntryNotFoundError
+    except Exception:
+        return None
+    root = str(root)
+    for f in folders:
+        rel = os.path.relpath(f, root).replace("\\", "/")
+        if rel.startswith(".."):
+            continue
+        name = DORA_NORMS_FILE if rel in (".", "") else f"{rel}/{DORA_NORMS_FILE}"
+        if prefix:
+            name = prefix.strip("/") + "/" + name
+        print(f"  DoRA NormFix: downloading {name} from {repo_id}", flush=True)
+        try:
+            if prefix:                      # repo de normas aparte: se baja a la caché y se copia junto al NF4
+                import shutil
+                path = os.path.join(f, DORA_NORMS_FILE)
+                shutil.copyfile(hf_hub_download(repo_id, name, token=_hf_token()), path)
+            else:
+                path = hf_hub_download(repo_id, name, local_dir=root, token=_hf_token())
+        except EntryNotFoundError:
+            print(f"  DoRA NormFix: {repo_id} has no {name}", flush=True)
+            continue
+        except Exception as e:
+            print(f"  [!] DoRA NormFix: download failed ({type(e).__name__}: {e})", flush=True)
+            return None
+        if os.path.isfile(path):
+            return path
+    return None
+
+
+def attach_dora_norms(model, folders, enabled=True, adapter="default", repo_id=None, root=None, prefix=None):
+    """
+    NormFix: da a cada capa DoRA la norma por fila del peso ORIGINAL (bf16), la que divide ComfyUI, en vez
+    de la del NF4 con el que se entrena. La de una fila NF4 se aparta de la original ~0,2 %, más que lo que
+    aprende DoRA (0,02-0,05 %), y sin esto el LoRA pierde el parecido en ComfyUI aunque la preview salga bien.
+    folders: carpeta(s) del transformer NF4 donde buscar dora_norms.safetensors (lo crea
+    tools/dora_norms/make_dora_norms.py); vale la primera que lo tenga. Si no está y se pasan repo_id y
+    root (carpeta local del repo NF4), se descarga antes de seguir. Llamar después de get_peft_model.
+    NormFix: gives each DoRA layer the row norms of the original weights, which ComfyUI divides by, instead of
+    the NF4 ones it trains on. Returns the number of layers that got them.
+    """
+    if not enabled:
+        print("  DoRA NormFix: off (the export uses the NF4 norms)", flush=True)
+        return 0
+    if isinstance(folders, (str, os.PathLike)):
+        folders = [folders]
+    path = ensure_dora_norms(folders, repo_id, root, prefix)   # si falta, lo baja del repo NF4 (repo_id + root)
+    if path is None:
+        print(f"  [!] DoRA NormFix: {DORA_NORMS_FILE} not found in {', '.join(map(str, folders))}. "
+              "The export uses the NF4 norms: in ComfyUI the LoRA may look weaker than in the previews.",
+              flush=True)
+        return 0
+    from safetensors.torch import load_file
+    norms = load_file(path)
+    total = done = 0
+    for name, module in model.named_modules():
+        magnitudes = getattr(module, "lora_magnitude_vector", None)
+        if not magnitudes or adapter not in magnitudes:
+            continue
+        total += 1
+        name = name.replace("base_model.model.", "", 1)
+        own = norms.get(name)
+        if own is None:                     # el modelo puede ir dentro de otro (p. ej. "transformer.")
+            parts = name.split(".")
+            own = next((norms[".".join(parts[i:])] for i in range(1, len(parts)) if ".".join(parts[i:]) in norms), None)
+        base = module.get_base_layer()
+        rows = getattr(base, "out_features", None) or base.weight.shape[0]
+        if own is not None and own.numel() == rows:
+            base._dora_row_norm = own.float()
+            done += 1
+    if done < total:
+        print(f"  [!] DoRA NormFix: original norms for {done}/{total} layers ({path}); "
+              "the others use the NF4 norms.", flush=True)
+    else:
+        print(f"  DoRA NormFix: original norms for {done} layers", flush=True)
+    return done
 
 
 def dora_export(model, key_of, swapped=(), base_norms=None):
