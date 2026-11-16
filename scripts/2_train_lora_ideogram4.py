@@ -69,6 +69,7 @@ DEFAULTS = {
     "lokr_factor": 16,
     "use_dora": False,
     "dora_normfix": True,
+    "precision": "auto",
     "lora_targets": "blocks",
     "weight_decay": 0.0,
     "max_grad_norm": 1.0,
@@ -125,6 +126,12 @@ USE_DORA          = bool(cfg.get("use_dora",     DEFAULTS["use_dora"]))
 # transformer NF4) en vez de la del NF4, que es la que divide ComfyUI. Sin esto el LoRA pierde el parecido
 # en ComfyUI aunque las previews salgan bien. Solo cambia la exportación.
 DORA_NORMFIX      = bool(cfg.get("dora_normfix", DEFAULTS["dora_normfix"]))
+# Precisión de cálculo (Auto / BF16 / FP16): ver lora_options.resolve_precision. FP16_OK: las activaciones
+# del modelo caben en FP16 (medido), si no Auto se queda en BF16.
+FP16_OK           = True
+PRECISION_CFG     = str(cfg.get("precision", DEFAULTS["precision"]) or "auto").lower()
+PRECISION         = lora_options.resolve_precision(PRECISION_CFG, FP16_OK)
+COMPUTE_DTYPE, ADAPTER_DTYPE = lora_options.precision_dtypes(PRECISION)
 if USE_LOKR:
     USE_RSLORA = USE_LORAPLUS = USE_DORA = False
 WEIGHT_DECAY      = cfg.get("weight_decay",      DEFAULTS["weight_decay"])
@@ -160,6 +167,7 @@ print(f"  {t('LR Scheduler'):<22}: {lora_options.lr_scheduler_label(LR_SCHEDULER
 print(f"  {'LoRA Rank/Alpha':<22}: {LORA_RANK}/{LORA_ALPHA}")
 print(f"  {'rsLoRA / LoRA+':<22}: {'on' if USE_RSLORA else 'off'} / {f'x{LORAPLUS_RATIO:g}' if USE_LORAPLUS else 'off'}")
 print(f"  {'DoRA':<22}: {('on, NormFix' if DORA_NORMFIX else 'on') if USE_DORA else 'off'}")
+print(f"  {'Precision':<22}: {PRECISION.upper()}{' (auto)' if PRECISION_CFG not in ('bf16', 'fp16') else ''}")
 print(f"  {'LoKr':<22}: {f'factor {LOKR_FACTOR}' if USE_LOKR else 'off'}")
 print(f"  {t('LoRA Targets'):<22}: {LORA_TARGETS}")
 print(f"  {'Batch / Grad Accum':<22}: {BATCH_SIZE}/{GRAD_ACCUM_STEPS}")
@@ -299,7 +307,7 @@ def build_lora_metadata(step):
         "ss_batch_size_per_device": BATCH_SIZE,
         "ss_gradient_accumulation_steps": GRAD_ACCUM_STEPS,
         "ss_seed": SEED,
-        "ss_mixed_precision": "bf16",
+        "ss_mixed_precision": PRECISION,
     }
 
     # La GUI lee estas claves al exportar o descargar para poner el sufijo _rs / _plus / _lokr al nombre.
@@ -391,7 +399,7 @@ class VaeHolder:
     @classmethod
     def get(cls):
         if cls.vae is None:
-            cls.vae = AutoencoderKLFlux2.from_pretrained(MODEL_ID, subfolder="vae", torch_dtype=torch.bfloat16)
+            cls.vae = AutoencoderKLFlux2.from_pretrained(MODEL_ID, subfolder="vae", torch_dtype=(torch.bfloat16 if PRECISION == "bf16" else torch.float32))
         return cls.vae
 
 
@@ -403,8 +411,8 @@ class UncondHolder:
     def get(cls):
         if cls.model is None:
             print("  " + t("Loading the unconditional transformer (preview CFG)..."))
-            cls.model = Ideogram4Transformer2DModel.from_pretrained(
-                MODEL_ID, subfolder="unconditional_transformer", torch_dtype=torch.bfloat16).eval()
+            cls.model = lora_options.to_compute_dtype(Ideogram4Transformer2DModel.from_pretrained(
+                MODEL_ID, subfolder="unconditional_transformer", torch_dtype=COMPUTE_DTYPE), COMPUTE_DTYPE).eval()
         return cls.model.to("cuda")
 
 
@@ -425,12 +433,12 @@ def denoise(model, scheduler, feat, gh, gw, generator):
 
     try:
         for i, t in enumerate(scheduler.timesteps):
-            t_model = (1.0 - t.float() / 1000).expand(1).to(torch.bfloat16)
-            hidden = torch.cat([latents.new_zeros(1, n, 128), latents], dim=1).to(torch.bfloat16)
+            t_model = (1.0 - t.float() / 1000).expand(1).to(COMPUTE_DTYPE)
+            hidden = torch.cat([latents.new_zeros(1, n, 128), latents], dim=1).to(COMPUTE_DTYPE)
             v = model(hidden_states=hidden, timestep=t_model, encoder_hidden_states=llm, position_ids=position_ids,
                       segment_ids=segment_ids, indicator=indicator, return_dict=False)[0][:, n:].float()
             if use_cfg:
-                v_neg = uncond(hidden_states=latents.to(torch.bfloat16), timestep=t_model, encoder_hidden_states=neg,
+                v_neg = uncond(hidden_states=latents.to(COMPUTE_DTYPE), timestep=t_model, encoder_hidden_states=neg,
                                position_ids=position_ids[:, n:], segment_ids=segment_ids[:, n:],
                                indicator=indicator[:, n:], return_dict=False)[0].float()
                 v = gws[i] * v + (1.0 - gws[i]) * v_neg
@@ -578,7 +586,8 @@ def train_ideogram4():
 
     print(t("Loading {name}...", name="Ideogram 4 Transformer (NF4)"))
     t0 = time.time()
-    transformer = Ideogram4Transformer2DModel.from_pretrained(MODEL_ID, subfolder="transformer", torch_dtype=torch.bfloat16)
+    transformer = Ideogram4Transformer2DModel.from_pretrained(MODEL_ID, subfolder="transformer", torch_dtype=COMPUTE_DTYPE)
+    lora_options.to_compute_dtype(transformer, COMPUTE_DTYPE)
     transformer.to("cuda")
     free_vram()
     print(t("Transformer loaded in {s:.1f}s.", s=time.time() - t0) + f" VRAM: {torch.cuda.memory_allocated()/1e9:.1f} GB", flush=True)
@@ -681,6 +690,7 @@ def train_ideogram4():
                                       lr=LR, weight_decay=WEIGHT_DECAY)
     else:
         optimizer = torch.optim.AdamW(trainable, lr=LR, weight_decay=WEIGHT_DECAY)
+    scaler = lora_options.grad_scaler(PRECISION)   # FP16: loss escalada; BF16: no hace nada
 
     def lr_at(step):
         return LR * lora_options.lr_factor(LR_SCHEDULER, step, TOTAL_STEPS, WARMUP_STEPS, MIN_LR_RATIO, LR_CYCLES)
@@ -748,7 +758,7 @@ def train_ideogram4():
     cache_data, buckets = {}, defaultdict(list)
 
     def load_tensor(path):
-        t = torch.load(path, weights_only=True).to(torch.bfloat16)
+        t = torch.load(path, weights_only=True).to(COMPUTE_DTYPE)
         return t.pin_memory() if pin else t
 
     for f in os.listdir(CACHE_DIR):
@@ -815,10 +825,10 @@ def train_ideogram4():
             # El transformer predice x0 - ruido con tiempo 0 = ruido, 1 = imagen (como Z-Image).
             target = latents - noise
 
-            hidden = torch.cat([noisy.new_zeros(len(names), n_text, 128), noisy], dim=1).to(torch.bfloat16)
+            hidden = torch.cat([noisy.new_zeros(len(names), n_text, 128), noisy], dim=1).to(COMPUTE_DTYPE)
             pred = model(
                 hidden_states=hidden,
-                timestep=(1.0 - sigma).to(torch.bfloat16),
+                timestep=(1.0 - sigma).to(COMPUTE_DTYPE),
                 encoder_hidden_states=llm,
                 position_ids=position_ids,
                 segment_ids=segment_ids,
@@ -827,16 +837,18 @@ def train_ideogram4():
             )[0][:, n_text:]
 
             loss = F.mse_loss(pred.float(), target.float()) / GRAD_ACCUM_STEPS
-            loss.backward()
+            scaler.scale(loss).backward()
             step_loss = loss.item() * GRAD_ACCUM_STEPS
             running_loss += step_loss
 
             # La norma solo existe al aplicar el optimizador: entre medias se muestra la última.
             if step % GRAD_ACCUM_STEPS == 0:
+                scaler.unscale_(optimizer)
                 grad_norm = torch.nn.utils.clip_grad_norm_(trainable, MAX_GRAD_NORM).item()
                 for gparam in optimizer.param_groups:
                     gparam["lr"] = lr_at(step) * gparam.get("lr_mult", 1.0)
-                optimizer.step()
+                scaler.step(optimizer)      # en FP16 se salta si hubo inf
+                scaler.update()
                 optimizer.zero_grad(set_to_none=True)
 
             t_step     = time.time() - t0

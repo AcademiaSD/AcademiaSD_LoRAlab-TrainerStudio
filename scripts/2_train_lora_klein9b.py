@@ -66,6 +66,7 @@ DEFAULTS = {
     "lokr_factor": 16,
     "use_dora": False,
     "dora_normfix": True,
+    "precision": "auto",
     "lora_targets": "blocks",
     "weight_decay": 0.0,
     "max_grad_norm": 1.0,
@@ -124,6 +125,12 @@ USE_DORA          = bool(cfg.get("use_dora",     DEFAULTS["use_dora"]))
 # transformer NF4) en vez de la del NF4, que es la que divide ComfyUI. Sin esto el LoRA pierde el parecido
 # en ComfyUI aunque las previews salgan bien. Solo cambia la exportación.
 DORA_NORMFIX      = bool(cfg.get("dora_normfix", DEFAULTS["dora_normfix"]))
+# Precisión de cálculo (Auto / BF16 / FP16): ver lora_options.resolve_precision. FP16_OK: las activaciones
+# del modelo caben en FP16 (medido), si no Auto se queda en BF16.
+FP16_OK           = True
+PRECISION_CFG     = str(cfg.get("precision", DEFAULTS["precision"]) or "auto").lower()
+PRECISION         = lora_options.resolve_precision(PRECISION_CFG, FP16_OK)
+COMPUTE_DTYPE, ADAPTER_DTYPE = lora_options.precision_dtypes(PRECISION)
 if USE_LOKR:
     USE_RSLORA = USE_LORAPLUS = USE_DORA = False
 WEIGHT_DECAY      = cfg.get("weight_decay",      DEFAULTS["weight_decay"])
@@ -165,6 +172,7 @@ print(f"  {'LoRA Rank/Alpha':<22}: {LORA_RANK}/{LORA_ALPHA}")
 print(f"  {'rsLoRA / LoRA+':<22}: {'on' if USE_RSLORA else 'off'} / {f'x{LORAPLUS_RATIO:g}' if USE_LORAPLUS else 'off'}")
 print(f"  {'LoKr':<22}: {f'factor {LOKR_FACTOR}' if USE_LOKR else 'off'}")
 print(f"  {'DoRA':<22}: {('on, NormFix' if DORA_NORMFIX else 'on') if USE_DORA else 'off'}")
+print(f"  {'Precision':<22}: {PRECISION.upper()}{' (auto)' if PRECISION_CFG not in ('bf16', 'fp16') else ''}")
 print(f"  {t('LoRA Targets'):<22}: {LORA_TARGETS}")
 print(f"  {'Batch / Grad Accum':<22}: {BATCH_SIZE}/{GRAD_ACCUM_STEPS}")
 print(f"  {t('Preview'):<22}: {t('Mode')}={PREVIEW_CAPTION_MODE} | Prompt='{PREVIEW_CUSTOM_PROMPT}'")
@@ -334,13 +342,13 @@ def load_nf4_transformer(model_dir):
         # En meta: nn.Linear.__init__ reserva y rellena con kaiming una matriz FP32 que se tira
         # en la línea siguiente.
         with torch.device("meta"):
-            layer = Linear4bit(info["in_features"], info["out_features"], bias=False, quant_type="nf4", compute_dtype=torch.bfloat16)
+            layer = Linear4bit(info["in_features"], info["out_features"], bias=False, quant_type="nf4", compute_dtype=COMPUTE_DTYPE)
         layer.weight = weight
         set_module(name, layer)
 
     for name, info in index["unquantized"].items():
         with torch.device("meta"):
-            layer = torch.nn.Linear(info["in_features"], info["out_features"], bias=False, dtype=torch.bfloat16)
+            layer = torch.nn.Linear(info["in_features"], info["out_features"], bias=False, dtype=COMPUTE_DTYPE)
         layer.load_state_dict(load_file(os.path.join(weights_dir, info["file"])), assign=True)
         layer.requires_grad_(False)
         set_module(name, layer)
@@ -378,7 +386,7 @@ def build_lora_metadata(step):
         "ss_batch_size_per_device": BATCH_SIZE,
         "ss_gradient_accumulation_steps": GRAD_ACCUM_STEPS,
         "ss_seed": SEED,
-        "ss_mixed_precision": "bf16",
+        "ss_mixed_precision": PRECISION,
     }
 
     # La GUI lee estas claves al exportar o descargar para poner el sufijo _rs / _plus / _lokr al nombre.
@@ -449,13 +457,13 @@ class VaeHolder:
     @classmethod
     def get(cls):
         if cls.vae is None:
-            cls.vae = AutoencoderKLFlux2.from_pretrained(MODEL_ID, subfolder="vae", torch_dtype=torch.bfloat16)
+            cls.vae = AutoencoderKLFlux2.from_pretrained(MODEL_ID, subfolder="vae", torch_dtype=(torch.bfloat16 if PRECISION == "bf16" else torch.float32))
         return cls.vae
 
 
 def denoise(model, scheduler, sample, H, W, generator, neg=None):
     device = "cuda"
-    latents = pack_latents(torch.randn((1, 128, H, W), generator=generator, device=device, dtype=torch.bfloat16))
+    latents = pack_latents(torch.randn((1, 128, H, W), generator=generator, device=device, dtype=COMPUTE_DTYPE))
 
     sigmas = np.linspace(1.0, 1.0 / PREVIEW_STEPS, PREVIEW_STEPS)
     scheduler.set_timesteps(sigmas=sigmas, device=device, mu=compute_empirical_mu(H * W, PREVIEW_STEPS))
@@ -468,7 +476,7 @@ def denoise(model, scheduler, sample, H, W, generator, neg=None):
         conds.append({**sample, "emb": neg})
 
     for t in scheduler.timesteps:
-        timestep = (t / 1000).expand(1).to(torch.bfloat16)
+        timestep = (t / 1000).expand(1).to(COMPUTE_DTYPE)
         preds = []
         for cond in conds:
             hidden, img_ids, txt_ids = model_inputs(cond, latents, H, W, device)
@@ -552,13 +560,13 @@ class TurboHolder:
             for k in f.keys():
                 name = k[len("diffusion_model."):]
                 if name.endswith(".diff"):
-                    cls.norms[turbo_targets(name[:-len(".diff")])[0]] = f.get_tensor(k).to(torch.bfloat16)
+                    cls.norms[turbo_targets(name[:-len(".diff")])[0]] = f.get_tensor(k).to(COMPUTE_DTYPE)
                     continue
                 if not name.endswith(".lora_down.weight"):
                     continue
                 name = name[:-len(".lora_down.weight")]
-                down = f.get_tensor(k).to(torch.bfloat16).pin_memory()
-                up = f.get_tensor(k.replace(".lora_down.", ".lora_up.")).to(torch.bfloat16)
+                down = f.get_tensor(k).to(COMPUTE_DTYPE).pin_memory()
+                up = f.get_tensor(k.replace(".lora_down.", ".lora_up.")).to(COMPUTE_DTYPE)
                 targets = turbo_targets(name)
                 if targets == ["norm_out.linear"]:
                     # BFL guarda (shift, scale); la AdaLayerNormContinuous de diffusers espera (scale, shift).
@@ -753,6 +761,7 @@ def train_klein9b():
     print(t("Loading {name}...", name="FLUX.2 Klein 9B Transformer (NF4)"))
     t0 = time.time()
     transformer = load_nf4_transformer(MODEL_ID)
+    lora_options.to_compute_dtype(transformer, COMPUTE_DTYPE)
     transformer.to("cuda")
     free_vram()
     print(t("Transformer loaded in {s:.1f}s.", s=time.time() - t0) + f" VRAM: {torch.cuda.memory_allocated()/1e9:.1f} GB", flush=True)
@@ -855,6 +864,7 @@ def train_klein9b():
                                       lr=LR, weight_decay=WEIGHT_DECAY)
     else:
         optimizer = torch.optim.AdamW(trainable, lr=LR, weight_decay=WEIGHT_DECAY)
+    scaler = lora_options.grad_scaler(PRECISION)   # FP16: loss escalada; BF16: no hace nada
 
     def lr_at(step):
         return LR * lora_options.lr_factor(LR_SCHEDULER, step, TOTAL_STEPS, WARMUP_STEPS, MIN_LR_RATIO, LR_CYCLES)
@@ -927,13 +937,13 @@ def train_klein9b():
         for key, suffix in (("lat", "latent"), ("emb", "embed"), ("ctrl", "ctrl")):
             path = f"{CACHE_DIR}/{nombre}_{suffix}.pt"
             if os.path.exists(path):
-                t = torch.load(path, weights_only=True).to(torch.bfloat16)
+                t = torch.load(path, weights_only=True).to(COMPUTE_DTYPE)
                 sample[key] = t.pin_memory() if pin else t
         if "ctrl" in sample:
             ctrls = [sample["ctrl"]]
             index = 2
             while os.path.exists(f"{CACHE_DIR}/{nombre}_ctrl_{index}.pt"):
-                extra = torch.load(f"{CACHE_DIR}/{nombre}_ctrl_{index}.pt", weights_only=True).to(torch.bfloat16)
+                extra = torch.load(f"{CACHE_DIR}/{nombre}_ctrl_{index}.pt", weights_only=True).to(COMPUTE_DTYPE)
                 ctrls.append(extra.pin_memory() if pin else extra)
                 index += 1
             if len(ctrls) > 1:
@@ -956,7 +966,7 @@ def train_klein9b():
 
     neg = None
     if os.path.exists(f"{CACHE_DIR}/_neg_embed.pt"):
-        neg = torch.load(f"{CACHE_DIR}/_neg_embed.pt", weights_only=True).to(torch.bfloat16)
+        neg = torch.load(f"{CACHE_DIR}/_neg_embed.pt", weights_only=True).to(COMPUTE_DTYPE)
 
     all_preview_names = sorted(k for k in cache_data.keys() if not cache_names.is_reserved(k))
 
@@ -1010,7 +1020,7 @@ def train_klein9b():
             noise  = torch.randn_like(latent_packed)
             t_exp  = sigma.view(-1, 1, 1)
 
-            noisy = ((1 - t_exp) * latent_packed + t_exp * noise).to(torch.bfloat16)
+            noisy = ((1 - t_exp) * latent_packed + t_exp * noise).to(COMPUTE_DTYPE)
             # El transformer predice la velocidad (ruido - x0), como Flux.1.
             target = noise - latent_packed
 
@@ -1021,23 +1031,25 @@ def train_klein9b():
             pred = model(
                 hidden_states=hidden,
                 encoder_hidden_states=embeds,
-                timestep=sigma.to(torch.bfloat16),
+                timestep=sigma.to(COMPUTE_DTYPE),
                 img_ids=img_ids,
                 txt_ids=txt_ids,
                 return_dict=False,
             )[0][:, :H * W]
 
             loss = F.mse_loss(pred.float(), target.float()) / GRAD_ACCUM_STEPS
-            loss.backward()
+            scaler.scale(loss).backward()
             step_loss = loss.item() * GRAD_ACCUM_STEPS
             running_loss += step_loss
 
             # La norma solo existe al aplicar el optimizador: entre medias se muestra la última.
             if step % GRAD_ACCUM_STEPS == 0:
+                scaler.unscale_(optimizer)
                 grad_norm = torch.nn.utils.clip_grad_norm_(trainable, MAX_GRAD_NORM).item()
                 for gparam in optimizer.param_groups:
                     gparam["lr"] = lr_at(step) * gparam.get("lr_mult", 1.0)
-                optimizer.step()
+                scaler.step(optimizer)      # en FP16 se salta si hubo inf
+                scaler.update()
                 optimizer.zero_grad(set_to_none=True)
 
             t_step     = time.time() - t0
