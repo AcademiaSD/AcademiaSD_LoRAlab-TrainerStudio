@@ -544,6 +544,17 @@
                     </div>
 
                     <div class="form-row">
+                        <div class="form-group" title="Precision: the number type the GPU computes with. Auto picks BF16 on RTX 30 or newer, and FP16 on GPUs without BF16 in hardware (RTX 20, Quadro RTX, GTX 16), which emulate BF16 and train several times slower with it. Both give the same quality on Krea 2; with FP16 the trainer scales the loss so small gradients are not lost, and skips the rare step that overflows. The model stays in 4 bits either way. Applies when the training starts or resumes.">
+                            <label>Precision:</label>
+                            <select id="train_precision" class="no-i18n">
+                                <option value="auto" selected>Auto</option>
+                                <option value="bf16">BF16</option>
+                                <option value="fp16">FP16</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
                         <div class="form-group">
                             <label>Batch Size:</label>
                             <input type="number" id="train_batch_size" value="1">
@@ -980,6 +991,7 @@
                     if (t.lokr_factor !== undefined) document.getElementById('train_lokr_factor').value = t.lokr_factor;
                     if (t.use_dora !== undefined) document.getElementById('train_use_dora').checked = t.use_dora;
                     if (t.dora_normfix !== undefined) document.getElementById('train_dora_normfix').checked = t.dora_normfix;
+                    if (t.precision) document.getElementById('train_precision').value = t.precision;
                     if (t.use_lokr !== undefined) { document.getElementById('train_use_lokr').checked = t.use_lokr; setLokrState(t.use_lokr); }
                     if (t.batch_size) document.getElementById('train_batch_size').value = t.batch_size;
                     if (t.grad_accum_steps) document.getElementById('train_grad_accum').value = t.grad_accum_steps;
@@ -1051,6 +1063,7 @@
                     if (data.lokr_factor !== undefined) document.getElementById('train_lokr_factor').value = data.lokr_factor;
                     if (data.use_dora !== undefined) document.getElementById('train_use_dora').checked = data.use_dora;
                     if (data.dora_normfix !== undefined) document.getElementById('train_dora_normfix').checked = data.dora_normfix;
+                    if (data.precision) document.getElementById('train_precision').value = data.precision;
                     if (data.use_lokr !== undefined) { document.getElementById('train_use_lokr').checked = data.use_lokr; setLokrState(data.use_lokr); }
                     if (data.batch_size !== undefined) document.getElementById('train_batch_size').value = data.batch_size;
                     if (data.grad_accum_steps !== undefined) document.getElementById('train_grad_accum').value = data.grad_accum_steps;
@@ -1214,7 +1227,7 @@
                     turbo_lora_strength: 'train_turbo_strength' },
             resume: { trigger_word: 'trigger_word', lr_scheduler: 'train_lr_scheduler',
                       warmup_steps: 'train_warmup_steps', lr_cycles: 'train_lr_cycles', batch_size: 'train_batch_size',
-                      grad_accum_steps: 'train_grad_accum' },
+                      grad_accum_steps: 'train_grad_accum', precision: 'train_precision' },
             new: { lora_rank: 'train_lora_rank', lora_alpha: 'train_lora_alpha', use_rslora: 'train_use_rslora',
                    use_loraplus: 'train_use_loraplus', use_lokr: 'train_use_lokr', lokr_factor: 'train_lokr_factor', use_dora: 'train_use_dora', dora_normfix: 'train_dora_normfix' },
         };
@@ -1239,6 +1252,7 @@
                 use_lokr: document.getElementById('train_use_lokr').checked,
                 use_dora: document.getElementById('train_use_dora').checked,
                 dora_normfix: document.getElementById('train_dora_normfix').checked,
+                precision: document.getElementById('train_precision').value,
                 lokr_factor: parseInt(document.getElementById('train_lokr_factor').value) || 16,
                 batch_size: parseInt(document.getElementById('train_batch_size').value),
                 grad_accum_steps: parseInt(document.getElementById('train_grad_accum').value),

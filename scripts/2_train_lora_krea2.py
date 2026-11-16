@@ -58,6 +58,7 @@ DEFAULTS = {
     "lokr_factor": 16,
     "use_dora": False,
     "dora_normfix": True,
+    "precision": "auto",
     "weight_decay": 0.0,
     "max_grad_norm": 1.0,
     "save_every": 25,
@@ -116,6 +117,23 @@ USE_DORA          = bool(cfg.get("use_dora",     DEFAULTS["use_dora"]))
 # transformer NF4) en vez de la del NF4, que es la que divide ComfyUI. Sin esto el LoRA pierde el parecido
 # en ComfyUI aunque las previews salgan bien. Solo cambia la exportación.
 DORA_NORMFIX      = bool(cfg.get("dora_normfix", DEFAULTS["dora_normfix"]))
+# Precisión de cálculo. BF16 en Ampere (RTX 30) o posterior. Las GPUs sin BF16 por hardware (RTX 20 /
+# Quadro RTX / Turing, GTX 16) lo emulan y cada paso va varias veces más lento: ahí FP16, con la loss
+# escalada (GradScaler) y el LoRA en FP32. Krea 2 cabe en FP16 (activaciones ~22000 < 65504) y su error
+# frente a FP32 es como el de BF16. "auto" elige según la GPU.
+PRECISION_CFG     = str(cfg.get("precision", DEFAULTS["precision"]) or "auto").lower()
+
+
+def _gpu_has_bf16():
+    try:
+        return not torch.cuda.is_available() or torch.cuda.get_device_capability(0)[0] >= 8
+    except Exception:
+        return True
+
+
+PRECISION         = PRECISION_CFG if PRECISION_CFG in ("bf16", "fp16") else ("bf16" if _gpu_has_bf16() else "fp16")
+COMPUTE_DTYPE     = torch.float16 if PRECISION == "fp16" else torch.bfloat16
+ADAPTER_DTYPE     = torch.float32 if PRECISION == "fp16" else torch.bfloat16   # GradScaler no desescala FP16
 if USE_LOKR:
     USE_RSLORA = USE_LORAPLUS = USE_DORA = False
 WEIGHT_DECAY      = cfg.get("weight_decay",      DEFAULTS["weight_decay"])
@@ -158,6 +176,7 @@ print(f"  {'LoRA Rank/Alpha':<22}: {LORA_RANK}/{LORA_ALPHA}")
 print(f"  {'rsLoRA / LoRA+':<22}: {'on' if USE_RSLORA else 'off'} / {f'x{LORAPLUS_RATIO:g}' if USE_LORAPLUS else 'off'}")
 print(f"  {'LoKr':<22}: {f'factor {LOKR_FACTOR}' if USE_LOKR else 'off'}")
 print(f"  {'DoRA':<22}: {('on, NormFix' if DORA_NORMFIX else 'on') if USE_DORA else 'off'}")
+print(f"  {'Precision':<22}: {PRECISION.upper()}{' (auto)' if PRECISION_CFG not in ('bf16', 'fp16') else ''}")
 print(f"  {'Batch / Grad Accum':<22}: {BATCH_SIZE}/{GRAD_ACCUM_STEPS}")
 print(f"  {t('Preview'):<22}: {t('Mode')}={PREVIEW_CAPTION_MODE} | Prompt='{PREVIEW_CUSTOM_PROMPT}'")
 print(f"  {t('Preview Every'):<22}: {PREVIEW_EVERY} | {t('Preview Steps')} {PREVIEW_STEPS} | CFG {PREVIEW_CFG}")
@@ -355,7 +374,7 @@ def load_nf4_transformer(model_dir):
 
         # En meta: nn.Linear.__init__ reservaría y rellenaría una matriz FP32 que se tira en la línea siguiente.
         with torch.device("meta"):
-            layer = Linear4bit(info["in_features"], info["out_features"], bias=False, quant_type="nf4", compute_dtype=torch.bfloat16)
+            layer = Linear4bit(info["in_features"], info["out_features"], bias=False, quant_type="nf4", compute_dtype=COMPUTE_DTYPE)
         layer.weight = weight
         set_module(name, layer)
 
@@ -372,6 +391,10 @@ def load_nf4_transformer(model_dir):
     missing = [n for n, t in list(transformer.named_parameters()) + list(transformer.named_buffers()) if t.is_meta]
     if missing:
         raise RuntimeError(t("NF4 cache incomplete: {names}", names=missing[:5]))
+    if COMPUTE_DTYPE != torch.bfloat16:      # FP16: las capas y tablas BF16 pasan a FP16 (las normas siguen en FP32)
+        for tensor in list(transformer.parameters()) + list(transformer.buffers()):
+            if tensor.dtype == torch.bfloat16:
+                tensor.data = tensor.data.to(COMPUTE_DTYPE)
 
     print("[OK] " + t("NF4 layers: {a} | BF16 layers: {b}", a=len(index['quantized']), b=len(index['unquantized'])))
     return transformer
@@ -399,7 +422,7 @@ def build_lora_metadata(step):
         "ss_batch_size_per_device": BATCH_SIZE,
         "ss_gradient_accumulation_steps": GRAD_ACCUM_STEPS,
         "ss_seed": SEED,
-        "ss_mixed_precision": "bf16",
+        "ss_mixed_precision": PRECISION,
     }
 
     # La GUI lee estas claves al exportar o descargar para poner el sufijo _rs / _plus / _lokr al nombre.
@@ -471,7 +494,7 @@ class VaeHolder:
         if cls.vae is None:
             from diffusers import AutoencoderKLQwenImage
             cls.vae = AutoencoderKLQwenImage.from_pretrained(
-                MODEL_ID, subfolder="vae", torch_dtype=torch.bfloat16)
+                MODEL_ID, subfolder="vae", torch_dtype=torch.bfloat16 if PRECISION == "bf16" else torch.float32)   # sin BF16: FP32, el VAE no se fía de FP16
         return cls.vae
 
 
@@ -842,7 +865,7 @@ def apply_preview_lora_hooks(
     tag="Preview LoRA",
     strength=1.0,
     device="cuda",
-    dtype=torch.bfloat16,
+    dtype=COMPUTE_DTYPE,
 ):
     if not os.path.exists(lora_path):
         print("  [!] " + t("{name} file not found at: {path}", name=tag, path=lora_path))
@@ -984,12 +1007,12 @@ def run_preview(model, scheduler, embed, mask, neg, size, step, shift_cfg):
 
     try:
         g = torch.Generator(device=device).manual_seed(actual_seed)
-        latents = torch.randn((1, 16, H // 8, W // 8), generator=g, device=device, dtype=torch.bfloat16)
+        latents = torch.randn((1, 16, H // 8, W // 8), generator=g, device=device, dtype=COMPUTE_DTYPE)
         latents = pack_latents(latents)
         pos_ids = prepare_position_ids(embed.shape[1], gh, gw, device)
-        embed, mask = embed.to(device), mask.to(device)
+        embed, mask = embed.to(device, COMPUTE_DTYPE), mask.to(device)
         if neg is not None:
-            neg = (neg[0].to(device), neg[1].to(device))
+            neg = (neg[0].to(device, COMPUTE_DTYPE), neg[1].to(device))
 
         sigmas = np.linspace(1.0, 1.0 / PREVIEW_STEPS, PREVIEW_STEPS)
         mu = calculate_shift(latents.shape[1], *shift_cfg)
@@ -998,7 +1021,7 @@ def run_preview(model, scheduler, embed, mask, neg, size, step, shift_cfg):
 
         with torch.no_grad():
             for ts in scheduler.timesteps:
-                tt = (ts / scheduler.config.num_train_timesteps).expand(1).to(torch.bfloat16)
+                tt = (ts / scheduler.config.num_train_timesteps).expand(1).to(COMPUTE_DTYPE)
                 pred = model(hidden_states=latents, encoder_hidden_states=embed, timestep=tt,
                              position_ids=pos_ids, encoder_attention_mask=mask, return_dict=False)[0]
                 if neg is not None and PREVIEW_CFG > 1.0:
@@ -1236,16 +1259,16 @@ def train_krea2():
     for module in model.modules():
         if hasattr(module, "lora_A"):
             for adapter in module.lora_A.values():
-                adapter.to(dtype=torch.bfloat16)
+                adapter.to(dtype=ADAPTER_DTYPE)
         if hasattr(module, "lora_B"):
             for adapter in module.lora_B.values():
-                adapter.to(dtype=torch.bfloat16)
+                adapter.to(dtype=ADAPTER_DTYPE)
         if hasattr(module, "lora_embedding_A"):
             for adapter in module.lora_embedding_A.values():
-                adapter.data = adapter.data.to(torch.bfloat16)
+                adapter.data = adapter.data.to(ADAPTER_DTYPE)
         if hasattr(module, "lora_embedding_B"):
             for adapter in module.lora_embedding_B.values():
-                adapter.data = adapter.data.to(torch.bfloat16)
+                adapter.data = adapter.data.to(ADAPTER_DTYPE)
 
     model.print_trainable_parameters()
 
@@ -1264,6 +1287,8 @@ def train_krea2():
                                       lr=LR, weight_decay=WEIGHT_DECAY)
     else:
         optimizer = bnb.optim.AdamW8bit(trainable, lr=LR, weight_decay=WEIGHT_DECAY)
+    # FP16: escala la loss para que los gradientes pequeños no se queden en 0; si un paso desborda, se salta.
+    scaler = torch.amp.GradScaler("cuda", init_scale=2.0 ** 12, enabled=PRECISION == "fp16")
 
     def lr_at(step):
         return LR * lora_options.lr_factor(LR_SCHEDULER, step, TOTAL_STEPS, WARMUP_STEPS, MIN_LR_RATIO, LR_CYCLES)
@@ -1337,7 +1362,7 @@ def train_krea2():
         lat  = torch.load(f"{CACHE_DIR}/{nombre}_latent.pt", weights_only=True)
         emb  = torch.load(f"{CACHE_DIR}/{nombre}_embed.pt",  weights_only=True)
         msk  = torch.load(f"{CACHE_DIR}/{nombre}_mask.pt",   weights_only=True).bool()
-        lat, emb, msk = lat.to(torch.bfloat16), emb.to(torch.bfloat16), msk
+        lat, emb, msk = lat.to(COMPUTE_DTYPE), emb.to(COMPUTE_DTYPE), msk
         if pin:
             lat, emb, msk = lat.pin_memory(), emb.pin_memory(), msk.pin_memory()
         cache_data[nombre] = (lat, emb, msk)
@@ -1346,7 +1371,7 @@ def train_krea2():
     def load_custom():
         # El prompt manual no tiene imagen: la preview toma el tamaño de la primera muestra.
         first_ref = next(v[0] for k, v in cache_data.items() if not cache_names.is_reserved(k))
-        c_emb = torch.load(f"{CACHE_DIR}/_custom_embed.pt", weights_only=True).to(torch.bfloat16)
+        c_emb = torch.load(f"{CACHE_DIR}/_custom_embed.pt", weights_only=True).to(COMPUTE_DTYPE)
         c_msk = torch.load(f"{CACHE_DIR}/_custom_mask.pt",  weights_only=True).bool()
         if pin:
             c_emb, c_msk = c_emb.pin_memory(), c_msk.pin_memory()
@@ -1419,7 +1444,7 @@ def train_krea2():
             noise  = torch.randn_like(latent_patched)
             t_exp  = sigma.view(-1, 1, 1)
 
-            target_dtype = torch.bfloat16
+            target_dtype = COMPUTE_DTYPE
             noisy = ((1 - t_exp) * latent_patched + t_exp * noise).to(target_dtype)
             target = noise - latent_patched
 
@@ -1435,16 +1460,18 @@ def train_krea2():
             )[0]
 
             loss = F.mse_loss(pred.float(), target.float()) / GRAD_ACCUM_STEPS
-            loss.backward()
+            scaler.scale(loss).backward()
             step_loss = loss.item() * GRAD_ACCUM_STEPS
             running_loss += step_loss
 
             # La norma solo existe al aplicar el optimizador: entre medias se muestra la última.
             if step % GRAD_ACCUM_STEPS == 0:
+                scaler.unscale_(optimizer)
                 grad_norm = torch.nn.utils.clip_grad_norm_(trainable, MAX_GRAD_NORM).item()
                 for gparam in optimizer.param_groups:
                     gparam["lr"] = lr_at(step) * gparam.get("lr_mult", 1.0)
-                optimizer.step()
+                scaler.step(optimizer)      # sin FP16 es optimizer.step(); en FP16 se salta si hubo inf
+                scaler.update()
                 optimizer.zero_grad(set_to_none=True)
 
             t_step     = time.time() - t0
