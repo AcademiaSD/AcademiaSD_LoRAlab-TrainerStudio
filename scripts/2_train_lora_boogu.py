@@ -150,6 +150,10 @@ def main():
             args.append("--use_dora")
             if not train_cfg.get("dora_normfix", True):
                 args.append("--no_dora_normfix")
+        # Precisión de cálculo (Auto / BF16 / FP16): ver lora_options.resolve_precision.
+        precision_cfg = str(train_cfg.get("precision", "auto") or "auto").lower()
+        precision = lora_options.resolve_precision(precision_cfg, True)
+        args += ["--precision", precision]
         if train_cfg.get("use_lokr", False):
             args += ["--use_lokr", "--lokr_factor", str(max(1, int(train_cfg.get("lokr_factor", 16))))]
         elif train_cfg.get("use_loraplus", False):
@@ -187,6 +191,7 @@ def main():
         print(f"  {'LoRA Rank/Alpha':<22}: {args[args.index('--lora_rank') + 1]}/{args[args.index('--lora_alpha') + 1]}")
         print(f"  {'rsLoRA / LoRA+ / LoKr':<22}: {'on' if '--use_rslora' in args else 'off'} / {'on' if '--use_loraplus' in args else 'off'} / {'on' if '--use_lokr' in args else 'off'}")
         print(f"  {'DoRA':<22}: {('on' if '--no_dora_normfix' in args else 'on, NormFix') if '--use_dora' in args else 'off'}")
+        print(f"  {'Precision':<22}: {precision.upper()}{' (auto)' if precision_cfg not in ('bf16', 'fp16') else ''}")
         print(f"  {'Batch / Grad Accum':<22}: {batch_size}/{grad_accum}")
         print(f"  {t('Save Every'):<22}: {save_every}")
         print(f"  {t('Preview Every'):<22}: {train_cfg.get('preview_every', 0)}", flush=True)

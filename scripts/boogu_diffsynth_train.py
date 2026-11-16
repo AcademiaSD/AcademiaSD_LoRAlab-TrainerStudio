@@ -56,6 +56,7 @@ class BooguImageTrainingModule(DiffusionTrainingModule):
         lokr_factor=16,
         use_dora=False,
         dora_normfix=True,
+        precision="bf16",
         lora_checkpoint=None,
         preset_lora_path=None,
         preset_lora_model=None,
@@ -80,12 +81,19 @@ class BooguImageTrainingModule(DiffusionTrainingModule):
             device=device,
         )
         processor_config = ModelConfig(processor_path) if processor_path is not None else None
+        # Precisión de cálculo (--precision): FP16 en GPUs sin BF16 por hardware; el LoRA sigue en FP32.
+        compute_dtype = torch.float16 if precision == "fp16" else torch.bfloat16
         self.pipe = BooguImagePipeline.from_pretrained(
-            torch_dtype=torch.bfloat16,
+            torch_dtype=compute_dtype,
             device=device,
             model_configs=model_configs,
             processor_config=processor_config,
         )
+        if compute_dtype != torch.bfloat16:
+            import lora_options
+            for component in vars(self.pipe).values():
+                if isinstance(component, torch.nn.Module):
+                    lora_options.to_compute_dtype(component, compute_dtype)
         self.pipe = self.split_pipeline_units(task, self.pipe, trainable_models, lora_base_model)
         self.resume_from_checkpoint(resume_from_checkpoint, remove_prefix_in_ckpt)
         self.lora_alpha = int(lora_alpha if lora_alpha is not None else lora_rank)
@@ -270,6 +278,7 @@ def boogu_image_parser():
     parser.add_argument("--use_lokr", action="store_true")
     parser.add_argument("--use_dora", action="store_true")
     parser.add_argument("--no_dora_normfix", action="store_true")
+    parser.add_argument("--precision", choices=("bf16", "fp16"), default="bf16")
     parser.add_argument("--lokr_factor", type=int, default=16)
     parser.add_argument("--lora_batch_size", type=int, default=1)
     parser.add_argument("--total_steps", type=int, default=500)
@@ -644,7 +653,7 @@ class BooguModelLogger(ModelLogger):
                 "ss_batch_size_per_device": str(args.lora_batch_size),
                 "ss_gradient_accumulation_steps": str(args.gradient_accumulation_steps),
                 "ss_seed": str(args.seed),
-                "ss_mixed_precision": "bf16",
+                "ss_mixed_precision": getattr(args, "precision", "bf16"),
             })
         if self.use_rslora and not self.use_lokr:
             metadata["rslora"] = "true"
@@ -700,8 +709,10 @@ def main():
     if args.model_paths and "Boogu-image-edit-NF4" in args.model_paths:
         from boogu_model import register_nf4_models
         register_nf4_models()
+    # FP16: Accelerate escala la loss (GradScaler) y se salta el paso que desborda; BF16: sin cambios.
     accelerator = accelerate.Accelerator(
         gradient_accumulation_steps=args.gradient_accumulation_steps,
+        mixed_precision="fp16" if args.precision == "fp16" else "no",
         kwargs_handlers=[
             accelerate.DistributedDataParallelKwargs(find_unused_parameters=args.find_unused_parameters)
         ],
@@ -730,6 +741,7 @@ def main():
             lokr_factor=args.lokr_factor,
             use_dora=args.use_dora and not args.use_lokr,
             dora_normfix=not args.no_dora_normfix,
+            precision=args.precision,
             lora_checkpoint=args.lora_checkpoint,
             preset_lora_path=args.preset_lora_path,
             preset_lora_model=args.preset_lora_model,

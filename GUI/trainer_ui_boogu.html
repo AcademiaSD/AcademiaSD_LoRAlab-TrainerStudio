@@ -551,6 +551,17 @@
                         </div>
                     </div>
 
+                    <div class="form-row">
+                        <div class="form-group" title="Precision: the number type the GPU computes with. Auto picks BF16 on RTX 30 or newer, and FP16 on GPUs without BF16 in hardware (RTX 20, Quadro RTX, GTX 16), which emulate BF16 and train several times slower with it. Both give the same quality; with FP16 the trainer scales the loss so small gradients are not lost, and skips the rare step that overflows. If a model does not fit in FP16, Auto stays on BF16. The model stays in 4 bits either way. Applies when the training starts or resumes.">
+                            <label>Precision:</label>
+                            <select id="train_precision" class="no-i18n">
+                                <option value="auto" selected>Auto</option>
+                                <option value="bf16">BF16</option>
+                                <option value="fp16">FP16</option>
+                            </select>
+                        </div>
+                    </div>
+
                     <div class="form-group">
                         <label>LoRA Targets:</label>
                         <select id="train_lora_targets"
@@ -1035,6 +1046,7 @@
                     if (t.use_loraplus !== undefined) document.getElementById('train_use_loraplus').checked = t.use_loraplus;
                     if (t.use_dora !== undefined) document.getElementById('train_use_dora').checked = t.use_dora;
                     if (t.dora_normfix !== undefined) document.getElementById('train_dora_normfix').checked = t.dora_normfix;
+                    if (t.precision) document.getElementById('train_precision').value = t.precision;
                     if (t.use_lokr !== undefined) document.getElementById('train_use_lokr').checked = t.use_lokr;
                     if (t.lokr_factor !== undefined) document.getElementById('train_lokr_factor').value = t.lokr_factor;
                     toggleBooguLokr(document.getElementById('train_use_lokr').checked);
@@ -1113,6 +1125,7 @@
                     if (data.use_loraplus !== undefined) document.getElementById('train_use_loraplus').checked = data.use_loraplus;
                     if (data.use_dora !== undefined) document.getElementById('train_use_dora').checked = data.use_dora;
                     if (data.dora_normfix !== undefined) document.getElementById('train_dora_normfix').checked = data.dora_normfix;
+                    if (data.precision) document.getElementById('train_precision').value = data.precision;
                     if (data.use_lokr !== undefined) document.getElementById('train_use_lokr').checked = data.use_lokr;
                     if (data.lokr_factor !== undefined) document.getElementById('train_lokr_factor').value = data.lokr_factor;
                     toggleBooguLokr(document.getElementById('train_use_lokr').checked);
@@ -1303,7 +1316,7 @@
             resume: { trigger_word: 'trigger_word', lr_scheduler: 'train_lr_scheduler',
                       warmup_steps: 'train_warmup_steps', lr_cycles: 'train_lr_cycles', lora_alpha: 'train_lora_alpha',
                       use_rslora: 'train_use_rslora', batch_size: 'train_batch_size',
-                      grad_accum_steps: 'train_grad_accum' },
+                      grad_accum_steps: 'train_grad_accum', precision: 'train_precision' },
             restart: { lora_rank: 'train_lora_rank', use_loraplus: 'train_use_loraplus', use_lokr: 'train_use_lokr', use_dora: 'train_use_dora', dora_normfix: 'train_dora_normfix',
                        lokr_factor: 'train_lokr_factor', lora_targets: 'train_lora_targets' },
         };
@@ -1327,6 +1340,7 @@
                 use_loraplus: document.getElementById('train_use_loraplus').checked,
                 use_dora: document.getElementById('train_use_dora').checked,
                 dora_normfix: document.getElementById('train_dora_normfix').checked,
+                precision: document.getElementById('train_precision').value,
                 loraplus_ratio: 16,
                 use_lokr: document.getElementById('train_use_lokr').checked,
                 lokr_factor: parseInt(document.getElementById('train_lokr_factor').value) || 16,
