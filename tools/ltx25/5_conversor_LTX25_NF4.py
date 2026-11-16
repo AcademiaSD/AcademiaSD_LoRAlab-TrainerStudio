@@ -326,17 +326,11 @@ def copy_components():
             if k in mi:
                 mi[k] = [None, None]
         atomic_json(mi, os.path.join(OUT, "model_index.json"))
-    with open(os.path.join(OUT, "README.md"), "w", encoding="utf-8") as f:
-        f.write("---\nlicense: other\nlicense_name: ltx-2.x-community-license\n"
-                "license_link: https://huggingface.co/Lightricks/LTX-2.5/blob/main/LICENSE\n"
-                "base_model: Lightricks/LTX-2.5\nbase_model_relation: quantized\ntags: [nf4, lora-training]\n---\n\n"
-                "# LTX-2.5 - NF4 for LoRA training\n\n"
-                "Modified files: the full (SFT) transformer of LTX-2.5 and its Gemma 4 text encoder, quantized to NF4 "
-                "(bitsandbytes, double quantization) for AcademiaSD LoRAlab Trainer Studio. Layers outside the "
-                "transformer blocks stay in BF16. VAEs, vocoder, connectors, scheduler and tokenizer are unchanged.\n\n"
-                "LTX-2.5 and its derivatives are subject to the LTX-2.x Community License Agreement, including the "
-                "use restrictions of its Section 4 and Attachment A. A copy of the agreement must ship with this "
-                "repository (LICENSE).\n")
+    # Ficha del repo NF4 y copia completa de la licencia (obligatoria, seccion 3.2 de la LTX-2.x Community License).
+    here = os.path.dirname(os.path.abspath(__file__))
+    for src, dst in (("README_NF4.md", "README.md"), ("LICENSE-2_x.txt", "LICENSE")):
+        if os.path.exists(os.path.join(here, src)):
+            shutil.copy2(os.path.join(here, src), os.path.join(OUT, dst))
     print("[OK] components copied / componentes copiados")
 
 
