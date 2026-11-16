@@ -116,6 +116,9 @@ DEFAULTS = {
     # escalados a su propia área. Por defecto 384x384 y 49 fotogramas (~2 s): ~1000 tokens, cabe en 8 GB.
     "video_target_area": 384 * 384,
     "max_frames": 49,
+    # Pista de audio de los clips (Fase 3): se codifica con el VAE de audio. Un clip mudo lleva el latente de un
+    # silencio real y queda marcado sin audio (no entra en la pérdida de audio).
+    "use_audio": True,
     "project_name": "",
     "trigger_word": "",
     "preview_custom_prompt": "",
@@ -201,6 +204,7 @@ FRAME_RATE = float(cfg_get("frame_rate", DEFAULTS["frame_rate"]))
 NUM_FRAMES = int(cfg_get("num_frames", DEFAULTS["num_frames"]))
 VIDEO_TARGET_AREA = int(cfg_get("video_target_area", DEFAULTS["video_target_area"]))
 MAX_FRAMES = int(cfg_get("max_frames", DEFAULTS["max_frames"]))
+USE_AUDIO = _cfg_bool("use_audio", DEFAULTS["use_audio"])
 TRIGGER_WORD = str(cfg_get("trigger_word", DEFAULTS["trigger_word"])).strip()
 PROJECT_NAME = str(cfg_get("project_name", DEFAULTS["project_name"])).strip()
 PREVIEW_CUSTOM_PROMPT = str(cfg_get("preview_custom_prompt", DEFAULTS["preview_custom_prompt"])).strip()
@@ -1291,6 +1295,9 @@ def preprocess_ltx25():
     vae = getattr(pipe, "vae", None)
     if vae is not None:
         vae.to("cuda")
+    audio_vae = getattr(pipe, "audio_vae", None)
+    if audio_vae is not None:
+        audio_vae.to("cuda", dtype=torch.float32)   # 0.1 GB; en FP32 como ltx-trainer
     print("[VRAM] " + t("VAE in VRAM: {gb:.2f} GB", gb=vram_gb()))
 
     # ------------------------------------------------------------------
@@ -1355,10 +1362,24 @@ def preprocess_ltx25():
         torch.save(video_latent, video_path)
         print("Video latent:", tuple(video_latent.shape))
 
-        # Audio: latente de la duración del clip (25 por segundo, como LTX2Pipeline). Fase 2: vacío (sin pérdida
-        # de audio); la Fase 3 codificará la pista del clip.
-        audio_latent = torch.zeros((1, audio_channels, ltx25_model.audio_latent_length(frames) if is_video else 1),
-                                   dtype=torch.bfloat16)
+        # Audio: latente de la duración del clip (25 por segundo, como LTX2Pipeline). Con pista se codifica la pista;
+        # un clip mudo lleva el latente de un silencio de verdad. Las imágenes, un latente vacío de 1.
+        has_audio = False
+        if is_video and audio_vae is not None:
+            seconds = frames / 24.0
+            n_lat = ltx25_model.audio_latent_length(frames)
+            wave = ltx25_model.read_audio(src, 0.0, seconds) if (USE_AUDIO and info.get("has_audio")) else None
+            has_audio = wave is not None and float(abs(wave).max()) > 1e-4
+            if not has_audio:
+                wave = torch.zeros((2, int(round(seconds * ltx25_model.AUDIO_SR)))).numpy()
+            audio_latent = ltx25_model.encode_audio(audio_vae, wave)
+            if audio_latent.shape[-1] < n_lat:
+                audio_latent = torch.nn.functional.pad(audio_latent, (0, n_lat - audio_latent.shape[-1]))
+            audio_latent = audio_latent[..., :n_lat].contiguous()
+            print(t("Audio") + ":", t("clip track") if has_audio else t("silence (no track)"))
+        else:
+            audio_latent = torch.zeros((1, audio_channels, ltx25_model.audio_latent_length(frames) if is_video else 1),
+                                       dtype=torch.bfloat16)
         torch.save(audio_latent, audio_path)
         print("Audio latent:", tuple(audio_latent.shape))
         print("[VRAM] " + t("accumulated peak: {gb:.2f} GB", gb=vram_peak_gb()))
@@ -1371,6 +1392,7 @@ def preprocess_ltx25():
                 "height": bh,
                 "num_frames": frames,
                 "media": "video" if is_video else "image",
+                "has_audio": bool(has_audio),
                 "frame_rate": FRAME_RATE,
                 "prompt": prompt,
                 "video_latent": os.path.basename(video_path),
@@ -1406,7 +1428,8 @@ def preprocess_ltx25():
         "prompt_encoding": "LTX2Pipeline.encode_prompt",
         "video_target_area": VIDEO_TARGET_AREA,
         "max_frames": MAX_FRAMES,
-        "note": "Images and video clips (24 fps, 8n+1 frames). Audio latents are zero-filled (phase 2).",
+        "use_audio": USE_AUDIO,
+        "note": "Images and video clips (24 fps, 8n+1 frames). Clip audio encoded with the audio VAE (ltx-core mel).",
     }
 
     atomic_json(cache_info, os.path.join(CACHE_DIR, "cache_info.json"))

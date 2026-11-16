@@ -2,7 +2,7 @@
 
 > **Technical notes** for the LTX-2.5 trainer of **AcademiaSD LoRAlab Trainer Studio**. Installation, updating and everyday use are in the [main README](../README.md).
 
-> **Status: phases 1 (images) and 2 (video clips).** Video + audio and IC-LoRA edit modes are planned; see [PLAN_LTX25.md](PLAN_LTX25.md).
+> **Status: phases 1 (images), 2 (video clips) and 3 (video + audio).** The IC-LoRA edit mode is planned; see [PLAN_LTX25.md](PLAN_LTX25.md).
 
 ## Which model
 
@@ -78,8 +78,22 @@ A dataset can mix images and clips (`.mp4`, `.mov`, `.mkv`, `.webm`), each with 
 
 Measured with the 8 GB profile (RTX 5080): 49 frames at 320 × 448 (980 tokens), 16 of 48 blocks resident, **~5.8 s/it**, peak **6.72 GiB**; pre-cache peak 6.0 GB.
 
+## Video + audio (phase 3)
+
+LTX-2.5 generates picture and sound together, so a clip's audio track can be trained with it.
+
+- **Audio encoding**, as Lightricks' `ltx-core` (`AudioProcessor`): the track is resampled to 16 kHz, 2 channels (mono duplicated), turned into a natural-log **magnitude** mel spectrogram (n_fft = window = 1024, hop 160, 64 slaney bands 0–8 kHz, centered with reflect padding, floor 1e-5), encoded by the audio VAE (mean of the distribution, not a sample), packed to `[T, 128]` and normalized per channel. 25 latents per second; trimmed or padded to the clip's frames. Round trip measured (encode → decode → vocoder at 48 kHz): log-mel correlation **0.975** with the original, against 0.657 for a random latent.
+- **Pre-cache** (**Use clip audio**, on by default): clips with a track are encoded; mute clips get the latent of real silence and are marked as having no sound.
+- **Train Audio**: adds the audio attention and the audio↔video cross-attention layers to the LoRA (912 more layers, 1,392 in all at rank 32), and adds the audio loss of the clips that have a track to the video loss, with **Audio Loss Weight** (1.0, as `ltx-trainer`, which sums both). Images and mute clips train only the picture. Without it the LoRA touches only the video branch.
+- **Previews** of clips carry the generated sound (audio VAE + vocoder, 48 kHz stereo), muxed into the `.mp4`.
+- Captions: the captioner cannot hear; write the sound in the caption.
+
+Measured with the 8 GB profile: 49-frame clips with audio (1,008 tokens), 15 of 48 blocks resident, **~7.2 s/it**, peak **6.75 GiB**.
+
+MiniMax-H3 showed that training audio **alone** drags the video branch down; here only clips (picture and sound together) train audio, and audio-only files are not accepted.
+
 ## Not done yet
 
 - DoRA with block swap (DoRA needs the dequantized weight of every layer; it refuses to start while blocks are parked).
-- Video + audio (phase 3) and IC-LoRA edit (phase 4).
-- Validation of trained LoRAs in ComfyUI, and of video LoRAs on real clips (phase 2 was tested on synthetic zoom clips).
+- IC-LoRA edit (phase 4).
+- Validation of trained LoRAs in ComfyUI, and of video / audio LoRAs on real clips (phases 2 and 3 were tested on synthetic clips and cuts of a demo video).

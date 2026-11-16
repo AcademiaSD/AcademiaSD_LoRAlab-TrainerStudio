@@ -123,6 +123,10 @@ DEFAULTS = {
     "lora_only_attn": True,
     "cast_frozen_bf16": True,
     "use_audio_loss": False,
+    # Fase 3: entrena también el audio de los clips con pista. Añade al LoRA la atención de audio y las cruzadas
+    # audio<->vídeo, y suma la pérdida de audio (solo de las muestras con pista) con este peso, como ltx-trainer.
+    "train_audio": False,
+    "audio_loss_weight": 1.0,
     # Muestreo de sigma, como ltx-trainer (Lightricks): "shifted_logit_normal" (por defecto) o "uniform" (el de LTX 2.3).
     "timestep_sampling": "shifted_logit_normal",
 
@@ -256,6 +260,10 @@ MAX_TEXT_TOKENS = int(cfg_get("max_text_tokens", DEFAULTS["max_text_tokens"]) or
 LORA_ONLY_ATTN = _cfg_bool("lora_only_attn", DEFAULTS["lora_only_attn"])
 CAST_FROZEN_BF16 = _cfg_bool("cast_frozen_bf16", DEFAULTS["cast_frozen_bf16"])
 USE_AUDIO_LOSS = _cfg_bool("use_audio_loss", DEFAULTS["use_audio_loss"])
+TRAIN_AUDIO = _cfg_bool("train_audio", DEFAULTS["train_audio"])
+AUDIO_LOSS_WEIGHT = float(cfg_get("audio_loss_weight", DEFAULTS["audio_loss_weight"]))
+if TRAIN_AUDIO:
+    USE_AUDIO_LOSS = True
 TIMESTEP_SAMPLING = str(cfg_get("timestep_sampling", DEFAULTS["timestep_sampling"])).strip().lower()
 
 PREVIEW_EVERY = int(cfg_get("preview_every", DEFAULTS["preview_every"]) or 0)
@@ -334,6 +342,7 @@ print("  Batch / Grad Accum          : {}/{}".format(BATCH_SIZE, GRAD_ACCUM_STEP
 print("  Max Text Tokens             : {}".format(MAX_TEXT_TOKENS))
 print("  LoRA Only Attention         : {}".format("ON" if LORA_ONLY_ATTN else "OFF"))
 print("  Use Audio Loss              : {}".format("ON" if USE_AUDIO_LOSS else "OFF"))
+print("  Train Audio                 : {} (weight {})".format("ON" if TRAIN_AUDIO else "OFF", AUDIO_LOSS_WEIGHT))
 print("  Preview Mode                : {}".format(PREVIEW_MODE))
 print("  Preview Compare Base/LoRA   : {}".format("ON" if PREVIEW_COMPARE_BASE else "OFF"))
 print("  Preview Caption Mode        : {}".format(PREVIEW_CAPTION_MODE))
@@ -651,11 +660,14 @@ def discover_lora_targets(transformer):
             "video_to_audio_attn",
         }
 
-        if any(part in excluded_parts for part in parts):
-            continue
+        # Sin Train Audio el LoRA solo toca la rama de vídeo. Con Train Audio entran también la atención de audio
+        # y las cruzadas audio<->vídeo (con lora_only_attn, sin el FF de audio, igual que en vídeo).
+        if not TRAIN_AUDIO:
+            if any(part in excluded_parts for part in parts):
+                continue
 
-        if any(part.startswith("audio_") for part in parts):
-            continue
+            if any(part.startswith("audio_") for part in parts):
+                continue
 
         if "transformer_blocks" not in parts:
             continue
@@ -1163,9 +1175,19 @@ def load_cached_entries(cache_dir, audio_channels, max_text_tokens=0):
 
         audio_latent = pin_cpu_tensor(audio_latent)
 
+        has_audio = False
+        info_path = os.path.join(cache_dir, "{}_info.json".format(base))
+        if os.path.exists(info_path):
+            try:
+                with open(info_path, "r", encoding="utf-8") as f:
+                    has_audio = bool(json.load(f).get("has_audio", False))
+            except Exception:
+                pass
+
         entries.append(
             {
                 "name": base,
+                "has_audio": has_audio,
                 "video": video_latent,
                 "audio": audio_latent,
                 "prompt": prompt_result,
@@ -2086,7 +2108,48 @@ def run_fullgen_flow_preview(
         patch_size_t,
     )
 
+    global LAST_PREVIEW_AUDIO
+    LAST_PREVIEW_AUDIO = ax.detach()   # tokens de audio [1, T, 128]: el .mp4 de la preview los lleva
+
     return latents.detach()
+
+
+LAST_PREVIEW_AUDIO = None
+
+
+class LTXAudioHolder:
+    """VAE de audio + vocoder para el sonido de la preview (0.35 GB, FP32). Se suben solo para decodificar."""
+    audio_vae = None
+    vocoder = None
+
+    @classmethod
+    def decode(cls, tokens):
+        from diffusers import AutoencoderKLLTX2Audio
+        from diffusers.pipelines.ltx2.vocoder import LTX2VocoderWithBWE
+        if cls.audio_vae is None:
+            cls.audio_vae = AutoencoderKLLTX2Audio.from_pretrained(os.path.join(MODEL_ID, "audio_vae"),
+                                                                    torch_dtype=torch.float32).eval()
+            cls.vocoder = LTX2VocoderWithBWE.from_pretrained(os.path.join(MODEL_ID, "vocoder"),
+                                                             torch_dtype=torch.float32).eval()
+        try:
+            cls.audio_vae.to("cuda")
+            cls.vocoder.to("cuda")
+            return ltx25_model.decode_audio(cls.audio_vae, cls.vocoder, tokens.to("cuda"))
+        finally:
+            cls.audio_vae.to("cpu")
+            cls.vocoder.to("cpu")
+            torch.cuda.empty_cache()
+
+
+def _preview_audio():
+    """(onda, sample rate) del último clip de preview, o (None, None) si no se puede."""
+    if LAST_PREVIEW_AUDIO is None or LAST_PREVIEW_AUDIO.shape[1] < 2:
+        return None, None
+    try:
+        return LTXAudioHolder.decode(LAST_PREVIEW_AUDIO)
+    except Exception as e:
+        print("  [!] " + t("Preview audio failed: {error}", error=e))
+        return None, None
 
 
 def reload_preview_settings():
@@ -2490,7 +2553,9 @@ def run_preview_diagnostic(
             out_path = os.path.join(OUTPUT_DIR, out_name)
 
             if is_clip:
-                out_path = ltx25_model.write_video(img, out_path.replace(".png", ".mp4"), fps=FRAME_RATE)
+                wav, sr = _preview_audio()   # el de la pasada con LoRA, que es la última
+                out_path = ltx25_model.write_video(img, out_path.replace(".png", ".mp4"), fps=FRAME_RATE,
+                                                   audio=wav, sample_rate=sr)
             else:
                 Image.fromarray(img).save(out_path)
 
@@ -2524,8 +2589,10 @@ def run_preview_diagnostic(
 
             out_path = os.path.join(OUTPUT_DIR, preview_filename(step))
             if is_clip:
-                # Clip: .mp4 a 24 fps (como Wan 2.2). El audio llega en la Fase 3.
-                out_path = ltx25_model.write_video(img, out_path.replace(".png", ".mp4"), fps=FRAME_RATE)
+                # Clip: .mp4 a 24 fps (como Wan 2.2) con el audio que el modelo generó a la vez.
+                wav, sr = _preview_audio()
+                out_path = ltx25_model.write_video(img, out_path.replace(".png", ".mp4"), fps=FRAME_RATE,
+                                                   audio=wav, sample_rate=sr)
             else:
                 Image.fromarray(img).save(out_path)
 
@@ -3156,14 +3223,19 @@ def train_ltx25():
             if not USE_AUDIO_LOSS:
                 pred_audio = None
 
-            if USE_AUDIO_LOSS and pred_audio is not None and target_audio is not None:
+            if (USE_AUDIO_LOSS and pred_audio is not None and target_audio is not None
+                    and (entry.get("has_audio", False) or not TRAIN_AUDIO)):
                 if pred_audio.shape != target_audio.shape:
                     raise RuntimeError(t("The audio output shape does not match the target."))
 
                 loss_video = mse_loss_chunked(pred_video, target_video)
                 loss_audio = mse_loss_chunked(pred_audio, target_audio)
 
-                loss = (loss_video + loss_audio) * 0.5
+                if TRAIN_AUDIO:
+                    # Como ltx-trainer: suma de las dos pérdidas (audio con su peso), solo en clips con pista.
+                    loss = loss_video + AUDIO_LOSS_WEIGHT * loss_audio
+                else:
+                    loss = (loss_video + loss_audio) * 0.5
             else:
                 loss = mse_loss_chunked(pred_video, target_video)
 

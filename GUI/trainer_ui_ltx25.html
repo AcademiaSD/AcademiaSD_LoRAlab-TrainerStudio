@@ -403,6 +403,13 @@
                         </div>
                     </div>
 
+                    <div class="form-group" title="Encodes the audio track of every clip with the LTX audio VAE (16 kHz, as Lightricks' trainer). Mute clips get the latent of real silence and are marked as having no sound. Needed for Train Audio. Off: every clip is cached as mute.">
+                        <label style="display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer;" for="precache_use_audio">
+                            <input type="checkbox" id="precache_use_audio" checked style="width: 18px; height: 18px; cursor: pointer;">
+                            Use clip audio
+                        </label>
+                    </div>
+
                     <!-- Botones Load JSON y Save JSON -->
                     <div class="btn-row" style="margin-top:12px;">
                         <button type="button" class="btn btn-secondary btn-tall" onclick="triggerLoadJson('precache')">
@@ -581,6 +588,19 @@
                         <div class="form-group" title="Resident Blocks: how many of the 48 transformer blocks stay in VRAM. -1 lets the plan choose from the profile and your cached resolution. Each block left in RAM saves about 0.2 GB of VRAM and costs some speed.">
                             <label>Resident Blocks:</label>
                             <input type="number" id="train_resident_blocks" value="-1" min="-1" max="48">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group" title="Train Audio: the LoRA also learns the sound of the clips that have an audio track (voice, music, effects). It adds the audio attention and the audio-video cross attention layers to the LoRA, and the audio loss of those clips is added to the video one. Images and mute clips train only the picture. Without it the LoRA touches only the video branch and the model keeps its own sound. Write the sound in the caption too (the captioner cannot hear). Fixed for the whole training: to change it, start a new one.">
+                            <label style="display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer;" for="train_train_audio">
+                                <input type="checkbox" id="train_train_audio" style="width: 18px; height: 18px; cursor: pointer;">
+                                Train Audio
+                            </label>
+                        </div>
+                        <div class="form-group" title="Weight of the audio loss next to the video one. 1.0 is what Lightricks' trainer uses. Lower it if the picture gets worse while the sound is learned.">
+                            <label>Audio Loss Weight:</label>
+                            <input type="number" step="0.1" min="0" id="train_audio_loss_weight" value="1.0">
                         </div>
                     </div>
 
@@ -1035,6 +1055,7 @@
                     if (p.max_seq_len) document.getElementById('precache_max_seq_len').value = p.max_seq_len;
                     if (p.max_frames) document.getElementById('precache_max_frames').value = String(p.max_frames);
                     if (p.video_target_area) document.getElementById('precache_video_area').value = String(p.video_target_area);
+                    if (p.use_audio !== undefined) document.getElementById('precache_use_audio').checked = !!p.use_audio;
                 }
                 if (data.train) {
                     const t = data.train;
@@ -1053,6 +1074,8 @@
                     if (t.dora_normfix !== undefined) document.getElementById('train_dora_normfix').checked = t.dora_normfix;
                     if (t.precision) document.getElementById('train_precision').value = t.precision;
                     if (t.vram_profile) document.getElementById('train_vram_profile').value = t.vram_profile;
+                    if (t.train_audio !== undefined) document.getElementById('train_train_audio').checked = !!t.train_audio;
+                    if (t.audio_loss_weight !== undefined) document.getElementById('train_audio_loss_weight').value = t.audio_loss_weight;
                     if (t.resident_blocks !== undefined) document.getElementById('train_resident_blocks').value = t.resident_blocks;
                     if (t.batch_size) document.getElementById('train_batch_size').value = t.batch_size;
                     if (t.grad_accum_steps) document.getElementById('train_grad_accum').value = t.grad_accum_steps;
@@ -1114,6 +1137,7 @@
                     if (data.max_seq_len !== undefined) document.getElementById('precache_max_seq_len').value = data.max_seq_len;
                     if (data.max_frames !== undefined) document.getElementById('precache_max_frames').value = String(data.max_frames);
                     if (data.video_target_area !== undefined) document.getElementById('precache_video_area').value = String(data.video_target_area);
+                    if (data.use_audio !== undefined) document.getElementById('precache_use_audio').checked = !!data.use_audio;
                     
                     if (data.total_steps !== undefined) document.getElementById('train_total_steps').value = data.total_steps;
                     if (data.lr !== undefined) document.getElementById('train_lr').value = data.lr;
@@ -1129,6 +1153,8 @@
                     if (data.dora_normfix !== undefined) document.getElementById('train_dora_normfix').checked = data.dora_normfix;
                     if (data.precision) document.getElementById('train_precision').value = data.precision;
                     if (data.vram_profile) document.getElementById('train_vram_profile').value = data.vram_profile;
+                    if (data.train_audio !== undefined) document.getElementById('train_train_audio').checked = !!data.train_audio;
+                    if (data.audio_loss_weight !== undefined) document.getElementById('train_audio_loss_weight').value = data.audio_loss_weight;
                     if (data.resident_blocks !== undefined) document.getElementById('train_resident_blocks').value = data.resident_blocks;
                     if (data.batch_size !== undefined) document.getElementById('train_batch_size').value = data.batch_size;
                     if (data.grad_accum_steps !== undefined) document.getElementById('train_grad_accum').value = data.grad_accum_steps;
@@ -1217,6 +1243,7 @@
                 max_seq_len: parseInt(document.getElementById('precache_max_seq_len').value),
                 max_frames: parseInt(document.getElementById('precache_max_frames').value),
                 video_target_area: parseInt(document.getElementById('precache_video_area').value),
+                use_audio: document.getElementById('precache_use_audio').checked,
                 vram_profile: document.getElementById('train_vram_profile').value,
                 cache_dir: document.getElementById('precache_cache_dir').value,
                 preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim()
@@ -1277,7 +1304,7 @@
                       grad_accum_steps: 'train_grad_accum', preview_caption_mode: 'train_preview_caption_mode',
                       preview_custom_prompt: 'train_preview_custom_prompt', precision: 'train_precision',
                       vram_profile: 'train_vram_profile', resident_blocks: 'train_resident_blocks' },
-            new: { lora_rank: 'train_lora_rank', lora_alpha: 'train_lora_alpha', use_rslora: 'train_use_rslora',
+            new: { train_audio: 'train_train_audio', lora_rank: 'train_lora_rank', lora_alpha: 'train_lora_alpha', use_rslora: 'train_use_rslora',
                    use_loraplus: 'train_use_loraplus', use_dora: 'train_use_dora', dora_normfix: 'train_dora_normfix' },
         };
 
@@ -1303,6 +1330,8 @@
                 precision: document.getElementById('train_precision').value,
                 vram_profile: document.getElementById('train_vram_profile').value,
                 resident_blocks: parseInt(document.getElementById('train_resident_blocks').value),
+                train_audio: document.getElementById('train_train_audio').checked,
+                audio_loss_weight: parseFloat(document.getElementById('train_audio_loss_weight').value) || 1.0,
                 batch_size: parseInt(document.getElementById('train_batch_size').value),
                 grad_accum_steps: parseInt(document.getElementById('train_grad_accum').value),
                 save_every: parseInt(document.getElementById('train_save_every').value),

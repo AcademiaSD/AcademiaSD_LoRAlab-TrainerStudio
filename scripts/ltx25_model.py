@@ -471,7 +471,8 @@ def write_video(frames, path, fps=FPS, audio=None, sample_rate=None):
                 wf.setsampwidth(2)
                 wf.setframerate(int(sample_rate))
                 wf.writeframes((a.T * 32767).astype(_np.int16).tobytes())
-            cmd += ["-i", wav, "-c:a", "aac", "-b:a", "160k", "-shortest"]
+            # apad + -shortest: el audio se rellena con silencio y el fichero acaba con el vídeo (sin perder fotogramas).
+            cmd += ["-i", wav, "-af", "apad", "-c:a", "aac", "-b:a", "160k", "-shortest"]
         cmd += ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", "-movflags", "+faststart", tmp]
         try:
             _subprocess.run(cmd, input=frames.tobytes(), check=True, timeout=600)
@@ -488,3 +489,85 @@ def write_video(frames, path, fps=FPS, audio=None, sample_rate=None):
     imgs = [Image.fromarray(f) for f in frames]
     imgs[0].save(path, save_all=True, append_images=imgs[1:], duration=int(1000 / fps), loop=0, quality=90)
     return path
+
+
+# ----------------------------------------------------------------------------------------------------------------
+# Audio. Preprocesado de ltx-core (AudioProcessor.waveform_to_mel) y empaquetado de LTX2Pipeline:
+#   onda 16 kHz, 2 canales (mono duplicado) -> mel de MAGNITUD: n_fft=win=1024, hop=160, 64 bandas slaney 0-8 kHz,
+#   center + reflect, log(clamp(1e-5)) -> [B, 2, T, 64] -> VAE de audio -> media (no muestra) [B, 8, T/4, 16]
+#   -> empaquetado [B, T/4, 128] -> (x - latents_mean) / latents_std.   25 latentes por segundo.
+# ----------------------------------------------------------------------------------------------------------------
+AUDIO_SR = 16000
+
+
+def read_audio(path, start=0.0, duration=None, sample_rate=AUDIO_SR):
+    """Pista de audio de un fichero (vídeo o audio) -> float32 [2, N] a `sample_rate`, o None si no tiene audio."""
+    ffmpeg = ffbin("ffmpeg")
+    if not ffmpeg:
+        raise RuntimeError("ffmpeg not found in PATH / no está en el PATH")
+    cmd = [ffmpeg, "-v", "error", "-ss", "{:.4f}".format(start), "-i", str(path)]
+    if duration is not None:
+        cmd += ["-t", "{:.4f}".format(duration)]
+    cmd += ["-vn", "-ac", "2", "-ar", str(int(sample_rate)), "-f", "f32le", "-"]
+    raw = _subprocess.run(cmd, capture_output=True, timeout=600).stdout
+    if not raw:
+        return None
+    a = _np.frombuffer(raw, dtype=_np.float32)
+    a = a[: len(a) // 2 * 2].reshape(-1, 2).T.copy()
+    if duration is not None:
+        n = int(round(duration * sample_rate))
+        if a.shape[1] < n:   # como ltx-trainer: relleno con silencio al final si la pista es más corta
+            a = _np.pad(a, ((0, 0), (0, n - a.shape[1])))
+        a = a[:, :n]
+    return a
+
+
+_MEL = {}
+
+
+def waveform_to_mel(wave, device="cuda"):
+    """[2, N] o [B, 2, N] float -> log-mel [B, 2, T, 64] (como ltx-core)."""
+    import torchaudio
+    key = str(device)
+    if key not in _MEL:
+        _MEL[key] = torchaudio.transforms.MelSpectrogram(
+            sample_rate=AUDIO_SR, n_fft=1024, win_length=1024, hop_length=160, f_min=0.0, f_max=AUDIO_SR / 2.0,
+            n_mels=64, window_fn=torch.hann_window, center=True, pad_mode="reflect", power=1.0,
+            mel_scale="slaney", norm="slaney").to(device)
+    w = torch.as_tensor(wave, dtype=torch.float32, device=device)
+    if w.ndim == 2:
+        w = w.unsqueeze(0)
+    mel = _MEL[key](w)                                   # [B, 2, 64, T]
+    mel = torch.log(torch.clamp(mel, min=1e-5))
+    return mel.permute(0, 1, 3, 2).contiguous()          # [B, 2, T, 64]
+
+
+def encode_audio(audio_vae, wave, device="cuda"):
+    """Onda [2, N] a 16 kHz -> latente normalizado en el formato del caché del trainer: [1, 128, T]."""
+    dtype = next(audio_vae.parameters()).dtype
+    mel = waveform_to_mel(wave, device).to(dtype)
+    with torch.no_grad():
+        post = audio_vae.encode(mel).latent_dist
+    z = post.mode() if hasattr(post, "mode") else post.mean       # [1, 8, T, 16]
+    packed = z.transpose(1, 2).flatten(2, 3).float()              # [1, T, 128]
+    mean = audio_vae.latents_mean.to(packed.device, torch.float32)
+    std = audio_vae.latents_std.to(packed.device, torch.float32)
+    packed = (packed - mean) / std
+    return packed.transpose(1, 2).contiguous().to(torch.bfloat16).cpu()   # [1, 128, T]
+
+
+def decode_audio(audio_vae, vocoder, latent):
+    """Latente normalizado [1, T, 128] (tokens) o [1, 128, T] -> onda float32 [canales, N] y su sample rate."""
+    dtype = next(audio_vae.parameters()).dtype
+    x = latent.float()
+    if x.shape[-1] != 128:
+        x = x.transpose(1, 2)
+    mean = audio_vae.latents_mean.to(x.device, torch.float32)
+    std = audio_vae.latents_std.to(x.device, torch.float32)
+    x = x * std + mean                                            # [1, T, 128]
+    x = x.unflatten(2, (-1, 16)).transpose(1, 2)                  # [1, 8, T, 16]
+    with torch.no_grad():
+        mel = audio_vae.decode(x.to(dtype), return_dict=False)[0]
+        wav = vocoder(mel.to(next(vocoder.parameters()).dtype))
+    sr = int(getattr(vocoder.config, "output_sampling_rate", AUDIO_SR) or AUDIO_SR)
+    return wav[0].float().cpu().numpy(), sr
