@@ -14,7 +14,7 @@
     {
       "id": "ltx25",
       "name": "LTX 2.5",
-      "description": "Video LoRAs (8 GB with block swap)",
+      "description": "Image, video, audio and edit LoRAs (8 GB)",
       "image": "assets/ltx25/portada.jpg",
       "run": "Run_LoRAlab-LTX25.bat"
     },
