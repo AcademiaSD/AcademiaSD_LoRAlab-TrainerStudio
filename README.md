@@ -10,6 +10,7 @@ What was added, newest first. Each entry links to its commit.
 
 **2026-11-16**
 
+- **Krea 2: Precision selector for older GPUs** — a **Precision** selector (Auto / BF16 / FP16) under DoRA / NormFix. RTX 20, Quadro RTX and GTX 16 cards have no BF16 in hardware and trained several times slower with it; **Auto** now uses FP16 on them and BF16 on RTX 30 or newer. Same quality in both: with FP16 the loss is scaled so small gradients are not lost, and the model stays in 4 bits [`a8844b7`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/a8844b7)
 - **DoRA NormFix** — a **NormFix** checkbox next to DoRA, on by default, in the 17 DoRA trainers. A DoRA trained on the 4-bit model could lose the likeness in ComfyUI even with good previews, because ComfyUI measures the layers on the full model; with NormFix the file is saved with the original model's sizes, and the likeness is the same as in the previews. The trainer downloads the small `dora_norms.safetensors` it needs (5–20 MB) before training if your model folder does not have it ([details](#️-lora-options-rslora-lora-dora-and-lokr)) [`3922b7e`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/3922b7e)
 
 **2026-11-15**
