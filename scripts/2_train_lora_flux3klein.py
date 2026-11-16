@@ -78,6 +78,7 @@ DEFAULTS = {
     "lokr_factor": 16,
     "use_dora": False,
     "dora_normfix": True,
+    "precision": "auto",
     "weight_decay": 0.0,
     "max_grad_norm": 1.0,
     "save_every": 100,
@@ -132,6 +133,12 @@ USE_DORA          = bool(cfg.get("use_dora",     DEFAULTS["use_dora"]))
 # transformer NF4) en vez de la del NF4, que es la que divide ComfyUI. Sin esto el LoRA pierde el parecido
 # en ComfyUI aunque las previews salgan bien. Solo cambia la exportación.
 DORA_NORMFIX      = bool(cfg.get("dora_normfix", DEFAULTS["dora_normfix"]))
+# Precisión de cálculo (Auto / BF16 / FP16): ver lora_options.resolve_precision. FP16_OK: las activaciones
+# del modelo caben en FP16 (medido), si no Auto se queda en BF16.
+FP16_OK           = True
+PRECISION_CFG     = str(cfg.get("precision", DEFAULTS["precision"]) or "auto").lower()
+PRECISION         = lora_options.resolve_precision(PRECISION_CFG, FP16_OK)
+COMPUTE_DTYPE, ADAPTER_DTYPE = lora_options.precision_dtypes(PRECISION)
 if USE_LOKR:
     USE_RSLORA = USE_LORAPLUS = USE_DORA = False
 WEIGHT_DECAY      = cfg.get("weight_decay",      DEFAULTS["weight_decay"])
@@ -166,6 +173,7 @@ print(f"  {'LoRA Rank/Alpha':<22}: {LORA_RANK}/{LORA_ALPHA}")
 print(f"  {'rsLoRA / LoRA+':<22}: {'on' if USE_RSLORA else 'off'} / {f'x{LORAPLUS_RATIO:g}' if USE_LORAPLUS else 'off'}")
 print(f"  {'LoKr':<22}: {f'factor {LOKR_FACTOR}' if USE_LOKR else 'off'}")
 print(f"  {'DoRA':<22}: {('on, NormFix' if DORA_NORMFIX else 'on') if USE_DORA else 'off'}")
+print(f"  {'Precision':<22}: {PRECISION.upper()}{' (auto)' if PRECISION_CFG not in ('bf16', 'fp16') else ''}")
 print(f"  {'Batch / Grad Accum':<22}: {BATCH_SIZE}/{GRAD_ACCUM_STEPS}")
 print(f"  {t('Preview'):<22}: {t('Mode')}={PREVIEW_CAPTION_MODE} | Prompt='{PREVIEW_CUSTOM_PROMPT}'")
 print(f"  {t('Preview Every'):<22}: {PREVIEW_EVERY} | {t('Preview Steps')} {PREVIEW_STEPS} | CFG {PREVIEW_CFG} | {t('Preview Size')} {PREVIEW_SIZE or t('Training')}")
@@ -376,6 +384,7 @@ def load_nf4_transformer(model_dir):
     if missing:
         raise RuntimeError(t("NF4 cache incomplete: {names}", names=missing[:5]))
 
+    lora_options.to_compute_dtype(transformer, COMPUTE_DTYPE)
     print("[OK] " + t("NF4 layers: {a} | BF16 layers: {b}", a=len(index['quantized']), b=len(index['unquantized'])))
     return transformer
 
@@ -402,7 +411,7 @@ def build_lora_metadata(step):
         "ss_batch_size_per_device": BATCH_SIZE,
         "ss_gradient_accumulation_steps": GRAD_ACCUM_STEPS,
         "ss_seed": SEED,
-        "ss_mixed_precision": "bf16",
+        "ss_mixed_precision": PRECISION,
     }
 
     # La GUI lee estas claves al exportar o descargar para poner el sufijo _rs / _plus / _lokr al nombre.
@@ -491,13 +500,13 @@ class VaeHolder:
     @classmethod
     def get(cls):
         if cls.vae is None:
-            cls.vae = AutoencoderKLFlux2.from_pretrained(MODEL_ID, subfolder="vae", torch_dtype=torch.bfloat16)
+            cls.vae = AutoencoderKLFlux2.from_pretrained(MODEL_ID, subfolder="vae", torch_dtype=torch.bfloat16 if PRECISION == "bf16" else torch.float32)
         return cls.vae
 
 
 def denoise(model, scheduler, sample, H, W, generator, neg=None):
     device = "cuda"
-    latents = pack_latents(torch.randn((1, 128, H, W), generator=generator, device=device, dtype=torch.bfloat16))
+    latents = pack_latents(torch.randn((1, 128, H, W), generator=generator, device=device, dtype=COMPUTE_DTYPE))
 
     sigmas = np.linspace(1.0, 1.0 / PREVIEW_STEPS, PREVIEW_STEPS)
     scheduler.set_timesteps(sigmas=sigmas, device=device)
@@ -510,7 +519,7 @@ def denoise(model, scheduler, sample, H, W, generator, neg=None):
         conds.append({**sample, "emb": neg})
 
     for t in scheduler.timesteps:
-        timestep = (t / 1000).expand(1).to(torch.bfloat16)
+        timestep = (t / 1000).expand(1).to(COMPUTE_DTYPE)
         preds = []
         for cond in conds:
             preds.append(model(**model_inputs(cond, latents, H, W, device), timestep=timestep, return_dict=False)[0])
@@ -749,6 +758,17 @@ def train_flux3klein():
     for p in model.parameters():
         if p.requires_grad:
             p.data = p.data.float()
+    if PRECISION == "fp16":
+        # En FP16 los dos flujos residuales (texto e imagen) pasan de 65504 (medido en BF16: el del texto sale de
+        # context_embedder ya en ~116k y crece hasta ~10,6M en los últimos bloques). Solo los leen LayerNorm
+        # (la de cada bloque y norm_out), que quitan la escala, y todas las capas implicadas van sin bias:
+        # dividir entre 512 lo que entra en ellos (la entrada de context_embedder, la salida de x_embedders y la
+        # entrada de attn.to_out.0 y ff.linear_out de cada bloque) da el mismo resultado.
+        k = 512
+        n = lora_options.fp16_rescale(model, r".*\.context_embedder", k, on="input")
+        n += lora_options.fp16_rescale(model, r".*\.x_embedders\.\w+", k, on="output")
+        n += lora_options.fp16_rescale(model, r".*\.(txt_mode_blocks|mode_blocks\.\w+|single_transformer_blocks)\.\d+\.(attn\.to_out\.0|ff\.linear_out)", k, on="input")
+        print(f"[OK] FP16: residual streams / {k} ({n} hooks)")
     model.print_trainable_parameters()
 
     trainable = [p for p in model.parameters() if p.requires_grad]
@@ -761,6 +781,7 @@ def train_flux3klein():
                                       lr=LR, weight_decay=WEIGHT_DECAY)
     else:
         optimizer = torch.optim.AdamW(trainable, lr=LR, weight_decay=WEIGHT_DECAY)
+    scaler = lora_options.grad_scaler(PRECISION)   # FP16: loss escalada; BF16: no hace nada
 
     def lr_at(step):
         return LR * lora_options.lr_factor(LR_SCHEDULER, step, TOTAL_STEPS, WARMUP_STEPS, MIN_LR_RATIO, LR_CYCLES)
@@ -833,13 +854,13 @@ def train_flux3klein():
         for key, suffix in (("lat", "latent"), ("emb", "embed"), ("ctrl", "ctrl")):
             path = f"{CACHE_DIR}/{nombre}_{suffix}.pt"
             if os.path.exists(path):
-                t = torch.load(path, weights_only=True).to(torch.bfloat16)
+                t = torch.load(path, weights_only=True).to(COMPUTE_DTYPE)
                 sample[key] = t.pin_memory() if pin else t
         if "ctrl" in sample:
             ctrls = [sample["ctrl"]]
             index = 2
             while os.path.exists(f"{CACHE_DIR}/{nombre}_ctrl_{index}.pt"):
-                extra = torch.load(f"{CACHE_DIR}/{nombre}_ctrl_{index}.pt", weights_only=True).to(torch.bfloat16)
+                extra = torch.load(f"{CACHE_DIR}/{nombre}_ctrl_{index}.pt", weights_only=True).to(COMPUTE_DTYPE)
                 ctrls.append(extra.pin_memory() if pin else extra)
                 index += 1
             if len(ctrls) > 1:
@@ -862,7 +883,7 @@ def train_flux3klein():
 
     neg = None
     if os.path.exists(f"{CACHE_DIR}/_neg_embed.pt"):
-        neg = torch.load(f"{CACHE_DIR}/_neg_embed.pt", weights_only=True).to(torch.bfloat16)
+        neg = torch.load(f"{CACHE_DIR}/_neg_embed.pt", weights_only=True).to(COMPUTE_DTYPE)
 
     all_preview_names = sorted(k for k in cache_data.keys() if not cache_names.is_reserved(k))
 
@@ -915,26 +936,28 @@ def train_flux3klein():
             noise  = torch.randn_like(latent_packed)
             t_exp  = sigma.view(-1, 1, 1)
 
-            noisy = ((1 - t_exp) * latent_packed + t_exp * noise).to(torch.bfloat16)
+            noisy = ((1 - t_exp) * latent_packed + t_exp * noise).to(COMPUTE_DTYPE)
             # El transformer predice la velocidad (ruido - x0), como Flux.1.
             target = noise - latent_packed
 
             batch = {"emb": embeds}
             if edit_mode:
                 batch["ctrl"] = torch.cat([cache_data[n]["ctrl"] for n in names])
-            pred = model(**model_inputs(batch, noisy, H, W, "cuda"), timestep=sigma.to(torch.bfloat16), return_dict=False)[0]
+            pred = model(**model_inputs(batch, noisy, H, W, "cuda"), timestep=sigma.to(COMPUTE_DTYPE), return_dict=False)[0]
 
             loss = F.mse_loss(pred.float(), target.float()) / GRAD_ACCUM_STEPS
-            loss.backward()
+            scaler.scale(loss).backward()
             step_loss = loss.item() * GRAD_ACCUM_STEPS
             running_loss += step_loss
 
             # La norma solo existe al aplicar el optimizador: entre medias se muestra la última.
             if step % GRAD_ACCUM_STEPS == 0:
+                scaler.unscale_(optimizer)
                 grad_norm = torch.nn.utils.clip_grad_norm_(trainable, MAX_GRAD_NORM).item()
                 for gparam in optimizer.param_groups:
                     gparam["lr"] = lr_at(step) * gparam.get("lr_mult", 1.0)
-                optimizer.step()
+                scaler.step(optimizer)      # en FP16 se salta si hubo inf
+                scaler.update()
                 optimizer.zero_grad(set_to_none=True)
 
             t_step     = time.time() - t0

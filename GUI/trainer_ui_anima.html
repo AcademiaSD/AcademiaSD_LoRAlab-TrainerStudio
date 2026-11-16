@@ -555,6 +555,17 @@
                     </div>
 
                     <div class="form-row">
+                        <div class="form-group" title="Compute: the number type the GPU computes with. Auto picks BF16 on RTX 30 or newer, and FP16 on GPUs without BF16 in hardware (RTX 20, Quadro RTX, GTX 16), which emulate BF16 and train several times slower with it. Both give the same quality; with FP16 the trainer scales the loss so small gradients are not lost, and skips the rare step that overflows. If a model does not fit in FP16, Auto stays on BF16. The model stays in 4 bits either way. Applies when the training starts or resumes. This is apart from Precision, which is how the model is stored (NF4 or BF16).">
+                            <label>Compute:</label>
+                            <select id="train_compute_precision" class="no-i18n">
+                                <option value="auto" selected>Auto</option>
+                                <option value="bf16">BF16</option>
+                                <option value="fp16">FP16</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
                         <div class="form-group">
                             <label>Batch Size:</label>
                             <input type="number" id="train_batch_size" value="1">
@@ -964,6 +975,7 @@
                     if (t.lokr_factor !== undefined) document.getElementById('train_lokr_factor').value = t.lokr_factor;
                     if (t.use_dora !== undefined) document.getElementById('train_use_dora').checked = t.use_dora;
                     if (t.dora_normfix !== undefined) document.getElementById('train_dora_normfix').checked = t.dora_normfix;
+                    if (t.compute_precision) document.getElementById('train_compute_precision').value = t.compute_precision;
                     if (t.use_lokr !== undefined) { document.getElementById('train_use_lokr').checked = t.use_lokr; setLokrState(t.use_lokr); }
                     if (t.lora_targets) document.getElementById('train_lora_targets').value = t.lora_targets;
                     if (t.precision) document.getElementById('train_precision').value = t.precision;
@@ -1034,6 +1046,7 @@
                     if (data.lokr_factor !== undefined) document.getElementById('train_lokr_factor').value = data.lokr_factor;
                     if (data.use_dora !== undefined) document.getElementById('train_use_dora').checked = data.use_dora;
                     if (data.dora_normfix !== undefined) document.getElementById('train_dora_normfix').checked = data.dora_normfix;
+                    if (data.compute_precision) document.getElementById('train_compute_precision').value = data.compute_precision;
                     if (data.use_lokr !== undefined) { document.getElementById('train_use_lokr').checked = data.use_lokr; setLokrState(data.use_lokr); }
                     if (data.lora_targets !== undefined) document.getElementById('train_lora_targets').value = data.lora_targets;
                     if (data.precision !== undefined) document.getElementById('train_precision').value = data.precision;
@@ -1194,7 +1207,7 @@
                     preview_aspect_ratio: 'train_preview_aspect', preview_size: 'train_preview_size' },
             resume: { trigger_word: 'trigger_word', lr_scheduler: 'train_lr_scheduler',
                       warmup_steps: 'train_warmup_steps', lr_cycles: 'train_lr_cycles', precision: 'train_precision',
-                      batch_size: 'train_batch_size', grad_accum_steps: 'train_grad_accum' },
+                      batch_size: 'train_batch_size', grad_accum_steps: 'train_grad_accum', compute_precision: 'train_compute_precision' },
             new: { lora_rank: 'train_lora_rank', lora_alpha: 'train_lora_alpha', use_rslora: 'train_use_rslora',
                    use_loraplus: 'train_use_loraplus', use_lokr: 'train_use_lokr', lokr_factor: 'train_lokr_factor',
                    lora_targets: 'train_lora_targets', use_dora: 'train_use_dora', dora_normfix: 'train_dora_normfix' },
@@ -1220,6 +1233,7 @@
                 use_lokr: document.getElementById('train_use_lokr').checked,
                 use_dora: document.getElementById('train_use_dora').checked,
                 dora_normfix: document.getElementById('train_dora_normfix').checked,
+                compute_precision: document.getElementById('train_compute_precision').value,
                 lokr_factor: parseInt(document.getElementById('train_lokr_factor').value) || 16,
                 lora_targets: document.getElementById('train_lora_targets').value,
                 precision: document.getElementById('train_precision').value,

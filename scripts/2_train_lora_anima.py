@@ -67,6 +67,7 @@ DEFAULTS = {
     "lokr_factor": 16,
     "use_dora": False,
     "dora_normfix": True,
+    "compute_precision": "auto",
     "lora_targets": "blocks",
     "weight_decay": 0.0,
     "max_grad_norm": 1.0,
@@ -126,6 +127,12 @@ USE_DORA          = bool(cfg.get("use_dora",     DEFAULTS["use_dora"]))
 # del peso BF16) en vez de la del NF4, que es la que divide ComfyUI. Sin esto el LoRA pierde el parecido
 # en ComfyUI aunque las previews salgan bien. Solo cambia la exportación.
 DORA_NORMFIX      = bool(cfg.get("dora_normfix", DEFAULTS["dora_normfix"]))
+# Precisión de cálculo (Compute: Auto / BF16 / FP16), aparte de "precision" (modelo en NF4 o BF16):
+# ver lora_options.resolve_precision. FP16_OK: las activaciones caben en FP16 (medido).
+FP16_OK           = True
+COMPUTE_CFG       = str(cfg.get("compute_precision", DEFAULTS["compute_precision"]) or "auto").lower()
+COMPUTE_PRECISION = lora_options.resolve_precision(COMPUTE_CFG, FP16_OK)
+COMPUTE_DTYPE, ADAPTER_DTYPE = lora_options.precision_dtypes(COMPUTE_PRECISION)
 if USE_LOKR:
     USE_RSLORA = USE_LORAPLUS = USE_DORA = False
 WEIGHT_DECAY      = cfg.get("weight_decay",      DEFAULTS["weight_decay"])
@@ -163,6 +170,7 @@ print(f"  {'LoRA Rank/Alpha':<22}: {LORA_RANK}/{LORA_ALPHA}")
 print(f"  {'rsLoRA / LoRA+':<22}: {'on' if USE_RSLORA else 'off'} / {f'x{LORAPLUS_RATIO:g}' if USE_LORAPLUS else 'off'}")
 print(f"  {'LoKr':<22}: {f'factor {LOKR_FACTOR}' if USE_LOKR else 'off'}")
 print(f"  {'DoRA':<22}: {('on, NormFix' if DORA_NORMFIX else 'on') if USE_DORA else 'off'}")
+print(f"  {'Compute':<22}: {COMPUTE_PRECISION.upper()}{' (auto)' if COMPUTE_CFG not in ('bf16', 'fp16') else ''}")
 print(f"  {t('LoRA Targets'):<22}: {LORA_TARGETS}")
 print(f"  {'Batch / Grad Accum':<22}: {BATCH_SIZE}/{GRAD_ACCUM_STEPS}")
 print(f"  {'Timesteps / Shift':<22}: {TIMESTEP_SAMPLING} / {TRAIN_SHIFT}")
@@ -290,7 +298,7 @@ def load_transformer():
         for name, module in list(transformer.named_modules()):
             if isinstance(module, torch.nn.Linear) and is_quantized(name):
                 layer = Linear4bit(module.in_features, module.out_features, bias=module.bias is not None,
-                                   quant_type="nf4", compute_dtype=torch.bfloat16)
+                                   quant_type="nf4", compute_dtype=COMPUTE_DTYPE)
                 # bitsandbytes cuantiza al mover a la GPU.
                 layer.weight = Params4bit(module.weight.data.float(), requires_grad=False, quant_type="nf4")
                 if USE_DORA and DORA_NORMFIX:   # NormFix: norma por fila del peso BF16 (ver lora_options.dora_scales)
@@ -301,7 +309,7 @@ def load_transformer():
                 setattr(transformer.get_submodule(parent), child, layer)
                 quantized += 1
         print("[OK] " + t("NF4 layers: {n} (attention + MLP)", n=quantized))
-    return transformer
+    return lora_options.to_compute_dtype(transformer, COMPUTE_DTYPE)
 
 
 def build_lora_metadata(step):
@@ -327,7 +335,7 @@ def build_lora_metadata(step):
         "ss_batch_size_per_device": BATCH_SIZE,
         "ss_gradient_accumulation_steps": GRAD_ACCUM_STEPS,
         "ss_seed": SEED,
-        "ss_mixed_precision": "bf16",
+        "ss_mixed_precision": COMPUTE_PRECISION,
     }
 
     # La GUI lee estas claves al exportar o descargar para poner el sufijo _rs / _plus / _lokr al nombre.
@@ -437,7 +445,7 @@ class VaeHolder:
     @classmethod
     def get(cls):
         if cls.vae is None:
-            cls.vae = AutoencoderKLQwenImage.from_pretrained(MODEL_ID, subfolder="vae", torch_dtype=torch.bfloat16)
+            cls.vae = AutoencoderKLQwenImage.from_pretrained(MODEL_ID, subfolder="vae", torch_dtype=(torch.bfloat16 if COMPUTE_PRECISION == "bf16" else torch.float32))
         return cls.vae
 
 
@@ -456,7 +464,7 @@ def denoise(model, scheduler, embed, neg, H, W, generator):
 
     for t in scheduler.timesteps:
         sigma = (t / 1000).expand(len(texts))
-        out = predict(model, latents.to(torch.bfloat16).expand(len(texts), -1, -1, -1), sigma, texts).float()
+        out = predict(model, latents.to(COMPUTE_DTYPE).expand(len(texts), -1, -1, -1), sigma, texts).float()
         pred = out[1:] + PREVIEW_CFG * (out[:1] - out[1:]) if use_cfg else out
         latents = scheduler.step(pred, t, latents, return_dict=False)[0]
 
@@ -692,6 +700,14 @@ def train_anima():
     for p in model.parameters():
         if p.requires_grad:
             p.data = p.data.float()
+    if COMPUTE_PRECISION == "fp16":
+        # En FP16 el flujo residual pasa de 65504 (medido en BF16: hasta ~270k en los bloques 12-20, mediana
+        # 0,08-596). Solo lo leen LayerNorm (las de norm1/norm2/norm3 y norm_out), que quitan la escala, y
+        # extra_pos_emb no se usa: dividir entre 16 lo que entra en él (la entrada del primer bloque y la salida
+        # de attn1, attn2 y ff de cada bloque) da el mismo resultado.
+        n = lora_options.fp16_rescale(model, r".*\.transformer_blocks\.0", 16, on="input")
+        n += lora_options.fp16_rescale(model, r".*\.transformer_blocks\.\d+\.(attn1|attn2|ff)", 16, on="output")
+        print(f"[OK] FP16: residual stream / 16 ({n} hooks)")
     model.print_trainable_parameters()
 
     trainable = [p for p in model.parameters() if p.requires_grad]
@@ -704,6 +720,7 @@ def train_anima():
                                       lr=LR, weight_decay=WEIGHT_DECAY)
     else:
         optimizer = torch.optim.AdamW(trainable, lr=LR, weight_decay=WEIGHT_DECAY)
+    scaler = lora_options.grad_scaler(COMPUTE_PRECISION)   # FP16: loss escalada; BF16: no hace nada
 
     def lr_at(step):
         return LR * lora_options.lr_factor(LR_SCHEDULER, step, TOTAL_STEPS, WARMUP_STEPS, MIN_LR_RATIO, LR_CYCLES)
@@ -769,7 +786,7 @@ def train_anima():
     pin = torch.cuda.is_available()
 
     def load_tensor(path):
-        t = torch.load(path, weights_only=True).to(torch.bfloat16)
+        t = torch.load(path, weights_only=True).to(COMPUTE_DTYPE)
         return t.pin_memory() if pin else t
 
     cache_data, buckets = {}, defaultdict(list)
@@ -834,23 +851,25 @@ def train_anima():
             noise = torch.randn_like(latents)
             t_exp = sigma.view(-1, 1, 1, 1)
 
-            noisy = ((1 - t_exp) * latents + t_exp * noise).to(torch.bfloat16)
+            noisy = ((1 - t_exp) * latents + t_exp * noise).to(COMPUTE_DTYPE)
             # Cosmos predice la velocidad (ruido - x0), al revés que Z-Image.
             target = noise - latents
 
             pred = predict(model, noisy, sigma, embeds)
 
             loss = F.mse_loss(pred.float(), target) / GRAD_ACCUM_STEPS
-            loss.backward()
+            scaler.scale(loss).backward()
             step_loss = loss.item() * GRAD_ACCUM_STEPS
             running_loss += step_loss
 
             # La norma solo existe al aplicar el optimizador: entre medias se muestra la última.
             if step % GRAD_ACCUM_STEPS == 0:
+                scaler.unscale_(optimizer)
                 grad_norm = torch.nn.utils.clip_grad_norm_(trainable, MAX_GRAD_NORM).item()
                 for gparam in optimizer.param_groups:
                     gparam["lr"] = lr_at(step) * gparam.get("lr_mult", 1.0)
-                optimizer.step()
+                scaler.step(optimizer)      # en FP16 se salta si hubo inf
+                scaler.update()
                 optimizer.zero_grad(set_to_none=True)
 
             t_step     = time.time() - t0

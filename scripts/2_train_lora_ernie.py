@@ -44,6 +44,12 @@ USE_DORA=bool(cfg.get("use_dora",False)) and not USE_LOKR
 # transformer NF4) en vez de la del NF4, que es la que divide ComfyUI. Sin esto el LoRA pierde el parecido
 # en ComfyUI aunque las previews salgan bien. Solo cambia la exportación.
 DORA_NORMFIX=bool(cfg.get("dora_normfix",True))
+# Precisión de cálculo (Auto / BF16 / FP16): ver lora_options.resolve_precision. FP16_OK: las activaciones
+# del modelo caben en FP16 (medido), si no Auto se queda en BF16.
+FP16_OK           = True
+PRECISION_CFG     = str(cfg.get("precision", "auto") or "auto").lower()
+PRECISION         = lora_options.resolve_precision(PRECISION_CFG, FP16_OK)
+COMPUTE_DTYPE, ADAPTER_DTYPE = lora_options.precision_dtypes(PRECISION)
 LORA_TARGETS="all" if cfg.get("lora_targets","blocks")=="all" else "blocks"
 WEIGHT_DECAY=float(cfg.get("weight_decay",0)); MAX_GRAD_NORM=float(cfg.get("max_grad_norm",1.0)); PREVIEW_EVERY=int(cfg.get("preview_every",0) or 0)
 PREVIEW_STEPS=int(cfg.get("preview_steps",28)); PREVIEW_CFG=float(cfg.get("preview_cfg",4)); PREVIEW_SIZE=int(cfg.get("preview_size",0)); PREVIEW_WIDTH=int(cfg.get("preview_width",0)); PREVIEW_HEIGHT=int(cfg.get("preview_height",0))
@@ -64,7 +70,7 @@ def load_nf4(model_dir):
         with safe_open(path,framework="pt",device="cpu") as f:
             wd=f.get_tensor("weight"); qs={k[len("quant_state."):]:f.get_tensor(k) for k in f.keys() if k.startswith("quant_state.")}; bias=f.get_tensor("bias") if "bias" in f.keys() else None
         w=Params4bit(wd,requires_grad=False,quant_type="nf4",quant_storage=torch.uint8); w.quant_state=QuantState.from_dict(qs,device="cpu"); w.bnb_quantized=True
-        with torch.device("meta"): layer=Linear4bit(info["in_features"],info["out_features"],bias=info["bias"],quant_type="nf4",compute_dtype=torch.bfloat16)
+        with torch.device("meta"): layer=Linear4bit(info["in_features"],info["out_features"],bias=info["bias"],quant_type="nf4",compute_dtype=COMPUTE_DTYPE)
         layer.weight=w
         if bias is not None: layer.bias=torch.nn.Parameter(bias,requires_grad=False)
         put(name,layer)
@@ -86,25 +92,25 @@ def export(model,path,step):
         if key.endswith(".lora_A.weight"): state[key[:-len(".lora_A.weight")]+".alpha"]=torch.tensor(float(lora_options.export_alpha(ALPHA,RANK,USE_RSLORA)),dtype=torch.float32)
     state.update(lora_options.dora_export(model,lambda name:"transformer."+name))   # DoRA: <capa>.dora_scale
     trigger=TRIGGER or ""
-    meta={"format":"pt","trained_with":"AcademiaSD LoRAlab ERNIE-Image","ss_sd_model_name":"baidu/ERNIE-Image","ss_base_model_version":"ERNIE-Image","ss_network_module":"peft.LoraModel","ss_lr_scheduler":LR_SCHEDULER,"ss_network_dim":str(RANK),"ss_network_alpha":str(lora_options.export_alpha(ALPHA,RANK,USE_RSLORA)),"ss_steps":str(step),"ss_max_train_steps":str(STEPS),"ss_learning_rate":str(LR),"ss_mixed_precision":"bf16","ss_optimizer":"AdamW","ss_weight_decay":str(WEIGHT_DECAY)}
+    meta={"format":"pt","trained_with":"AcademiaSD LoRAlab ERNIE-Image","ss_sd_model_name":"baidu/ERNIE-Image","ss_base_model_version":"ERNIE-Image","ss_network_module":"peft.LoraModel","ss_lr_scheduler":LR_SCHEDULER,"ss_network_dim":str(RANK),"ss_network_alpha":str(lora_options.export_alpha(ALPHA,RANK,USE_RSLORA)),"ss_steps":str(step),"ss_max_train_steps":str(STEPS),"ss_learning_rate":str(LR),"ss_mixed_precision":PRECISION,"ss_optimizer":"AdamW","ss_weight_decay":str(WEIGHT_DECAY)}
     if trigger: meta["trigger_word"]=trigger; meta["ss_tag_frequency"]=json.dumps({"dataset":{trigger:1}})
     if USE_DORA:
         meta["dora"]="true"; meta["ss_network_args"]=json.dumps({"rslora":USE_RSLORA,"dora_wd":True})
     save_file(state,path,metadata=meta)
 
 def pad_text(embeds,device):
-    return ErnieImagePipeline._pad_text(embeds,device,torch.bfloat16,3072)
+    return ErnieImagePipeline._pad_text(embeds,device,COMPUTE_DTYPE,3072)
 
 def sample_sigma(b):
     # Match the ERNIE FlowMatch scheduler's shift=4 schedule while sampling training noise uniformly.
     u=torch.rand((b,),device="cuda").clamp(1e-5,1-1e-5); shift=4.0
-    return (shift*u/(1+(shift-1)*u)).to(torch.bfloat16)
+    return (shift*u/(1+(shift-1)*u)).to(COMPUTE_DTYPE)
 
 class VAE:
     model=None
     @classmethod
     def get(cls):
-        if cls.model is None: cls.model=AutoencoderKLFlux2.from_pretrained(MODEL,subfolder="vae",torch_dtype=torch.bfloat16).eval()
+        if cls.model is None: cls.model=AutoencoderKLFlux2.from_pretrained(MODEL,subfolder="vae",torch_dtype=(torch.bfloat16 if PRECISION == "bf16" else torch.float32)).eval()
         return cls.model
 
 def preview(model,scheduler,emb,shape,step):
@@ -116,13 +122,13 @@ def preview(model,scheduler,emb,shape,step):
     else: text,lens=pad_text([emb],device)
     gen=torch.Generator(device=device)
     gen.manual_seed((SEED if SEED>0 else int(time.time()))+step)
-    lat=torch.randn((1,128,H,W),device=device,dtype=torch.bfloat16,generator=gen)
+    lat=torch.randn((1,128,H,W),device=device,dtype=COMPUTE_DTYPE,generator=gen)
     sigmas=torch.linspace(1,0,PREVIEW_STEPS+1,device="cpu")[:-1]
     scheduler.set_timesteps(sigmas=sigmas,device=device)
     with torch.no_grad():
         for t in scheduler.timesteps:
             model_lat=torch.cat([lat,lat]) if PREVIEW_CFG>1 else lat
-            t_batch=torch.full((model_lat.shape[0],),float(t),device=device,dtype=torch.bfloat16)
+            t_batch=torch.full((model_lat.shape[0],),float(t),device=device,dtype=COMPUTE_DTYPE)
             pred=model(hidden_states=model_lat,timestep=t_batch,text_bth=text,text_lens=lens,return_dict=False)[0]
             if PREVIEW_CFG>1:
                 p0,p1=pred.chunk(2); pred=p0+PREVIEW_CFG*(p1-p0)
@@ -130,7 +136,7 @@ def preview(model,scheduler,emb,shape,step):
         vae=VAE.get().to(device)
         mean=vae.bn.running_mean.view(1,-1,1,1).to(device,lat.dtype); std=torch.sqrt(vae.bn.running_var.view(1,-1,1,1)+1e-5).to(device,lat.dtype)
         z=ErnieImagePipeline._unpatchify_latents(lat[:1]*std+mean)
-        img=vae.decode(z,return_dict=False)[0]
+        img=vae.decode(z.to(vae.dtype),return_dict=False)[0]
         arr=((img.float()/2+0.5).clamp(0,1)[0].cpu().permute(1,2,0).numpy()*255).astype("uint8")
         from PIL import Image
         Image.fromarray(arr).save(os.path.join(OUT,f"preview_step_{step}.png"))
@@ -141,7 +147,7 @@ def main():
     global RANK, ALPHA, USE_RSLORA, USE_LORAPLUS, LORAPLUS_RATIO, USE_LOKR, LOKR_FACTOR, USE_DORA
     if not torch.cuda.is_available(): raise RuntimeError("CUDA is required for ERNIE training")
     if not os.path.isfile(os.path.join(CACHE,"_neg_embed.pt")): raise RuntimeError("Run ERNIE Pre-Cache first")
-    model=load_nf4(MODEL).to("cuda"); model.enable_gradient_checkpointing()
+    model=lora_options.to_compute_dtype(load_nf4(MODEL),COMPUTE_DTYPE).to("cuda"); model.enable_gradient_checkpointing()
     targets=[n for n,m in model.named_modules() if isinstance(m,(torch.nn.Linear,Linear4bit)) and (LORA_TARGETS=="all" or n.startswith("layers."))]
     if not targets: raise RuntimeError("No ERNIE transformer layer targets found for LoRA")
     print(f"Attaching {'all-linear' if LORA_TARGETS=='all' else 'block'} adapters (rank {RANK}) to {len(targets)} ERNIE linears",flush=True)
@@ -173,19 +179,28 @@ def main():
         model=get_peft_model(model,lconf)
         if USE_DORA: lora_options.attach_dora_norms(model,os.path.join(MODEL,"transformer"),DORA_NORMFIX,repo_id="AcademiaSD/Ernie-NF4-for-LoRA-Training",root=MODEL)
     print(f"  {'DoRA':<22}: {('on, NormFix' if DORA_NORMFIX else 'on') if USE_DORA else 'off'}",flush=True)
+    print(f"  {'Precision':<22}: {PRECISION.upper()}{' (auto)' if PRECISION_CFG not in ('bf16', 'fp16') else ''}")
+    if PRECISION=="fp16":
+        # En FP16 el flujo residual pasa de 65504 (medido en BF16: hasta ~97k, mediana 3-78). Solo lo leen
+        # RMSNorm (adaLN_sa_ln / adaLN_mlp_ln) y la LayerNorm final, que quitan la escala: dividir entre 8 lo que
+        # entra en él (la entrada del primer bloque y la salida de cada atención y MLP) da el mismo resultado.
+        n=lora_options.fp16_rescale(model,r".*\.layers\.0",8,on="input")
+        n+=lora_options.fp16_rescale(model,r".*\.layers\.\d+\.(self_attention|mlp)",8,on="output")
+        print(f"[OK] FP16: residual stream / 8 ({n} hooks)",flush=True)
     model.train()
     trainable=[p for p in model.parameters() if p.requires_grad]
     if USE_LORAPLUS:
         a=[p for n,p in model.named_parameters() if p.requires_grad and "lora_B" not in n]; b=[p for n,p in model.named_parameters() if p.requires_grad and "lora_B" in n]
         optimizer=torch.optim.AdamW([{"params":a,"lr_mult":1.0},{"params":b,"lr_mult":LORAPLUS_RATIO}],lr=LR,weight_decay=WEIGHT_DECAY)
     else: optimizer=torch.optim.AdamW(trainable,lr=LR,weight_decay=WEIGHT_DECAY)
+    scaler=lora_options.grad_scaler(PRECISION)   # FP16: loss escalada; BF16: no hace nada
     for p in trainable: p.data=p.data.float()
     def lr_at(s): return LR*lora_options.lr_factor(LR_SCHEDULER,s,STEPS,WARMUP,MIN_LR_RATIO,LR_CYCLES)
     scheduler=FlowMatchEulerDiscreteScheduler.from_pretrained(MODEL,subfolder="scheduler")
     cache={}; buckets=defaultdict(list)
     for f in os.listdir(CACHE):
         if not f.endswith("_latent.pt"): continue
-        name=f[:-10]; lat=torch.load(os.path.join(CACHE,f),weights_only=True).to(torch.bfloat16).pin_memory(); emb=torch.load(os.path.join(CACHE,name+"_embed.pt"),weights_only=True).to(torch.bfloat16).pin_memory()
+        name=f[:-10]; lat=torch.load(os.path.join(CACHE,f),weights_only=True).to(COMPUTE_DTYPE).pin_memory(); emb=torch.load(os.path.join(CACHE,name+"_embed.pt"),weights_only=True).to(COMPUTE_DTYPE).pin_memory()
         cache[name]=(lat,emb); buckets[tuple(lat.shape[-2:])].append(name)
     if not cache: raise RuntimeError("No pre-cached ERNIE image latents found")
     step=0
@@ -234,15 +249,15 @@ def main():
         tic=time.time(); size=random.choice(list(buckets)); names=[random.choice(buckets[size]) for _ in range(BATCH)]
         z=torch.cat([cache[n][0] for n in names]).to("cuda",non_blocking=True); embeds=[cache[n][1] for n in names]
         text,lens=pad_text(embeds,"cuda"); b=z.shape[0]; sigma=sample_sigma(b); noise=torch.randn_like(z); se=sigma.view(b,1,1,1)
-        noisy=((1-se)*z+se*noise).to(torch.bfloat16); target=noise-z; timestep=(sigma*1000).to(torch.bfloat16)
+        noisy=((1-se)*z+se*noise).to(COMPUTE_DTYPE); target=noise-z; timestep=(sigma*1000).to(COMPUTE_DTYPE)
         pred=model(hidden_states=noisy,timestep=timestep,text_bth=text,text_lens=lens,return_dict=False)[0]
-        loss=F.mse_loss(pred.float(),target.float())/ACCUM; loss.backward()
+        loss=F.mse_loss(pred.float(),target.float())/ACCUM; scaler.scale(loss).backward()
         step_loss=loss.item()*ACCUM; running_loss+=step_loss
         step+=1; last_step=step
         if step%ACCUM==0 or step==STEPS:
-            grad_norm=torch.nn.utils.clip_grad_norm_(trainable,MAX_GRAD_NORM).item()
+            scaler.unscale_(optimizer); grad_norm=torch.nn.utils.clip_grad_norm_(trainable,MAX_GRAD_NORM).item()
             for g in optimizer.param_groups: g["lr"]=lr_at(step)*g.get("lr_mult",1.0)
-            optimizer.step(); optimizer.zero_grad(set_to_none=True)
+            scaler.step(optimizer); scaler.update(); optimizer.zero_grad(set_to_none=True)
         elapsed=time.time()-tic; t_step_avg=elapsed if not t_step_avg else .1*elapsed+.9*t_step_avg
         pct=min(1.0,step/max(1,STEPS))
         if PROGRESS_FILLED == "█":
@@ -265,10 +280,11 @@ def main():
             custom_path=os.path.join(CACHE,"_custom_embed.pt")
             if PREVIEW_MODE=="custom" and os.path.isfile(custom_path): e=torch.load(custom_path,weights_only=True)
             h,w=size
+            # Cada punto del latente es un parche de 16x16 px; lados pares.
             if PREVIEW_WIDTH>0 and PREVIEW_HEIGHT>0:
-                h=max(2,round(PREVIEW_HEIGHT/32/2)*2); w=max(2,round(PREVIEW_WIDTH/32/2)*2)
+                h=max(2,round(PREVIEW_HEIGHT/16/2)*2); w=max(2,round(PREVIEW_WIDTH/16/2)*2)
             elif PREVIEW_SIZE>0:
-                scale=PREVIEW_SIZE/max(h,w); h=max(1,round(h*scale)); w=max(1,round(w*scale))
+                scale=PREVIEW_SIZE/16/math.sqrt(h*w); h=max(2,round(h*scale/2)*2); w=max(2,round(w*scale/2)*2)
             preview(model,scheduler,e,(h,w),step)
     save(); export(model,os.path.join(OUT,"Ernie_FINAL_LoRA.safetensors"),step); print("Training completed.",flush=True)
 
