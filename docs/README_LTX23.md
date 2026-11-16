@@ -2,7 +2,7 @@
 
 > **Technical notes** for the LTX-2.3 trainer of **AcademiaSD LoRAlab Trainer Studio**. Installation, updating and everyday use are in the [main README](../README.md).
 
-> **LTX-2.5:** this trainer is also compatible with LTX-2.5. / Este entrenador también es compatible con LTX-2.5.
+> **LTX-2.5:** this trainer trains LTX-2.3. Its LoRAs usually load in LTX-2.5 too (same layers and LoRA key names), but it does not train LTX-2.5, which retrains the transformer and uses another text encoder (Gemma 4). / Este entrenador entrena LTX-2.3. Sus LoRAs suelen cargar también en LTX-2.5 (mismas capas y nombres de claves), pero no entrena LTX-2.5, que re-entrena el transformer y usa otro codificador de texto (Gemma 4).
 
 
 ![AcademiaSD_LoRAlab-LTX23](../assets/ltx23/portada.jpg)

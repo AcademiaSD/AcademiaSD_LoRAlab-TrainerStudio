@@ -6,7 +6,7 @@
   "trainers": [
     {
       "id": "ltx23",
-      "name": "LTX 2.3 (2.5)",
+      "name": "LTX 2.3",
       "description": "Video LoRAs",
       "image": "assets/ltx23/portada.jpg",
       "run": "Run_LoRAlab-LTX23.bat"
