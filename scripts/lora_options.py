@@ -159,6 +159,68 @@ def to_compute_dtype(module, dtype):
     return module
 
 
+def fp16_rescale(model, pattern, factor, on="input"):
+    """
+    FP16 sin desbordes donde el modelo pasa de 65504: divide por factor la entrada (on="input") o la salida
+    (on="output") de los módulos cuyo nombre encaja con pattern. Solo vale cuando todo lo que va de ahí a la
+    siguiente RMSNorm es lineal y sin bias (la norma quita la escala: el resultado es el mismo, LoRA incluido).
+    Llamar después de añadir el LoRA, para que el gancho quede en la capa con LoRA. Devuelve cuántos.
+    Divides the input or output of matching modules by factor; exact when only bias-free linear maps lead to
+    the next RMSNorm.
+    """
+    import re
+    rx = re.compile(pattern)
+    inv = 1.0 / float(factor)
+
+    def pre(module, args):
+        if args and torch.is_tensor(args[0]) and args[0].is_floating_point():
+            return (args[0] * inv,) + tuple(args[1:])
+        return None
+
+    def post(module, args, output):
+        return output * inv if torch.is_tensor(output) else output
+
+    count = 0
+    for name, m in model.named_modules():
+        if rx.fullmatch(name):
+            if on == "input":
+                m.register_forward_pre_hook(pre)
+            else:
+                m.register_forward_hook(post)
+            count += 1
+    return count
+
+
+def fp32_output(model, pattern):
+    """
+    Capas cuya salida no cabe en FP16 ni escalando (p. ej. la última del MLP, antes de una RMSNorm): se
+    calculan en FP32 y su salida sigue en FP32 hasta la norma, que la devuelve a FP16 (sus pesos son FP16).
+    Llamar después de añadir el LoRA. Devuelve cuántas.
+    Layers whose output does not fit in FP16 run in FP32 and hand an FP32 output to the next norm.
+    """
+    import re
+    rx = re.compile(pattern)
+
+    def pre(module, args):
+        if args and torch.is_tensor(args[0]) and args[0].is_floating_point():
+            return (args[0].float(),) + tuple(args[1:])
+        return None
+
+    count = 0
+    for name, m in model.named_modules():
+        if not rx.fullmatch(name):
+            continue
+        for sub in m.modules():
+            if getattr(sub, "compute_dtype", None) is not None:
+                sub.compute_dtype = torch.float32
+            qs = getattr(getattr(sub, "weight", None), "quant_state", None)
+            if qs is not None:
+                qs.dtype = torch.float32
+        m.register_forward_pre_hook(pre)
+        count += 1
+    return count
+
+
 def grad_scaler(precision):
     """GradScaler activo solo en FP16; en BF16 scale/unscale_/step/update no hacen nada."""
     return torch.amp.GradScaler("cuda", init_scale=2.0 ** 12, enabled=precision == "fp16")
@@ -415,5 +477,3 @@ class LoKrModel(torch.nn.Module):
     def print_trainable_parameters(self):
         n = sum(p.numel() for p in self.parameters() if p.requires_grad)
         print(f"trainable params: {n:,} (LoKr)")
-
-
