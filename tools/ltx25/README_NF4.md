@@ -33,7 +33,7 @@ As required by Section 3.3 of the LTX-2.x Community License Agreement, these fil
 - **Transformer** (`weights/`, `index.json`, `others.safetensors`): quantized to NF4 and split into one file per layer.
 - **Text encoder** (`text_encoder_NF4/`): quantized to NF4.
 - **`scheduler/scheduler_config.json`**: `use_dynamic_shifting` set to `true` and `shift_terminal` to `0.1`, the settings the model card gives for the full transformer (the repository's scheduler is configured for the distilled one).
-- **`model_index.json`**: the components not shipped here (`prompt_enhancer`, `processor`, `diffusion_decoder`, latent upsamplers) set to null.
+- **`model_index.json`**: the components not shipped here (`prompt_enhancer`, `processor`, `diffusion_decoder`) set to null.
 
 The conversion scripts are in `tools/ltx25/` of the Trainer Studio repository.
 
