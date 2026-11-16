@@ -178,7 +178,8 @@
         .img-wrapper { position: relative; width: 100%; height: 115px; background: #020617; }
         .ds-grid.compact .img-wrapper { height: 75px; }
         .ds-grid.large .img-wrapper { height: 165px; }
-        .img-wrapper img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .img-wrapper img, .img-wrapper video { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .video-tag { position: absolute; top: 6px; right: 22px; padding: 1px 5px; border-radius: 4px; background: rgba(15,23,42,0.85); color: #38bdf8; font-size: 0.62rem; font-weight: 700; z-index: 2; }
 
         .caption-dot { position: absolute; top: 6px; right: 6px; width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid #0f172a; box-shadow: 0 0 5px rgba(0,0,0,0.8); z-index: 2; }
         .dot-green { background-color: var(--success); }
@@ -191,7 +192,7 @@
         .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; max-height: 800px; overflow-y: auto; padding-right: 5px; }
         .preview-card { position: relative; border-radius: 8px; overflow: hidden; border: 1px solid var(--panel-border); cursor: pointer; background: #0f172a; transition: transform 0.15s, border-color 0.15s; }
         .preview-card:hover { transform: translateY(-2px); border-color: #38bdf8; }
-        .preview-card img { width: 100%; height: 280px; object-fit: cover; display: block; }
+        .preview-card img, .preview-card video { width: 100%; height: 280px; object-fit: cover; display: block; }
         .preview-filename-tag { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(2px); padding: 6px 8px; font-size: 0.8rem; color: #38bdf8; font-weight: 600; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
         .status-badge { font-size: 0.75rem; padding: 3px 8px; border-radius: 12px; font-weight: bold; text-transform: uppercase; }
@@ -201,7 +202,7 @@
         .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000; justify-content: center; align-items: center; padding: 20px; }
         .modal.active { display: flex; }
         .modal-content { background: var(--panel-bg); border-radius: 12px; border: 1px solid var(--panel-border); max-width: 800px; width: 100%; padding: 20px; display: flex; flex-direction: column; gap: 15px; max-height: 90vh; }
-        .modal-content img { max-height: 55vh; object-fit: contain; border-radius: 8px; }
+        .modal-content img, .modal-content video { max-height: 55vh; object-fit: contain; border-radius: 8px; }
         .modal-content textarea { width: 100%; height: 90px; background: #0f172a; border: 1px solid var(--panel-border); color: #fff; padding: 10px; border-radius: 6px; resize: none; font-size: 0.9rem; }
 
         .drive-selector { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
@@ -377,6 +378,29 @@
                     <div class="form-group">
                         <label>Max Seq Len:</label>
                         <input type="number" id="precache_max_seq_len" value="128">
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group" title="Video clips (.mp4, .mov, .mkv, .webm) are read at 24 fps from their start. LTX works in 8n+1 frames (9, 17, 25, 33, 41, 49 ... 121 = 5 s); a shorter clip uses all it has. 49 frames are about 2 s. More frames cost VRAM and time in proportion. Images are always 1 frame.">
+                            <label>Max Frames:</label>
+                            <select id="precache_max_frames" class="no-i18n">
+                                <option value="25">25 (1 s)</option>
+                                <option value="49" selected>49 (2 s)</option>
+                                <option value="73">73 (3 s)</option>
+                                <option value="97">97 (4 s)</option>
+                                <option value="121">121 (5 s)</option>
+                            </select>
+                        </div>
+                        <div class="form-group" title="Area of every video clip; each keeps its own aspect ratio. Images use Target Area. 384 x 384 with 49 frames is about 1,000 tokens and fits an 8 GB card; 512 x 512 is about 1,800.">
+                            <label>Video Area:</label>
+                            <select id="precache_video_area" class="no-i18n">
+                                <option value="102400">320 x 320</option>
+                                <option value="147456" selected>384 x 384</option>
+                                <option value="200704">448 x 448</option>
+                                <option value="262144">512 x 512</option>
+                                <option value="409600">640 x 640</option>
+                            </select>
+                        </div>
                     </div>
 
                     <!-- Botones Load JSON y Save JSON -->
@@ -656,6 +680,17 @@
                         <textarea id="train_preview_custom_prompt" rows="2" placeholder="Write your custom prompt for the preview here..."></textarea>
                     </div>
 
+                    <div class="form-group" title="Frames of the preview. Same as sample: a clip gives an .mp4 at 24 fps, an image a .png. A number makes an .mp4 of that length even when the sample is an image. Video previews cost much more: 49 frames are several times the work of one.">
+                        <label>Preview Frames:</label>
+                        <select id="train_preview_frames" class="no-i18n">
+                            <option value="0" selected>Same as sample</option>
+                            <option value="1">1 (image)</option>
+                            <option value="25">25 (1 s)</option>
+                            <option value="49">49 (2 s)</option>
+                            <option value="97">97 (4 s)</option>
+                        </select>
+                    </div>
+
                     <div class="form-row">
                         <div class="form-group">
                             <label>Preview Steps:</label>
@@ -744,6 +779,13 @@
                     </div>
                 </div>
 
+                <!-- Prepare clips va antes de Create Captions: primero el clip queda a 24 fps y 8n+1, luego se describe. -->
+                <div class="ds-caption-bar">
+                    <button type="button" class="btn btn-primary btn-sm" id="btn-fps" onclick="prepareClips()"
+                            title="Leaves every clip at exactly 24 fps with a valid 8n+1 frame count (9, 17, 25 ... 121), WITHOUT cutting anything off the end: the whole clip is kept and time is stretched or squeezed by the couple of percent needed to land on a valid count. The audio track is kept and stretched with it. Re-encodes at crf 16 (visually lossless); originals are moved to _originals, which the pre-cache ignores.">Prepare clips</button>
+                    <span class="ds-step-hint">Video clips · run this before captioning</span>
+                </div>
+
                 <!-- Auto-caption con Qwen3-VL-8B: el mismo captioner del LoRAlab de Qwen-Image 2.1. -->
                 <div class="ds-caption-bar">
                     <button type="button" class="btn btn-primary btn-sm" id="btn-caption" onclick="runCaption()"
@@ -756,7 +798,9 @@
                         Overwrite
                     </label>
                     <textarea class="ds-search ds-caption-prompt" id="caption_prompt_text" rows="4"
-                              placeholder="Prompt for the captioner"></textarea>
+                              placeholder="Prompt for the captioner" title="Prompt for images"></textarea>
+                    <textarea class="ds-search ds-caption-prompt" id="caption_video_prompt_text" rows="4"
+                              placeholder="Prompt for the captioner (videos)" title="Prompt for videos. Of each clip the captioner sees only the part that is trained (Max Frames at 24 fps)."></textarea>
                 </div>
 
                 <div class="ds-grid no-i18n" id="ds-grid"></div>
@@ -780,6 +824,7 @@
                 <span style="font-size:0.8rem; color:var(--text-muted);">Click outside or button to close</span>
             </div>
             <img id="modal-img" src="" alt="Dataset Image">
+            <video id="modal-vid" src="" controls autoplay loop playsinline style="display:none;"></video>
             <div class="form-group">
                 <label>Caption Text (.txt):</label>
                 <textarea id="modal-txt"></textarea>
@@ -988,6 +1033,8 @@
                     if (p.multiple) document.getElementById('precache_multiple').value = p.multiple;
                     if (p.max_side) document.getElementById('precache_max_side').value = p.max_side;
                     if (p.max_seq_len) document.getElementById('precache_max_seq_len').value = p.max_seq_len;
+                    if (p.max_frames) document.getElementById('precache_max_frames').value = String(p.max_frames);
+                    if (p.video_target_area) document.getElementById('precache_video_area').value = String(p.video_target_area);
                 }
                 if (data.train) {
                     const t = data.train;
@@ -1018,6 +1065,7 @@
                     }
                     if (t.preview_custom_prompt !== undefined) document.getElementById('train_preview_custom_prompt').value = t.preview_custom_prompt;
                     if (t.preview_steps !== undefined) document.getElementById('train_preview_steps').value = t.preview_steps;
+                    if (t.preview_frames !== undefined) document.getElementById('train_preview_frames').value = String(t.preview_frames);
                     if (t.preview_cfg !== undefined) document.getElementById('train_preview_cfg').value = t.preview_cfg;
                     PreviewSize.apply(t);
                     syncVideoPreviewSize();
@@ -1064,6 +1112,8 @@
                     if (data.multiple !== undefined) document.getElementById('precache_multiple').value = data.multiple;
                     if (data.max_side !== undefined) document.getElementById('precache_max_side').value = data.max_side;
                     if (data.max_seq_len !== undefined) document.getElementById('precache_max_seq_len').value = data.max_seq_len;
+                    if (data.max_frames !== undefined) document.getElementById('precache_max_frames').value = String(data.max_frames);
+                    if (data.video_target_area !== undefined) document.getElementById('precache_video_area').value = String(data.video_target_area);
                     
                     if (data.total_steps !== undefined) document.getElementById('train_total_steps').value = data.total_steps;
                     if (data.lr !== undefined) document.getElementById('train_lr').value = data.lr;
@@ -1091,6 +1141,7 @@
                     }
                     if (data.preview_custom_prompt !== undefined) document.getElementById('train_preview_custom_prompt').value = data.preview_custom_prompt;
                     if (data.preview_steps !== undefined) document.getElementById('train_preview_steps').value = data.preview_steps;
+                    if (data.preview_frames !== undefined) document.getElementById('train_preview_frames').value = String(data.preview_frames);
                     if (data.preview_cfg !== undefined) document.getElementById('train_preview_cfg').value = data.preview_cfg;
                     PreviewSize.apply(data);
                     syncVideoPreviewSize();
@@ -1164,6 +1215,9 @@
                 multiple: parseInt(document.getElementById('precache_multiple').value),
                 max_side: parseInt(document.getElementById('precache_max_side').value),
                 max_seq_len: parseInt(document.getElementById('precache_max_seq_len').value),
+                max_frames: parseInt(document.getElementById('precache_max_frames').value),
+                video_target_area: parseInt(document.getElementById('precache_video_area').value),
+                vram_profile: document.getElementById('train_vram_profile').value,
                 cache_dir: document.getElementById('precache_cache_dir').value,
                 preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim()
             };
@@ -1215,7 +1269,7 @@
         // Sacado de su código: live: relee en el paso siguiente; resume: se leen al arrancar; new: al reanudar se sigue con el LoRA del checkpoint.
         const LIVE_APPLY = {
             live: { total_steps: 'train_total_steps', lr: 'train_lr', save_every: 'train_save_every',
-                    seed: 'train_seed', preview_every: 'train_preview_every', preview_steps: 'train_preview_steps',
+                    seed: 'train_seed', preview_every: 'train_preview_every', preview_steps: 'train_preview_steps', preview_frames: 'train_preview_frames',
                     preview_cfg: 'train_preview_cfg',
                     preview_aspect_ratio: 'train_preview_aspect', preview_size: 'train_preview_size' },
             resume: { trigger_word: 'trigger_word', lr_scheduler: 'train_lr_scheduler',
@@ -1257,6 +1311,7 @@
                 preview_caption_mode: document.getElementById('train_preview_caption_mode').value,
                 preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim(),
                 preview_steps: parseInt(document.getElementById('train_preview_steps').value),
+                preview_frames: parseInt(document.getElementById('train_preview_frames').value),
                 preview_cfg: parseFloat(document.getElementById('train_preview_cfg').value),
                 ...PreviewSize.values(),
                 use_turbo: document.getElementById('train_use_turbo').checked,
@@ -1511,6 +1566,40 @@
             }
         }
 
+        async function prepareClips() {
+            const msg = t('Prepare every clip for LTX-2.5?') + '\n\n'
+                      + '• ' + t('exactly 24 fps') + '\n'
+                      + '• ' + t('frame count 8n+1, keeping the WHOLE clip') + '\n\n'
+                      + t('Nothing is cut off the end; time is stretched by the couple of percent needed to reach a valid count. Re-encodes at crf 16.') + '\n\n'
+                      + t('Originals are saved in _originals.');
+            if (!await askConfirm(msg)) return;
+            const btn = document.getElementById('btn-fps');
+            const prev = btn ? btn.innerText : '';
+            if (btn) { btn.disabled = true; btn.innerText = '...'; }
+            try {
+                const res = await fetch('/api/prepare-clips', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+                const data = await res.json();
+                if (data.status === 'error') { toast('Error: ' + (data.error || t('unknown')), 'error'); return; }
+                let out = t('{a} converted, {b} untouched', { a: data.converted, b: data.skipped });
+                if (data.details && data.details.length) out += '\n\n' + data.details.join('\n');
+                if (data.skipped_details && data.skipped_details.length) out += '\n\n' + t('Untouched:') + '\n' + data.skipped_details.join('\n');
+                if (data.warnings && data.warnings.length) out += '\n\n' + t('Warnings:') + '\n' + data.warnings.join('\n');
+                if (data.errors && data.errors.length) out += '\n\n' + t('Errors:') + '\n' + data.errors.join('\n');
+                if (data.backup) out += '\n\n' + t('Originals:') + ' ' + data.backup;
+                // El parte va a la consola: ahí se puede seleccionar y comparar con el anterior.
+                appendTerminal('');
+                appendTerminal('[PREPARE CLIPS] ' + new Date().toLocaleTimeString(), false,
+                               data.errors && data.errors.length ? 'term-danger' : 'term-success');
+                out.split('\n').forEach(function (linea) { appendTerminal(linea); });
+                appendTerminal('');
+                loadDatasetInfo();
+            } catch (e) {
+                toast('Error: ' + e, 'error');
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerText = prev; }
+            }
+        }
+
         async function loadDatasetInfo() {
             try {
                 // Sin cache-busting el navegador puede servir la respuesta anterior y Refresh no refresca.
@@ -1538,7 +1627,7 @@
                 card.className = 'ds-card';
                 card.onclick = (ev) => {
                     if (ev.target.closest('.ds-del')) return;
-                    openModal(mediaUrl(img), img.file, img.caption || '');
+                    openModal(mediaUrl(img), img.file, img.caption || '', img.video);
                 };
 
                 const hasCaption = img.has_txt && img.caption && img.caption.trim().length > 0;
@@ -1547,7 +1636,9 @@
 
                 card.innerHTML = `
                     <div class="img-wrapper">
-                        <img src="${mediaUrl(img)}" alt="${img.file}">
+                        ${img.video
+                            ? `<video src="${mediaUrl(img)}#t=0.1" muted loop playsinline preload="metadata" onmouseenter="this.play()" onmouseleave="this.pause()"></video><span class="video-tag">VIDEO</span>`
+                            : `<img src="${mediaUrl(img)}" alt="${img.file}" loading="lazy">`}
                         <button type="button" class="ds-del" title="${t('Remove from dataset')}">&#128465;</button>
                         <span class="${dotClass}" title="${dotTitle}"></span>
                         <div class="img-filename-tag">${img.file}</div>
@@ -1630,11 +1721,15 @@
             } catch (e) { toast('Error: ' + e, 'error'); }
         }
 
-        // Mismo prompt por defecto que 0_caption_LTX25.py; se guarda en caption_settings_ltx25.json al ejecutar.
-        const DEFAULT_CAPTION_PROMPT = 'Describe this image for training a text-to-image model, in at most 150 words. '
-            + 'One single paragraph of plain prose, no lists and no preamble. Cover the main subject and what they are doing, '
-            + 'their appearance, hair and clothing, the pose, the framing and camera angle, the setting and background, '
-            + 'the lighting and the colors. Do not invent a name and do not mention that this is an image or a photo.';
+        // Mismos prompts por defecto que 0_caption_LTX25.py; se guardan en caption_settings_ltx25.json al ejecutar.
+        const DEFAULT_CAPTION_PROMPT = 'Describe this image for training a text-to-video model, in at most 120 words. '
+            + 'One single paragraph of plain prose, no lists and no preamble. Cover the main subject, their appearance, '
+            + 'hair and clothing, the pose, the framing and camera angle, the setting and background, the lighting and the '
+            + 'colors. Do not invent a name and do not mention that this is an image or a photo.';
+        const DEFAULT_CAPTION_VIDEO_PROMPT = 'Describe this video clip for training a text-to-video model, in at most 120 words. '
+            + 'One single paragraph of plain prose, no lists and no preamble. Describe the main subject and their appearance, '
+            + 'what they do and how they move, how the camera moves, the setting, the lighting and the colors. Do not invent '
+            + 'a name and do not mention that this is a video or a clip.';
 
         async function loadCaptionSettings() {
             let data = {};
@@ -1642,6 +1737,7 @@
                 data = await (await fetch('/api/caption-settings')).json();
             } catch (e) {}
             document.getElementById('caption_prompt_text').value = data.caption_prompt || DEFAULT_CAPTION_PROMPT;
+            document.getElementById('caption_video_prompt_text').value = data.caption_video_prompt || DEFAULT_CAPTION_VIDEO_PROMPT;
             if (data.overwrite !== undefined) document.getElementById('caption_overwrite').checked = !!data.overwrite;
         }
         loadCaptionSettings();
@@ -1660,6 +1756,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         caption_prompt: document.getElementById('caption_prompt_text').value.trim(),
+                        caption_video_prompt: document.getElementById('caption_video_prompt_text').value.trim(),
                         overwrite: overwrite
                     })
                 });
@@ -1747,13 +1844,15 @@
                     card.onclick = () => openModal(src, filename, `${t('Generated preview')}: ${filename}`);
 
                     let stepTag = filename;
-                    const match = filename.match(/preview_step_(\d+)\.png/i);
+                    const match = filename.match(/preview_step_(\d+)/i);
                     if (match) {
                         stepTag = t('Step {n}', { n: match[1] });
                     }
 
                     card.innerHTML = `
-                        <img src="${src}" alt="${filename}">
+                        ${/\.mp4$/i.test(filename)
+                            ? `<video src="${src}" autoplay muted loop playsinline></video>`
+                            : `<img src="${src}" alt="${filename}">`}
                         <div class="preview-filename-tag">${stepTag}</div>
                     `;
                     gallery.appendChild(card);
@@ -1767,11 +1866,14 @@
         // Texto del caption tal como se abrió, para saber si se ha editado.
         let captionAtOpen = '';
 
-        function openModal(imgSrc, filename, text) {
+        function openModal(imgSrc, filename, text, isVideo = /\.(mp4|webm|mov|mkv)(\?|$)/i.test(imgSrc)) {
             currentEditingFilename = filename;
             captionAtOpen = text;
             document.getElementById('modal-filename').innerText = filename;
-            document.getElementById('modal-img').src = imgSrc;
+            const im = document.getElementById('modal-img'), vid = document.getElementById('modal-vid');
+            im.style.display = isVideo ? 'none' : '';
+            vid.style.display = isVideo ? '' : 'none';
+            if (isVideo) { im.src = ''; vid.src = imgSrc; } else { vid.removeAttribute('src'); vid.load(); im.src = imgSrc; }
             document.getElementById('modal-txt').value = text;
             document.getElementById('modal').classList.add('active');
         }
@@ -1794,6 +1896,9 @@
                     && !await askConfirm(t('The caption has unsaved changes. Close and lose them?'))) {
                 return;
             }
+            // Un <video> oculto con src sigue sonando y descargando: se vacía al cerrar.
+            const vid = document.getElementById('modal-vid');
+            vid.pause(); vid.removeAttribute('src'); vid.load();
             document.getElementById('modal').classList.remove('active');
         }
 

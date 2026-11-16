@@ -144,6 +144,9 @@ DEFAULTS = {
     "preview_mode": "gen",                # gen | recon | onestep
     "preview_recon_sigma": 0.55,
     "preview_frame_index": -1,
+    # Fotogramas de la preview: 0 = los de la muestra (una imagen da .png, un clip da .mp4); >0 = ese número
+    # (rejilla 8n+1 a 24 fps) aunque la muestra sea una imagen.
+    "preview_frames": 0,
     "preview_shift": 1.0,
     "preview_vae_fp32": True,
     "preview_audio_cfg": 1.0,
@@ -271,6 +274,7 @@ PREVIEW_CUSTOM_PROMPT = str(cfg_get("preview_custom_prompt", DEFAULTS["preview_c
 PREVIEW_MODE = str(cfg_get("preview_mode", DEFAULTS["preview_mode"])).strip().lower()
 PREVIEW_RECON_SIGMA = float(cfg_get("preview_recon_sigma", DEFAULTS["preview_recon_sigma"]))
 PREVIEW_FRAME_INDEX = int(cfg_get("preview_frame_index", DEFAULTS["preview_frame_index"]))
+PREVIEW_FRAMES = int(cfg_get("preview_frames", DEFAULTS["preview_frames"]))
 PREVIEW_SHIFT = float(cfg_get("preview_shift", DEFAULTS["preview_shift"]))
 PREVIEW_VAE_FP32 = _cfg_bool("preview_vae_fp32", DEFAULTS["preview_vae_fp32"])
 PREVIEW_AUDIO_CFG = float(cfg_get("preview_audio_cfg", DEFAULTS["preview_audio_cfg"]))
@@ -1747,7 +1751,7 @@ def predict_velocity_cfg(
     return guided_v, guided_a
 
 
-def decode_preview_latent(vae, latent, frame_index=-1):
+def decode_preview_latent(vae, latent, frame_index=-1, all_frames=False):
     dtype = next(vae.parameters()).dtype
     latent = latent.detach().to("cuda", dtype=dtype)
 
@@ -1773,6 +1777,11 @@ def decode_preview_latent(vae, latent, frame_index=-1):
 
     with torch.no_grad():
         decoded = vae.decode(latent, return_dict=False)[0]
+
+    if all_frames and decoded.ndim == 5:
+        # [1, 3, F, H, W] -> [F, H, W, 3] uint8, para el .mp4
+        v = (decoded[0, :3].float() / 2 + 0.5).clamp(0, 1).permute(1, 2, 3, 0)
+        return (v.cpu().numpy() * 255).astype("uint8")
 
     if decoded.ndim == 5:
         f = decoded.shape[2]
@@ -1999,6 +2008,11 @@ def run_fullgen_flow_preview(
     preview_area=0,
 ):
     B, C, Fm, H, W = tuple(video_ref.shape)
+    if PREVIEW_FRAMES > 0:
+        frames = ltx25_model.valid_frames(PREVIEW_FRAMES)
+        Fm = ltx25_model.latent_frames(frames)
+        audio_ref = torch.zeros((1, audio_ref.shape[-2] if audio_ref.ndim == 3 else audio_channels,
+                                 ltx25_model.audio_latent_length(frames)), device=device, dtype=audio_ref.dtype)
     # El VAE de LTX-2 comprime 32x en espacio (192x320 px -> latente 6x10), no 16x como MiniMax-H3.
     # The LTX-2 VAE compresses 32x spatially, not 16x like MiniMax-H3.
     vae_scale = 32.0
@@ -2080,7 +2094,7 @@ def reload_preview_settings():
     global PREVIEW_STEPS, PREVIEW_CFG, PREVIEW_SAMPLER
     global PREVIEW_LORA_SCALE, PREVIEW_CFG_MAX, PREVIEW_CFG_RESCALE
     global PREVIEW_CAPTION_MODE, PREVIEW_CUSTOM_PROMPT
-    global PREVIEW_MODE, PREVIEW_RECON_SIGMA, PREVIEW_FRAME_INDEX
+    global PREVIEW_MODE, PREVIEW_RECON_SIGMA, PREVIEW_FRAME_INDEX, PREVIEW_FRAMES
     global PREVIEW_SHIFT, PREVIEW_VAE_FP32, PREVIEW_AUDIO_CFG
     global PREVIEW_SAMPLE_NAME, PREVIEW_VAE_USE_SCALING_FACTOR
     global PREVIEW_COMPARE_BASE
@@ -2135,6 +2149,7 @@ def reload_preview_settings():
         PREVIEW_MODE = str(g("preview_mode", PREVIEW_MODE)).strip().lower()
         PREVIEW_RECON_SIGMA = float(g("preview_recon_sigma", PREVIEW_RECON_SIGMA))
         PREVIEW_FRAME_INDEX = int(g("preview_frame_index", PREVIEW_FRAME_INDEX))
+        PREVIEW_FRAMES = int(g("preview_frames", PREVIEW_FRAMES) or 0)
         PREVIEW_SHIFT = float(g("preview_shift", PREVIEW_SHIFT))
         PREVIEW_VAE_FP32 = gb("preview_vae_fp32", PREVIEW_VAE_FP32)
         PREVIEW_AUDIO_CFG = float(g("preview_audio_cfg", PREVIEW_AUDIO_CFG))
@@ -2444,27 +2459,40 @@ def run_preview_diagnostic(
                 return
 
             vae = _vae_on_gpu()
-            with torch.no_grad():
-                img_base = decode_preview_latent(
-                    vae,
-                    latents_base,
-                    frame_index=PREVIEW_FRAME_INDEX,
-                )
+            is_clip = latents_lora.ndim == 5 and latents_lora.shape[2] > 1
+            if is_clip and hasattr(vae, "enable_tiling"):
+                vae.enable_tiling()
+            try:
+                with torch.no_grad():
+                    img_base = decode_preview_latent(
+                        vae,
+                        latents_base,
+                        frame_index=PREVIEW_FRAME_INDEX,
+                        all_frames=is_clip,
+                    )
 
-                img_lora = decode_preview_latent(
-                    vae,
-                    latents_lora,
-                    frame_index=PREVIEW_FRAME_INDEX,
-                )
+                    img_lora = decode_preview_latent(
+                        vae,
+                        latents_lora,
+                        frame_index=PREVIEW_FRAME_INDEX,
+                        all_frames=is_clip,
+                    )
+            finally:
+                if is_clip and hasattr(vae, "disable_tiling"):
+                    vae.disable_tiling()
 
-            img = np.concatenate([img_base, img_lora], axis=1)
+            # Lado a lado: en un clip, fotograma a fotograma (eje del ancho).
+            img = np.concatenate([img_base, img_lora], axis=2 if is_clip else 1)
 
             vae.to("cpu")
 
             out_name = preview_filename(step).replace(".png", "_compare_BASE_LoRA.png")
             out_path = os.path.join(OUTPUT_DIR, out_name)
 
-            Image.fromarray(img).save(out_path)
+            if is_clip:
+                out_path = ltx25_model.write_video(img, out_path.replace(".png", ".mp4"), fps=FRAME_RATE)
+            else:
+                Image.fromarray(img).save(out_path)
 
             print("  -> " + t("Compare preview saved: {path}", path=out_path))
 
@@ -2477,17 +2505,29 @@ def run_preview_diagnostic(
                 return
 
             vae = _vae_on_gpu()
-            with torch.no_grad():
-                img = decode_preview_latent(
-                    vae,
-                    latents,
-                    frame_index=PREVIEW_FRAME_INDEX,
-                )
+            is_clip = latents.ndim == 5 and latents.shape[2] > 1
+            if is_clip and hasattr(vae, "enable_tiling"):
+                vae.enable_tiling()
+            try:
+                with torch.no_grad():
+                    img = decode_preview_latent(
+                        vae,
+                        latents,
+                        frame_index=PREVIEW_FRAME_INDEX,
+                        all_frames=is_clip,
+                    )
+            finally:
+                if is_clip and hasattr(vae, "disable_tiling"):
+                    vae.disable_tiling()
 
             vae.to("cpu")
 
             out_path = os.path.join(OUTPUT_DIR, preview_filename(step))
-            Image.fromarray(img).save(out_path)
+            if is_clip:
+                # Clip: .mp4 a 24 fps (como Wan 2.2). El audio llega en la Fase 3.
+                out_path = ltx25_model.write_video(img, out_path.replace(".png", ".mp4"), fps=FRAME_RATE)
+            else:
+                Image.fromarray(img).save(out_path)
 
             print("  -> " + t("Preview saved to: {path}", path=out_path))
 

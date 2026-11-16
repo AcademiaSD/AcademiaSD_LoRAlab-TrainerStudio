@@ -42,6 +42,7 @@ from diffusers import DiffusionPipeline
 from i18n import t
 from text_io import read_text_file
 import gpu_stats
+import ltx25_model
 from project_layout import resolve_cache_dir, resolve_model_dir
 
 
@@ -111,6 +112,10 @@ DEFAULTS = {
     "max_seq_len": 1024,
     "frame_rate": 24.0,
     "num_frames": 1,
+    # Clips de vídeo (.mp4 .mov .mkv .webm): se leen a 24 fps, con 8n+1 fotogramas (1, 9, 17, ..., 121),
+    # escalados a su propia área. Por defecto 384x384 y 49 fotogramas (~2 s): ~1000 tokens, cabe en 8 GB.
+    "video_target_area": 384 * 384,
+    "max_frames": 49,
     "project_name": "",
     "trigger_word": "",
     "preview_custom_prompt": "",
@@ -194,6 +199,8 @@ MULTIPLE = int(cfg_get("multiple", DEFAULTS["multiple"]))
 MAX_SEQ_LEN = int(cfg_get("max_seq_len", DEFAULTS["max_seq_len"]))
 FRAME_RATE = float(cfg_get("frame_rate", DEFAULTS["frame_rate"]))
 NUM_FRAMES = int(cfg_get("num_frames", DEFAULTS["num_frames"]))
+VIDEO_TARGET_AREA = int(cfg_get("video_target_area", DEFAULTS["video_target_area"]))
+MAX_FRAMES = int(cfg_get("max_frames", DEFAULTS["max_frames"]))
 TRIGGER_WORD = str(cfg_get("trigger_word", DEFAULTS["trigger_word"])).strip()
 PROJECT_NAME = str(cfg_get("project_name", DEFAULTS["project_name"])).strip()
 PREVIEW_CUSTOM_PROMPT = str(cfg_get("preview_custom_prompt", DEFAULTS["preview_custom_prompt"])).strip()
@@ -919,10 +926,10 @@ def atomic_json(data, path):
     os.replace(tmp, path)
 
 
-def bucket_size(width, height):
+def bucket_size(width, height, area=None):
     ar = width / height
 
-    bh = math.sqrt(TARGET_AREA / ar)
+    bh = math.sqrt((area or TARGET_AREA) / ar)
     bw = ar * bh
 
     bw = max(MULTIPLE, round(bw / MULTIPLE) * MULTIPLE)
@@ -1032,10 +1039,12 @@ def encode_prompt(pipe, prompt, text_device):
 
 def encode_video_latent(vae, image):
     image_tensor = F_vision.pil_to_tensor(image).float() / 127.5 - 1.0
+    return encode_pixels(vae, image_tensor.unsqueeze(0).unsqueeze(2).repeat(1, 1, NUM_FRAMES, 1, 1))
 
-    image_tensor = (
-        image_tensor.unsqueeze(0).unsqueeze(2).repeat(1, 1, NUM_FRAMES, 1, 1)
-    ).to("cuda", dtype=torch.bfloat16)
+
+def encode_pixels(vae, pixels):
+    """[1, 3, F, H, W] en [-1, 1] -> latente normalizado [1, 128, (F-1)/8+1, H/32, W/32] en CPU."""
+    image_tensor = pixels.to("cuda", dtype=torch.bfloat16)
 
     encoded = vae.encode(image_tensor)
 
@@ -1124,9 +1133,10 @@ def preprocess_ltx25():
     os.makedirs(DATASET_PATH, exist_ok=True)
     os.makedirs(CACHE_DIR, exist_ok=True)
 
+    # "images" son todas las muestras: imágenes y clips de vídeo.
     images = sorted(
         f for f in os.listdir(DATASET_PATH)
-        if f.lower().endswith((".png", ".jpg", ".jpeg", ".webp"))
+        if f.lower().endswith((".png", ".jpg", ".jpeg", ".webp") + ltx25_model.VIDEO_EXTS)
     )
 
     if not images:
@@ -1301,25 +1311,54 @@ def preprocess_ltx25():
         print("=" * 80)
         print(f"[{idx}/{len(images)}] {filename}")
 
-        image = Image.open(os.path.join(DATASET_PATH, filename)).convert("RGB")
-        bw, bh = bucket_size(image.width, image.height)
-        scale = max(bw / image.width, bh / image.height)
-        image = image.resize(
-            (math.ceil(image.width * scale), math.ceil(image.height * scale)),
-            Image.LANCZOS,
-        )
-        left = (image.width - bw) // 2
-        top = (image.height - bh) // 2
-        image = image.crop((left, top, left + bw, top + bh))
-        print("Bucket:", f"{bw}x{bh}")
+        src = os.path.join(DATASET_PATH, filename)
+        is_video = filename.lower().endswith(ltx25_model.VIDEO_EXTS)
+        if is_video:
+            info = ltx25_model.video_info(src)
+            if info is None:
+                print("[!] " + t("Unreadable video, skipped: {name}", name=filename))
+                continue
+            frames = ltx25_model.clip_frames(info["duration"], MAX_FRAMES)
+            bw, bh = bucket_size(info["width"], info["height"], VIDEO_TARGET_AREA)
+            print("Bucket:", f"{bw}x{bh}", "·", t("{n} frames at 24 fps ({s:.2f} s of {d:.2f} s)",
+                                                   n=frames, s=frames / 24.0, d=info["duration"]))
+            pixels = ltx25_model.read_video(src, frames, bw, bh)
+            pixels = torch.from_numpy(pixels.copy()).permute(3, 0, 1, 2).unsqueeze(0).float() / 127.5 - 1.0
+            print(t("Encoding video latent..."))
+            # Tiles en el VAE solo para clips (en 8 GB un clip entero no cabe de una vez); las imágenes como antes.
+            if hasattr(pipe.vae, "enable_tiling"):
+                pipe.vae.enable_tiling()
+            try:
+                with torch.inference_mode():
+                    video_latent = encode_pixels(pipe.vae, pixels)
+            finally:
+                if hasattr(pipe.vae, "disable_tiling"):
+                    pipe.vae.disable_tiling()
+            del pixels
+        else:
+            frames = NUM_FRAMES
+            image = Image.open(src).convert("RGB")
+            bw, bh = bucket_size(image.width, image.height)
+            scale = max(bw / image.width, bh / image.height)
+            image = image.resize(
+                (math.ceil(image.width * scale), math.ceil(image.height * scale)),
+                Image.LANCZOS,
+            )
+            left = (image.width - bw) // 2
+            top = (image.height - bh) // 2
+            image = image.crop((left, top, left + bw, top + bh))
+            print("Bucket:", f"{bw}x{bh}")
 
-        print(t("Encoding video latent..."))
-        with torch.inference_mode():
-            video_latent = encode_video_latent(pipe.vae, image)
+            print(t("Encoding video latent..."))
+            with torch.inference_mode():
+                video_latent = encode_video_latent(pipe.vae, image)
         torch.save(video_latent, video_path)
         print("Video latent:", tuple(video_latent.shape))
 
-        audio_latent = make_audio_latent(video_latent, audio_channels)
+        # Audio: latente de la duración del clip (25 por segundo, como LTX2Pipeline). Fase 2: vacío (sin pérdida
+        # de audio); la Fase 3 codificará la pista del clip.
+        audio_latent = torch.zeros((1, audio_channels, ltx25_model.audio_latent_length(frames) if is_video else 1),
+                                   dtype=torch.bfloat16)
         torch.save(audio_latent, audio_path)
         print("Audio latent:", tuple(audio_latent.shape))
         print("[VRAM] " + t("accumulated peak: {gb:.2f} GB", gb=vram_peak_gb()))
@@ -1330,7 +1369,8 @@ def preprocess_ltx25():
                 "filename": filename,
                 "width": bw,
                 "height": bh,
-                "num_frames": NUM_FRAMES,
+                "num_frames": frames,
+                "media": "video" if is_video else "image",
                 "frame_rate": FRAME_RATE,
                 "prompt": prompt,
                 "video_latent": os.path.basename(video_path),
@@ -1364,7 +1404,9 @@ def preprocess_ltx25():
         "low_ram_threshold_gb": LOW_RAM_THRESHOLD_GB,
         "system_ram_gb": SYSTEM_RAM_GB,
         "prompt_encoding": "LTX2Pipeline.encode_prompt",
-        "note": "Image dataset cache. Audio latent is zero-filled minimal conditioning.",
+        "video_target_area": VIDEO_TARGET_AREA,
+        "max_frames": MAX_FRAMES,
+        "note": "Images and video clips (24 fps, 8n+1 frames). Audio latents are zero-filled (phase 2).",
     }
 
     atomic_json(cache_info, os.path.join(CACHE_DIR, "cache_info.json"))

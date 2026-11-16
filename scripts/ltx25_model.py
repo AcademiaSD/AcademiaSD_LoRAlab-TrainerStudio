@@ -373,3 +373,118 @@ def load_text_encoder_lean(path, device="cuda", compute_dtype=COMPUTE_DTYPE, log
     log("[TE] Gemma 4 NF4: {} NF4 layers in VRAM, embeddings in RAM ({:.2f} GB)".format(
         moved, torch.cuda.memory_allocated() / 1e9))
     return model
+
+
+# ----------------------------------------------------------------------------------------------------------------
+# Vídeo (ffmpeg). LTX: 24 fps, el VAE comprime 8x en el tiempo -> clips de 8n+1 fotogramas (1, 9, 17, ..., 121).
+# ----------------------------------------------------------------------------------------------------------------
+import json as _json
+import math as _math
+import shutil as _shutil
+import subprocess as _subprocess
+
+import numpy as _np
+
+VIDEO_EXTS = (".mp4", ".mov", ".mkv", ".webm")
+FPS = 24.0
+AUDIO_LATENTS_PER_SECOND = 16000 / 160 / 4   # 25: sample_rate / hop / compresión temporal del VAE de audio
+
+
+def ffbin(name):
+    return _shutil.which(name) or _shutil.which(name + ".exe")
+
+
+def video_info(path):
+    """{width, height, fps, duration, has_audio} o None si ffprobe no lo lee."""
+    probe = ffbin("ffprobe")
+    if not probe:
+        raise RuntimeError("ffmpeg/ffprobe not found in PATH / no están en el PATH")
+    try:
+        out = _subprocess.run([probe, "-v", "error", "-show_entries",
+                               "stream=codec_type,width,height,r_frame_rate:format=duration", "-of", "json",
+                               str(path)], capture_output=True, text=True, timeout=60).stdout
+        data = _json.loads(out)
+        v = next(s for s in data["streams"] if s.get("codec_type") == "video")
+        num, _, den = v["r_frame_rate"].partition("/")
+        return {"width": int(v["width"]), "height": int(v["height"]), "fps": float(num) / float(den or 1),
+                "duration": float(data["format"]["duration"]),
+                "has_audio": any(s.get("codec_type") == "audio" for s in data["streams"])}
+    except Exception:
+        return None
+
+
+def valid_frames(n):
+    """El mayor 8k+1 que no pasa de n."""
+    return max(1, (int(n) - 1) // 8 * 8 + 1)
+
+
+def clip_frames(duration, max_frames, fps=FPS):
+    """Fotogramas que se entrenan de un clip: los que caben a `fps`, en la rejilla 8k+1, sin pasar de max_frames."""
+    return valid_frames(min(int(max_frames), max(1, _math.floor(duration * fps + 1e-6))))
+
+
+def latent_frames(frames):
+    return (int(frames) - 1) // 8 + 1
+
+
+def audio_latent_length(frames, fps=FPS):
+    """Longitud del latente de audio para `frames` fotogramas: la cuenta de LTX2Pipeline."""
+    return max(1, round(frames / fps * AUDIO_LATENTS_PER_SECOND))
+
+
+def read_video(path, frames, width, height, fps=FPS):
+    """Los `frames` primeros fotogramas a `fps`, escalados hasta cubrir width x height y recortados al centro."""
+    ffmpeg = ffbin("ffmpeg")
+    if not ffmpeg:
+        raise RuntimeError("ffmpeg not found in PATH / no está en el PATH")
+    vf = (f"fps={fps},scale={width}:{height}:force_original_aspect_ratio=increase:flags=lanczos,"
+          f"crop={width}:{height}")
+    raw = _subprocess.run([ffmpeg, "-v", "error", "-i", str(path), "-vf", vf, "-frames:v", str(frames),
+                           "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], capture_output=True, timeout=600,
+                          check=True).stdout
+    got = len(raw) // (width * height * 3)
+    if got < frames:
+        raise RuntimeError("Only {} of {} frames could be read / solo se leyeron {} de {}".format(got, frames, got, frames))
+    return _np.frombuffer(raw[:frames * width * height * 3], dtype=_np.uint8).reshape(frames, height, width, 3)
+
+
+def write_video(frames, path, fps=FPS, audio=None, sample_rate=None):
+    """[F, H, W, 3] uint8 -> mp4 H.264 (+ AAC si `audio` [canales, muestras] float). Sin ffmpeg, .webp animado."""
+    import os
+    import tempfile
+    ffmpeg = ffbin("ffmpeg")
+    if ffmpeg:
+        h, w = frames.shape[1:3]
+        tmp = path + ".tmp.mp4"
+        cmd = [ffmpeg, "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{w}x{h}", "-r", str(fps),
+               "-i", "-"]
+        wav = None
+        if audio is not None and sample_rate:
+            import wave
+            a = _np.clip(_np.asarray(audio, dtype=_np.float32), -1, 1)
+            if a.ndim == 1:
+                a = a[None]
+            fd, wav = tempfile.mkstemp(suffix=".wav")
+            os.close(fd)
+            with wave.open(wav, "wb") as wf:
+                wf.setnchannels(a.shape[0])
+                wf.setsampwidth(2)
+                wf.setframerate(int(sample_rate))
+                wf.writeframes((a.T * 32767).astype(_np.int16).tobytes())
+            cmd += ["-i", wav, "-c:a", "aac", "-b:a", "160k", "-shortest"]
+        cmd += ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", "-movflags", "+faststart", tmp]
+        try:
+            _subprocess.run(cmd, input=frames.tobytes(), check=True, timeout=600)
+        finally:
+            if wav:
+                try:
+                    os.remove(wav)
+                except OSError:
+                    pass
+        os.replace(tmp, path)
+        return path
+    from PIL import Image
+    path = os.path.splitext(path)[0] + ".webp"
+    imgs = [Image.fromarray(f) for f in frames]
+    imgs[0].save(path, save_all=True, append_images=imgs[1:], duration=int(1000 / fps), loop=0, quality=90)
+    return path

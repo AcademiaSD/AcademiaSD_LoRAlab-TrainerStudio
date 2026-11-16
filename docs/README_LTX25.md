@@ -2,7 +2,7 @@
 
 > **Technical notes** for the LTX-2.5 trainer of **AcademiaSD LoRAlab Trainer Studio**. Installation, updating and everyday use are in the [main README](../README.md).
 
-> **Status: Phase 1 (image LoRAs).** Video, video + audio and IC-LoRA edit modes are planned; see [PLAN_LTX25.md](PLAN_LTX25.md).
+> **Status: phases 1 (images) and 2 (video clips).** Video + audio and IC-LoRA edit modes are planned; see [PLAN_LTX25.md](PLAN_LTX25.md).
 
 ## Which model
 
@@ -67,8 +67,19 @@ The prefetch hides most of the swap: 30 parked blocks cost ~0.8 s/it.
 - Flow matching: `x_t = (1 − σ)·x0 + σ·noise`, target `noise − x0`.
 - LoRA on the attention layers of the video branch (as LTX-2.3); exported with the official key names.
 
+## Video clips (phase 2)
+
+A dataset can mix images and clips (`.mp4`, `.mov`, `.mkv`, `.webm`), each with its `.txt`.
+
+- **Prepare clips** (Dataset Manager, before captioning): every clip ends at exactly **24 fps** with a valid **8n+1** frame count (9, 17, 25 … 121), the nearest one, **without cutting the end**: time is stretched or squeezed by the couple of percent needed, and the audio track is kept and stretched with it (`atempo`). Re-encodes at crf 16; originals go to `_originals/`, which the pre-cache ignores. Example: 30 fps, 2.33 s → 24 fps, 57 frames, 2.38 s.
+- **Pre-cache**: clips are read from their start at 24 fps, up to **Max Frames** (default 49, about 2 s), at their own **Video Area** (default 384 × 384) keeping their aspect ratio; images keep Target Area. The VAE encodes clips in tiles. The audio latent has the clip's length (25 per second, as `LTX2Pipeline` computes it) and is empty for now (phase 3 encodes the track).
+- **Captions**: the captioner (Qwen3-VL-8B, shared) has a separate prompt for clips and sees only the part that is trained (Max Frames at 24 fps).
+- **Previews**: when the sample is a clip, or **Preview Frames** asks for frames, the preview is an `.mp4` at 24 fps (base and LoRA side by side with Compare). The VAE decodes in tiles.
+
+Measured with the 8 GB profile (RTX 5080): 49 frames at 320 × 448 (980 tokens), 16 of 48 blocks resident, **~5.8 s/it**, peak **6.72 GiB**; pre-cache peak 6.0 GB.
+
 ## Not done yet
 
 - DoRA with block swap (DoRA needs the dequantized weight of every layer; it refuses to start while blocks are parked).
-- Video, video + audio and IC-LoRA modes.
-- Validation of trained LoRAs in ComfyUI.
+- Video + audio (phase 3) and IC-LoRA edit (phase 4).
+- Validation of trained LoRAs in ComfyUI, and of video LoRAs on real clips (phase 2 was tested on synthetic zoom clips).

@@ -99,7 +99,10 @@ HF_TOKEN_CONFIG = SETTINGS_DIR / "HF_token.json"
 EXPORT_CONFIG = SETTINGS_DIR / "export_settings.json"  # compartido / shared by every trainer
 CAPTION_CONFIG = SETTINGS_DIR / "caption_settings_ltx25.json"
 
-DATASET_EXTS = (".png", ".jpg", ".jpeg", ".webp")
+IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp")
+VIDEO_EXTS = (".mp4", ".webm", ".mov", ".mkv")
+DATASET_EXTS = IMAGE_EXTS + VIDEO_EXTS
+PREVIEW_EXTS = (".png", ".mp4", ".webp")
 
 CAPTION_SCRIPT = SCRIPTS_DIR / "0_caption_LTX25.py"
 PRECACHE_SCRIPT = SCRIPTS_DIR / "1_pre_cache_LTX25.py"
@@ -602,7 +605,7 @@ def get_previews():
     previews = []
     if output_dir.is_dir():
         for file_path in output_dir.iterdir():
-            if file_path.is_file() and file_path.name.startswith("preview_step_") and file_path.suffix.lower() == ".png":
+            if file_path.is_file() and file_path.name.startswith("preview_step_") and file_path.suffix.lower() in PREVIEW_EXTS:
                 st = file_path.stat()
                 # Un PNG recien escrito puede estar a medias: se ensena en el siguiente sondeo.
                 if st.st_size > 0 and time.time() - st.st_mtime > 1.0:
@@ -653,10 +656,12 @@ def dataset_info():
                         pass
                 # mtime va a la URL (?v=) para que el navegador no muestre una imagen reemplazada desde su caché.
                 images.append({"file": file_path.name, "mtime": int(file_path.stat().st_mtime),
-                               "has_txt": txt_path.exists(), "caption": caption})
+                               "has_txt": txt_path.exists(), "caption": caption,
+                               "video": file_path.suffix.lower() in VIDEO_EXTS})
     return jsonify({
         "path": str(dataset_dir),
         "image_count": len(images),
+        "video_count": sum(1 for i in images if i["video"]),
         "caption_count": sum(1 for t in dataset_caption_paths(dataset_dir) if t.exists()) if dataset_dir.is_dir() else 0,
         "images": images[:500]
     })
@@ -817,6 +822,94 @@ def delete_dataset_image():
                 f.unlink()
                 removed.append(f.name)
         return jsonify({"status": "ok", "removed": removed})
+    except Exception as exc:
+        return jsonify({"status": "error", "error": str(exc)}), 500
+
+
+def _ltx_nearest_frames(ideal):
+    """El 8n+1 más cercano a `ideal` (nunca por debajo de 9). Al más cercano y no hacia abajo: hacia abajo se
+    perdería el final del clip, que en un efecto es el remate (lección de MiniMax-H3)."""
+    if ideal <= 9:
+        return 9
+    return int(round((float(ideal) - 1) / 8.0)) * 8 + 1
+
+
+@app.route("/api/prepare-clips", methods=["POST"])
+def prepare_clips():
+    """
+    Deja cada clip a 24 fps exactos con un recuento 8n+1 (9, 17, ..., 121), SIN recortar el final: remuestrea
+    conservando la duración y estira o comprime el tiempo lo justo para caer en el recuento válido más cercano.
+    El audio se conserva y se estira por el mismo factor (atempo), para que no se desincronice. Los originales
+    van a _originals, que ni el pre-cache ni el Dataset Manager recorren.
+    """
+    import ltx25_model
+    try:
+        target = 24.0
+        if get_status().get("running"):
+            return jsonify({"status": "error", "error": "A process is running. Stop it first. / "
+                                                        "Hay un proceso en marcha. Detenlo primero."}), 409
+        ffmpeg = ltx25_model.ffbin("ffmpeg")
+        if not ffmpeg or not ltx25_model.ffbin("ffprobe"):
+            return jsonify({"status": "error", "error": "ffmpeg/ffprobe not found in PATH. / "
+                                                        "No se encuentran ffmpeg/ffprobe en el PATH."}), 400
+        dataset_dir = get_dataset_dir()
+        if not dataset_dir.is_dir():
+            return jsonify({"status": "error", "error": t("No dataset folder")}), 404
+        clips = sorted(f for f in dataset_dir.iterdir() if f.is_file() and f.suffix.lower() in VIDEO_EXTS)
+        backup = dataset_dir / "_originals"
+        converted, skipped, errors, warnings = [], [], [], []
+        for clip in clips:
+            info = ltx25_model.video_info(clip)
+            if info is None or info["fps"] <= 0:
+                errors.append("{}: {}".format(clip.name, t("could not read the clip")))
+                continue
+            dur = info["duration"]
+            keep = _ltx_nearest_frames(dur * target)
+            new_dur = keep / target
+            stretch = new_dur / dur
+            if abs(stretch - 1.0) >= 0.10:
+                warnings.append("{}: {:.2f}s -> {:.2f}s ({:+.0f}% speed)".format(
+                    clip.name, dur, new_dur, (1.0 / stretch - 1.0) * 100.0))
+            if abs(info["fps"] - target) < 0.05 and abs(dur * target - keep) < 0.5:
+                skipped.append(clip.name)
+                continue
+            speed = 1.0 / stretch
+            steps = []
+            while speed < 0.5:
+                steps.append(0.5)
+                speed /= 0.5
+            while speed > 2.0:
+                steps.append(2.0)
+                speed /= 2.0
+            steps.append(speed)
+            backup.mkdir(exist_ok=True)
+            tmp = backup / ("__converting__" + clip.with_suffix(".mp4").name)
+            cmd = [ffmpeg, "-v", "error", "-y", "-i", str(clip),
+                   "-vf", "setpts=PTS*{:.10f},fps={:.6f}".format(stretch, target),
+                   "-af", ",".join("atempo={:.10f}".format(x) for x in steps),
+                   "-frames:v", str(keep), "-c:v", "libx264", "-crf", "16", "-preset", "medium",
+                   "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", str(tmp)]
+            try:
+                subprocess.run(cmd, capture_output=True, text=True, timeout=600, check=True)
+                shutil.move(str(clip), str(backup / clip.name))
+                out = clip.with_suffix(".mp4")
+                shutil.move(str(tmp), str(out))
+                converted.append("{} ({:.0f} -> 24 fps, {:.2f}s -> {:.2f}s, {} frames, audio: {})".format(
+                    out.name, info["fps"], dur, new_dur, keep, "yes" if info["has_audio"] else t("no track")))
+            except subprocess.CalledProcessError as exc:
+                det = (exc.stderr or "").strip().splitlines()
+                errors.append("{}: ffmpeg: {}".format(clip.name, det[-1] if det else exc.returncode))
+            except Exception as exc:
+                errors.append("{}: {}".format(clip.name, exc))
+            finally:
+                try:
+                    if tmp.exists():
+                        tmp.unlink()
+                except Exception:
+                    pass
+        return jsonify({"status": "ok" if not errors else "partial", "converted": len(converted),
+                        "skipped": len(skipped), "details": converted, "skipped_details": skipped,
+                        "errors": errors, "warnings": warnings, "backup": str(backup) if converted else None})
     except Exception as exc:
         return jsonify({"status": "error", "error": str(exc)}), 500
 

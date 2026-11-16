@@ -3,15 +3,15 @@
 0_caption_LTX25.py — Captions automáticos del dataset con Qwen3-VL-8B
 Dataset auto-captioning with Qwen3-VL-8B
 
-Un .txt por imagen con una descripción. La palabra trigger va siempre al principio.
-One .txt per image with a description. The trigger word always goes first.
+Un .txt por imagen o vídeo con una descripción. La palabra trigger va siempre al principio.
+One .txt per image or video with a description. The trigger word always goes first.
 
-Usa el mismo captioner que el LoRAlab de Qwen-Image 2.1: el text encoder NF4 de su repo
-(Qwen3-VL-8B-Instruct, ~5.5 GB de VRAM). El de LTX-2.5 (Gemma 3 12B) también describe
-bien, pero es unas 7 veces más lento. La primera vez se descargan solo text_encoder_NF4/
-y processor/ (~5 GB) a Models/Captioner-Qwen3-VL-8B/.
+Usa el mismo captioner que Z-Image, LTX-2.3 y Qwen-Image 2.1 (Models/Captioner-Qwen3-VL-8B,
+~5.5 GB de VRAM). De cada vídeo ve solo el tramo que se entrena (los Max Frames primeros
+fotogramas a 24 fps): un caption que describiera el final del clip enseñaría al LoRA un texto
+que no corresponde a sus píxeles.
 
-Lee caption_settings_ltx25.json; la ruta del dataset y el trigger salen de
+Lee caption_settings_ltx25.json; la ruta del dataset, el trigger y Max Frames salen de
 pre_cache_settings_ltx25.json.
 """
 import os
@@ -27,6 +27,38 @@ from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
 from i18n import t
 from text_io import read_text_file
 from project_layout import resolve_model_dir
+import ltx25_model as _ltx
+
+
+class wan:
+    """Adaptador: el captioner viene del de Wan 2.2; aquí usa las utilidades de vídeo de LTX (24 fps, 8n+1)."""
+    FPS = _ltx.FPS
+    IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp")
+    VIDEO_EXTS = _ltx.VIDEO_EXTS
+    clip_frames = staticmethod(_ltx.clip_frames)
+    read_video = staticmethod(_ltx.read_video)
+
+    @staticmethod
+    def video_info(path):
+        i = _ltx.video_info(path)
+        return None if i is None else (i["width"], i["height"], i["fps"], i["duration"])
+
+    @staticmethod
+    def get_hf_token():
+        try:
+            with open("settings/HF_token.json", "r", encoding="utf-8") as f:
+                return (json.load(f).get("token") or "").strip() or None
+        except Exception:
+            return os.environ.get("HF_TOKEN") or None
+
+    @staticmethod
+    def enable_hf_file_progress():
+        os.environ["TQDM_DISABLE"] = "0"
+        try:
+            from huggingface_hub.utils import enable_progress_bars
+            enable_progress_bars()
+        except Exception:
+            pass
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -41,24 +73,31 @@ DEFAULTS = {
     "captioner_dir": "Models/Captioner-Qwen3-VL-8B",
     "dataset_path": "./dataset",
     "trigger_word": "",
+    "num_frames": 49,   # Max Frames del pre-cache (max_frames)
     "caption_prompt": (
-        "Describe this image for training a text-to-image model, in at most 150 words. "
+        "Describe this image for training a text-to-video model, in at most 120 words. "
         "One single paragraph of plain prose, no lists and no preamble. Cover the main "
-        "subject and what they are doing, their appearance, hair and clothing, the pose, "
-        "the framing and camera angle, the setting and background, the lighting and the "
-        "colors. Do not invent a name and do not mention that this is an image or a photo."
+        "subject, their appearance, hair and clothing, the pose, the framing and camera angle, "
+        "the setting and background, the lighting and the colors. Do not invent a name and do "
+        "not mention that this is an image or a photo."
     ),
-    # 150 palabras son ~200 tokens; el margen evita captions cortados a media frase.
+    "caption_video_prompt": (
+        "Describe this video clip for training a text-to-video model, in at most 120 words. "
+        "One single paragraph of plain prose, no lists and no preamble. Describe the main "
+        "subject and their appearance, what they do and how they move, how the camera moves, "
+        "the setting, the lighting and the colors. Do not invent a name and do not mention "
+        "that this is a video or a clip."
+    ),
+    # Fotogramas que ve el captioner, repartidos por el tramo entrenable del clip.
+    "caption_video_frames": 8,
     "max_new_tokens": 300,
     "temperature": 0.3,
     # Lado largo de la copia EN MEMORIA que ve el modelo; el fichero del dataset no se toca.
-    # Más píxeles = más tokens de visión y un prefill más lento. 0 = sin reescalar.
     "max_image_side": 768,
-    # False = no toca las imágenes que ya tienen un .txt con contenido.
+    "max_video_side": 448,
+    # False = no toca lo que ya tiene un .txt con contenido.
     "overwrite": True,
 }
-
-IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp")
 
 PRECACHE_CONFIG = "settings/pre_cache_settings_ltx25.json"
 CONFIG_PATH = "settings/caption_settings_ltx25.json"
@@ -79,40 +118,11 @@ def load_config():
     for key in ("dataset_path", "trigger_word"):
         if precache.get(key):
             cfg[key] = precache[key]
+    # En LTX-2.5 num_frames del pre-cache es el de las imágenes (1); el de los clips es max_frames.
+    if precache.get("max_frames"):
+        cfg["num_frames"] = int(precache["max_frames"])
     cfg.update({k: v for k, v in read_json(CONFIG_PATH).items() if v != ""})
     return cfg
-
-
-def enable_hf_file_progress():
-    # Lanzado desde la GUI la salida no es una terminal y tqdm se desactiva: la descarga del captioner
-    # (~5 GB) parecería colgada. Se fuerzan las barras de progreso por fichero (en bytes).
-    import logging
-    try:
-        import tqdm
-        import tqdm.auto
-        import tqdm.std
-
-        def patch_tqdm(cls):
-            orig_init = cls.__init__
-            def new_init(self, *args, **kwargs):
-                kwargs['disable'] = False
-                kwargs['mininterval'] = 0.5
-                orig_init(self, *args, **kwargs)
-            cls.__init__ = new_init
-
-        patch_tqdm(tqdm.std.tqdm)
-        patch_tqdm(tqdm.auto.tqdm)
-        if hasattr(tqdm, 'tqdm'):
-            patch_tqdm(tqdm.tqdm)
-
-        from huggingface_hub.utils import enable_progress_bars
-        enable_progress_bars()
-        logging.getLogger("huggingface_hub").setLevel(logging.INFO)
-    except Exception:
-        pass
-
-    os.environ["TQDM_DISABLE"] = "0"
-    os.environ["TQDM_MININTERVAL"] = "0.5"
 
 
 def load_captioner(captioner_dir):
@@ -120,9 +130,8 @@ def load_captioner(captioner_dir):
     path = os.path.join(captioner_dir, "text_encoder_NF4")
     if not os.path.exists(os.path.join(path, "config.json")):
         print(t("Downloading the captioner from Hugging Face: {repo} (~5 GB)", repo=HF_REPO_ID), flush=True)
-        enable_hf_file_progress()
-        token = read_json("settings/HF_token.json").get("token", "").strip() or None
-        snapshot_download(repo_id=HF_REPO_ID, local_dir=captioner_dir, token=token, max_workers=2,
+        wan.enable_hf_file_progress()
+        snapshot_download(repo_id=HF_REPO_ID, local_dir=captioner_dir, token=wan.get_hf_token(), max_workers=2,
                           allow_patterns=["text_encoder_NF4/*", "processor/*"])
 
     print(t("Loading {name}...", name="Qwen3-VL-8B (NF4)"), flush=True)
@@ -143,6 +152,7 @@ def shrink(image, max_side):
 def clean_caption(text):
     text = " ".join(text.split())
     for prefix in ("The image shows ", "This image shows ", "The image depicts ", "This image depicts ",
+                   "The video shows ", "This video shows ", "The video depicts ", "In this video, ",
                    "The photo shows ", "In this image, ", "In the image, ", "Sure, ", "Certainly, ", "Here is a "):
         if text.lower().startswith(prefix.lower()):
             text = text[len(prefix):]
@@ -151,20 +161,50 @@ def clean_caption(text):
     return text.strip().strip('"')
 
 
-def caption_image(model, processor, image, prompt, cfg):
-    messages = [{"role": "user", "content": [{"type": "image", "image": image}, {"type": "text", "text": prompt}]}]
-    text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-    inputs = processor(text=[text], images=[image], return_tensors="pt").to("cuda")
-
+def generate(model, processor, inputs, cfg):
     temperature = float(cfg["temperature"])
     with torch.inference_mode():
         out = model.generate(
-            **inputs,
+            **inputs.to("cuda"),
             max_new_tokens=int(cfg["max_new_tokens"]),
             do_sample=temperature > 0,
             temperature=max(temperature, 1e-4),
         )
     return clean_caption(processor.tokenizer.decode(out[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True))
+
+
+def caption_image(model, processor, image, cfg):
+    messages = [{"role": "user", "content": [{"type": "image", "image": image}, {"type": "text", "text": cfg["caption_prompt"]}]}]
+    text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    return generate(model, processor, processor(text=[text], images=[image], return_tensors="pt"), cfg)
+
+
+def caption_video(model, processor, path, cfg):
+    info = wan.video_info(path)
+    if info is None:
+        raise RuntimeError(t("ffprobe could not read the video"))
+    w, h, _, duration = info
+    # El tramo que entrena el pre-caché: sus fotogramas a 24 fps, sacados ya a un tamaño pequeño.
+    window = wan.clip_frames(duration, cfg["num_frames"])
+    side = int(cfg["max_video_side"])
+    scale = min(1.0, side / max(w, h))
+    vw, vh = max(32, round(w * scale / 32) * 32), max(32, round(h * scale / 32) * 32)
+    clip = wan.read_video(path, window, vw, vh)
+
+    count = max(2, min(int(cfg["caption_video_frames"]), window))
+    picks = sorted({round(i * (window - 1) / (count - 1)) for i in range(count)})
+    frames = [Image.fromarray(clip[i]) for i in picks]
+    if len(frames) % 2:
+        # Qwen3-VL agrupa los fotogramas de dos en dos (temporal_patch_size 2).
+        frames.append(frames[-1])
+
+    messages = [{"role": "user", "content": [{"type": "video", "video": frames}, {"type": "text", "text": cfg["caption_video_prompt"]}]}]
+    text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    # Los metadatos describen lo que se entrega (los fotogramas elegidos), no el clip original.
+    seconds = max(window / wan.FPS, 1e-3)
+    metadata = [{"fps": len(frames) / seconds, "total_num_frames": len(frames), "duration": seconds}]
+    inputs = processor(text=[text], videos=[frames], return_tensors="pt", video_metadata=metadata)
+    return generate(model, processor, inputs, cfg)
 
 
 def with_trigger(trigger, caption):
@@ -182,21 +222,21 @@ def main():
         print("[!] " + t("Dataset folder does not exist: {path}", path=dataset))
         return 1
 
-    images = sorted(f for f in os.listdir(dataset) if f.lower().endswith(IMAGE_EXTS))
+    files = sorted(f for f in os.listdir(dataset) if f.lower().endswith(wan.IMAGE_EXTS + wan.VIDEO_EXTS))
     pending = []
-    for name in images:
+    for name in files:
         txt = os.path.join(dataset, os.path.splitext(name)[0] + ".txt")
         if not cfg["overwrite"] and os.path.isfile(txt) and read_text_file(txt).strip():
             continue
         pending.append(name)
 
     print(f"  {t('Dataset'):<22}: {os.path.abspath(dataset)}")
-    print(f"  {t('Images'):<22}: {len(images)}, {t('{n} to caption', n=len(pending))}")
+    print(f"  {t('Files'):<22}: {len(files)}, {t('{n} to caption', n=len(pending))}")
     print(f"  {t('Trigger Word'):<22}: {cfg['trigger_word'] or t('(none)')}")
     print(f"  {t('Overwrite'):<22}: {t('yes') if cfg['overwrite'] else t('only missing')}")
 
     if not pending:
-        print(t("Nothing to do: every image already has a caption."))
+        print(t("Nothing to do: every file already has a caption."))
         return 0
 
     model, processor = load_captioner(cfg["captioner_dir"])
@@ -206,10 +246,14 @@ def main():
     for i, name in enumerate(pending, 1):
         t0 = time.time()
         stem = os.path.splitext(name)[0]
+        path = os.path.join(dataset, name)
         try:
-            with Image.open(os.path.join(dataset, name)) as img:
-                image = shrink(img.convert("RGB"), int(cfg["max_image_side"]))
-            caption = caption_image(model, processor, image, cfg["caption_prompt"], cfg)
+            if name.lower().endswith(wan.VIDEO_EXTS):
+                caption = caption_video(model, processor, path, cfg)
+            else:
+                with Image.open(path) as img:
+                    image = shrink(img.convert("RGB"), int(cfg["max_image_side"]))
+                caption = caption_image(model, processor, image, cfg)
             if not caption:
                 raise RuntimeError(t("empty caption"))
 
@@ -226,7 +270,7 @@ def main():
             print(f"[{i}/{len(pending)}] {name} {t('FAILED')}: {e}", flush=True)
 
     total = time.time() - started
-    print("\n✓ " + t("{n} captions in {time} ({per:.1f}s per image).", n=done, time=f"{int(total // 60)}m{int(total % 60):02d}s", per=total / max(done, 1)))
+    print("\n✓ " + t("{n} captions in {time} ({per:.1f}s per file).", n=done, time=f"{int(total // 60)}m{int(total % 60):02d}s", per=total / max(done, 1)))
     if failed:
         print("[!] " + t("{n} failed: {names}", n=len(failed), names=', '.join(failed[:10])))
     print(t("Review them in the Dataset Manager before pre-caching."))
