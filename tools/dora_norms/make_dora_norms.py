@@ -225,13 +225,16 @@ def make(name, force=False, workers=4):
     norms = {n: norms[n].contiguous() for n in layers}
     # Comprobación: la norma NF4 debe quedar a ~0,2 % de la original (otra variante del modelo daría mucho más).
     step = max(1, len(layers) // 12)
-    rs = []
+    # Las filas que valen 0 en el original (p. ej. la mitad de algunas adaLN) no cuentan: su dora_scale sale 0
+    # y la fila sigue en 0 en ComfyUI, como en el original.
+    rs, zeros = [], int(sum((norms[n] == 0).sum().item() for n in layers))
     for n in layers[::step]:
         q = dequant(*get(n))
-        rs.append(q.reshape(q.shape[0], -1).norm(dim=1) / norms[n])
+        live = norms[n] > 0
+        rs.append(q.reshape(q.shape[0], -1).norm(dim=1)[live] / norms[n][live])
     r = torch.cat(rs)
     print(f"[{name}] |NF4|/|original| en {len(rs)} capas: media {r.mean():.5f} desv {r.std():.5f} "
-          f"min {r.min():.4f} max {r.max():.4f}", flush=True)
+          f"min {r.min():.4f} max {r.max():.4f}" + (f" | {zeros} filas a 0 en el original" if zeros else ""), flush=True)
     if abs(r.mean().item() - 1) > 0.01 or r.std().item() > 0.01:
         raise RuntimeError(f"[{name}] las normas no cuadran con el NF4: ¿otro modelo de origen?")
     meta = {"format": "dora_norms", "version": "1", "source": f"{src} {sub}".strip(),
