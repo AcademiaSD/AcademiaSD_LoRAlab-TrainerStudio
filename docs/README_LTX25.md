@@ -66,7 +66,7 @@ The packed NF4 bytes of every block are already on disk, in `Models/LTX25-NF4/we
 
 - **RAM**: a pinned copy in RAM. Uploads are asynchronous, the fastest option.
 - **Disk**: the block stays memory-mapped from its file, with no RAM of its own. Windows keeps its pages in the file cache while there is memory and drops them when there is not, so a machine short on RAM slows down instead of running out. No file is written (MiniMax-H3 writes a spill file; here the model files themselves are the store).
-- **Auto** (default): RAM while the system keeps 8 GB free (`ram_reserve_gb`), the rest on disk.
+- **Auto (RAM + Disk)** (default), as in MiniMax-H3: each block goes to RAM while the total system RAM stays under **RAM Limit** (`ram_limit_gb`, 0 = no limit) and the system keeps 8 GB free (`ram_reserve_gb`); the rest stay on disk. The limit is checked when the blocks are placed: the training adds a few GB afterwards (activations, optimizer), so leave some margin.
 
 Measured (RTX 5080, 98 GB of RAM, `orbital` video cache, DoRA rank 32, 8 steps; identical losses in every mode):
 

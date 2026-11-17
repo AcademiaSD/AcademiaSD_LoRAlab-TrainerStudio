@@ -215,8 +215,10 @@ DEFAULTS = {
     "swap_pin_memory": True,      # copia NF4 fija (pinned) en RAM: subidas asíncronas
     # Dónde viven los bloques aparcados: "ram" (RAM fijada, lo más rápido), "disk" (mapeados al .safetensors
     # del modelo: sin RAM propia, como el modo disco de MiniMax-H3 pero sin escribir ningún fichero) o "auto"
-    # (RAM mientras el sistema conserve ram_reserve_gb libres; el resto, disco).
+    # (RAM + disco, como MiniMax-H3: RAM mientras la RAM total del sistema no pase de ram_limit_gb, 0 = sin
+    # límite, y queden ram_reserve_gb libres; el resto, disco).
     "park_mode": "auto",
+    "ram_limit_gb": 0.0,
     "ram_reserve_gb": 8.0,
 }
 
@@ -348,6 +350,10 @@ PARK_MODE = str(cfg_get("park_mode", DEFAULTS["park_mode"])).strip().lower()
 if PARK_MODE not in ("auto", "ram", "disk"):
     PARK_MODE = "auto"
 RAM_RESERVE_GB = float(cfg_get("ram_reserve_gb", DEFAULTS["ram_reserve_gb"]))
+try:
+    RAM_LIMIT_GB = max(0.0, float(cfg_get("ram_limit_gb", DEFAULTS["ram_limit_gb"]) or 0))
+except (TypeError, ValueError):
+    RAM_LIMIT_GB = 0.0
 LOSS_CHUNK_ELEMENTS = int(cfg_get("loss_chunk_elements", DEFAULTS["loss_chunk_elements"]))
 
 if PREVIEW_MODE not in ("gen", "recon", "onestep"):
@@ -2918,7 +2924,7 @@ def setup_block_swap(transformer, entries, card_gb):
                         "block {b:.3f} GB -> {r}/{n} resident", c=card_gb, f=fixed_gb, a=act_gb, tok=tokens,
                         b=block_gb, r=resident, n=n))
     swap = ltx25_model.BlockSwap(blocks, resident, pin=SWAP_PIN_MEMORY, log=print, park=PARK_MODE,
-                                 ram_reserve_gb=RAM_RESERVE_GB)
+                                 ram_reserve_gb=RAM_RESERVE_GB, ram_limit_gb=RAM_LIMIT_GB)
     torch.cuda.synchronize()
     print("[VRAM] " + t("After placing the blocks: {gb:.2f} GB allocated", gb=torch.cuda.memory_allocated() / 1e9))
     print(ram_report())

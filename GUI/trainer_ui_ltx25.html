@@ -635,13 +635,17 @@
                     </div>
 
                     <div class="form-row">
-                        <div class="form-group" title="Where the blocks that do not fit in VRAM wait. RAM: a pinned copy in RAM, the fastest. Disk: they stay memory-mapped from the model files, with no RAM of their own (Windows frees those pages when it needs memory, so a machine short on RAM slows down instead of running out); no file is written. Auto: RAM while the system keeps 8 GB free, the rest on disk. Applies when the training starts or resumes.">
+                        <div class="form-group" title="Where the blocks that do not fit in VRAM wait. RAM: a pinned copy in RAM, the fastest. Disk: they stay memory-mapped from the model files, with no RAM of their own (Windows frees those pages when it needs memory, so a machine short on RAM slows down instead of running out); no file is written. Auto (RAM + Disk): RAM up to the RAM Limit (and while the system keeps 8 GB free), the rest on disk. Applies when the training starts or resumes.">
                             <label>Block Swap Storage:</label>
                             <select id="train_park_mode" class="no-i18n">
-                                <option value="auto" selected>Auto</option>
+                                <option value="auto" selected>Auto (RAM + Disk)</option>
                                 <option value="ram">RAM</option>
                                 <option value="disk">Disk</option>
                             </select>
+                        </div>
+                        <div class="form-group" title="Only used in Auto mode. Ceiling for the TOTAL system RAM, the figure you see in Task Manager, when the blocks are placed. 0 = no limit: every block goes to RAM while the system keeps 8 GB free. Above 0, the blocks that would push the machine past it stay on disk. The training itself adds a few GB later (activations, optimizer), so leave some margin. Applies when the training starts or resumes.">
+                            <label>RAM Limit (GB, 0 = off):</label>
+                            <input type="number" step="1" min="0" id="train_ram_limit_gb" value="0">
                         </div>
                     </div>
 
@@ -1131,6 +1135,7 @@
                     if (t.precision) document.getElementById('train_precision').value = t.precision;
                     if (t.vram_profile) document.getElementById('train_vram_profile').value = t.vram_profile;
                     if (t.park_mode) document.getElementById('train_park_mode').value = t.park_mode;
+                    if (t.ram_limit_gb !== undefined) document.getElementById('train_ram_limit_gb').value = t.ram_limit_gb;
                     if (t.train_audio !== undefined) document.getElementById('train_train_audio').checked = !!t.train_audio;
                     if (t.audio_loss_weight !== undefined) document.getElementById('train_audio_loss_weight').value = t.audio_loss_weight;
                     if (t.resident_blocks !== undefined) document.getElementById('train_resident_blocks').value = t.resident_blocks;
@@ -1213,6 +1218,7 @@
                     if (data.precision) document.getElementById('train_precision').value = data.precision;
                     if (data.vram_profile) document.getElementById('train_vram_profile').value = data.vram_profile;
                     if (data.park_mode) document.getElementById('train_park_mode').value = data.park_mode;
+                    if (data.ram_limit_gb !== undefined) document.getElementById('train_ram_limit_gb').value = data.ram_limit_gb;
                     if (data.train_audio !== undefined) document.getElementById('train_train_audio').checked = !!data.train_audio;
                     if (data.audio_loss_weight !== undefined) document.getElementById('train_audio_loss_weight').value = data.audio_loss_weight;
                     if (data.resident_blocks !== undefined) document.getElementById('train_resident_blocks').value = data.resident_blocks;
@@ -1365,7 +1371,8 @@
                       warmup_steps: 'train_warmup_steps', lr_cycles: 'train_lr_cycles', batch_size: 'train_batch_size',
                       grad_accum_steps: 'train_grad_accum', preview_caption_mode: 'train_preview_caption_mode',
                       preview_custom_prompt: 'train_preview_custom_prompt', precision: 'train_precision',
-                      vram_profile: 'train_vram_profile', resident_blocks: 'train_resident_blocks', park_mode: 'train_park_mode' },
+                      vram_profile: 'train_vram_profile', resident_blocks: 'train_resident_blocks', park_mode: 'train_park_mode',
+                      ram_limit_gb: 'train_ram_limit_gb' },
             new: { train_audio: 'train_train_audio', lora_rank: 'train_lora_rank', lora_alpha: 'train_lora_alpha', use_rslora: 'train_use_rslora',
                    use_loraplus: 'train_use_loraplus', use_dora: 'train_use_dora', dora_normfix: 'train_dora_normfix' },
         };
@@ -1393,6 +1400,7 @@
                 vram_profile: document.getElementById('train_vram_profile').value,
                 resident_blocks: parseInt(document.getElementById('train_resident_blocks').value),
                 park_mode: document.getElementById('train_park_mode').value,
+                ram_limit_gb: parseFloat(document.getElementById('train_ram_limit_gb').value) || 0,
                 train_audio: document.getElementById('train_train_audio').checked,
                 audio_loss_weight: parseFloat(document.getElementById('train_audio_loss_weight').value) || 1.0,
                 batch_size: parseInt(document.getElementById('train_batch_size').value),

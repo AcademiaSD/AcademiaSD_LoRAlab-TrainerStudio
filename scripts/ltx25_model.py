@@ -242,13 +242,15 @@ class BlockSwap:
     (con prefetch del siguiente). Acepta bloques cargados en CPU (blocks_on_cpu) o ya en CUDA.
     """
 
-    def __init__(self, blocks, resident, pin=True, prefetch=True, log=print, park="ram", ram_reserve_gb=8.0):
+    def __init__(self, blocks, resident, pin=True, prefetch=True, log=print, park="ram", ram_reserve_gb=8.0,
+                 ram_limit_gb=0.0):
         """
         park: dónde viven los bloques aparcados.
           "ram"  copia en RAM fijada (pinned): subidas asíncronas, lo más rápido;
           "disk" mapeados al .safetensors del modelo: no ocupan RAM propia (el sistema suelta sus páginas
                  cuando falta memoria); cada subida lee del fichero o de la caché del sistema;
-          "auto" RAM mientras el sistema conserve ram_reserve_gb libres; el resto, disco.
+          "auto" RAM + disco, como MiniMax-H3: cada bloque va a RAM mientras la RAM total del sistema no pase de
+                 ram_limit_gb (0 = sin límite) y queden ram_reserve_gb libres; el resto, a disco.
         """
         self.blocks = list(blocks)
         self.n = len(self.blocks)
@@ -279,8 +281,11 @@ class BlockSwap:
             nbytes = block_nf4_bytes(block)
             to_ram = self.park == "ram"
             if self.park == "auto":
-                avail = psutil.virtual_memory().available if psutil else 0
+                vm = psutil.virtual_memory() if psutil else None
+                avail = vm.available if vm else 0
                 to_ram = avail - nbytes > ram_reserve_gb * 1e9
+                if to_ram and ram_limit_gb and ram_limit_gb > 0 and vm is not None:
+                    to_ram = (vm.total - avail) + nbytes <= ram_limit_gb * 1e9
             for m in mods:
                 mm = getattr(m, "_mmap_home", None)
                 if not to_ram and mm is not None:
