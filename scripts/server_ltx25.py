@@ -771,7 +771,7 @@ def clear_dataset():
             for f in dataset_dir.iterdir():
                 if f.is_file() and f.suffix.lower() in DATASET_EXTS + (".txt",):
                     try:
-                        f.unlink()
+                        _unlink_retry(f)
                         removed += 1
                     except Exception as exc:
                         errors.append(f"{f.name}: {exc}")
@@ -802,6 +802,22 @@ def clear_captions():
         return jsonify({"status": "error", "error": str(exc)}), 500
 
 
+def _unlink_retry(path, tries=25, delay=0.2):
+    """
+    Borra un fichero; si Windows lo tiene en uso (WinError 32), reintenta unos segundos. Pasa con los clips: el
+    <video> de la tarjeta deja abierta la descarga (preload) y el fichero sigue abierto hasta que el navegador la
+    corta. La interfaz suelta el vídeo antes de borrar; esto cubre el tiempo que tarda en cerrarse.
+    """
+    for i in range(tries):
+        try:
+            path.unlink()
+            return
+        except PermissionError:
+            if i == tries - 1:
+                raise
+            time.sleep(delay)
+
+
 @app.route("/api/delete-dataset-image", methods=["POST"])
 def delete_dataset_image():
     """Borra una imagen del dataset y su .txt."""
@@ -819,7 +835,7 @@ def delete_dataset_image():
         removed = []
         for f in (target, caption_path(target)):
             if f.is_file():
-                f.unlink()
+                _unlink_retry(f)
                 removed.append(f.name)
         return jsonify({"status": "ok", "removed": removed})
     except Exception as exc:

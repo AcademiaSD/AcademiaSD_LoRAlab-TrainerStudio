@@ -1702,8 +1702,20 @@
             });
         }
 
+        // Un <video> con src mantiene abierta su descarga, y en Windows el servidor no puede borrar un fichero abierto.
+        // Antes de borrar se sueltan todos los vídeos de ese fichero (tarjeta y visor).
+        function releaseMedia(file) {
+            const tail = '/api/dataset-image/' + encodeURIComponent(file);
+            document.querySelectorAll('video').forEach(v => {
+                const src = v.getAttribute('src') || '';
+                if (src.indexOf(tail) !== -1) { v.pause(); v.removeAttribute('src'); v.load(); }
+            });
+        }
+
         async function deleteDatasetImage(file) {
             if (!await askConfirm(t('Remove "{name}" and its .txt caption from the dataset?', { name: file }) + '\n\n' + t('The files are deleted from disk.'))) return;
+            releaseMedia(file);
+            await new Promise(r => setTimeout(r, 300));
             try {
                 const res = await fetch('/api/delete-dataset-image', {
                     method: 'POST',
