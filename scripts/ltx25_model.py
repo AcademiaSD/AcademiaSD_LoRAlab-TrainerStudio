@@ -70,6 +70,7 @@ def load_nf4_transformer(model_dir, device="cuda", compute_dtype=COMPUTE_DTYPE, 
             layer = Linear4bit(int(info["in_features"]), int(info["out_features"]), bias=bool(info.get("bias")),
                                quant_type="nf4", compute_dtype=compute_dtype)
         on_cpu = blocks_on_cpu and name.startswith("transformer_blocks.")
+        layer._nf4_file = path   # origen del dato NF4: BlockSwap.restore_resident lo vuelve a leer de aquí
         layer.weight = Params4bit.from_prequantized(data=data, quantized_stats=qs, requires_grad=False,
                                                     device="cpu" if on_cpu else device, module=layer)
         if on_cpu:
@@ -305,14 +306,22 @@ class BlockSwap:
         return self.resident < self.n
 
     def offload_resident(self):
-        """Baja a RAM los bloques residentes (para decodificar con el VAE en 8 GB). La copia en RAM se guarda."""
+        """
+        Saca de la VRAM los bloques residentes (para decodificar con el VAE). No se guarda copia en RAM (con 48
+        residentes eran ~9 GB que no se soltaban): al volver se releen de su fichero .safetensors, que el sistema
+        suele tener aún en caché. Las capas sin fichero conocido sí se copian a RAM, solo durante la preview.
+        """
         if self._resident_offloaded:
             return
         for block in self.blocks[:self.resident]:
             for m in block._swap_mods:
-                if getattr(m, "_res_home", None) is None:
+                if getattr(m, "_nf4_file", None):
+                    m._res_home = None
+                    m._res_shape = (m.weight.data.shape, m.weight.data.dtype)
+                    m.weight.data = torch.empty(0, dtype=m.weight.data.dtype)
+                else:
                     m._res_home = m.weight.data.to("cpu")
-                m.weight.data = m._res_home
+                    m.weight.data = m._res_home
         self._resident_offloaded = True
         torch.cuda.empty_cache()
 
@@ -321,7 +330,15 @@ class BlockSwap:
             return
         for block in self.blocks[:self.resident]:
             for m in block._swap_mods:
-                m.weight.data = m._res_home.to("cuda", non_blocking=True)
+                if m._res_home is None:
+                    with safe_open(m._nf4_file, framework="pt", device="cpu") as f:
+                        data = f.get_tensor("weight")
+                    shape, dtype = m._res_shape
+                    data = data.view(dtype).reshape(shape)
+                    m.weight.data = data.to("cuda", non_blocking=False)
+                else:
+                    m.weight.data = m._res_home.to("cuda", non_blocking=True)
+                m._res_home = None
         torch.cuda.synchronize()
         self._resident_offloaded = False
 

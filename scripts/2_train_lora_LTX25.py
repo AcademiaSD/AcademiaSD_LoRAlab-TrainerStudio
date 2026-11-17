@@ -74,7 +74,43 @@ except Exception:
 # Activation offload
 # ---------------------------------------------------------------------------
 try:
-    from torch.autograd.graph import save_on_cpu as _save_on_cpu_ctx
+    import weakref
+    from torch.autograd.graph import saved_tensors_hooks as _saved_tensors_hooks
+
+    class _save_on_cpu_ctx(_saved_tensors_hooks):
+        """
+        Como torch.autograd.graph.save_on_cpu, pero un tensor que se guarda varias veces se copia a RAM una sola.
+        En LTX-2.5 la modulación por token (1 x tokens x 36864, FP32) entra en los 48 bloques: save_on_cpu la
+        copiaba 48 veces (10-15 GB de RAM fijada por paso, que el caché de PyTorch retenía para cada tamaño de
+        muestra: más de 40 GB en dos pasos). Solo se reutiliza la copia si es el mismo objeto, vivo y sin cambios.
+        """
+
+        def __init__(self, pin_memory=True):
+            seen = {}
+            self._seen = seen
+
+            def pack(t):
+                if t.device.type != "cuda":
+                    return (None, t)
+                key = (t.data_ptr(), t._version, tuple(t.shape), t.stride(), t.dtype)
+                hit = seen.get(key)
+                if hit is not None and hit[0]() is t:
+                    return (t.device, hit[1])
+                cpu = torch.empty(t.size(), dtype=t.dtype, layout=t.layout, pin_memory=pin_memory)
+                cpu.copy_(t)
+                seen[key] = (weakref.ref(t), cpu)
+                return (t.device, cpu)
+
+            def unpack(packed):
+                device, cpu = packed
+                return cpu if device is None else cpu.to(device, non_blocking=pin_memory)
+
+            super().__init__(pack, unpack)
+
+        def __exit__(self, *args):
+            self._seen.clear()   # las copias siguen vivas mientras el grafo las use
+            return super().__exit__(*args)
+
     _SAVE_ON_CPU_AVAILABLE = True
 except Exception:
     _save_on_cpu_ctx = None
@@ -1616,27 +1652,13 @@ class LTXVaeHolder:
             use_fp32 = globals().get("PREVIEW_VAE_FP32", True)
             dtype = torch.float32 if use_fp32 else (torch.bfloat16 if PRECISION == "bf16" else torch.float32)
 
-            pipe = DiffusionPipeline.from_pretrained(
-                MODEL_ID,
-                transformer=None,
-                text_encoder=None,
-                audio_vae=None,
-                tokenizer=None,
-                processor=None,
-                vocoder=None,
-                torch_dtype=dtype,
-                low_cpu_mem_usage=True,
-            )
-
-            cls.vae = pipe.vae
-
-            if cls.vae is None:
-                raise RuntimeError(t("Could not get pipe.vae for the preview."))
-
+            # Solo el VAE: cargar el pipeline entero (connectors en FP32 incluidos) dejaba ~34 GB de RAM ocupados
+            # hasta el final y, con poca memoria virtual libre, el proceso moría en la primera preview de vídeo.
+            from diffusers import AutoencoderKLLTX2Video
+            cls.vae = AutoencoderKLLTX2Video.from_pretrained(os.path.join(MODEL_ID, "vae"), torch_dtype=dtype,
+                                                             low_cpu_mem_usage=True)
             cls.vae.requires_grad_(False)
             cls.vae.eval()
-
-            del pipe
             gc.collect()
 
         return cls.vae
