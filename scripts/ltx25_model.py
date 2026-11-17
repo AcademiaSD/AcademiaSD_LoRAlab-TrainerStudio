@@ -571,3 +571,70 @@ def decode_audio(audio_vae, vocoder, latent):
         wav = vocoder(mel.to(next(vocoder.parameters()).dtype))
     sr = int(getattr(vocoder.config, "output_sampling_rate", AUDIO_SR) or AUDIO_SR)
     return wav[0].float().cpu().numpy(), sr
+
+
+# ----------------------------------------------------------------------------------------------------------------
+# Descarga del repo NF4 con progreso visible en la consola web
+# ----------------------------------------------------------------------------------------------------------------
+def _dir_bytes(path):
+    total = 0
+    for d, _, files in os.walk(path):
+        for f in files:
+            try:
+                total += os.path.getsize(os.path.join(d, f))
+            except OSError:
+                pass
+    return total
+
+
+def download_repo(repo_id, local_dir, token=None, log=print, every=2.0, allow_patterns=None):
+    """
+    snapshot_download con una línea de progreso propia (GB descargados, velocidad, tiempo restante) que se
+    reescribe con "\r" en la consola web. No depende de las barras de tqdm / hf_xet, que según la versión de
+    huggingface_hub salen o no cuando la salida no es una terminal.
+    """
+    import threading
+    import time
+    from huggingface_hub import HfApi, snapshot_download
+
+    total = 0
+    try:
+        info = HfApi(token=token).model_info(repo_id, files_metadata=True)
+        import fnmatch
+        total = sum((s.size or 0) for s in info.siblings
+                    if not allow_patterns or any(fnmatch.fnmatch(s.rfilename, p) for p in allow_patterns))
+    except Exception:
+        pass
+    os.makedirs(local_dir, exist_ok=True)
+    start_bytes = _dir_bytes(local_dir)
+    stop = threading.Event()
+
+    def watch():
+        t0 = time.time()
+        while not stop.wait(every):
+            now = _dir_bytes(local_dir)
+            done = max(0, now - start_bytes)
+            el = max(1e-6, time.time() - t0)
+            speed = done / el
+            line = "[HF] {:.2f} GB".format(now / 1e9)
+            if total:
+                pct = min(100.0, 100.0 * now / total)
+                left = max(0, total - now)
+                eta = left / speed if speed > 0 else 0
+                line += " / {:.2f} GB ({:.0f}%) | {:.1f} MB/s | ETA {:d}m{:02d}s".format(
+                    total / 1e9, pct, speed / 1e6, int(eta // 60), int(eta % 60))
+            else:
+                line += " | {:.1f} MB/s".format(speed / 1e6)
+            print("\r" + line, end="", flush=True)
+
+    th = threading.Thread(target=watch, daemon=True)
+    th.start()
+    try:
+        snapshot_download(repo_id=repo_id, local_dir=local_dir, token=token, max_workers=4,
+                          allow_patterns=allow_patterns)
+    finally:
+        stop.set()
+        th.join(timeout=every + 1)
+        got = _dir_bytes(local_dir)
+        got = min(got, total) if total else got   # sin contar los metadatos de .cache
+        print("\r[HF] {:.2f} GB".format(got / 1e9) + (" / {:.2f} GB".format(total / 1e9) if total else ""), flush=True)

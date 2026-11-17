@@ -337,7 +337,7 @@ def ensure_ltx25_model_downloaded(local_path):
     print(t("This will download about {gb} GB. This may take several minutes.", gb=28))
     print("=" * 80)
 
-    from huggingface_hub import snapshot_download
+    import ltx25_model
 
     token = get_hf_token()
     if token:
@@ -345,7 +345,8 @@ def ensure_ltx25_model_downloaded(local_path):
     enable_hf_file_progress()
     os.makedirs(local_path, exist_ok=True)
     print(t("Downloading from Hugging Face: {repo}", repo=HF_NF4_REPO_ID))
-    snapshot_download(repo_id=HF_NF4_REPO_ID, local_dir=local_path, token=token, max_workers=4)
+    # Línea de progreso propia (GB, velocidad, ETA): las barras de hf_xet no siempre llegan a la consola web.
+    ltx25_model.download_repo(HF_NF4_REPO_ID, local_path, token=token)
     for n in needed:
         if not os.path.exists(os.path.join(local_path, n)):
             raise RuntimeError(t("Incomplete download: {name} missing in {path}", name=n, path=local_path))

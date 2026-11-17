@@ -390,6 +390,37 @@ def get_hf_token():
     return None
 
 
+def enable_hf_file_progress():
+    # Lanzado desde la GUI la salida no es una terminal y tqdm se desactiva: la descarga parecería colgada.
+    import logging
+    try:
+        import tqdm
+        import tqdm.auto
+        import tqdm.std
+
+        def patch_tqdm(cls):
+            orig_init = cls.__init__
+            def new_init(self, *args, **kwargs):
+                kwargs['disable'] = False
+                kwargs['mininterval'] = 0.5
+                orig_init(self, *args, **kwargs)
+            cls.__init__ = new_init
+
+        patch_tqdm(tqdm.std.tqdm)
+        patch_tqdm(tqdm.auto.tqdm)
+        if hasattr(tqdm, 'tqdm'):
+            patch_tqdm(tqdm.tqdm)
+
+        from huggingface_hub.utils import enable_progress_bars
+        enable_progress_bars()
+        logging.getLogger("huggingface_hub").setLevel(logging.INFO)
+    except Exception:
+        pass
+
+    os.environ["TQDM_DISABLE"] = "0"
+    os.environ["TQDM_MININTERVAL"] = "0.5"
+
+
 def ensure_ltx25_model_downloaded(local_path):
     """
     LTX-2.5 viene entero del repo NF4 de AcademiaSD (el oficial tiene gate): transformer NF4 + Gemma 4 NF4 +
@@ -409,14 +440,16 @@ def ensure_ltx25_model_downloaded(local_path):
     print(t("This will download about {gb} GB. This may take several minutes.", gb=28))
     print("=" * 80)
 
-    from huggingface_hub import snapshot_download
+    import ltx25_model
 
     token = get_hf_token()
     if token:
         print(t("Using HF Token"))
+    enable_hf_file_progress()
     os.makedirs(local_path, exist_ok=True)
     print(t("Downloading from Hugging Face: {repo}", repo=HF_NF4_REPO_ID))
-    snapshot_download(repo_id=HF_NF4_REPO_ID, local_dir=local_path, token=token, max_workers=4)
+    # Línea de progreso propia (GB, velocidad, ETA): las barras de hf_xet no siempre llegan a la consola web.
+    ltx25_model.download_repo(HF_NF4_REPO_ID, local_path, token=token)
     for n in needed:
         if not os.path.exists(os.path.join(local_path, n)):
             raise RuntimeError(t("Incomplete download: {name} missing in {path}", name=n, path=local_path))
