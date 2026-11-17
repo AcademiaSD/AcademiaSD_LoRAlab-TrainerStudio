@@ -1209,6 +1209,7 @@ def load_cached_entries(cache_dir, audio_channels, max_text_tokens=0):
         audio_latent = pin_cpu_tensor(audio_latent)
 
         has_audio = False
+        media = "image"
         ref_downscale = 1
         info_path = os.path.join(cache_dir, "{}_info.json".format(base))
         if os.path.exists(info_path):
@@ -1216,6 +1217,7 @@ def load_cached_entries(cache_dir, audio_channels, max_text_tokens=0):
                 with open(info_path, "r", encoding="utf-8") as f:
                     info = json.load(f)
                 has_audio = bool(info.get("has_audio", False))
+                media = info.get("media", "image")
                 ref_downscale = int((info.get("reference") or {}).get("downscale", 1) or 1)
             except Exception:
                 pass
@@ -1230,6 +1232,7 @@ def load_cached_entries(cache_dir, audio_channels, max_text_tokens=0):
             {
                 "name": base,
                 "has_audio": has_audio,
+                "media": media,
                 "ref": ref_latent,
                 "ref_downscale": ref_downscale,
                 "video": video_latent,
@@ -1239,6 +1242,16 @@ def load_cached_entries(cache_dir, audio_channels, max_text_tokens=0):
                 "_audio_text_path": audio_text_path,
             }
         )
+
+    # Audio suelto: solo tiene sentido con Train Audio (su vídeo es un relleno negro y no se aprende).
+    audio_only = [e for e in entries if e.get("media") == "audio"]
+    if audio_only and not TRAIN_AUDIO:
+        print("[!] " + t("{n} audio-only samples skipped: they need Train Audio.", n=len(audio_only)))
+        entries = [e for e in entries if e.get("media") != "audio"]
+    elif audio_only:
+        print("[!] " + t("{n} audio-only samples: experimental. In MiniMax-H3, training audio on its own pulled "
+                         "the video branch down past a point; keep clips with picture in the dataset and watch the "
+                         "previews.", n=len(audio_only)))
 
     if not entries:
         raise RuntimeError(t("No valid entries found."))
@@ -3358,7 +3371,10 @@ def train_ltx25():
                 loss_video = mse_loss_chunked(pred_video, target_video)
                 loss_audio = mse_loss_chunked(pred_audio, target_audio)
 
-                if TRAIN_AUDIO:
+                if TRAIN_AUDIO and entry.get("media") == "audio":
+                    # Audio suelto: el vídeo es relleno; solo se aprende el sonido.
+                    loss = AUDIO_LOSS_WEIGHT * loss_audio
+                elif TRAIN_AUDIO:
                     # Como ltx-trainer: suma de las dos pérdidas (audio con su peso), solo en clips con pista.
                     loss = loss_video + AUDIO_LOSS_WEIGHT * loss_audio
                 else:

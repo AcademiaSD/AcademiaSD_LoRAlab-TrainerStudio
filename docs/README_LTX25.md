@@ -90,7 +90,7 @@ LTX-2.5 generates picture and sound together, so a clip's audio track can be tra
 
 Measured with the 8 GB profile: 49-frame clips with audio (1,008 tokens), 15 of 48 blocks resident, **~7.2 s/it**, peak **6.75 GiB**.
 
-MiniMax-H3 showed that training audio **alone** drags the video branch down; here only clips (picture and sound together) train audio, and audio-only files are not accepted.
+**Audio files** (`.wav`, `.mp3`, `.flac`, `.m4a`, `.ogg`, with their `.txt`) can also go in the dataset, next to images and clips. Each is encoded with the audio VAE (up to Max Frames at 24 fps) and paired with a minimal filler video (black, 64 × 64, same length: a few tokens) so the model sees the whole `[video | audio]` sequence; on those samples **only the audio loss** counts. They need **Train Audio** (without it they are skipped, with a message). **Experimental:** MiniMax-H3 showed that training audio on its own drags the video branch down past a point, so keep clips with picture in the dataset and watch the previews. In the Dataset Manager they show as a speaker card with a player; Upload accepts them.
 
 ## Not done yet
 

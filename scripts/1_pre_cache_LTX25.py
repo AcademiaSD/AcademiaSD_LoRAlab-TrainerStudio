@@ -1148,7 +1148,7 @@ def preprocess_ltx25():
     # "images" son todas las muestras: imágenes y clips de vídeo.
     images = sorted(
         f for f in os.listdir(DATASET_PATH)
-        if f.lower().endswith((".png", ".jpg", ".jpeg", ".webp") + ltx25_model.VIDEO_EXTS)
+        if f.lower().endswith((".png", ".jpg", ".jpeg", ".webp") + ltx25_model.VIDEO_EXTS + ltx25_model.AUDIO_EXTS)
     )
 
     # Edición: cada muestra es un par; se recorre el "after" (objetivo) y la referencia sale de REF_FILES.
@@ -1347,7 +1347,24 @@ def preprocess_ltx25():
 
         src = os.path.join(DATASET_PATH, filename)
         is_video = filename.lower().endswith(ltx25_model.VIDEO_EXTS)
-        if is_video:
+        is_audio = filename.lower().endswith(ltx25_model.AUDIO_EXTS)
+        if is_audio:
+            # Audio suelto: el sonido se codifica de verdad y el vídeo es un relleno mínimo (negro, 64x64) con
+            # la misma duración, solo para que el modelo vea la secuencia [vídeo | audio] completa. El trainer
+            # calcula en estas muestras SOLO la pérdida de audio (necesitan Train Audio).
+            dur = ltx25_model.audio_duration(src)
+            if not dur:
+                print("[!] " + t("Unreadable audio, skipped: {name}", name=filename))
+                continue
+            frames = ltx25_model.clip_frames(dur, MAX_FRAMES)
+            bw, bh = 64, 64
+            print(t("Audio only") + ":", t("{n} frames at 24 fps ({s:.2f} s of {d:.2f} s)",
+                                          n=frames, s=frames / 24.0, d=dur))
+            pixels = torch.full((1, 3, frames, bh, bw), -1.0)
+            with torch.inference_mode():
+                video_latent = encode_pixels(pipe.vae, pixels)
+            del pixels
+        elif is_video:
             info = ltx25_model.video_info(src)
             if info is None:
                 print("[!] " + t("Unreadable video, skipped: {name}", name=filename))
@@ -1430,10 +1447,11 @@ def preprocess_ltx25():
         # Audio: latente de la duración del clip (25 por segundo, como LTX2Pipeline). Con pista se codifica la pista;
         # un clip mudo lleva el latente de un silencio de verdad. Las imágenes, un latente vacío de 1.
         has_audio = False
-        if is_video and audio_vae is not None:
+        if (is_video or is_audio) and audio_vae is not None:
             seconds = frames / 24.0
             n_lat = ltx25_model.audio_latent_length(frames)
-            wave = ltx25_model.read_audio(src, 0.0, seconds) if (USE_AUDIO and info.get("has_audio")) else None
+            wave = (ltx25_model.read_audio(src, 0.0, seconds)
+                    if (is_audio or (USE_AUDIO and info.get("has_audio"))) else None)
             has_audio = wave is not None and float(abs(wave).max()) > 1e-4
             if not has_audio:
                 wave = torch.zeros((2, int(round(seconds * ltx25_model.AUDIO_SR)))).numpy()
@@ -1456,7 +1474,7 @@ def preprocess_ltx25():
                 "width": bw,
                 "height": bh,
                 "num_frames": frames,
-                "media": "video" if is_video else "image",
+                "media": "audio" if is_audio else ("video" if is_video else "image"),
                 "has_audio": bool(has_audio),
                 "reference": ref_info,
                 "frame_rate": FRAME_RATE,

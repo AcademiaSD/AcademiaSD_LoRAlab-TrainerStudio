@@ -386,6 +386,7 @@ import subprocess as _subprocess
 import numpy as _np
 
 VIDEO_EXTS = (".mp4", ".mov", ".mkv", ".webm")
+AUDIO_EXTS = (".wav", ".mp3", ".flac", ".m4a", ".ogg")
 FPS = 24.0
 AUDIO_LATENTS_PER_SECOND = 16000 / 160 / 4   # 25: sample_rate / hop / compresión temporal del VAE de audio
 
@@ -409,6 +410,19 @@ def video_info(path):
         return {"width": int(v["width"]), "height": int(v["height"]), "fps": float(num) / float(den or 1),
                 "duration": float(data["format"]["duration"]),
                 "has_audio": any(s.get("codec_type") == "audio" for s in data["streams"])}
+    except Exception:
+        return None
+
+
+def audio_duration(path):
+    """Duración en segundos de un fichero de audio (ffprobe), o None."""
+    probe = ffbin("ffprobe")
+    if not probe:
+        return None
+    try:
+        out = _subprocess.run([probe, "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
+                               str(path)], capture_output=True, text=True, timeout=60).stdout.strip()
+        return float(out) if out else None
     except Exception:
         return None
 

@@ -101,7 +101,8 @@ CAPTION_CONFIG = SETTINGS_DIR / "caption_settings_ltx25.json"
 
 IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp")
 VIDEO_EXTS = (".mp4", ".webm", ".mov", ".mkv")
-DATASET_EXTS = IMAGE_EXTS + VIDEO_EXTS
+AUDIO_EXTS = (".wav", ".mp3", ".flac", ".m4a", ".ogg")
+DATASET_EXTS = IMAGE_EXTS + VIDEO_EXTS + AUDIO_EXTS
 PREVIEW_EXTS = (".png", ".mp4", ".webp")
 
 CAPTION_SCRIPT = SCRIPTS_DIR / "0_caption_LTX25.py"
@@ -702,11 +703,13 @@ def dataset_info():
                 images.append({"file": file_path.name, "mtime": int(file_path.stat().st_mtime),
                                "has_txt": txt_path.exists(), "caption": caption,
                                "video": file_path.suffix.lower() in VIDEO_EXTS,
+                               "audio": file_path.suffix.lower() in AUDIO_EXTS,
                                "has_audio": _has_audio(file_path) if file_path.suffix.lower() in VIDEO_EXTS else None})
     return jsonify({
         "path": str(dataset_dir),
         "image_count": len(images),
         "video_count": sum(1 for i in images if i["video"]),
+        "audio_count": sum(1 for i in images if i.get("audio")),
         "caption_count": sum(1 for t in dataset_caption_paths(dataset_dir) if t.exists()) if dataset_dir.is_dir() else 0,
         "images": images[:500]
     })
