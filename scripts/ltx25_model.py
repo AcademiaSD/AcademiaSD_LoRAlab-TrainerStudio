@@ -126,6 +126,51 @@ def to_device_except_nf4(model, device="cuda"):
     return model
 
 
+class nf4_on_gpu:
+    """
+    Con block swap el dato NF4 empaquetado de un bloque aparcado vive en RAM y su quant_state en la GPU: así no
+    se puede descomprimir. Dentro de este contexto las Linear4bit de `module` con el dato en CPU lo tienen en la
+    GPU, y al salir vuelven a su copia en RAM (sin copiar nada de vuelta: los pesos están congelados).
+    Lo usa DoRA, que descomprime el peso para su norma al crear el LoRA y al exportarlo.
+    """
+
+    def __init__(self, module):
+        self.module = module
+        self.moved = []
+
+    def __enter__(self):
+        for m in self.module.modules():
+            w = getattr(m, "weight", None)
+            qs = getattr(w, "quant_state", None)
+            if isinstance(w, Params4bit) and qs is not None and w.data.device.type == "cpu":
+                self.moved.append((w, w.data))
+                w.data = w.data.to(qs.absmax.device, non_blocking=True)
+        return self.module
+
+    def __exit__(self, *exc):
+        for w, home in self.moved:
+            w.data = home
+        self.moved = []
+        return False
+
+
+def patch_peft_dora_init():
+    """PEFT calcula la magnitud inicial de DoRA descomprimiendo el peso de la capa: con el dato en RAM se sube
+    a la GPU solo para eso. Idempotente."""
+    from peft.tuners.lora import dora
+    cls = dora.DoraLinearLayer
+    if getattr(cls, "_ltx25_patched", False):
+        return
+    orig = cls.update_layer
+
+    def update_layer(self, *, base_layer, **kw):
+        with nf4_on_gpu(base_layer):
+            return orig(self, base_layer=base_layer, **kw)
+
+    cls.update_layer = update_layer
+    cls._ltx25_patched = True
+
+
 # ----------------------------------------------------------------------------------------------------------------
 # Block swap
 # ----------------------------------------------------------------------------------------------------------------

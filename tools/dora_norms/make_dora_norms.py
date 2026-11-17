@@ -64,6 +64,8 @@ MODELS = {
     "fibo2":       ("Fibo2_Dev-NF4/transformer", "local:" + os.path.join(M, "Fibo2_Dev-Raw", "transformer"), ""),
     "ideogram4":   ("Ideogram4-NF4/transformer", "cache:ideogram-ai/ideogram-4-fp8", "transformer"),
     "ltx23":       ("LTX23-NF4", "hf:diffusers/LTX-2.3-Diffusers", "transformer"),
+    # Gated: el token de settings/HF_token.json tiene que haber aceptado los términos del repo.
+    "ltx25":       ("LTX25-NF4", "hf:Lightricks/LTX-2.5-Diffusers", "transformer_full"),
     "wan22_high":  ("Wan22-T2V-A14B-NF4/transformer_nf4", "hf:Wan-AI/Wan2.2-T2V-A14B-Diffusers", "transformer"),
     "wan22_low":   ("Wan22-T2V-A14B-NF4/transformer_2_nf4", "hf:Wan-AI/Wan2.2-T2V-A14B-Diffusers", "transformer_2"),
 }

@@ -234,7 +234,8 @@ USE_LORAPLUS = bool(cfg_get("use_loraplus", DEFAULTS["use_loraplus"]))
 LORAPLUS_RATIO = float(cfg_get("loraplus_ratio", DEFAULTS["loraplus_ratio"]))
 # DoRA (Liu et al., 2024): cada fila de salida aprende su magnitud aparte de la dirección (la de B·A).
 # Es una variante de LoRA (PEFT, use_dora): convive con rsLoRA y LoRA+. Cada paso descomprime el peso NF4
-# de cada capa para su norma, así que es más lento y pide algo más de VRAM.
+# de cada capa para su norma, así que es más lento y pide algo más de VRAM. Funciona con block swap: el bloque
+# ya está en la GPU cuando corre; al crear el LoRA y al exportar, cada capa aparcada se sube solo para eso.
 USE_DORA = bool(cfg_get("use_dora", DEFAULTS["use_dora"]))
 # DoRA NormFix: la exportación usa la norma por fila del peso original (dora_norms.safetensors junto al
 # transformer NF4) en vez de la del NF4, que es la que divide ComfyUI. Sin esto el LoRA pierde el parecido
@@ -2847,8 +2848,6 @@ def setup_block_swap(transformer, entries, card_gb):
     print("[VRAM] " + t("Plan: card {c:.1f} GB · fixed {f:.2f} GB · activations ~{a:.2f} GB ({tok} tokens) · "
                         "block {b:.3f} GB -> {r}/{n} resident", c=card_gb, f=fixed_gb, a=act_gb, tok=tokens,
                         b=block_gb, r=resident, n=n))
-    if resident < n and USE_DORA:
-        raise RuntimeError(t("DoRA does not work with block swap yet: untick DoRA or use a bigger VRAM profile."))
     swap = ltx25_model.BlockSwap(blocks, resident, pin=SWAP_PIN_MEMORY, log=print)
     torch.cuda.synchronize()
     print("[VRAM] " + t("After placing the blocks: {gb:.2f} GB allocated", gb=torch.cuda.memory_allocated() / 1e9))
@@ -3020,6 +3019,9 @@ def train_ltx25():
         use_dora=USE_DORA,
     )
 
+    if USE_DORA:
+        # Los bloques se cargan con el dato NF4 en RAM: DoRA lo sube a la GPU solo para su norma inicial.
+        ltx25_model.patch_peft_dora_init()
     model = get_peft_model(transformer, lora_config)
     if USE_DORA:
         lora_options.attach_dora_norms(model, MODEL_ID, DORA_NORMFIX, repo_id=HF_NF4_REPO_ID, root=MODEL_ID)

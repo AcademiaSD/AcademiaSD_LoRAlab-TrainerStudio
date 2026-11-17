@@ -70,6 +70,22 @@ def lr_scheduler_label(scheduler, warmup, cycles):
     return f"{scheduler} (warmup {warmup})"
 
 
+def _dequantize_anywhere(base, dequantize_module_weight):
+    """Peso descomprimido en FP32. Con block swap (LTX 2.5) el dato NF4 de un bloque aparcado está en RAM y su
+    quant_state en la GPU: se sube el dato solo para descomprimir y vuelve a su copia en RAM."""
+    w = getattr(base, "weight", None)
+    qs = getattr(w, "quant_state", None)
+    home = None
+    if qs is not None and getattr(w, "data", None) is not None and w.data.device != qs.absmax.device:
+        home = w.data
+        w.data = home.to(qs.absmax.device)
+    try:
+        return dequantize_module_weight(base).float()
+    finally:
+        if home is not None:
+            w.data = home
+
+
 def dora_scales(model, adapter="default", base_norms=None):
     """
     DoRA (Liu et al., 2024) para exportar: {nombre del módulo PEFT: dora_scale [out, 1]} ([out, 1, 1, 1]
@@ -94,7 +110,7 @@ def dora_scales(model, adapter="default", base_norms=None):
             if not magnitudes or adapter not in magnitudes:
                 continue
             base = module.get_base_layer()
-            weight = dequantize_module_weight(base).float()
+            weight = _dequantize_anywhere(base, dequantize_module_weight)
             shape = weight.shape
             weight = weight.reshape(shape[0], -1)            # una convolución: cada canal de salida es una fila
             a = module.lora_A[adapter].weight.float().to(weight.device)

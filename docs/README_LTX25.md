@@ -92,8 +92,13 @@ Measured with the 8 GB profile: 49-frame clips with audio (1,008 tokens), 15 of 
 
 **Audio files** (`.wav`, `.mp3`, `.flac`, `.m4a`, `.ogg`, with their `.txt`) can also go in the dataset, next to images and clips. Each is encoded with the audio VAE (up to Max Frames at 24 fps) and paired with a minimal filler video (black, 64 × 64, same length: a few tokens) so the model sees the whole `[video | audio]` sequence; on those samples **only the audio loss** counts. They need **Train Audio** (without it they are skipped, with a message). **Experimental:** MiniMax-H3 showed that training audio on its own drags the video branch down past a point, so keep clips with picture in the dataset and watch the previews. In the Dataset Manager they show as a speaker card with a player; Upload accepts them.
 
+## DoRA
+
+**DoRA** works with block swap. DoRA dequantizes the NF4 weight of every layer for its row norm: during training the block is already on the GPU when it runs; when the LoRA is created and when it is exported, each parked layer is uploaded only while it is dequantized and goes back to its RAM copy. Checked: loss and every gradient (magnitudes included) identical with all blocks parked or all resident, and the same exported `dora_scale`. Measured with the 8 GB profile: 31 of 48 blocks parked, ~5.9 s/it, 6.85 GiB peak.
+
+**NormFix** uses `dora_norms.safetensors` (row norms of the original BF16 weights, built with `tools/dora_norms/make_dora_norms.py ltx25`, 1,632 layers): an NF4 row is off the original by ±0.3 %, more than DoRA learns, and without it the LoRA looks weaker in ComfyUI than in the previews.
+
 ## Not done yet
 
-- DoRA with block swap (DoRA needs the dequantized weight of every layer; it refuses to start while blocks are parked).
 - IC-LoRA edit (phase 4).
 - Validation of trained LoRAs in ComfyUI, and of video / audio LoRAs on real clips (phases 2 and 3 were tested on synthetic clips and cuts of a demo video).
