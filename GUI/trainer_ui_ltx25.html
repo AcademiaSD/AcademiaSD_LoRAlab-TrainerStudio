@@ -635,6 +635,17 @@
                     </div>
 
                     <div class="form-row">
+                        <div class="form-group" title="Where the blocks that do not fit in VRAM wait. RAM: a pinned copy in RAM, the fastest. Disk: they stay memory-mapped from the model files, with no RAM of their own (Windows frees those pages when it needs memory, so a machine short on RAM slows down instead of running out); no file is written. Auto: RAM while the system keeps 8 GB free, the rest on disk. Applies when the training starts or resumes.">
+                            <label>Block Swap Storage:</label>
+                            <select id="train_park_mode" class="no-i18n">
+                                <option value="auto" selected>Auto</option>
+                                <option value="ram">RAM</option>
+                                <option value="disk">Disk</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
                         <div class="form-group" title="Train Audio: the LoRA also learns the sound of the clips that have an audio track (voice, music, effects). It adds the audio attention and the audio-video cross attention layers to the LoRA, and the audio loss of those clips is added to the video one. Images and mute clips train only the picture. Without it the LoRA touches only the video branch and the model keeps its own sound. Write the sound in the caption too (the captioner cannot hear). Fixed for the whole training: to change it, start a new one.">
                             <label style="display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer;" for="train_train_audio">
                                 <input type="checkbox" id="train_train_audio" style="width: 18px; height: 18px; cursor: pointer;">
@@ -1119,6 +1130,7 @@
                     if (t.dora_normfix !== undefined) document.getElementById('train_dora_normfix').checked = t.dora_normfix;
                     if (t.precision) document.getElementById('train_precision').value = t.precision;
                     if (t.vram_profile) document.getElementById('train_vram_profile').value = t.vram_profile;
+                    if (t.park_mode) document.getElementById('train_park_mode').value = t.park_mode;
                     if (t.train_audio !== undefined) document.getElementById('train_train_audio').checked = !!t.train_audio;
                     if (t.audio_loss_weight !== undefined) document.getElementById('train_audio_loss_weight').value = t.audio_loss_weight;
                     if (t.resident_blocks !== undefined) document.getElementById('train_resident_blocks').value = t.resident_blocks;
@@ -1200,6 +1212,7 @@
                     if (data.dora_normfix !== undefined) document.getElementById('train_dora_normfix').checked = data.dora_normfix;
                     if (data.precision) document.getElementById('train_precision').value = data.precision;
                     if (data.vram_profile) document.getElementById('train_vram_profile').value = data.vram_profile;
+                    if (data.park_mode) document.getElementById('train_park_mode').value = data.park_mode;
                     if (data.train_audio !== undefined) document.getElementById('train_train_audio').checked = !!data.train_audio;
                     if (data.audio_loss_weight !== undefined) document.getElementById('train_audio_loss_weight').value = data.audio_loss_weight;
                     if (data.resident_blocks !== undefined) document.getElementById('train_resident_blocks').value = data.resident_blocks;
@@ -1352,7 +1365,7 @@
                       warmup_steps: 'train_warmup_steps', lr_cycles: 'train_lr_cycles', batch_size: 'train_batch_size',
                       grad_accum_steps: 'train_grad_accum', preview_caption_mode: 'train_preview_caption_mode',
                       preview_custom_prompt: 'train_preview_custom_prompt', precision: 'train_precision',
-                      vram_profile: 'train_vram_profile', resident_blocks: 'train_resident_blocks' },
+                      vram_profile: 'train_vram_profile', resident_blocks: 'train_resident_blocks', park_mode: 'train_park_mode' },
             new: { train_audio: 'train_train_audio', lora_rank: 'train_lora_rank', lora_alpha: 'train_lora_alpha', use_rslora: 'train_use_rslora',
                    use_loraplus: 'train_use_loraplus', use_dora: 'train_use_dora', dora_normfix: 'train_dora_normfix' },
         };
@@ -1379,6 +1392,7 @@
                 precision: document.getElementById('train_precision').value,
                 vram_profile: document.getElementById('train_vram_profile').value,
                 resident_blocks: parseInt(document.getElementById('train_resident_blocks').value),
+                park_mode: document.getElementById('train_park_mode').value,
                 train_audio: document.getElementById('train_train_audio').checked,
                 audio_loss_weight: parseFloat(document.getElementById('train_audio_loss_weight').value) || 1.0,
                 batch_size: parseInt(document.getElementById('train_batch_size').value),

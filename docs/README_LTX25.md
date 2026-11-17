@@ -60,6 +60,18 @@ Measured (RTX 5080, 768² images, rank 32, batch 1):
 
 The prefetch hides most of the swap: 30 parked blocks cost ~0.8 s/it.
 
+### Block Swap Storage: RAM, Disk or Auto
+
+The packed NF4 bytes of every block are already on disk, in `Models/LTX25-NF4/weights/*.safetensors`. The loader **memory-maps** them instead of reading them into RAM, so loading the model takes no RAM of its own. Then **Block Swap Storage** decides where each parked block waits:
+
+- **RAM**: a pinned copy in RAM. Uploads are asynchronous, the fastest option.
+- **Disk**: the block stays memory-mapped from its file, with no RAM of its own. Windows keeps its pages in the file cache while there is memory and drops them when there is not, so a machine short on RAM slows down instead of running out. No file is written (MiniMax-H3 writes a spill file; here the model files themselves are the store).
+- **Auto** (default): RAM while the system keeps 8 GB free (`ram_reserve_gb`), the rest on disk.
+
+Previews no longer keep a RAM copy of the resident blocks while the VAE decodes: they leave the GPU and come back from the mapped files.
+
+The console prints where the blocks are (`parked: … GB pinned RAM, … GB disk`) and the RAM after placing them and at the end: **own** (memory the process really holds), **working set** (also counts mapped pages the system can drop) and the system total.
+
 ## Training details
 
 - **`sigma` in the timestep scale.** LTX-2.3/2.5 feed `sigma` to `prompt_adaln` (the text modulation), a timestep embedding: `LTX2Pipeline` passes `sigma=timestep` (0–1000) and `use_cross_timestep=True`. The trainer does the same. Passing it in 0–1 (as the LTX-2.3 trainer did) makes the model believe the input is almost noise-free: the previews came out deformed even without a LoRA.

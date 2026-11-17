@@ -46,6 +46,28 @@ class CastLinear(torch.nn.Linear):
         return y.to(x.dtype)
 
 
+def mmap_tensor(path, key="weight"):
+    """
+    Tensor de un .safetensors mapeado en memoria (sin copiarlo a RAM): sus páginas las carga y las suelta el
+    sistema según haga falta. Los bytes NF4 de cada capa ya están en Models/LTX25-NF4/weights; esto evita tener
+    una segunda copia en RAM. Solo lectura.
+    """
+    import struct
+    import warnings
+    import numpy as np
+    with open(path, "rb") as f:
+        n = struct.unpack("<Q", f.read(8))[0]
+        header = json.loads(f.read(n))
+    info = header[key]
+    if info["dtype"] != "U8":
+        raise ValueError("mmap_tensor: only U8 tensors ({} is {})".format(key, info["dtype"]))
+    start, end = info["data_offsets"]
+    arr = np.memmap(path, dtype=np.uint8, mode="r", offset=8 + n + start, shape=(end - start,))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")      # tensor de solo lectura: nunca se escribe
+        return torch.from_numpy(arr).view(*info["shape"])
+
+
 def load_nf4_transformer(model_dir, device="cuda", compute_dtype=COMPUTE_DTYPE, blocks_on_cpu=False, log=print):
     """
     Devuelve el transformer listo. Con `blocks_on_cpu=True` el dato NF4 empaquetado de los bloques se queda en RAM
@@ -62,19 +84,24 @@ def load_nf4_transformer(model_dir, device="cuda", compute_dtype=COMPUTE_DTYPE, 
 
     for name, info in index.get("quantized", {}).items():
         path = os.path.join(weights_dir, info["file"])
+        on_cpu = blocks_on_cpu and name.startswith("transformer_blocks.")
         with safe_open(path, framework="pt", device="cpu") as f:
-            data = f.get_tensor("weight")
+            data = None if on_cpu else f.get_tensor("weight")   # los bloques se mapean, sin leerlos aquí
             bias = f.get_tensor("bias") if info.get("bias") else None
             qs = {k[len("quant_state."):]: f.get_tensor(k) for k in f.keys() if k.startswith("quant_state.")}
         with torch.device("meta"):
             layer = Linear4bit(int(info["in_features"]), int(info["out_features"]), bias=bool(info.get("bias")),
                                quant_type="nf4", compute_dtype=compute_dtype)
-        on_cpu = blocks_on_cpu and name.startswith("transformer_blocks.")
-        layer._nf4_file = path   # origen del dato NF4: BlockSwap.restore_resident lo vuelve a leer de aquí
+        layer._nf4_file = path   # origen del dato NF4: BlockSwap.restore_resident lo puede releer de aquí
+        if on_cpu:
+            # El dato empaquetado de los bloques no se copia a RAM: se mapea desde su fichero. BlockSwap decide
+            # después si cada bloque va a la GPU, a RAM fijada (rápido) o se queda mapeado (disco).
+            data = mmap_tensor(path, "weight")
         layer.weight = Params4bit.from_prequantized(data=data, quantized_stats=qs, requires_grad=False,
                                                     device="cpu" if on_cpu else device, module=layer)
         if on_cpu:
-            layer.weight.quant_state.to(device)   # absmax/code en GPU; el dato empaquetado se queda en RAM
+            layer.weight.quant_state.to(device)   # absmax/code en GPU; el dato empaquetado, mapeado
+            layer._mmap_home = layer.weight.data
         if bias is not None:
             layer.bias = torch.nn.Parameter(bias.to(device, dtype=compute_dtype), requires_grad=False)
         parent, child = _parent(model, name)
@@ -215,7 +242,14 @@ class BlockSwap:
     (con prefetch del siguiente). Acepta bloques cargados en CPU (blocks_on_cpu) o ya en CUDA.
     """
 
-    def __init__(self, blocks, resident, pin=True, prefetch=True, log=print):
+    def __init__(self, blocks, resident, pin=True, prefetch=True, log=print, park="ram", ram_reserve_gb=8.0):
+        """
+        park: dónde viven los bloques aparcados.
+          "ram"  copia en RAM fijada (pinned): subidas asíncronas, lo más rápido;
+          "disk" mapeados al .safetensors del modelo: no ocupan RAM propia (el sistema suelta sus páginas
+                 cuando falta memoria); cada subida lee del fichero o de la caché del sistema;
+          "auto" RAM mientras el sistema conserve ram_reserve_gb libres; el resto, disco.
+        """
         self.blocks = list(blocks)
         self.n = len(self.blocks)
         self.resident = max(0, min(int(resident), self.n))
@@ -225,7 +259,13 @@ class BlockSwap:
         self.uploads = 0
         self.pinned = False
         self._order = {id(b): i for i, b in enumerate(self.blocks)}
+        self.park = park if park in ("ram", "disk", "auto") else "ram"
         parked_bytes = 0
+        ram_bytes = disk_bytes = 0
+        try:
+            import psutil
+        except Exception:
+            psutil = None
         for i, block in enumerate(self.blocks):
             mods = [m for m in block.modules() if isinstance(m, Linear4bit)]
             block._swap_mods = mods
@@ -236,17 +276,32 @@ class BlockSwap:
                     if m.weight.data.device.type != "cuda":
                         m.weight.data = m.weight.data.to("cuda")
                 continue
+            nbytes = block_nf4_bytes(block)
+            to_ram = self.park == "ram"
+            if self.park == "auto":
+                avail = psutil.virtual_memory().available if psutil else 0
+                to_ram = avail - nbytes > ram_reserve_gb * 1e9
             for m in mods:
-                cpu = m.weight.data.to("cpu")
-                if pin:
-                    try:
-                        cpu = cpu.pin_memory()
-                        self.pinned = True
-                    except RuntimeError:
-                        pin = False
-                m._swap_home = cpu
-                m.weight.data = cpu  # en CPU: la copia CUDA se libera
-                parked_bytes += cpu.numel()
+                mm = getattr(m, "_mmap_home", None)
+                if not to_ram and mm is not None:
+                    home = mm                              # disco: mapeado, sin RAM propia
+                else:
+                    home = m.weight.data.to("cpu")
+                    if home.data_ptr() == getattr(mm, "data_ptr", lambda: -1)():
+                        home = home.clone()                # de mapeado a RAM: copia real
+                    if pin:
+                        try:
+                            home = home.pin_memory()
+                            self.pinned = True
+                        except RuntimeError:
+                            pin = False
+                m._swap_home = home
+                m.weight.data = home  # en CPU: la copia CUDA se libera
+                parked_bytes += home.numel()
+            if to_ram or all(getattr(m, "_mmap_home", None) is None for m in mods):
+                ram_bytes += nbytes
+            else:
+                disk_bytes += nbytes
             block._swap_on_gpu = False
             block.register_forward_pre_hook(self._pre_hook)
             block.register_forward_hook(self._post_hook)
@@ -255,8 +310,10 @@ class BlockSwap:
         ACTIVE_SWAP = self
         self._resident_offloaded = False
         torch.cuda.empty_cache()
-        log("[SWAP] resident blocks / bloques residentes: {}/{} · parked / aparcados: {} ({:.2f} GB {})".format(
-            self.resident, self.n, self.n - self.resident, parked_bytes / 1e9, "pinned" if self.pinned else "RAM"))
+        log("[SWAP] resident blocks / bloques residentes: {}/{} | parked / aparcados: {} ({:.2f} GB: {:.2f} GB {}, "
+            "{:.2f} GB disk / disco) | storage: {}".format(
+                self.resident, self.n, self.n - self.resident, parked_bytes / 1e9, ram_bytes / 1e9,
+                "pinned RAM" if self.pinned else "RAM", disk_bytes / 1e9, self.park))
 
     # -- movimiento --------------------------------------------------------------------------------------------
     def _upload(self, block, stream=None):
@@ -307,15 +364,19 @@ class BlockSwap:
 
     def offload_resident(self):
         """
-        Saca de la VRAM los bloques residentes (para decodificar con el VAE). No se guarda copia en RAM (con 48
-        residentes eran ~9 GB que no se soltaban): al volver se releen de su fichero .safetensors, que el sistema
-        suele tener aún en caché. Las capas sin fichero conocido sí se copian a RAM, solo durante la preview.
+        Saca de la VRAM los bloques residentes (para decodificar con el VAE) sin guardar copia en RAM: si el
+        bloque está mapeado, su origen es el fichero mapeado; si no, al volver se relee de su .safetensors. Solo
+        las capas sin fichero conocido se copian a RAM, y solo mientras dura la preview.
         """
         if self._resident_offloaded:
             return
         for block in self.blocks[:self.resident]:
             for m in block._swap_mods:
-                if getattr(m, "_nf4_file", None):
+                mm = getattr(m, "_mmap_home", None)
+                if mm is not None:
+                    m._res_home = mm
+                    m.weight.data = mm
+                elif getattr(m, "_nf4_file", None):
                     m._res_home = None
                     m._res_shape = (m.weight.data.shape, m.weight.data.dtype)
                     m.weight.data = torch.empty(0, dtype=m.weight.data.dtype)
@@ -334,8 +395,7 @@ class BlockSwap:
                     with safe_open(m._nf4_file, framework="pt", device="cpu") as f:
                         data = f.get_tensor("weight")
                     shape, dtype = m._res_shape
-                    data = data.view(dtype).reshape(shape)
-                    m.weight.data = data.to("cuda", non_blocking=False)
+                    m.weight.data = data.view(dtype).reshape(shape).to("cuda")
                 else:
                     m.weight.data = m._res_home.to("cuda", non_blocking=True)
                 m._res_home = None

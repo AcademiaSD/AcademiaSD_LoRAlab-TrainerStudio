@@ -213,6 +213,11 @@ DEFAULTS = {
     "resident_blocks": -1,        # -1 = lo decide el plan; 0..48 = a mano
     "vram_headroom_gb": 0.6,      # escritorio de Windows y fragmentación
     "swap_pin_memory": True,      # copia NF4 fija (pinned) en RAM: subidas asíncronas
+    # Dónde viven los bloques aparcados: "ram" (RAM fijada, lo más rápido), "disk" (mapeados al .safetensors
+    # del modelo: sin RAM propia, como el modo disco de MiniMax-H3 pero sin escribir ningún fichero) o "auto"
+    # (RAM mientras el sistema conserve ram_reserve_gb libres; el resto, disco).
+    "park_mode": "auto",
+    "ram_reserve_gb": 8.0,
 }
 
 CONFIG_PATH = os.environ.get("LORALAB_TRAIN_CONFIG") or "settings/train_settings_ltx25.json"
@@ -339,6 +344,10 @@ VRAM_PROFILE = str(cfg_get("vram_profile", DEFAULTS["vram_profile"])).strip().lo
 RESIDENT_BLOCKS = int(cfg_get("resident_blocks", DEFAULTS["resident_blocks"]))
 VRAM_HEADROOM_GB = float(cfg_get("vram_headroom_gb", DEFAULTS["vram_headroom_gb"]))
 SWAP_PIN_MEMORY = _cfg_bool("swap_pin_memory", DEFAULTS["swap_pin_memory"])
+PARK_MODE = str(cfg_get("park_mode", DEFAULTS["park_mode"])).strip().lower()
+if PARK_MODE not in ("auto", "ram", "disk"):
+    PARK_MODE = "auto"
+RAM_RESERVE_GB = float(cfg_get("ram_reserve_gb", DEFAULTS["ram_reserve_gb"]))
 LOSS_CHUNK_ELEMENTS = int(cfg_get("loss_chunk_elements", DEFAULTS["loss_chunk_elements"]))
 
 if PREVIEW_MODE not in ("gen", "recon", "onestep"):
@@ -2807,6 +2816,20 @@ NON_TORCH_VRAM_GB = 1.0
 VRAM_USABLE_GB = 1e9   # lo fija apply_vram_profile()
 
 
+def ram_report(label=""):
+    """RAM propia del proceso (lo que de verdad ocupa), working set (incluye páginas mapeadas que el sistema
+    puede soltar) y RAM usada del sistema."""
+    try:
+        import psutil
+        mi = psutil.Process().memory_info()
+        vm = psutil.virtual_memory()
+        own = getattr(mi, "private", None) or mi.rss
+        return "[RAM] {}own {:.1f} GB | working set {:.1f} GB | system {:.1f} / {:.1f} GB".format(
+            (label + ": ") if label else "", own / 1e9, mi.rss / 1e9, vm.used / 1e9, vm.total / 1e9)
+    except Exception:
+        return ""
+
+
 def apply_vram_profile():
     """Tope duro de VRAM del perfil (como H3): simular una tarjeta menor es fiable porque el proceso no puede pasar."""
     # Lo que PyTorch puede usar de una tarjeta: su VRAM menos ~1 GB que no ve el allocator (contexto CUDA,
@@ -2870,9 +2893,11 @@ def setup_block_swap(transformer, entries, card_gb):
     print("[VRAM] " + t("Plan: card {c:.1f} GB · fixed {f:.2f} GB · activations ~{a:.2f} GB ({tok} tokens) · "
                         "block {b:.3f} GB -> {r}/{n} resident", c=card_gb, f=fixed_gb, a=act_gb, tok=tokens,
                         b=block_gb, r=resident, n=n))
-    swap = ltx25_model.BlockSwap(blocks, resident, pin=SWAP_PIN_MEMORY, log=print)
+    swap = ltx25_model.BlockSwap(blocks, resident, pin=SWAP_PIN_MEMORY, log=print, park=PARK_MODE,
+                                 ram_reserve_gb=RAM_RESERVE_GB)
     torch.cuda.synchronize()
     print("[VRAM] " + t("After placing the blocks: {gb:.2f} GB allocated", gb=torch.cuda.memory_allocated() / 1e9))
+    print(ram_report())
     return swap if resident < n else None   # ACTIVE_SWAP queda registrado igual: la preview lo usa
 
 
@@ -3512,6 +3537,7 @@ def train_ltx25():
     print()
     print(t("Training completed!"))
     print("[VRAM] " + t("Peak: {a:.2f} GB allocated · {r:.2f} GB reserved by PyTorch", a=torch.cuda.max_memory_allocated() / 1e9, r=torch.cuda.max_memory_reserved() / 1e9))
+    print(ram_report("end"))
 
     # Pasos realmente entrenados: si se bajan los pasos en caliente por debajo del actual, se para aquí.
     save_checkpoint_now(last_step_executed)
