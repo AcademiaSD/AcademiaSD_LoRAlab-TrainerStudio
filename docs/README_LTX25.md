@@ -68,7 +68,18 @@ The packed NF4 bytes of every block are already on disk, in `Models/LTX25-NF4/we
 - **Disk**: the block stays memory-mapped from its file, with no RAM of its own. Windows keeps its pages in the file cache while there is memory and drops them when there is not, so a machine short on RAM slows down instead of running out. No file is written (MiniMax-H3 writes a spill file; here the model files themselves are the store).
 - **Auto** (default): RAM while the system keeps 8 GB free (`ram_reserve_gb`), the rest on disk.
 
-Previews no longer keep a RAM copy of the resident blocks while the VAE decodes: they leave the GPU and come back from the mapped files.
+Measured (RTX 5080, 98 GB of RAM, `orbital` video cache, DoRA rank 32, 8 steps; identical losses in every mode):
+
+| VRAM Profile | Storage | Parked blocks | Process RAM after placing them | s/it |
+|---|---|---|---|---|
+| 10 GB | RAM | 28 (5.4 GB) | 13.4 GB | 9.0 |
+| 10 GB | Disk | 28 (5.4 GB) | 8.0 GB | 10.2 |
+| 8 GB | RAM (Auto, plenty of RAM) | 39 (7.5 GB) | 13.4 GB | 9.6 |
+| 8 GB | Disk | 39 (7.5 GB) | 5.8 GB | 11.2 |
+
+Disk saves the RAM of the parked blocks for some 13–17 % more time per step. With enough free RAM, Auto behaves as RAM.
+
+Previews take no RAM copy of the resident blocks while the VAE decodes: they leave the GPU and come back from the mapped files (or are read again from them). If the video VAE does not fit in VRAM in FP32 (8 GB profile with 97-frame previews), the preview decodes in BF16, and in tiles if that does not fit either; the console says so once.
 
 The console prints where the blocks are (`parked: … GB pinned RAM, … GB disk`) and the RAM after placing them and at the end: **own** (memory the process really holds), **working set** (also counts mapped pages the system can drop) and the system total.
 

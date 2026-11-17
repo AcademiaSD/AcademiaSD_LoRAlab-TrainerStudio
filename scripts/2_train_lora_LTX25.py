@@ -1887,6 +1887,31 @@ def _vae_tiling(vae, on):
         _CUDNN_BENCH = None
 
 
+def _vae_decode_safe(vae, latent):
+    """
+    vae.decode, y si no cabe en VRAM (perfiles de 8 GB con clips largos: 97 fotogramas piden ~3 GB más en FP32),
+    reintenta con el VAE en BF16 (la mitad de memoria; así decodifica LTX ComfyUI) y después con tiles. El cambio
+    se queda para las previews siguientes, así que solo se avisa una vez.
+    """
+    while True:
+        try:
+            with torch.no_grad():
+                return vae.decode(latent.to(next(vae.parameters()).dtype), return_dict=False)[0]
+        except torch.OutOfMemoryError:
+            oom = True
+        if oom:
+            gc.collect()
+            torch.cuda.empty_cache()
+            if next(vae.parameters()).dtype != torch.bfloat16:
+                print("  [Preview] " + t("The VAE does not fit in VRAM in FP32: decoding in BF16."))
+                vae.to(torch.bfloat16)
+            elif not getattr(vae, "use_tiling", False):
+                print("  [Preview] " + t("The VAE does not fit in VRAM in BF16 either: decoding in tiles."))
+                vae.enable_tiling()
+            else:
+                raise torch.OutOfMemoryError(t("The VAE does not fit in VRAM even in tiles."))
+
+
 def decode_preview_latent(vae, latent, frame_index=-1, all_frames=False):
     dtype = next(vae.parameters()).dtype
     latent = latent.detach().to("cuda", dtype=dtype)
@@ -1911,8 +1936,7 @@ def decode_preview_latent(vae, latent, frame_index=-1, all_frames=False):
         else:
             latent = latent * latents_std + latents_mean
 
-    with torch.no_grad():
-        decoded = vae.decode(latent, return_dict=False)[0]
+    decoded = _vae_decode_safe(vae, latent)
 
     if all_frames and decoded.ndim == 5:
         # [1, 3, F, H, W] -> [F, H, W, 3] uint8, para el .mp4
