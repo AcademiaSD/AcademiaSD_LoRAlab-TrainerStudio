@@ -154,18 +154,44 @@ class nf4_on_gpu:
         return False
 
 
-def patch_peft_dora_init():
-    """PEFT calcula la magnitud inicial de DoRA descomprimiendo el peso de la capa: con el dato en RAM se sube
-    a la GPU solo para eso. Idempotente."""
+_DORA_PROGRESS = {"done": 0, "total": 0, "t0": 0.0}
+
+
+def patch_peft_dora_init(total_layers=0):
+    """
+    Magnitud inicial de DoRA (m = ||W + s*B*A|| por fila), como DoraLinearLayer.update_layer de PEFT pero:
+      * en la GPU: con block swap el dato NF4 de la capa está en RAM; se sube solo para descomprimirlo;
+      * sin la copia profunda de la capa NF4 que hace PEFT (un resto para FSDP: ~1,1 s por capa, 10 min en
+        las 480 capas de LTX 2.5) y sin bajar el peso descomprimido a la CPU para la norma;
+      * con una línea de progreso en la consola.
+    El resultado es el mismo número (se comprueba contra PEFT en tools/tests). Idempotente.
+    """
+    import time
     from peft.tuners.lora import dora
+    from peft.utils.integrations import dequantize_module_weight
+
     cls = dora.DoraLinearLayer
+    _DORA_PROGRESS.update(done=0, total=int(total_layers), t0=time.time())
     if getattr(cls, "_ltx25_patched", False):
         return
-    orig = cls.update_layer
 
-    def update_layer(self, *, base_layer, **kw):
-        with nf4_on_gpu(base_layer):
-            return orig(self, base_layer=base_layer, **kw)
+    def update_layer(self, *, base_layer, lora_A, lora_B, scaling, place_on_cpu=False):
+        with torch.no_grad(), nf4_on_gpu(base_layer):
+            weight = dequantize_module_weight(base_layer)
+            dev = weight.device
+            lora_weight = lora_B.to(dev, torch.float32) @ lora_A.to(dev, torch.float32)
+            weight_norm = self.get_weight_norm(weight=weight, lora_weight=lora_weight, scaling=scaling)
+            del weight, lora_weight
+        if place_on_cpu:
+            weight_norm = weight_norm.to("cpu")
+        self.weight = torch.nn.Parameter(weight_norm.to(lora_A.device), requires_grad=True)
+
+        p = _DORA_PROGRESS
+        p["done"] += 1
+        if p["total"] and (p["done"] % 16 == 0 or p["done"] == p["total"]):
+            el = time.time() - p["t0"]
+            print("\r[DoRA] magnitudes {}/{} ({:.0f} s)".format(p["done"], p["total"], el),
+                  end="\n" if p["done"] == p["total"] else "", flush=True)
 
     cls.update_layer = update_layer
     cls._ltx25_patched = True

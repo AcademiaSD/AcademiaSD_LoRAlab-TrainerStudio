@@ -3021,7 +3021,8 @@ def train_ltx25():
 
     if USE_DORA:
         # Los bloques se cargan con el dato NF4 en RAM: DoRA lo sube a la GPU solo para su norma inicial.
-        ltx25_model.patch_peft_dora_init()
+        print(t("DoRA: computing the initial magnitudes on the GPU..."))
+        ltx25_model.patch_peft_dora_init(len(target_modules))
     model = get_peft_model(transformer, lora_config)
     if USE_DORA:
         lora_options.attach_dora_norms(model, MODEL_ID, DORA_NORMFIX, repo_id=HF_NF4_REPO_ID, root=MODEL_ID)
