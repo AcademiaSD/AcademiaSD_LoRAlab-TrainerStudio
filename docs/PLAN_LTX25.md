@@ -1,6 +1,7 @@
 # Estudio — Entrenador LTX-2.5 para AcademiaSD LoRAlab Trainer Studio
 
-Estado: **Fase 0 completada · Fase 1 casi completa** (2026-11-16) · id: **`ltx25`** · rama `ltx25`
+Estado: **Fases 0–4 completadas y en `main`** (2026-11-17) · id: **`ltx25`**. LoRA de vídeo (roboface) probado en
+ComfyUI sin errores de claves; descarga del repo NF4 con progreso verificada. Pendiente: DoRA con block swap.
 
 > **Fase 1 (2026-11-16):** conversor NF4 (`tools/ltx25`), block swap (`scripts/ltx25_model.py`), pre-cache,
 > trainer, previews e interfaz con **VRAM Profile**. Medido con perfil de 8 GB en una RTX 5080: pre-cache 6.0 GB,

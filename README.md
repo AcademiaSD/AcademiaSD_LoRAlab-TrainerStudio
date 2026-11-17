@@ -8,6 +8,14 @@
 
 What was added, newest first. Each entry links to its commit.
 
+**2026-11-17**
+
+- <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **LTX 2.5: image, video, video + audio and edit (IC-LoRA) LoRAs, from 8 GB of VRAM** — a new trainer for Lightricks' LTX-2.5 (22B, full / SFT transformer), with everything in one place:
+  - **Image LoRAs** (characters, styles), **video LoRAs** from clips (motion, effects, camera), **video + audio LoRAs** (**Train Audio** also trains the sound of clips with a track) and **edit IC-LoRAs** (`name_before` / `name_after` pairs of images or clips, the before as a clean reference, as Lightricks' IC-LoRAs). Images, clips and audio files can share a dataset.
+  - **8 GB of VRAM** with block swap in the style of MiniMax-H3 (prefetch of the next block, frozen weights never copied back): measured with the 8 GB profile, pre-cache 6.0 GB, training 6.65 GB and video previews within budget. **VRAM Profile** simulates 8 / 10 / 12 / 16 / 24 / 32 GB cards with a hard cap; **Resident Blocks** -1 lets the plan decide.
+  - **Prepare clips** (24 fps and LTX's 8n+1 frame count without cutting the end, audio kept in sync), **Max Frames** and **Video Area** for clips, **video previews in .mp4 with the generated sound**, a captioner with separate prompts for images, clips and edit pairs, and clip cards with film-frame borders and a speaker / crossed-out speaker.
+  - Downloads the NF4 model (26.3 GB) from `AcademiaSD/LTX25-NF4-for-LoRA-Training` with a progress line; Gemma 4 text encoder in NF4 with its embedding table in RAM. Trains with the timestep sampling of Lightricks' `ltx-trainer` and exports LoRAs with the official key names (they load in ComfyUI) ([details](#ltx-25--image-video-video--audio-and-edit-loras)) [`bb8d867`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/bb8d867) [`b26c7a9`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/b26c7a9) [`79cec3d`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/79cec3d) [`c2b3589`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/c2b3589) [`c5c3a07`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/c5c3a07)
+
 **2026-11-16**
 
 - **LTX 2.3 trains LTX-2.3, not LTX-2.5** — the launcher card, this README and the technical notes said it also worked with LTX-2.5. Its LoRAs usually load in LTX-2.5 (same layers and LoRA key names), but it trains the 2.3 weights: LTX-2.5 retrains the transformer and uses Gemma 4 as text encoder instead of Gemma 3 [`725c0fa`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/725c0fa)
@@ -241,6 +249,7 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 | **MOSS-Image** | Image LoRAs (characters, objects, styles) on MOSS-Image Base or SFT **and edit LoRAs** (before → after, on top of armV5, armV4 or Moss-Image-Edit); supports rsLoRA, LoRA+ and LoKr | **6 GB** (512²) / 8 GB |
 | **Ideogram 4** | Image LoRAs (characters, objects, styles), with JSON captions | 12 GB (16 GB for previews with CFG) |
 | **SDXL** | Image LoRAs for SDXL Base, Pony, Illustrious, NoobAI, Juggernaut, RealVis or your own SDXL checkpoint | **4 GB** (NF4) / 12 GB (BF16) |
+| **LTX 2.5** | Image LoRAs, video LoRAs from clips, **video + audio** LoRAs and **edit IC-LoRAs** (before → after), on LTX-2.5; block swap | **8 GB** |
 | **LTX-2.3** | Character and style LoRAs for LTX-2.3, trained from images (they usually load in LTX-2.5 too) | 12 GB |
 | **MiniMax-H3** | Video LoRAs from images, clips and audio, plus training-free **RefMods** | 8 GB |
 | **MiniMax-H3 Image** *(experimental)* | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) on the 6-step distilled MiniMax-H3-Image, trained with a de-distillation adapter; 33B in NF4 with block swap | 8 GB (image LoRAs) / 10 GB (edit LoRAs), estimated from the VRAM plan with Resident Blocks on 0 |
@@ -265,6 +274,8 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 **Cola de trabajos:** con un entrenamiento en marcha, *Iniciar / Reanudar* o *Iniciar Pre-Caché* en cualquier entrenador pregunta si añadirlo a la cola, con una copia de los ajustes de ese momento. Los trabajos se ejecutan uno tras otro en la GPU. El botón **Cola** del lanzador y de cada entrenador abre la página de la cola: lo que entrena ahora (progreso, tiempo restante y curva de loss) y lo que espera, que puedes reordenar arrastrando, pausar, continuar o quitar. Pausar guarda un checkpoint y deja el trabajo pausado en la cola; continuar sigue desde ese paso. Mientras un entrenador entrena, **➕ Nuevo entrenamiento en cola** abre un borrador del mismo entrenador en otro puerto para preparar el siguiente sin tocar el que entrena (ponle otro nombre de proyecto). Si un trabajo falla, se queda en la lista en rojo diciendo por qué (no se encuentra la pre-caché o el dataset, falta VRAM…); corrígelo y pulsa **↻** para reintentarlo. **✎** en un trabajo de la cola abre su entrenador con sus ajustes para cambiarlos: el botón de empezar pasa a ser **💾 Guardar cambios en la cola**. Mientras se hace la pre-caché, *Iniciar / Reanudar* sigue disponible y manda el entrenamiento a la cola. **⏻ Pausar todo y salir**, abajo en el lanzador, pausa el entrenamiento en curso guardando su checkpoint y cierra todo desde el navegador; al volver a abrir el lanzador la cola sigue sola donde estaba, empezando por ese entrenamiento. En RunPod y otras nubes el lanzador sigue abierto, con la cola pausada.
 
 **Linux:** ya tiene soporte para Linux. Cada `.bat` tiene su `.sh` equivalente; la instalación y el uso están en [docs/Linux.md](docs/Linux.md). Gracias a **[Jonathan Hecl (@jonathanhecl)](https://github.com/jonathanhecl)** por aportarlo.
+
+**LTX 2.5:** nuevo entrenador para **LTX-2.5** de Lightricks con cuatro tipos de LoRA: de imagen (personajes, estilos), de vídeo a partir de clips (movimientos, efectos), de **vídeo + audio** (**Train Audio**) y de **edición IC-LoRA** (pares `nombre_before` / `nombre_after`, de imágenes o clips). Funciona **desde 8 GB de VRAM** con block swap; **VRAM Profile** simula tarjetas menores. Con clips, pulsa primero **Prepare clips** (24 fps y 8n+1 fotogramas sin recortar el final). Las previews de clips salen en `.mp4` con el sonido generado. Descarga `AcademiaSD/LTX25-NF4-for-LoRA-Training` (26,3 GB) la primera vez. Detalles en la sección *LTX 2.5* y en [docs/README_LTX25.md](docs/README_LTX25.md).
 
 **FLUX.1 Dev:** nuevo entrenador de LoRAs de imagen para **FLUX.1 [dev]** de Black Forest Labs (FLUX.1 [dev] Non-Commercial License). Se descarga ya en **NF4** (13,5 GB, sin token) y los dos text encoders solo se usan en el pre-caché. Detalles en la sección *FLUX.1 Dev*.
 
@@ -299,6 +310,7 @@ Each trainer downloads **only what it uses**, already quantized. The table compa
 | Trainer | Official model | LoRAlab before | **Trainer Studio now** | What changed |
 | :--- | ---: | ---: | ---: | :--- |
 | **Krea 2** | 62.0 | 43.2 | **17.0** | The BF16 transformer (26.3 GB) is no longer downloaded or used: the model is built directly from its NF4 weights. |
+| **LTX 2.5** | ~70 | — | **26.3** | New trainer: the full transformer (9.6 GB NF4 + 0.85 GB BF16), the Gemma 4 12B text encoder in NF4 (7.2 GB), connectors, VAEs and vocoder, from `AcademiaSD/LTX25-NF4-for-LoRA-Training`. The official Diffusers repo is gated; this one is not. |
 | **LTX-2.3** | 101.3 | 111.1 | **32.2** | The BF16 transformer (38.0 GB) and the FP32 Gemma 3 text encoder (48.8 GB) are replaced by NF4 versions (9.8 GB + 7.8 GB). |
 | **Qwen-Image 2.1** | ~32 (BF16) | 21.9 | **21.9 / 14.4 / 11.0** | Only the text encoder you pick is downloaded: BF16 (exact, default) / INT8 / NF4. |
 | **MiniMax-H3** | 498.5 | 41.4 | **41.4** | The 33B model ships in NF4 from the start. |
@@ -330,7 +342,7 @@ The automatic captioner adds, only the first time you use it: **nothing** for Kr
 | **Driver** | NVIDIA **580 or newer** (CUDA 13). AMD: a recent Adrenalin driver on Windows, or `amdgpu` on Linux | Latest |
 | **RAM** | 16 GB | 32 GB |
 | **Disk** | The model of each trainer you use (table above) plus your datasets and caches | SSD |
-| **Other** | Internet the first time each model is used. MiniMax-H3 and Wan 2.2 video clips need **`ffmpeg`** in the `PATH`. | |
+| **Other** | Internet the first time each model is used. MiniMax-H3, Wan 2.2 and LTX 2.5 clips and audio files need **`ffmpeg`** in the `PATH`. | |
 
 Python, Git and every library are installed by the installer. GTX 10xx and older cards are **not** supported: PyTorch for CUDA 13 starts at the RTX 20xx generation.
 
@@ -848,6 +860,28 @@ Each expert exports its own LoRA, named `_high_noise` / `_low_noise`. In ComfyUI
 
 On Windows a sample that does not fit in VRAM is left out with a message instead of letting the driver spill into system RAM, where a step takes 30 times longer. More in [docs/README_Wan22.md](docs/README_Wan22.md).
 
+### LTX 2.5 — image, video, video + audio and edit LoRAs
+
+LTX-2.5 is LTX-2.3 with a retrained transformer and a new text encoder (Gemma 4); its VAEs and vocoder are the same. One trainer covers four kinds of LoRA, chosen in the Pre-Cache panel and in the dataset itself:
+
+- **Image LoRAs** (characters, styles): images with their `.txt`.
+- **Video LoRAs** (motion, effects, camera moves): clips (`.mp4`, `.mov`, `.mkv`, `.webm`) with their `.txt`, next to images if you want. Press **Prepare clips** first: every clip ends at 24 fps with an 8n+1 frame count (9, 17 … 121), stretching time slightly instead of cutting the end, where the payoff of an effect is. **Max Frames** (49 by default, ~2 s; 121 = 5 s) and **Video Area** (384 × 384 by default) set what is trained.
+- **Video + audio LoRAs**: tick **Train Audio**. Clips with a track also train the sound (audio attention and audio↔video cross attention); mute clips train only the picture. Audio files (`.wav`, `.mp3`, `.flac`, `.m4a`, `.ogg`) can also go in the dataset, but training audio on its own is **experimental**. The captioner cannot hear: write the sound in the caption.
+- **Edit IC-LoRAs**: **LoRA Type → Edit**, pairs `name_before` / `name_after` (images or clips) with the instruction in `name.txt`; Create Captions writes the instructions. The before goes to the model as a clean reference and only the after is learned, as Lightricks' IC-LoRAs. **Reference Downscale ×2** halves the reference side to save VRAM.
+- **8 GB of VRAM**: the transformer blocks that do not fit stay in RAM and are brought in just in time (block swap). **VRAM Profile** plans for your card or simulates a smaller one with a hard cap. Measured on the 8 GB profile: pre-cache 6.0 GB, images 6.65 GB (~6.8 s/it), 49-frame clips with audio 6.75 GB (~7.2 s/it).
+- **Previews**: images as `.png`; clips (or **Preview Frames**) as `.mp4` at 24 fps with the generated sound, never larger than the training clips.
+- **Captioner:** Qwen3-VL-8B NF4, with separate prompts for images, clips and edit pairs.
+- Downloads `AcademiaSD/LTX25-NF4-for-LoRA-Training` (26.3 GB) the first time. LoRAs use the official key names and load in ComfyUI.
+
+| Default starting point | Images | Clips |
+| :--- | :--- | :--- |
+| Resolution | 768×768 | 384×384, 49–121 frames |
+| Rank / Alpha | 32 / 32 | 32 / 32 |
+| Learning rate | 1e-4 | 1e-4 |
+| Steps | 800 | 1500 |
+
+More in [docs/README_LTX25.md](docs/README_LTX25.md).
+
 ### LTX-2.3 — character and style LoRAs for the LTX video model
 
 - Trains **LTX-2.3**. Its LoRAs usually load in LTX-2.5 too, since both models have the same layers and LoRA key names, but it does not train LTX-2.5: 2.5 retrains the transformer and uses another text encoder (Gemma 4 instead of Gemma 3).
@@ -1008,7 +1042,7 @@ It needs Python 3.13, the CUDA 13.0 build of PyTorch (`requirements.txt` takes i
 
 ## 📚 Technical notes
 
-Detailed measurements and the reasoning behind each design decision are in `docs\`: [Qwen-Image 2.1](docs/README_QwenImage21.md) · [Krea 2](docs/README_Krea2.md) · [LTX-2.3](docs/README_LTX23.md) · [MiniMax-H3](docs/README_MiniMaxH3.md) · [Wan 2.2](docs/README_Wan22.md) (VRAM tables, block swap, video and audio datasets, RefMods and every setting) · [Linux](docs/Linux.md).
+Detailed measurements and the reasoning behind each design decision are in `docs\`: [Qwen-Image 2.1](docs/README_QwenImage21.md) · [Krea 2](docs/README_Krea2.md) · [LTX-2.3](docs/README_LTX23.md) · [LTX 2.5](docs/README_LTX25.md) · [MiniMax-H3](docs/README_MiniMaxH3.md) · [Wan 2.2](docs/README_Wan22.md) (VRAM tables, block swap, video and audio datasets, RefMods and every setting) · [Linux](docs/Linux.md).
 
 ## 🛠️ Tools for advanced users
 
@@ -1044,7 +1078,7 @@ AcademiaSD_LoRAlab-TrainerStudio/
 └── settings/                         # Your settings, HF token, network.json and ui.json (created on first use, never uploaded)
 ```
 
-Models (`Krea-2-NF4`, `LTX23-NF4`, `MiniMax-H3-NF4`, `Qwen-Image21-NF4`, `Z-Image_NF4`, `Anima-Base`, `FLUX.1-Dev_NF4`, `FLUX.2-Klein-9B_NF4`, `FLUX.3-Image-Klein_NF4`, `Ideogram4-NF4`, `MOSS-Image-NF4`, `Ming-Image_NF4`, `Fibo2_Dev-NF4`, `Wan22-T2V-A14B-NF4`, `SDXL-Models`, captioners) are created inside `Models/` on first use, and the caches and the LoRA outputs inside `Cache_Data/` and `Outputs/`. Legacy folders in the project root are moved into these folders automatically. A collision keeps both folders and prints a warning, so nothing is overwritten.
+Models (`Krea-2-NF4`, `LTX23-NF4`, `LTX25-NF4`, `MiniMax-H3-NF4`, `Qwen-Image21-NF4`, `Z-Image_NF4`, `Anima-Base`, `FLUX.1-Dev_NF4`, `FLUX.2-Klein-9B_NF4`, `FLUX.3-Image-Klein_NF4`, `Ideogram4-NF4`, `MOSS-Image-NF4`, `Ming-Image_NF4`, `Fibo2_Dev-NF4`, `Wan22-T2V-A14B-NF4`, `SDXL-Models`, captioners) are created inside `Models/` on first use, and the caches and the LoRA outputs inside `Cache_Data/` and `Outputs/`. Legacy folders in the project root are moved into these folders automatically. A collision keeps both folders and prints a warning, so nothing is overwritten.
 
 ---
 
@@ -1058,6 +1092,7 @@ The code is released under the **MIT License**. The models keep their own licens
 | Qwen-Image-2512, Qwen-Image-Edit-2511 (and lightx2v's Lightning LoRAs) | Apache 2.0 |
 | Krea 2 | Krea 2 Community License |
 | LTX-2.3 | LTX-2 Open-Source License |
+| LTX-2.5 | LTX-2.x Community License Agreement (free under USD 10 M of annual revenue; LoRAs are derivatives under the same license) |
 | MiniMax-H3 | MiniMax-H3 Community License Agreement |
 | MiniMax-H3-Image | MiniMax-H3-Image Community License Agreement |
 | Wan 2.2 T2V-A14B | Apache 2.0 |
