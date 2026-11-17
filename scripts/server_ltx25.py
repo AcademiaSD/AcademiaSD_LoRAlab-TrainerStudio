@@ -640,11 +640,55 @@ def dataset_caption_paths(dataset_dir):
     return [caption_path(f) for f in sorted(dataset_dir.iterdir()) if f.is_file() and f.suffix.lower() in DATASET_EXTS]
 
 
+_AUDIO_PROBE_CACHE = {}
+
+
+def _audio_probe_key(path):
+    try:
+        st = os.stat(str(path))
+        return (str(path), st.st_mtime_ns, st.st_size)
+    except Exception:
+        return (str(path), 0, 0)
+
+
+def _has_audio(path):
+    """
+    True si el clip trae una pista de audio (un ffprobe, cacheado por ruta, mtime y tamaño: solo cuesta en
+    ficheros nuevos o cambiados). None si no hay ffprobe: así la interfaz no pinta nada en vez de "sin audio".
+    """
+    key = _audio_probe_key(path)
+    if key in _AUDIO_PROBE_CACHE:
+        return _AUDIO_PROBE_CACHE[key]
+    probe = shutil.which("ffprobe") or shutil.which("ffprobe.exe")
+    if not probe:
+        return None
+    try:
+        out = subprocess.run([probe, "-v", "error", "-select_streams", "a:0", "-show_entries",
+                              "stream=codec_name", "-of", "csv=p=0", str(path)],
+                             capture_output=True, text=True, timeout=30).stdout.strip()
+    except Exception:
+        return None
+    if len(_AUDIO_PROBE_CACHE) > 5000:
+        _AUDIO_PROBE_CACHE.clear()
+    _AUDIO_PROBE_CACHE[key] = bool(out)
+    return bool(out)
+
+
 @app.route("/api/dataset-info", methods=["GET"])
 def dataset_info():
     dataset_dir = get_dataset_dir()
     images = []
     if dataset_dir.is_dir():
+        # Los clips sin sondear todavía se sondean en paralelo (~40 ms cada ffprobe; 8 hilos).
+        pending = [f for f in dataset_dir.iterdir() if f.is_file() and f.suffix.lower() in VIDEO_EXTS
+                   and _audio_probe_key(f) not in _AUDIO_PROBE_CACHE]
+        if pending:
+            try:
+                from concurrent.futures import ThreadPoolExecutor
+                with ThreadPoolExecutor(max_workers=8) as pool:
+                    list(pool.map(_has_audio, pending))
+            except Exception:
+                pass
         for file_path in sorted(dataset_dir.iterdir()):
             if file_path.is_file() and file_path.suffix.lower() in DATASET_EXTS:
                 txt_path = caption_path(file_path)
@@ -657,7 +701,8 @@ def dataset_info():
                 # mtime va a la URL (?v=) para que el navegador no muestre una imagen reemplazada desde su caché.
                 images.append({"file": file_path.name, "mtime": int(file_path.stat().st_mtime),
                                "has_txt": txt_path.exists(), "caption": caption,
-                               "video": file_path.suffix.lower() in VIDEO_EXTS})
+                               "video": file_path.suffix.lower() in VIDEO_EXTS,
+                               "has_audio": _has_audio(file_path) if file_path.suffix.lower() in VIDEO_EXTS else None})
     return jsonify({
         "path": str(dataset_dir),
         "image_count": len(images),

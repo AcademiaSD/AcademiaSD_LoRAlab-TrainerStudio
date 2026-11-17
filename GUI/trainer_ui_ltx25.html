@@ -179,13 +179,35 @@
         .ds-grid.compact .img-wrapper { height: 75px; }
         .ds-grid.large .img-wrapper { height: 165px; }
         .img-wrapper img, .img-wrapper video { width: 100%; height: 100%; object-fit: cover; display: block; }
-        .video-tag { position: absolute; top: 6px; right: 22px; padding: 1px 5px; border-radius: 4px; background: rgba(15,23,42,0.85); color: #38bdf8; font-size: 0.62rem; font-weight: 700; z-index: 2; }
+        /* Clips, como en MiniMax-H3: marco de fotograma de 35 mm (dos tiras perforadas a los lados, sin imágenes)
+           y altavoz / altavoz tachado según tenga pista de audio. Sustituye a la etiqueta VIDEO. */
+        .img-wrapper.is-video::before,
+        .img-wrapper.is-video::after {
+            content: ""; position: absolute; top: 0; bottom: 0; width: 9px;
+            z-index: 1; pointer-events: none;
+            background-color: rgba(2, 6, 23, 0.9);
+            background-image: repeating-linear-gradient(to bottom,
+                rgba(241, 245, 249, 0.92) 0 6px, transparent 6px 12px);
+            background-size: 5px 12px;
+            background-position: center top;
+            background-repeat: repeat-y;
+        }
+        .img-wrapper.is-video::before { left: 0; }
+        .img-wrapper.is-video::after  { right: 0; }
+        .img-wrapper img.ds-audio-badge {
+            position: absolute; right: 14px; bottom: 24px;
+            width: 30px; height: auto; object-fit: contain;
+            z-index: 3; pointer-events: none;
+            filter: drop-shadow(0 1px 3px rgba(0,0,0,.9));
+        }
+        .ds-grid.compact .img-wrapper img.ds-audio-badge { width: 20px; }
+        .ds-grid.large .img-wrapper img.ds-audio-badge { width: 38px; }
 
         .caption-dot { position: absolute; top: 6px; right: 6px; width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid #0f172a; box-shadow: 0 0 5px rgba(0,0,0,0.8); z-index: 2; }
         .dot-green { background-color: var(--success); }
         .dot-red { background-color: var(--danger); }
 
-        .img-filename-tag { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(2px); padding: 3px 6px; font-size: 0.68rem; color: #f8fafc; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-top: 1px solid rgba(255,255,255,0.05); }
+        .img-filename-tag { z-index: 3; position: absolute; bottom: 0; left: 0; right: 0; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(2px); padding: 3px 6px; font-size: 0.68rem; color: #f8fafc; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-top: 1px solid rgba(255,255,255,0.05); }
         .ds-card .caption { padding: 6px; font-size: 0.72rem; color: var(--text-muted); height: 40px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.2; background: #0f172a; }
 
         /* Galería de Previsualizaciones (AMPLIADA A GRAN ALTURA) */
@@ -1686,11 +1708,19 @@
                 const dotClass = hasCaption ? 'caption-dot dot-green' : 'caption-dot dot-red';
                 const dotTitle = hasCaption ? t('Caption OK') : t('No caption');
 
+                // Altavoz / altavoz tachado: has_audio llega null si el servidor no pudo sondear (sin ffprobe);
+                // entonces no se pinta nada, que es distinto de pintar "sin audio".
+                const badge = (img.video && img.has_audio !== null && img.has_audio !== undefined)
+                    ? `<img class="ds-audio-badge" src="/assets/${img.has_audio ? 'audio_solo' : 'audio_mute'}.png"
+                            alt="${img.has_audio ? 'has audio' : 'no audio'}"
+                            title="${img.has_audio ? t('Has an audio track') : t('No audio track: trains picture only')}">`
+                    : '';
                 card.innerHTML = `
-                    <div class="img-wrapper">
+                    <div class="img-wrapper${img.video ? ' is-video' : ''}">
                         ${img.video
-                            ? `<video src="${mediaUrl(img)}#t=0.1" muted loop playsinline preload="metadata" onmouseenter="this.play()" onmouseleave="this.pause()"></video><span class="video-tag">VIDEO</span>`
+                            ? `<video src="${mediaUrl(img)}#t=0.1" muted loop playsinline preload="metadata"></video>`
                             : `<img src="${mediaUrl(img)}" alt="${img.file}" loading="lazy">`}
+                        ${badge}
                         <button type="button" class="ds-del" title="${t('Remove from dataset')}">&#128465;</button>
                         <span class="${dotClass}" title="${dotTitle}"></span>
                         <div class="img-filename-tag">${img.file}</div>
@@ -1698,6 +1728,18 @@
                     <div class="caption">${img.caption || `<em>${t('No .txt caption')}</em>`}</div>
                 `;
                 card.querySelector('.ds-del').onclick = (ev) => { ev.stopPropagation(); deleteDatasetImage(img.file); };
+
+                // Clips: al pasar el ratón se reproducen en silencio y al salir vuelven al principio; la portada se
+                // fuerza en 0,1 s en cuanto hay metadatos (el #t=0.1 de la URL no siempre basta y queda en negro).
+                const vid = card.querySelector('video');
+                if (vid) {
+                    const cover = () => { try { if (vid.currentTime < 0.05) vid.currentTime = 0.1; } catch (e) {} };
+                    if (vid.readyState >= 1) cover();
+                    vid.addEventListener('loadedmetadata', cover, { once: true });
+                    vid.addEventListener('loadeddata', cover, { once: true });
+                    card.addEventListener('mouseenter', () => { vid.play().catch(() => {}); });
+                    card.addEventListener('mouseleave', () => { vid.pause(); try { vid.currentTime = 0.1; } catch (e) {} });
+                }
                 grid.appendChild(card);
             });
         }
