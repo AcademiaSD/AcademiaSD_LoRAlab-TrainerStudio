@@ -61,6 +61,7 @@ except Exception:
 
 import cache_names
 from i18n import t
+import settings_limits
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import lora_options
 import training_metrics
@@ -147,6 +148,7 @@ CFG = {}
 if os.path.isfile(CONFIG_PATH):
     with open(CONFIG_PATH, encoding="utf-8") as _fh:
         CFG = json.load(_fh)
+        CFG = settings_limits.check(CFG)
 
 
 def cfg(key):

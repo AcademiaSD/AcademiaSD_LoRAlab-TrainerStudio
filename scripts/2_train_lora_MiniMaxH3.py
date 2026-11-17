@@ -90,6 +90,7 @@ ACTIVATION_OFFLOAD_ACTIVE = False
 import psutil
 import cache_names
 from i18n import t
+import settings_limits
 import gpu_stats
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import lora_options
@@ -707,6 +708,7 @@ CONFIG_PATH = os.environ.get("LORALAB_TRAIN_CONFIG") or "settings/train_settings
 if os.path.exists(CONFIG_PATH):
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         raw_cfg = json.load(f)
+        raw_cfg = settings_limits.check(raw_cfg)
 
     if isinstance(raw_cfg, dict):
         cfg = {str(k).strip(): v for k, v in raw_cfg.items()}

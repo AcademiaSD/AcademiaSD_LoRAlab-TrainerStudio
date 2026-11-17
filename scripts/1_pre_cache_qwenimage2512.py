@@ -24,6 +24,7 @@ from diffusers import AutoencoderKLQwenImage
 from transformers import AutoModel, AutoProcessor, AutoTokenizer
 import cache_names
 from i18n import t
+import settings_limits
 from text_io import read_text_file
 import gpu_stats
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
@@ -94,6 +95,7 @@ CONFIG_PATH = os.environ.get("LORALAB_PRECACHE_CONFIG") or "settings/pre_cache_s
 if os.path.exists(CONFIG_PATH):
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         cfg = json.load(f)
+        cfg = settings_limits.check(cfg)
     print("✓ " + t("Configuration loaded from {path}", path=CONFIG_PATH))
 else:
     cfg = {}

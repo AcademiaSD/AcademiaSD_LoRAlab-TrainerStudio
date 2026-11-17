@@ -40,6 +40,7 @@ import torchvision.transforms.functional as F_vision
 from PIL import Image
 from diffusers import DiffusionPipeline
 from i18n import t
+import settings_limits
 from text_io import read_text_file
 import gpu_stats
 from project_layout import resolve_cache_dir, resolve_model_dir
@@ -147,6 +148,7 @@ except Exception:
 if os.path.exists(CONFIG_PATH):
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         cfg = json.load(f)
+        cfg = settings_limits.check(cfg)
     print("[OK] " + t("Configuration loaded from {path}", path=CONFIG_PATH))
 else:
     cfg = {}

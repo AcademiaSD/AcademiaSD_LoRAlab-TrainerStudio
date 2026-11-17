@@ -15,6 +15,7 @@ from boogu_model import (
     quiet, register_nf4_models,
 )
 from project_layout import resolve_cache_dir
+import settings_limits
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 CONFIG = Path(os.environ.get("LORALAB_PRECACHE_CONFIG") or BASE_DIR / "settings" / "pre_cache_settings_boogu.json")
@@ -135,7 +136,7 @@ def _fit_target(image, target_area, max_side, multiple):
 
 
 def _load_cache_settings():
-    config = json.loads(CONFIG.read_text(encoding="utf-8-sig")) if CONFIG.exists() else {}
+    config = settings_limits.check(json.loads(CONFIG.read_text(encoding="utf-8-sig")) if CONFIG.exists() else {})
     dataset = resolve_path(config.get("dataset_path", "./dataset"), BASE_DIR)
     cache = resolve_cache_dir(config.get("cache_dir"), "./Cache_Data/cached_data_boogu", BASE_DIR)
     mode = str(config.get("lora_type", "edit")).lower()

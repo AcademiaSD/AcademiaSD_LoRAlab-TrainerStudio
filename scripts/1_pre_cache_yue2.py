@@ -50,6 +50,7 @@ import logging
 import numpy as np
 import cache_names
 from i18n import t
+import settings_limits
 from text_io import read_text_file
 from project_layout import resolve_cache_dir, resolve_model_dir
 
@@ -219,7 +220,7 @@ def ensure_yue2_model():
 
 cfg = dict(DEFAULTS)
 if os.path.exists(CONFIG_PATH):
-    cfg.update({k: v for k, v in read_json(CONFIG_PATH).items() if v != ""})
+    cfg.update({k: v for k, v in settings_limits.check(read_json(CONFIG_PATH)).items() if v != ""})
 
 DATASET_PATH = str(cfg["dataset_path"])
 PROJECT_NAME = str(cfg["project_name"]).strip()

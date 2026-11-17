@@ -11,6 +11,7 @@ from pathlib import Path
 from boogu_dataset import CACHE_VERSION, build_metadata, cache_path, resolve_path
 from boogu_model import NF4_TRANSFORMER
 from i18n import t
+import settings_limits
 from project_layout import resolve_cache_dir, resolve_output_dir
 import lora_options
 
@@ -57,7 +58,7 @@ def main():
     configure_console_encoding()
     try:
         precache_cfg = read_json(PRECACHE_CONFIG)
-        train_cfg = read_json(TRAIN_CONFIG)
+        train_cfg = settings_limits.check(read_json(TRAIN_CONFIG))
         dataset_dir = resolve_path(precache_cfg.get("dataset_path", train_cfg.get("dataset_path", "./dataset")), BASE_DIR)
         cache_dir = resolve_cache_dir(precache_cfg.get("cache_dir", train_cfg.get("cache_dir")), "./Cache_Data/cached_data_boogu", BASE_DIR)
         output_dir = resolve_output_dir(train_cfg.get("output_dir"), OUTPUT_DEFAULT, BASE_DIR)

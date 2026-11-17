@@ -51,6 +51,7 @@ import torchvision.transforms.functional as F_vision
 from PIL import Image
 from safetensors import safe_open
 from i18n import t
+import settings_limits
 from text_io import read_text_file
 from project_layout import resolve_cache_dir, resolve_model_dir
 
@@ -556,6 +557,7 @@ if os.path.exists(CONFIG_PATH):
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
             cfg = json.load(f)
+            cfg = settings_limits.check(cfg)
         log_dev(L("[OK] Configuration loaded: {}", "[OK] Configuracion cargada: {}").format(CONFIG_PATH))
     except Exception as e:
         log_error(L("[ERROR] Could not read {}: {}", "[ERROR] No se pudo leer {}: {}").format(CONFIG_PATH, e))

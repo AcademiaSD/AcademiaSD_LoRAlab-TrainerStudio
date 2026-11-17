@@ -55,6 +55,7 @@ from safetensors.torch import save_file, load_file
 from PIL import Image
 import cache_names
 from i18n import t
+import settings_limits
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import lora_options
 import ltx25_model
@@ -231,6 +232,7 @@ HF_NF4_REPO_ID = "AcademiaSD/LTX25-NF4-for-LoRA-Training"
 if os.path.exists(CONFIG_PATH):
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         cfg = json.load(f)
+        cfg = settings_limits.check(cfg)
     print("[OK] " + t("Configuration loaded from {path}", path=CONFIG_PATH))
 else:
     cfg = {}

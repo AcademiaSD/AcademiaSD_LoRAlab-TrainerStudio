@@ -15,6 +15,7 @@ from safetensors.torch import load, load_file, save_file
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import lora_options
 import training_metrics
+import settings_limits
 
 # La barra de progreso comparte los caracteres visuales del entrenador Klein. Fuerza UTF-8
 # también cuando Python se lanza desde una consola Windows con codepage cp1252.
@@ -32,6 +33,7 @@ except (UnicodeEncodeError, LookupError):
 
 CONFIG=os.environ.get("LORALAB_TRAIN_CONFIG") or "settings/train_settings_ernie.json"
 cfg=json.load(open(CONFIG,encoding="utf-8")) if os.path.isfile(CONFIG) else {}
+cfg=settings_limits.check(cfg)
 MODEL=str(resolve_model_dir(cfg.get("model_id"), "Models/Ernie-NF4")); PROJECT=cfg.get("project_name","").strip()
 CACHE=str(resolve_cache_dir(f"./cached_data_ernie_{PROJECT}" if PROJECT else cfg.get("cache_dir"), "./Cache_Data/cached_data_ernie"))
 OUT=str(resolve_output_dir(f"./ernie_lora_output_{PROJECT}" if PROJECT else cfg.get("output_dir"), "./Outputs/ernie_lora_output"))
