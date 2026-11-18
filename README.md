@@ -8,6 +8,10 @@
 
 What was added, newest first. Each entry links to its commit.
 
+**2026-11-18**
+
+- **Up to 4 custom prompts per preview round, in every trainer** — **Custom Prompts (0-4)** next to Caption Mode: each round makes one preview per prompt, or one with a random prompt. Prompts changed while training are encoded on CPU and the trainer switches to them (LTX and MiniMax-H3 encode them in Pre-Cache only). In edit trainers with several reference images, **One image per prompt** makes each prompt edit its own image. The preview viewer shows the prompt of each preview ([details](#-custom-prompts-in-the-previews)) [`589c917`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/589c917) ([#87](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/issues/87))
+
 **2026-11-17**
 
 - **LTX 2.5: half the RAM and Block Swap Storage** — video previews no longer crash the training, and blocks can wait in **RAM**, on **Disk** or in **Auto (RAM + Disk)** with a **RAM Limit**, as in MiniMax-H3 ([details](docs/README_LTX25.md#block-swap-storage-ram-disk-or-auto)) [`429e04f`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/429e04f) [`d4c206a`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/d4c206a) [`dc854e9`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/dc854e9) [`c27a2a7`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/c27a2a7)
@@ -293,6 +297,8 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 
 **Parecido facial:** encima de las previews, **👤 Parecido facial → Activar...** pone en cada preview (y sobre su círculo en la gráfica del entrenamiento) el % de parecido de su cara con la del dataset. En las previews de un LoRA, un 45% o más es mucho parecido (verde) y un 30-45%, parecido parcial (naranja); las fotos reales de la misma persona suelen dar más. También en las previews de vídeo, con su primer fotograma. No se descarga por defecto: los modelos de InsightFace son solo para investigación no comercial, y antes de descargarlos hay que aceptar en una ventana que se usan bajo tu responsabilidad y sin fines comerciales. Funciona en la CPU, también en RunPod. Detalles en la sección *Face likeness in the previews*.
 
+**Prompts propios en las previews:** en **2b. Training Previews**, **Custom Prompts (0-4)** pone hasta 4 prompts tuyos: cada ronda de previews hace una imagen por prompt, o una sola con uno al azar (**One random prompt per preview**). Con 0 se usan las captions del dataset (Caption Mode). Los codifica el Pre-Cache; si los cambias durante el entrenamiento y pulsas **Save JSON**, se codifican en la CPU y el trainer pasa a usarlos (en LTX y MiniMax-H3 solo los codifica el Pre-Cache). En los entrenadores de edición con varias imágenes de referencia, **One image per prompt** hace que cada prompt edite su propia imagen. Al abrir una preview se ve el prompt con el que se hizo. Detalles en la sección *Custom prompts in the previews*.
+
 **Dataset Forge:** con pocas fotos de una persona (desde 1), **🧬 Dataset Forge** en la barra del Dataset Manager crea un dataset de personaje. *Analizar* escribe los captions que falten y una ficha con los rasgos fijos (edad, pelo, ojos). El *plan* combina encuadre, ropa, lugar (mitad interiores, mitad exteriores), luz, ángulo y expresión, y se puede editar línea a línea. *Generar* usa FLUX.3 Klein (FLUX Kommunity License), con las imágenes más naturales: anatomía limpia, poses nuevas y el encuadre pedido. En calidad *Rápida* (por defecto) usa la LoRA turbo PDD de NoiseToNova: 4 u 8 pasos, unos 12 o 25 s por imagen, con más parecido pero un aspecto más maquillado; *Mejor calidad* va de 12 a 50 pasos (16, unos 85 s por imagen), más natural. También se puede elegir Fibo 2.0 (CC BY-NC, el de más parecido, unos 5 min por imagen), Qwen-Image 2.1 (licencia Qwen Research, no comercial; rápido, pero con cuerpos a veces desproporcionados), FLUX.2 Klein 9B o Qwen-Image-Edit-2511 (Apache 2.0). El plan reparte la mitad de las imágenes en primeros planos. Solo guarda las imágenes que pasan el parecido facial mínimo (60% por defecto); las demás van a `_rejected`. El resultado va a una carpeta nueva (la de origen no se toca), con un caption por imagen sin los rasgos fijos, para que el trigger aprenda la identidad. **📂 Usar en el Dataset Manager** la carga en el entrenador. Antes de generar hay que confirmar que tienes derecho o permiso para usar las imágenes de esa persona. Detalles en la sección *Dataset Forge*.
 
 **LR Scheduler:** debajo del learning rate puedes elegir cómo cambia durante el entrenamiento: `cosine` (por defecto: sube durante el warmup y baja suavemente hasta el 10%), `constant` (el mismo LR de principio a fin, como el entrenador de Civitai), `constant_with_warmup`, `linear` o `cosine_with_restarts` (repite la curva tantas veces como indique *Ciclos*). Si no lo tocas, cada entrenador funciona igual que antes. Detalles en la sección *LR scheduler*.
@@ -416,6 +422,28 @@ Queue trainings and pre-caches, from one trainer or several, and they run one af
 - **Each job runs in its own trainer,** opened without a window on a free port (5001, 5002…). What you save in that trainer applies only to that job, never to your trainer settings. If the launcher is closed while a job trains, the job shows as paused (interrupted) and can be resumed.
 - **⏻ Pause all and exit,** at the bottom of the launcher, pauses the job training (with its checkpoint), closes every trainer and job and then the launcher itself, all from the browser. Next time you open the launcher, the queue continues on its own where it was, starting with that training from its checkpoint. On RunPod and other clouds, or when used remotely, the launcher stays open so the page keeps working, with the queue paused: turn off **Pause the queue** to carry on.
 - Behind a reverse proxy or on RunPod only ports 4990 and 5000 are published: the queue works, but **Go to the training** needs the job's port to be reachable.
+
+---
+
+## 🎯 Custom prompts in the previews
+
+In **2b. Training Previews** of every trainer, **Custom Prompts (0-4)** sets how many prompts of your own the previews use.
+
+- **0** — the previews use the dataset captions, as chosen in **Caption Mode** (First, Random, Rotate 4).
+- **1 to 4** — a box appears for each prompt, and each preview round makes one image per prompt: `preview_step_N.png`, `preview_step_N_2.png`… In the gallery they show as *Step N*, *Step N · #2*… Caption Mode is not used meanwhile.
+- **One random prompt per preview** — each round makes a single image, with one of your prompts chosen at random. Previews then take as long as with one prompt.
+- The trigger word is added in front of each prompt, as in the captions. A settings file from before, with Caption Mode = Custom prompt, opens as 1 prompt.
+- **Each preview keeps its prompt.** Click a preview: under its name you see the prompt it was made with, your own or the dataset caption. It is stored inside the PNG (and in a `.txt` next to video and audio previews), so it travels with the file.
+
+**When they are encoded.** Pre-Cache encodes the prompts on the GPU with the rest of the texts. If you change them with **Save JSON**, only the prompts that changed are encoded, in one process: on the GPU when nothing is running, on the CPU while training (it does not touch the training's VRAM; about a minute). The trainer switches to each prompt when it is ready; until then the previews use the ones that are, or the dataset captions. The console lists the prompts and marks with `...` the ones not encoded yet.
+
+**LTX 2.3, LTX 2.5, MiniMax-H3 and MiniMax-H3 Image** encode them in Pre-Cache only: their text encoders (Gemma, MiniMax) are too large to load on the CPU next to a training. After changing a prompt, run Pre-Cache again (it skips the images already cached). If a training is running, the console says which prompts are not encoded and the previews go on with the others. MiniMax-H3 Image uses your prompts for image LoRAs; for edit LoRAs its previews keep using the dataset pairs.
+
+**Edit trainers.** The prompts are the instructions, applied to the preview's reference image(s) (**Edit Preview Image** or **Edit Preview Reference Images**; empty = the "before" of the first pair). Changing the images re-encodes them and every prompt, because Qwen-Image and MOSS-Image show them to the text encoder too.
+
+- In the trainers with a list of reference images (Qwen-Image 2.1, Qwen-Image 2512 / Edit 2511, FLUX.2 Klein 9B, FLUX.3 Image Klein, MOSS-Image), by default all the images are `<image1>`, `<image2>`… of the same edit, for every prompt: the output follows image 1, and image 2 only matters if the prompt names it (*put the jacket of `<image2>` on the person of `<image1>`*).
+- **One image per prompt** makes each prompt edit its own image instead: prompt 1 → image 1, prompt 2 → image 2… (with fewer images than prompts they start over). Each image is used at full preview size. Use it to see the effect on several photos in one round, ideally photos that are not in the dataset.
+- YuE 2 takes your prompts as lyrics: they are not encoded, the trainer reads them directly.
 
 ---
 
