@@ -435,7 +435,7 @@ In **2b. Training Previews** of every trainer, **Custom Prompts (0-4)** sets how
 - The trigger word is added in front of each prompt, as in the captions. A settings file from before, with Caption Mode = Custom prompt, opens as 1 prompt.
 - **Each preview keeps its prompt.** Click a preview: under its name you see the prompt it was made with, your own or the dataset caption. It is stored inside the PNG (and in a `.txt` next to video and audio previews), so it travels with the file.
 
-**When they are encoded.** Pre-Cache encodes the prompts on the GPU with the rest of the texts. If you change them with **Save JSON**, only the prompts that changed are encoded, in one process: on the GPU when nothing is running, on the CPU while training (it does not touch the training's VRAM; about a minute). The trainer switches to each prompt when it is ready; until then the previews use the ones that are, or the dataset captions. The console lists the prompts and marks with `...` the ones not encoded yet.
+**When they are encoded.** Pre-Cache encodes the prompts on the GPU with the rest of the texts. If you change them with **Save JSON**, only the prompts that changed are encoded, in one process: on the GPU when nothing is running, on the CPU while training (it does not touch the training's VRAM; about a minute). The trainer switches to each prompt when it is ready; until then the previews use the ones that are, or the dataset captions. The console lists the prompts and marks with `...` the ones not encoded yet. YuE 2 takes your prompts as lyrics: nothing is encoded, the trainer reads them directly.
 
 **LTX 2.3, LTX 2.5, MiniMax-H3 and MiniMax-H3 Image** encode them in Pre-Cache only: their text encoders (Gemma, MiniMax) are too large to load on the CPU next to a training. After changing a prompt, run Pre-Cache again (it skips the images already cached). If a training is running, the console says which prompts are not encoded and the previews go on with the others. MiniMax-H3 Image uses your prompts for image LoRAs; for edit LoRAs its previews keep using the dataset pairs.
 
@@ -443,7 +443,6 @@ In **2b. Training Previews** of every trainer, **Custom Prompts (0-4)** sets how
 
 - In the trainers with a list of reference images (Qwen-Image 2.1, Qwen-Image 2512 / Edit 2511, FLUX.2 Klein 9B, FLUX.3 Image Klein, MOSS-Image), by default all the images are `<image1>`, `<image2>`… of the same edit, for every prompt: the output follows image 1, and image 2 only matters if the prompt names it (*put the jacket of `<image2>` on the person of `<image1>`*).
 - **One image per prompt** makes each prompt edit its own image instead: prompt 1 → image 1, prompt 2 → image 2… (with fewer images than prompts they start over). Each image is used at full preview size. Use it to see the effect on several photos in one round, ideally photos that are not in the dataset.
-- YuE 2 takes your prompts as lyrics: they are not encoded, the trainer reads them directly.
 
 ---
 
