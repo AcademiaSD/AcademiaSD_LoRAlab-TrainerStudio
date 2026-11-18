@@ -27,6 +27,7 @@ import remote_access
 import file_transfer
 import queue_link
 import training_metrics
+import preview_prompts
 import face_match
 import dataset_forge
 import gpu_stats
@@ -528,6 +529,10 @@ def save_precache():
             train_cfg["output_dir"] = f"./Outputs/{output_dir_name}"
         if "trigger_word" in data:
             train_cfg["trigger_word"] = data["trigger_word"]
+        # Custom Prompts: el Pre-Cache los codifica y el trainer los usa (preview_prompts.py).
+        for key in preview_prompts.DEFAULTS:
+            if key in data:
+                train_cfg[key] = data[key]
         write_json_file(TRAIN_CONFIG, train_cfg)
         return jsonify({"status": "ok", "file": saved_files[0], "all_saved": saved_files})
     except Exception as exc:
@@ -570,6 +575,13 @@ def save_train():
         # Lo que había antes: con el entrenamiento en marcha, la GUI avisa solo de lo que ha cambiado.
         previous = read_json_file(TRAIN_CONFIG, {})
         write_json_file(TRAIN_CONFIG, {**read_json_file(TRAIN_CONFIG, {}), **data})
+        # Custom Prompts: solo los codifica el Pre-Cache (el text encoder no cabe para hacerlo al vuelo),
+        # que los lee de su propio json.
+        precache_cfg = read_json_file(PRECACHE_CONFIG, {})
+        for key in preview_prompts.DEFAULTS:
+            if key in data:
+                precache_cfg[key] = data[key]
+        write_json_file(PRECACHE_CONFIG, precache_cfg)
         saved_files = [TRAIN_CONFIG.name]
         if proj:
             output_dir_path = resolve_config_path(data["output_dir"], output_dir_name)
@@ -782,7 +794,9 @@ def get_previews():
     previews = previews[:50]
     # versions = mtime en ms, para que el navegador no reutilice una imagen vieja con el mismo nombre.
     return jsonify({"output_dir": str(output_dir), "previews": [n for n, _ in previews],
-                    "versions": {n: int(m * 1000) for n, m in previews}})
+                    "versions": {n: int(m * 1000) for n, m in previews},
+                    # Prompt de cada preview, guardado dentro del PNG por el trainer (preview_prompts.save_png).
+                    "prompts": {n: preview_prompts.png_prompt(str(output_dir / n)) for n, _ in previews}})
 
 
 @app.route("/api/preview/<path:filename>")

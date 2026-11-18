@@ -25,6 +25,7 @@ from transformers import AutoModel, AutoProcessor, AutoTokenizer
 import cache_names
 from i18n import t
 import settings_limits
+import preview_prompts
 from text_io import read_text_file
 import gpu_stats
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
@@ -436,33 +437,49 @@ def preprocess_qwenimage2512():
     with torch.inference_mode():
         encode_and_save(te, "", "_neg")
 
-        # Prompt manual de las previews. En edición va con la imagen de antes de la preview;
-        # sin prompt manual se usa la instrucción del primer par.
-        custom_prompt = PREVIEW_CUSTOM_PROMPT or (read_caption(samples[0][0]) if edit else "")
-        if custom_prompt:
-            c_prompt = with_trigger(custom_prompt)
-            print("[Custom Prompt Cache] " + t("Encoding: '{prompt}'", prompt=c_prompt) + (f" + {', '.join(os.path.basename(p) for p in preview_sources)}" if edit else ""))
-            preview_images = []
-            for src, bucket in zip(preview_sources, preview_buckets):
+        # Prompts propios de las previews (Custom Prompts, hasta 4), cada uno con su nombre de muestra
+        # (_custom, _custom2...). En edición las previews usan siempre la imagen de antes: sin prompts
+        # propios, _custom lleva la instrucción del primer par. Las referencias y el negativo con ellas
+        # (_custom_neg) los comparten todos.
+        preview_prompts.remove_unused_prefixed(CACHE_DIR, cfg, ("embed", "mask"))
+        custom_prompts = preview_prompts.wanted(cfg, TRIGGER_WORD)
+        if not custom_prompts and edit:
+            custom_prompts = [(0, with_trigger(read_caption(samples[0][0])))]
+        # Imágenes de referencia de cada prompt: todas como <image1>, <image2>... o una por prompt (One
+        # image per prompt); en ese caso cada prompt lleva también su negativo (<prefix>_neg).
+        one_per_prompt = preview_prompts.per_prompt(cfg)
+        plan = preview_prompts.ref_plan(preview_sources, [s for s, _ in custom_prompts], one_per_prompt) if edit else {}
+        plan_buckets = {}
+        for refs in plan.values():
+            area = preview_image_area(len(refs))
+            for src, ctrl in refs:
                 with Image.open(src) as im:
-                    preview_images.append(fit(im.convert("RGB"), *bucket))
-            encode_and_save(te, c_prompt, "_custom", images=preview_images)
-            if edit:
+                    plan_buckets[ctrl] = (src, bucket_size(*im.size, area=area))
+        preview_prompts.remove_slot_refs(CACHE_DIR, {preview_prompts.prefix(s) for s in plan} if one_per_prompt else ())
+        for slot, c_prompt in custom_prompts:
+            refs = plan.get(slot, [])
+            preview_images = []
+            for src, ctrl in refs:
+                with Image.open(src) as im:
+                    preview_images.append(fit(im.convert("RGB"), *plan_buckets[ctrl][1]))
+            print("[Custom Prompt Cache] " + t("Encoding: '{prompt}'", prompt=c_prompt) + (f" + {', '.join(os.path.basename(src) for src, _ in refs)}" if edit else ""))
+            encode_and_save(te, c_prompt, preview_prompts.prefix(slot), images=preview_images)
+            if edit and (one_per_prompt or slot == custom_prompts[0][0]):
                 # El negativo del CFG de edición también ve las referencias, como en QwenImageEditPlusPipeline.
-                encode_and_save(te, EDIT_NEGATIVE, "_custom_neg", images=preview_images)
+                encode_and_save(te, EDIT_NEGATIVE, preview_prompts.prefix(slot) + "_neg" if one_per_prompt else "_custom_neg",
+                                images=preview_images)
             # El trainer y el servidor comparan con estos textos para saber si la caché está al día.
-            with open(os.path.join(CACHE_DIR, "_custom_prompt.txt"), "w", encoding="utf-8") as f:
-                f.write(c_prompt)
-            with open(os.path.join(CACHE_DIR, "_custom_image.txt"), "w", encoding="utf-8") as f:
-                f.write("\n".join(PREVIEW_EDIT_IMAGES))
-        # Restos de un prompt anterior, o de la preview de edición si el dataset ya no es de pares.
-        stale = () if custom_prompt else ("_custom_embed.pt", "_custom_mask.pt", "_custom_prompt.txt", "_custom_image.txt")
-        if not (custom_prompt and edit):
-            stale += ("_custom_ctrl.pt", "_custom_neg_embed.pt", "_custom_neg_mask.pt")
-        for f in stale:
-            if os.path.exists(os.path.join(CACHE_DIR, f)):
-                os.remove(os.path.join(CACHE_DIR, f))
-        expected_custom_ctrls = custom_ctrl_names(len(preview_sources)) if custom_prompt and edit else set()
+            preview_prompts.save_text(CACHE_DIR, slot, c_prompt)
+        if custom_prompts:
+            preview_prompts.save_images_text(CACHE_DIR, PREVIEW_EDIT_IMAGES, one_per_prompt)
+        elif os.path.exists(os.path.join(CACHE_DIR, "_custom_image.txt")):
+            os.remove(os.path.join(CACHE_DIR, "_custom_image.txt"))
+        # Restos de la preview de edición si el dataset ya no es de pares.
+        if not (custom_prompts and edit):
+            for f in ("_custom_ctrl.pt", "_custom_neg_embed.pt", "_custom_neg_mask.pt"):
+                if os.path.exists(os.path.join(CACHE_DIR, f)):
+                    os.remove(os.path.join(CACHE_DIR, f))
+        expected_custom_ctrls = {c for c in plan_buckets if c.startswith("_custom_ctrl")}
 
         for idx, (name, target, control) in enumerate(samples, 1):
             image = fit(Image.open(control).convert("RGB"), *buckets[name]) if control else None
@@ -479,14 +496,12 @@ def preprocess_qwenimage2512():
     # La imagen de la preview de edición se codifica siempre: puede ser otro fichero más antiguo.
     jobs = [(target, f"{name}_latent.pt", buckets[name]) for name, target, _ in samples]
     jobs += [(control, f"{name}_ctrl.pt", buckets[name]) for name, _, control in samples if control]
-    if custom_prompt and edit:
-        jobs += [(src, custom_ctrl_name(i), bucket)
-                 for i, (src, bucket) in enumerate(zip(preview_sources, preview_buckets))]
+    jobs += [(src, ctrl, bucket) for ctrl, (src, bucket) in plan_buckets.items()]
 
     pending = []
     for src, out, (bw, bh) in jobs:
         lat_path = os.path.join(CACHE_DIR, out)
-        if (not out.startswith("_custom_ctrl") and os.path.exists(lat_path) and os.path.getmtime(lat_path) > os.path.getmtime(src)
+        if (not out.startswith("_custom") and os.path.exists(lat_path) and os.path.getmtime(lat_path) > os.path.getmtime(src)
                 and tuple(torch.load(lat_path, weights_only=True).shape[-2:]) == (bh // 8, bw // 8)):
             continue
         pending.append((src, out, (bw, bh)))
@@ -517,72 +532,94 @@ def parse_preview_images_arg(value):
     return as_image_list(value)
 
 
-def encode_preview_prompt(cache_dir, prompt, images_arg, device):
+def encode_preview_prompts(cache_dir, device, items, images_arg=None):
+    """
+    Codifica solo los prompts propios de las previews (Custom Prompts) y, en edición, sus imágenes de
+    referencia (solo si han cambiado). Lo lanza el servidor al guardar prompts o imágenes nuevos: sin
+    entrenamiento en marcha va en GPU; con el entrenamiento en marcha, en CPU para no tocar su VRAM.
+    El trainer relee cada embedding antes de la siguiente preview.
+    """
     global CACHE_DIR
     CACHE_DIR = cache_dir
     where = device.upper().replace("CUDA", "GPU")
-    requested = parse_preview_images_arg(images_arg)
+    requested = as_image_list(images_arg or [])
     edit = any(f.endswith("_ctrl.pt") and not cache_names.is_reserved(f) for f in os.listdir(cache_dir))
     sources = preview_edit_sources(find_samples(), requested) if edit else []
-    buckets = []
-    area = preview_image_area(len(sources))
-    for src in sources:
-        with Image.open(src) as im:
-            buckets.append(bucket_size(*im.size, area=area))
-    images = []
-    for src, bucket in zip(sources, buckets):
-        with Image.open(src) as im:
-            images.append(fit(im.convert("RGB"), *bucket))
+    # Las referencias de cada prompt: todas como <image1>, <image2>... o una por prompt.
+    one_per_prompt = preview_prompts.per_prompt(cfg)
+    slot_images, ref_jobs = {}, {}
+    for slot, refs in preview_prompts.ref_plan(sources, [s for s, _ in items], one_per_prompt).items():
+        area = preview_image_area(len(refs))
+        slot_images[slot] = []
+        for src, ctrl in refs:
+            with Image.open(src) as im:
+                bucket = bucket_size(*im.size, area=area)
+                slot_images[slot].append(fit(im.convert("RGB"), *bucket))
+            ref_jobs[ctrl] = (src, bucket)
 
-    if sources:
+    # Las referencias solo se recodifican si han cambiado (o faltan).
+    new_refs = bool(sources) and (
+        preview_prompts.encoded_images(cache_dir) != preview_prompts.images_key(requested, one_per_prompt)
+        or not all(os.path.exists(os.path.join(cache_dir, c)) for c in ref_jobs))
+    if new_refs:
         # El servidor lee las líneas "[Custom Prompt] Image/Prompt" para mostrar la fase en la GUI.
         print("[Custom Prompt] Image: " + t("Encoding the reference image on {device}: {path}", device=where, path=", ".join(os.path.basename(p) for p in sources)), flush=True)
         vae = AutoencoderKLQwenImage.from_pretrained(
             MODEL_ID, subfolder="vae", dtype=torch.bfloat16 if device == "cuda" else torch.float32).to(device)
-        encode_latents(vae, [(src, custom_ctrl_name(i) + ".new", bucket)
-                             for i, (src, bucket) in enumerate(zip(sources, buckets))], device)
+        encode_latents(vae, [(src, ctrl + ".new", bucket) for ctrl, (src, bucket) in ref_jobs.items()], device)
         del vae
         free_vram()
 
-    print("[Custom Prompt] Prompt: " + t("Encoding the prompt on {device}: '{prompt}'", device=where, prompt=prompt), flush=True)
+    # El text encoder se carga una vez para todos los prompts (en CPU tarda).
     if device == "cuda":
         te = TextEncoder(TEXT_ENCODER_DIR, TEXT_ENCODER_MODES[TEXT_ENCODER][1], "cuda", edit)
     else:
         te = TextEncoder("text_encoder_BF16", False, "cpu", edit)
+    results, negs = [], {}
     with torch.inference_mode():
-        embeds, mask = te.encode(prompt, images)
-        neg = te.encode(EDIT_NEGATIVE, images) if images else None
+        for slot, prompt in items:
+            images = slot_images.get(slot, [])
+            print("[Custom Prompt] Prompt: " + t("Encoding the prompt on {device}: '{prompt}'", device=where, prompt=prompt), flush=True)
+            embeds, mask = te.encode(prompt, images)
+            results.append((slot, prompt, embeds.cpu(), mask))
+            # El negativo con las referencias: uno por prompt, o el de _custom para todos.
+            name = preview_prompts.prefix(slot) + "_neg" if one_per_prompt else "_custom_neg"
+            if images and name not in negs:
+                negs[name] = te.encode(EDIT_NEGATIVE, images)
     del te
     free_vram()
 
-    # Escrituras atómicas; el embedding el último, porque es el fichero que vigila el trainer.
-    def replace(name, write):
-        tmp = os.path.join(cache_dir, name + ".tmp")
-        write(tmp)
-        os.replace(tmp, os.path.join(cache_dir, name))
-
-    replace("_custom_mask.pt", lambda f: torch.save(mask, f))
-    if images:
-        for i in range(len(images)):
-            name = custom_ctrl_name(i)
+    # Escrituras atómicas: las referencias nuevas, el negativo y, por prompt, máscara, texto y el
+    # embedding el último, porque es el fichero que vigila el trainer.
+    if new_refs:
+        for name in ref_jobs:
             os.replace(os.path.join(cache_dir, name + ".new"), os.path.join(cache_dir, name))
-        replace("_custom_neg_mask.pt", lambda f: torch.save(neg[1], f))
-        replace("_custom_neg_embed.pt", lambda f: torch.save(neg[0].cpu(), f))
-    else:
+    for name, neg in negs.items():
+        preview_prompts.write_atomic(cache_dir, f"{name}_mask.pt", lambda f, v=neg[1]: torch.save(v, f))
+        preview_prompts.write_atomic(cache_dir, f"{name}_embed.pt", lambda f, v=neg[0]: torch.save(v.cpu(), f))
+    if not sources:
         for name in ("_custom_neg_mask.pt", "_custom_neg_embed.pt"):
             path = os.path.join(cache_dir, name)
             if os.path.exists(path):
                 os.remove(path)
-    remove_stale_custom_ctrls(custom_ctrl_names(len(images)))
-    replace("_custom_prompt.txt", lambda f: open(f, "w", encoding="utf-8").write(prompt))
-    replace("_custom_image.txt", lambda f: open(f, "w", encoding="utf-8").write("\n".join(requested)))
-    replace("_custom_embed.pt", lambda f: torch.save(embeds.cpu(), f))
+    if one_per_prompt:
+        remove_stale_custom_ctrls({"_custom_ctrl.pt"})
+    else:
+        remove_stale_custom_ctrls(custom_ctrl_names(len(sources)))
+        preview_prompts.remove_slot_refs(cache_dir)
+    preview_prompts.save_images_text(cache_dir, requested, one_per_prompt)
+    for slot, prompt, embeds, mask in results:
+        name = preview_prompts.prefix(slot)
+        preview_prompts.write_atomic(cache_dir, f"{name}_mask.pt", lambda f, v=mask: torch.save(v, f))
+        preview_prompts.save_text(cache_dir, slot, prompt)
+        preview_prompts.write_atomic(cache_dir, f"{name}_embed.pt", lambda f, v=embeds: torch.save(v, f))
     print("[Custom Prompt] " + t("Ready."), flush=True)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 6 and sys.argv[1] == "--prompt-only":
-        # --prompt-only <carpeta de caché> <prompt con el trigger ya puesto> <rutas JSON o una ruta> <cuda|cpu>
-        encode_preview_prompt(*sys.argv[2:])
+    prompts_only = preview_prompts.parse_prompts_only(sys.argv)
+    if prompts_only:
+        # --prompts-only <carpeta de caché> <cuda|cpu> <json [[slot, prompt con el trigger ya puesto], ...]> [<json rutas>]
+        encode_preview_prompts(*prompts_only)
     else:
         preprocess_qwenimage2512()

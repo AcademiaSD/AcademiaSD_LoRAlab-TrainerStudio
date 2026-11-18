@@ -38,6 +38,7 @@ import settings_limits
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import lora_options
 import training_metrics
+import preview_prompts
 
 # FLUX.3 hace las normas q/k en FP32 a propósito (como BFL): torch avisa de que no usa el kernel fusionado.
 warnings.filterwarnings("ignore", message="Mismatch dtype between input and weight")
@@ -156,6 +157,8 @@ PREVIEW_WIDTH     = int(cfg.get("preview_width",  DEFAULTS["preview_width"]))
 PREVIEW_HEIGHT    = int(cfg.get("preview_height", DEFAULTS["preview_height"]))
 PREVIEW_CAPTION_MODE  = cfg.get("preview_caption_mode",  DEFAULTS["preview_caption_mode"])
 PREVIEW_CUSTOM_PROMPT = cfg.get("preview_custom_prompt", DEFAULTS["preview_custom_prompt"]).strip()
+PREVIEW_PROMPTS = preview_prompts.settings(cfg)   # Custom Prompts (hasta 4), cambian en caliente
+PREVIEW_NOW = {"index": 0, "prompt": ""}          # preview en curso: nº dentro de la ronda y su prompt
 
 TRIGGER_WORD     = cfg.get("trigger_word", "")
 PROJECT_NAME      = cfg.get("project_name", "").strip()
@@ -563,8 +566,8 @@ def run_preview(model, scheduler, sample, neg, size, step):
             vae.to("cpu")
 
         from PIL import Image
-        out = os.path.join(OUTPUT_DIR, f"preview_step_{step}.png")
-        Image.fromarray(img).save(out)
+        out = os.path.join(OUTPUT_DIR, preview_prompts.preview_name(step, PREVIEW_NOW["index"]))
+        preview_prompts.save_png(img, out, PREVIEW_NOW["prompt"])
         print("  ↳ " + t("Preview saved to: {path}", path=out))
     finally:
         if was_training:
@@ -572,27 +575,20 @@ def run_preview(model, scheduler, sample, neg, size, step):
         free_vram()
 
 
-def check_custom_prompt(has_custom):
+def check_custom_prompt(custom):
     """
-    El trainer no tiene text encoder (es la razón de ser del pre-cache): el prompt manual
-    lo codifica el Pre-Cache, que al relanzarlo salta las imágenes ya cacheadas.
-    Aquí solo se avisa si falta o si el de los ajustes ya no es el codificado.
+    El trainer no tiene text encoder (es la razón de ser del pre-cache): los prompts propios los
+    codifica el Pre-Cache, o el servidor en CPU al guardarlos con el entrenamiento en marcha.
+    Aquí solo se dice cuáles hay y si alguno aún no está codificado.
     """
-    if PREVIEW_CAPTION_MODE != "custom":
+    if not preview_prompts.prompts(PREVIEW_PROMPTS):
         return
-    if not has_custom:
-        print("\n[PREVIEW] " + t("Custom mode but the cache has no encoded prompt: set it, Save JSON and run Pre-Cache "
-                                "(it only re-encodes the texts). Using the first caption meanwhile."))
-        return
-
-    wanted = PREVIEW_CUSTOM_PROMPT
-    if TRIGGER_WORD and wanted and TRIGGER_WORD.lower() not in wanted.lower():
-        wanted = f"{TRIGGER_WORD}, {wanted}"
-    prompt_file = os.path.join(CACHE_DIR, "_custom_prompt.txt")
-    encoded = open(prompt_file, "r", encoding="utf-8").read() if os.path.exists(prompt_file) else ""
-    print(f"\n[PREVIEW] {t('Custom prompt')}: '{encoded}'")
-    if wanted and wanted != encoded:
-        print("[PREVIEW] " + t("The new prompt is being encoded on CPU (Save JSON); previews switch to it when ready."))
+    print("\n[PREVIEW] " + t("Custom prompts:"))
+    for line in preview_prompts.describe(PREVIEW_PROMPTS, CACHE_DIR, TRIGGER_WORD):
+        print(line)
+    if custom.missing(PREVIEW_PROMPTS):
+        print("[PREVIEW] " + t("Prompts marked ... are not encoded yet: they are encoded on CPU when you Save JSON "
+                              "(or by Pre-Cache). Until then previews use the ones that are ready, or the dataset captions."))
 
 
 _live_mtime = None
@@ -650,6 +646,7 @@ def reload_live_settings():
     PREVIEW_CAPTION_MODE  = fresh("preview_caption_mode",  str,   PREVIEW_CAPTION_MODE)
     PREVIEW_CUSTOM_PROMPT = fresh("preview_custom_prompt", lambda v: str(v).strip(), PREVIEW_CUSTOM_PROMPT)
     SEED                 = fresh("seed",                  int,   SEED)  # solo previews
+    preview_prompts.live_update(PREVIEW_PROMPTS, raw, changes)
     return changes
 
 
@@ -878,10 +875,21 @@ def train_flux3klein():
 
     edit_mode = any("ctrl" in v for v in cache_data.values())
 
-    if os.path.exists(f"{CACHE_DIR}/_custom_embed.pt"):
-        cache_data["_custom"] = load_sample("_custom")
-    check_custom_prompt("_custom" in cache_data)
-    custom_mtime = [os.path.getmtime(f"{CACHE_DIR}/_custom_embed.pt") if "_custom" in cache_data else None]
+    def load_custom(slot):
+        # Cada prompt tiene su embedding y máscaras (<prefix>_*.pt); las imágenes de referencia
+        # (ctrl) se codifican una vez como _custom y las comparten todos.
+        sample = load_sample(preview_prompts.prefix(slot))
+        if slot:
+            shared = load_sample("_custom")
+            for key in ("ctrl", "ctrls", "ref", "refs", "uncond"):
+                if key in shared:
+                    sample.setdefault(key, shared[key])
+        return sample
+
+    # Custom Prompts: los embeddings se releen cuando el servidor los recodifica en CPU.
+    custom = preview_prompts.Embeds(CACHE_DIR, load_custom, prefixed=True)
+    custom.refresh(PREVIEW_PROMPTS)
+    check_custom_prompt(custom)
 
     neg = None
     if os.path.exists(f"{CACHE_DIR}/_neg_embed.pt"):
@@ -890,9 +898,7 @@ def train_flux3klein():
     all_preview_names = sorted(k for k in cache_data.keys() if not cache_names.is_reserved(k))
 
     def get_preview_sample(step):
-        if PREVIEW_CAPTION_MODE == "custom" and "_custom" in cache_data:
-            return "_custom"
-        elif PREVIEW_CAPTION_MODE == "random":
+        if PREVIEW_CAPTION_MODE == "random":
             return random.choice(all_preview_names)
         elif PREVIEW_CAPTION_MODE == "rotate4":
             idx = (step // max(1, PREVIEW_EVERY)) % min(4, len(all_preview_names))
@@ -918,8 +924,9 @@ def train_flux3klein():
                 print("\n[LIVE] " + t("Settings reloaded without stopping:"))
                 for c in changes:
                     print(f"[LIVE]   {c}")
-                if any(c.startswith(("preview_custom_prompt", "preview_caption_mode")) for c in changes):
-                    check_custom_prompt("_custom" in cache_data)
+                if any(c.startswith(("preview_custom", "preview_caption_mode")) for c in changes):
+                    custom.refresh(PREVIEW_PROMPTS)
+                    check_custom_prompt(custom)
                 if step > TOTAL_STEPS:
                     break
 
@@ -983,28 +990,35 @@ def train_flux3klein():
                 save_checkpoint_now(step)
 
             if PREVIEW_EVERY > 0 and step % PREVIEW_EVERY == 0:
-                # El servidor codifica en CPU los prompts nuevos: aquí solo se relee el embedding si cambió.
-                custom_path = f"{CACHE_DIR}/_custom_embed.pt"
-                if os.path.exists(custom_path) and os.path.getmtime(custom_path) != custom_mtime[0]:
-                    custom_mtime[0] = os.path.getmtime(custom_path)
-                    cache_data["_custom"] = load_sample("_custom")
-                    check_custom_prompt(True)
-                p_name = get_preview_sample(step)
-                sample = cache_data[p_name]
-                # Tamaño de la preview: el del objetivo; en edición, el de la imagen de antes
-                # (como en ComfyUI, la salida hereda el tamaño de la referencia). El prompt manual
-                # sin imagen usa el tamaño de la primera del dataset.
-                ref = sample.get("ctrl", sample.get("lat", cache_data[all_preview_names[0]]["lat"]))
-                print(f"\n  [Preview] {t('Mode')}: {PREVIEW_CAPTION_MODE} | {t('Sample')}: {p_name}")
-                H, W = ref.shape[2], ref.shape[3]
-                if PREVIEW_WIDTH > 0 and PREVIEW_HEIGHT > 0 and not edit_mode:
-                    # Lados explícitos en píxeles: cada token es un parche de 16x16 px.
-                    H, W = max(1, round(PREVIEW_HEIGHT / 16)), max(1, round(PREVIEW_WIDTH / 16))
-                elif PREVIEW_SIZE > 0:
-                    # Cada token es un parche de 16x16 px.
-                    s = PREVIEW_SIZE / 16 / math.sqrt(H * W)
-                    H, W = max(1, round(H * s)), max(1, round(W * s))
-                run_preview(model, scheduler, sample, neg, (H, W), step)
+                # El servidor codifica en CPU los prompts nuevos: aquí solo se releen los embeddings que cambiaron.
+                if custom.refresh(PREVIEW_PROMPTS):
+                    check_custom_prompt(custom)
+                # Una preview por prompt propio (o una con uno al azar); sin prompts, la de Caption Mode.
+                slots = custom.round(PREVIEW_PROMPTS)
+                for preview_index, preview_slot in enumerate(slots or [None]):
+                    if preview_slot is None:
+                        p_name = get_preview_sample(step)
+                        preview_text = preview_prompts.dataset_caption(cfg, p_name, TRIGGER_WORD)
+                    else:
+                        cache_data["_custom"] = custom.items[preview_slot]
+                        p_name = "_custom"
+                        preview_text = preview_prompts.custom_text(CACHE_DIR, preview_slot)
+                    PREVIEW_NOW.update(index=preview_index, prompt=preview_text)
+                    sample = cache_data[p_name]
+                    # Tamaño de la preview: el del objetivo; en edición, el de la imagen de antes
+                    # (como en ComfyUI, la salida hereda el tamaño de la referencia). El prompt manual
+                    # sin imagen usa el tamaño de la primera del dataset.
+                    ref = sample.get("ctrl", sample.get("lat", cache_data[all_preview_names[0]]["lat"]))
+                    print(f"\n  [Preview] {t('Mode')}: {PREVIEW_CAPTION_MODE} | {t('Sample')}: {p_name}")
+                    H, W = ref.shape[2], ref.shape[3]
+                    if PREVIEW_WIDTH > 0 and PREVIEW_HEIGHT > 0 and not edit_mode:
+                        # Lados explícitos en píxeles: cada token es un parche de 16x16 px.
+                        H, W = max(1, round(PREVIEW_HEIGHT / 16)), max(1, round(PREVIEW_WIDTH / 16))
+                    elif PREVIEW_SIZE > 0:
+                        # Cada token es un parche de 16x16 px.
+                        s = PREVIEW_SIZE / 16 / math.sqrt(H * W)
+                        H, W = max(1, round(H * s)), max(1, round(W * s))
+                    run_preview(model, scheduler, sample, neg, (H, W), step)
 
     except (KeyboardInterrupt, SystemExit):
         save_checkpoint_now(last_step_executed)

@@ -9,6 +9,7 @@
     <script src="/loss_chart.js"></script>
     <script src="/queue_client.js"></script>
     <script src="/number_limits.js"></script>
+    <script src="/preview_prompts.js"></script>
 
     <!-- Favicon de la pestaña del navegador -->
     <link rel="icon" type="image/png" href="/assets/logo_128.png">
@@ -1016,7 +1017,7 @@
                         document.getElementById('train_preview_caption_mode').value = t.preview_caption_mode;
                         toggleCaptionMode(t.preview_caption_mode);
                     }
-                    if (t.preview_custom_prompt !== undefined) document.getElementById('train_preview_custom_prompt').value = t.preview_custom_prompt;
+                    if (t.preview_custom_prompt !== undefined) document.getElementById('train_preview_custom_prompt').value = t.preview_custom_prompt; PreviewPrompts.load(t);
                     if (t.preview_ode_steps !== undefined || t.preview_steps !== undefined) document.getElementById('train_preview_ode_steps').value = t.preview_ode_steps ?? t.preview_steps;
                     if (t.preview_seconds !== undefined) document.getElementById('train_preview_seconds').value = t.preview_seconds;
                     if (t.preview_compare_base !== undefined) document.getElementById('train_preview_compare_base').checked = !!t.preview_compare_base;
@@ -1072,7 +1073,7 @@
                         document.getElementById('train_preview_caption_mode').value = data.preview_caption_mode;
                         toggleCaptionMode(data.preview_caption_mode);
                     }
-                    if (data.preview_custom_prompt !== undefined) document.getElementById('train_preview_custom_prompt').value = data.preview_custom_prompt;
+                    if (data.preview_custom_prompt !== undefined) document.getElementById('train_preview_custom_prompt').value = data.preview_custom_prompt; PreviewPrompts.load(data);
                     if (data.preview_ode_steps !== undefined || data.preview_steps !== undefined) document.getElementById('train_preview_ode_steps').value = data.preview_ode_steps ?? data.preview_steps;
                     if (data.preview_seconds !== undefined) document.getElementById('train_preview_seconds').value = data.preview_seconds;
                     if (data.preview_compare_base !== undefined) document.getElementById('train_preview_compare_base').checked = !!data.preview_compare_base;
@@ -1142,7 +1143,7 @@
                 dataset_path: document.getElementById('dataset_path').value,
                 style_prompt: document.getElementById('precache_style_prompt').value.trim(),
                 cache_dir: document.getElementById('precache_cache_dir').value,
-                preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim(),
+                preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim(), ...PreviewPrompts.values(),
                 regularizer: document.getElementById('precache_regularizer').checked
             };
             const res = await fetch('/api/save-precache', { method: 'POST', body: JSON.stringify(precacheData) });
@@ -1247,7 +1248,7 @@
                 seed: parseInt(document.getElementById('train_seed').value),
                 preview_every: parseInt(document.getElementById('train_preview_every').value) || 0,
                 preview_caption_mode: document.getElementById('train_preview_caption_mode').value,
-                preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim(),
+                preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim(), ...PreviewPrompts.values(),
                 preview_ode_steps: parseInt(document.getElementById('train_preview_ode_steps').value),
                 preview_seconds: parseFloat(document.getElementById('train_preview_seconds').value),
                 preview_compare_base: document.getElementById('train_preview_compare_base').checked,
@@ -1837,12 +1838,12 @@
                     // YuE2 produces WAV: audio card with icon + name + player.
                     // A stray .png (e.g. from an old session) renders as before.
                     const esAudio = /\.wav$/i.test(filename);
-                    card.onclick = () => openModal(src, filename, `${t('Generated preview')}: ${filename}`, esAudio);
+                    card.onclick = () => openModal(src, filename, `${t('Generated preview')}: ${filename}` + ((data.prompts || {})[filename] ? `\n\n${t('Prompt')}: ${data.prompts[filename]}` : ''), esAudio);
 
                     let stepTag = filename;
-                    const match = filename.match(/preview_step_(\d+)\.(wav|png)/i);
+                    const match = filename.match(/preview_step_(\d+)(?:_(\d+))?(?=[_.])/i);
                     if (match) {
-                        stepTag = t('Step {n}', { n: match[1] });
+                        stepTag = t('Step {n}', { n: match[1] }) + (match[2] ? ` · #${match[2]}` : '');
                     }
 
                     if (esAudio) {

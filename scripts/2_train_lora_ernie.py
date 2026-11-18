@@ -15,6 +15,7 @@ from safetensors.torch import load, load_file, save_file
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import lora_options
 import training_metrics
+import preview_prompts
 import settings_limits
 
 # La barra de progreso comparte los caracteres visuales del entrenador Klein. Fuerza UTF-8
@@ -56,6 +57,7 @@ LORA_TARGETS="all" if cfg.get("lora_targets","blocks")=="all" else "blocks"
 WEIGHT_DECAY=float(cfg.get("weight_decay",0)); MAX_GRAD_NORM=float(cfg.get("max_grad_norm",1.0)); PREVIEW_EVERY=int(cfg.get("preview_every",0) or 0)
 PREVIEW_STEPS=int(cfg.get("preview_steps",28)); PREVIEW_CFG=float(cfg.get("preview_cfg",4)); PREVIEW_SIZE=int(cfg.get("preview_size",0)); PREVIEW_WIDTH=int(cfg.get("preview_width",0)); PREVIEW_HEIGHT=int(cfg.get("preview_height",0))
 PREVIEW_MODE=cfg.get("preview_caption_mode","first")
+PREVIEW_PROMPTS=preview_prompts.settings(cfg)   # Custom Prompts (hasta 4), cambian en caliente
 SEED=int(cfg.get("seed",42)); TRIGGER=cfg.get("trigger_word","").strip(); CUSTOM=cfg.get("preview_custom_prompt","").strip()
 os.makedirs(OUT,exist_ok=True); RESUME=os.path.join(OUT,"resume_checkpoint"); OPT=os.path.join(OUT,"optimizer.pt"); STEPFILE=os.path.join(OUT,"current_step.txt")
 torch.manual_seed(SEED if SEED>0 else random.randrange(2**31)); random.seed(SEED if SEED>0 else None)
@@ -115,7 +117,7 @@ class VAE:
         if cls.model is None: cls.model=AutoencoderKLFlux2.from_pretrained(MODEL,subfolder="vae",torch_dtype=(torch.bfloat16 if PRECISION == "bf16" else torch.float32)).eval()
         return cls.model
 
-def preview(model,scheduler,emb,shape,step):
+def preview(model,scheduler,emb,shape,step,index=0,prompt=""):
     H,W=shape; model.eval(); device="cuda"
     text,lens=pad_text([emb],device)
     if PREVIEW_CFG>1:
@@ -141,7 +143,8 @@ def preview(model,scheduler,emb,shape,step):
         img=vae.decode(z.to(vae.dtype),return_dict=False)[0]
         arr=((img.float()/2+0.5).clamp(0,1)[0].cpu().permute(1,2,0).numpy()*255).astype("uint8")
         from PIL import Image
-        Image.fromarray(arr).save(os.path.join(OUT,f"preview_step_{step}.png"))
+        # El prompt va dentro del PNG: la galería lo enseña al abrir la preview.
+        preview_prompts.save_png(arr,os.path.join(OUT,preview_prompts.preview_name(step,index)),prompt)
         vae.to("cpu"); free()
     model.train()
 
@@ -232,6 +235,8 @@ def main():
         try: signal.signal(sig,stop)
         except Exception: pass
     ordered=list(cache)
+    # Custom Prompts: embeddings de _custom_embed.pt, _custom_embed_2.pt... (se releen si cambian).
+    custom=preview_prompts.Embeds(CACHE,lambda slot: torch.load(custom.path(slot),weights_only=True))
     print(f"ERNIE text-to-image training: {len(ordered)} images, {len(buckets)} buckets, {STEPS} steps, LR scheduler {lora_options.lr_scheduler_label(LR_SCHEDULER,WARMUP,LR_CYCLES)}",flush=True)
     model.train()
     running_loss=t_step_avg=grad_norm=0.0; start_step=step; last_step=step; live_mtime=None
@@ -246,6 +251,7 @@ def main():
                 for key,var,cast in (("total_steps","STEPS",int),("save_every","SAVE_EVERY",int),("lr","LR",float),("max_grad_norm","MAX_GRAD_NORM",float),("preview_every","PREVIEW_EVERY",int),("preview_steps","PREVIEW_STEPS",int),("preview_cfg","PREVIEW_CFG",float),("preview_size","PREVIEW_SIZE",int),("preview_width","PREVIEW_WIDTH",int),("preview_height","PREVIEW_HEIGHT",int),("preview_caption_mode","PREVIEW_MODE",str),("preview_custom_prompt","CUSTOM",str),("seed","SEED",int)):
                     old=globals()[var]; new=cast(fresh.get(key,old)); globals()[var]=new
                     if old!=new: changed.append(f"{key}: {old} -> {new}")
+                preview_prompts.live_update(PREVIEW_PROMPTS,fresh,changed)
                 if changed: print("\n[LIVE] Settings reloaded: " + " | ".join(changed),flush=True)
         except (OSError,ValueError,TypeError): pass
         tic=time.time(); size=random.choice(list(buckets)); names=[random.choice(buckets[size]) for _ in range(BATCH)]
@@ -275,19 +281,23 @@ def main():
         metrics.log(step,step_loss,lr_at(step),grad_norm,elapsed,STEPS)
         if SAVE_EVERY>0 and step%SAVE_EVERY==0: save()
         if PREVIEW_EVERY>0 and step%PREVIEW_EVERY==0:
-            if PREVIEW_MODE=="random": name=random.choice(ordered)
-            elif PREVIEW_MODE=="rotate4": name=ordered[(step//max(1,PREVIEW_EVERY))%min(4,len(ordered))]
-            else: name=ordered[0]
-            e=cache[name][1]
-            custom_path=os.path.join(CACHE,"_custom_embed.pt")
-            if PREVIEW_MODE=="custom" and os.path.isfile(custom_path): e=torch.load(custom_path,weights_only=True)
+            # Custom Prompts: una preview por prompt propio ya codificado (o una con uno al azar); sin
+            # ellos, la del Caption Mode. El servidor los recodifica en CPU y aquí se releen al cambiar.
+            custom.refresh(PREVIEW_PROMPTS)
+            rounds=[(custom.items[s],preview_prompts.custom_text(CACHE,s)) for s in custom.round(PREVIEW_PROMPTS)]
+            if not rounds:
+                if PREVIEW_MODE=="random": name=random.choice(ordered)
+                elif PREVIEW_MODE=="rotate4": name=ordered[(step//max(1,PREVIEW_EVERY))%min(4,len(ordered))]
+                else: name=ordered[0]
+                rounds=[(cache[name][1],preview_prompts.dataset_caption(cfg,name,TRIGGER))]
             h,w=size
             # Cada punto del latente es un parche de 16x16 px; lados pares.
             if PREVIEW_WIDTH>0 and PREVIEW_HEIGHT>0:
                 h=max(2,round(PREVIEW_HEIGHT/16/2)*2); w=max(2,round(PREVIEW_WIDTH/16/2)*2)
             elif PREVIEW_SIZE>0:
                 scale=PREVIEW_SIZE/16/math.sqrt(h*w); h=max(2,round(h*scale/2)*2); w=max(2,round(w*scale/2)*2)
-            preview(model,scheduler,e,(h,w),step)
+            for index,(e,text) in enumerate(rounds):
+                preview(model,scheduler,e,(h,w),step,index,text)
     save(); export(model,os.path.join(OUT,"Ernie_FINAL_LoRA.safetensors"),step); print("Training completed.",flush=True)
 
 if __name__=="__main__": main()

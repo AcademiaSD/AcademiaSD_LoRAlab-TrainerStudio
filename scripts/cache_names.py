@@ -15,7 +15,7 @@ their cache files were never removed when they left the dataset.
 """
 import re
 
-_RESERVED = re.compile(r"_(custom|neg|negcfg|pad|vision|realcodes|diagnostics)(_|\.|$)")
+_RESERVED = re.compile(r"_(custom\d*|neg|negcfg|pad|vision|realcodes|diagnostics)(_|\.|$)")
 
 
 def is_reserved(name):

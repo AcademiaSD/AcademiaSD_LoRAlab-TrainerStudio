@@ -41,6 +41,7 @@ from PIL import Image
 from diffusers import DiffusionPipeline
 from i18n import t
 import settings_limits
+import preview_prompts
 from text_io import read_text_file
 import gpu_stats
 import ltx25_model
@@ -1281,19 +1282,23 @@ def preprocess_ltx25():
     # ------------------------------------------------------------------
     # CUSTOM PROMPT
     # ------------------------------------------------------------------
-    if PREVIEW_CUSTOM_PROMPT:
-        custom_prompt = PREVIEW_CUSTOM_PROMPT
-
-        if TRIGGER_WORD and TRIGGER_WORD.lower() not in custom_prompt.lower():
-            custom_prompt = f"{TRIGGER_WORD}, {custom_prompt}".strip(", ")
-
+    # Prompts propios de las previews (Custom Prompts, hasta 4), cada uno con su nombre de muestra
+    # (_custom, _custom2...). Solo los codifica el Pre-Cache: el text encoder no cabe para hacerlo
+    # al vuelo. El trainer pasa por los conectores lo que falte; aquí se borra lo que pasó antes,
+    # que ya no corresponde al prompt nuevo.
+    for slot, custom_prompt in preview_prompts.wanted(cfg, TRIGGER_WORD):
+        prefix = preview_prompts.prefix(slot)
         print("\n" + t("Encoding: '{prompt}'", prompt=custom_prompt))
 
         with torch.inference_mode():
             custom_result = encode_prompt(pipe, custom_prompt, text_device)
 
-        save_prompt_result(custom_result, "_custom")
+        save_prompt_result(custom_result, prefix)
         free_vram(custom_result)
+        for f in os.listdir(CACHE_DIR):
+            if f.startswith((prefix + "video_text", prefix + "audio_text")):
+                os.remove(os.path.join(CACHE_DIR, f))
+        preview_prompts.save_text(CACHE_DIR, slot, custom_prompt)
 
     # ------------------------------------------------------------------
     # DATASET, pasada 1: textos (Gemma 4 en VRAM, VAE fuera)

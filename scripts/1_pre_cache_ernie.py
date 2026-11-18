@@ -8,6 +8,7 @@ from diffusers import AutoencoderKLFlux2, ErnieImagePipeline
 from transformers import AutoTokenizer, Mistral3Model
 import cache_names
 import settings_limits
+import preview_prompts
 from project_layout import resolve_cache_dir, resolve_model_dir
 from text_io import read_text_file
 
@@ -124,7 +125,6 @@ def main():
     print(f"ERNIE-Image text-to-image pre-cache: {len(samples)} images | {CACHE}",flush=True)
     expected={f"{n}_{s}.pt" for n,_,_ in samples for s in ("latent","embed")}
     expected|={"_neg_embed.pt"}
-    if CUSTOM: expected|={"_custom_embed.pt","_custom_prompt.txt"}
     for f in os.listdir(CACHE):
         if f.endswith(("_latent.pt","_embed.pt")) and not cache_names.is_reserved(f) and f not in expected: os.remove(os.path.join(CACHE,f))
     te=Mistral3Model.from_pretrained(os.path.join(MODEL_ID,"text_encoder"),torch_dtype=torch.bfloat16,device_map="cuda").eval()
@@ -133,10 +133,13 @@ def main():
         torch.save(encode_text(te,tok,prompt,"cuda"),os.path.join(CACHE,name+"_embed.pt"))
         print(f"[{i}/{len(samples)}] text: {name}",flush=True)
     torch.save(encode_text(te,tok,"","cuda"),os.path.join(CACHE,"_neg_embed.pt"))
-    if CUSTOM:
-        cp=with_trigger(CUSTOM); torch.save(encode_text(te,tok,cp,"cuda"),os.path.join(CACHE,"_custom_embed.pt"))
-        open(os.path.join(CACHE,"_custom_prompt.txt"),"w",encoding="utf-8").write(cp)
-        open(os.path.join(CACHE,"_custom_image.txt"),"w",encoding="utf-8").write("")
+    # Prompts propios de las previews (Custom Prompts, hasta 4): _custom_embed.pt, _custom_embed_2.pt...
+    preview_prompts.remove_unused(CACHE,cfg)
+    for slot,cp in preview_prompts.wanted(cfg,TRIGGER):
+        print(f"[Custom Prompt Cache] #{slot+1}: '{cp}'",flush=True)
+        emb=encode_text(te,tok,cp,"cuda")
+        preview_prompts.write_atomic(CACHE,preview_prompts.slot_name("_custom_embed.pt",slot),lambda f,v=emb: torch.save(v,f))
+        preview_prompts.save_text(CACHE,slot,cp)
     del te,tok; free()
     vae=AutoencoderKLFlux2.from_pretrained(MODEL_ID,subfolder="vae",torch_dtype=torch.bfloat16).to("cuda").eval()
     mean=vae.bn.running_mean.view(1,-1,1,1).to("cuda",torch.float32)
@@ -156,14 +159,19 @@ def main():
         del px,z,lat
     del vae; free(); print("Pre-cache complete.",flush=True)
 
-def encode_preview(cache,prompt,image,device):
+def encode_preview_prompts(cache,device,items,images=None):
+    # Solo los prompts propios de las previews (Custom Prompts), con el text encoder cargado una vez.
+    # Lo lanza el servidor al guardarlos: en GPU sin entrenamiento, en CPU con él en marcha.
     te=Mistral3Model.from_pretrained(os.path.join(MODEL_ID,"text_encoder"),torch_dtype=torch.bfloat16 if device=="cuda" else torch.float32,device_map=device).eval()
     tok=AutoTokenizer.from_pretrained(os.path.join(MODEL_ID,"tokenizer"))
-    prompt=with_trigger(prompt); emb=encode_text(te,tok,prompt,device)
-    torch.save(emb,os.path.join(cache,"_custom_embed.pt")); open(os.path.join(cache,"_custom_prompt.txt"),"w",encoding="utf-8").write(prompt)
-    open(os.path.join(cache,"_custom_image.txt"),"w",encoding="utf-8").write("")
+    for slot,prompt in items:
+        print(f"[Custom Prompt] Prompt: '{prompt}' ({device})",flush=True)
+        emb=encode_text(te,tok,prompt,device)
+        preview_prompts.save_text(cache,slot,prompt)
+        preview_prompts.write_atomic(cache,preview_prompts.slot_name("_custom_embed.pt",slot),lambda f,v=emb: torch.save(v,f))
     print("[Custom Prompt] Ready.",flush=True)
 
 if __name__=="__main__":
-    if len(sys.argv)==6 and sys.argv[1]=="--prompt-only": encode_preview(sys.argv[2],sys.argv[3],sys.argv[4],sys.argv[5])
+    prompts_only=preview_prompts.parse_prompts_only(sys.argv)
+    if prompts_only: encode_preview_prompts(*prompts_only)
     else: main()

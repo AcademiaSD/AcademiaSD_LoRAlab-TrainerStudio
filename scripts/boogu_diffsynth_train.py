@@ -22,6 +22,7 @@ from boogu_dataset import CACHE_VERSION, cache_path
 from boogu_model import NF4_DIR, NF4_REPO, quiet
 from i18n import t
 import training_metrics
+import preview_prompts
 from diffsynth.core.data.operators import *  # noqa: F401,F403
 from diffsynth.diffusion import *  # noqa: F401,F403
 from diffsynth.pipelines.boogu_image import BooguImagePipeline, ModelConfig
@@ -482,7 +483,8 @@ def launch_boogu_training_task(accelerator, dataset, model, model_logger, args):
                 accelerator.wait_for_everyone()
                 if accelerator.is_main_process:
                     print(flush=True)
-                    run_boogu_preview(unwrapped, dataset, args, global_step)
+                    for preview_index, (slot, prompt) in enumerate(custom_previews(args) or [(None, "")]):
+                        run_boogu_preview(unwrapped, dataset, args, global_step, slot, preview_index, prompt)
                 accelerator.wait_for_everyone()
                 t0 = time.time()
             if global_step >= args.total_steps or stop["requested"]:
@@ -499,29 +501,43 @@ def launch_boogu_training_task(accelerator, dataset, model, model_logger, args):
     print("✓ " + t("Final LoRA saved to: {path}", path=os.path.join(args.output_path, "Boogu_FINAL_LoRA.safetensors")), flush=True)
 
 
-def run_boogu_preview(model, dataset, args, step):
+def custom_previews(args):
+    """
+    Custom Prompts listos para esta ronda: [(slot, prompt)] de los que la caché tiene codificados con el
+    texto y la imagen de antes de los ajustes (o uno al azar). Los que no, los está codificando el
+    servidor (Save JSON) y la ronda sigue con los demás o, sin ninguno, con el Caption Mode.
+    """
+    try:
+        settings = json.loads(Path(args.live_settings).read_text(encoding="utf-8"))
+        manifest = json.loads((Path(args.boogu_cache_dir) / "cache_manifest.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    trigger = args.trigger_word.strip()
+    wanted = preview_prompts.wanted(settings, trigger,
+                                    lambda p: p if not trigger or trigger.casefold() in p.casefold() else f"{trigger}, {p}")
+    encoded = manifest.get("preview_custom_prompts") or {}
+    ready = [(slot, p) for slot, p in wanted if encoded.get(str(slot)) == p
+             and cache_path(args.boogu_cache_dir, {"image": preview_prompts.prefix(slot)}).is_file()]
+    if len(ready) < len(wanted):
+        print("[PREVIEW] " + t("Prompts marked ... are not encoded yet: they are encoded on CPU when you Save JSON "
+                               "(or by Pre-Cache). Until then previews use the ones that are ready, or the dataset captions."), flush=True)
+    if ready and preview_prompts.random_one(settings):
+        ready = [random.choice(ready)]
+    return ready
+
+
+def run_boogu_preview(model, dataset, args, step, slot=None, preview_index=0, prompt=""):
+    # slot = el Custom Prompt de esta preview (None = Caption Mode); preview_index = su nº en la ronda.
     from diffsynth.core import ModelConfig
     from diffsynth.pipelines.boogu_image import BooguImagePipeline, BooguImageUnit_FreqsCis
 
     pipe = model.pipe
     rows = dataset.rows
     mode = args.preview_caption_mode
-    if mode == "custom" and args.preview_custom_prompt.strip():
-        sample_key = {"image": "_custom"}
+    if slot is not None:
+        sample_key = {"image": preview_prompts.prefix(slot)}
         cached_path = cache_path(args.boogu_cache_dir, sample_key)
-        manifest = json.loads((Path(args.boogu_cache_dir) / "cache_manifest.json").read_text(encoding="utf-8"))
-        expected_prompt = args.preview_custom_prompt.strip()
-        trigger = args.trigger_word.strip()
-        if trigger and trigger.casefold() not in expected_prompt.casefold():
-            expected_prompt = f"{trigger}, {expected_prompt}"
-        default_edit_image = rows[0].get("edit_image", "") if args.lora_type == "edit" else ""
-        expected_edit_image = args.preview_edit_image.strip() or default_edit_image
-        if (manifest.get("preview_custom_prompt") != expected_prompt
-                or manifest.get("preview_edit_image", "") != expected_edit_image or not cached_path.is_file()):
-            # El servidor lo está codificando (Save JSON): mientras tanto, la primera muestra del dataset.
-            print("[PREVIEW] " + t("The new prompt is being encoded on CPU (Save JSON); previews switch to it when ready."), flush=True)
-            mode = "first"
-    if mode != "custom" or not args.preview_custom_prompt.strip():
+    else:
         if mode == "random":
             index = random.randrange(len(rows))
         elif mode == "rotate4":
@@ -530,6 +546,7 @@ def run_boogu_preview(model, dataset, args, step):
             index = 0
         sample_key = rows[index]
         cached_path = cache_path(args.boogu_cache_dir, sample_key)
+        prompt = str(sample_key.get("prompt", ""))
     sample = torch.load(cached_path, map_location="cpu", weights_only=True)
     height, width = int(sample["height"]), int(sample["width"])
     if args.preview_width > 0 and args.preview_height > 0 and "reference_latents" not in sample:
@@ -604,8 +621,10 @@ def run_boogu_preview(model, dataset, args, step):
             del preview_pipe
         preview_dir = args.output_path
         os.makedirs(preview_dir, exist_ok=True)
-        result.save(os.path.join(preview_dir, f"preview_step_{step}.png"))
-        print("  ↳ " + t("Preview saved to: {path}", path=os.path.join(preview_dir, f"preview_step_{step}.png")), flush=True)
+        out = os.path.join(preview_dir, preview_prompts.preview_name(step, preview_index))
+        # El prompt va dentro del PNG: la galería lo enseña al abrir la preview.
+        preview_prompts.save_png(result, out, prompt)
+        print("  ↳ " + t("Preview saved to: {path}", path=out), flush=True)
     except Exception as exc:
         print(f"[Boogu preview] Error en step {step}: {exc}", flush=True)
     finally:

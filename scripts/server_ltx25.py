@@ -27,6 +27,7 @@ import remote_access
 import file_transfer
 import queue_link
 import training_metrics
+import preview_prompts
 import face_match
 import dataset_forge
 import gpu_stats
@@ -93,7 +94,8 @@ UI_FILE = BASE_DIR / "GUI" / "trainer_ui_ltx25.html"
 LOGO_FILE = ASSETS_DIR / "logo.png" if (ASSETS_DIR / "logo.png").exists() else BASE_DIR / "logo.png"
 
 PRECACHE_CONFIG = Path(os.environ.get("LORALAB_PRECACHE_CONFIG") or SETTINGS_DIR / "pre_cache_settings_ltx25.json")
-PREVIEW_KEYS = ("preview_custom_prompt",)
+# Custom Prompts: solo los codifica el Pre-Cache (el text encoder no cabe para hacerlo al vuelo).
+PREVIEW_KEYS = ("preview_custom_prompt",) + tuple(preview_prompts.DEFAULTS)
 TRAIN_CONFIG = Path(os.environ.get("LORALAB_TRAIN_CONFIG") or SETTINGS_DIR / "train_settings_ltx25.json")
 HF_TOKEN_CONFIG = SETTINGS_DIR / "HF_token.json"
 EXPORT_CONFIG = SETTINGS_DIR / "export_settings.json"  # compartido / shared by every trainer
@@ -615,7 +617,9 @@ def get_previews():
     previews = previews[:50]
     # versions = mtime en ms, para que el navegador no reutilice una imagen vieja con el mismo nombre.
     return jsonify({"output_dir": str(output_dir), "previews": [n for n, _ in previews],
-                    "versions": {n: int(m * 1000) for n, m in previews}})
+                    "versions": {n: int(m * 1000) for n, m in previews},
+                    # Prompt de cada preview, guardado dentro del PNG por el trainer (preview_prompts.save_png).
+                    "prompts": {n: preview_prompts.png_prompt(str(output_dir / n)) for n, _ in previews}})
 
 
 @app.route("/api/preview/<path:filename>")

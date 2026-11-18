@@ -27,6 +27,7 @@ from PIL import Image
 import cache_names
 from i18n import t
 import settings_limits
+import preview_prompts
 from text_io import read_text_file
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 
@@ -470,34 +471,31 @@ def preprocess_mingimage():
     torch.save(torch.zeros_like(embeds2), os.path.join(CACHE_DIR, "_neg_embed2.pt"))
     print(f"[neg] cap_feats {tuple(embeds.shape)} | directvlm {tuple(embeds2.shape)} (zeros)")
 
-    # Prompt manual de las previews (en edición, con su imagen de antes).
-    custom_prompt = PREVIEW_CUSTOM_PROMPT
-    custom_src = preview_edit_source(samples) if edit and custom_prompt else None
+    # Prompts propios de las previews (Custom Prompts, hasta 4), cada uno con su nombre de muestra
+    # (_custom, _custom2...). En edición van con la imagen de antes de la preview (_custom_ctrl.pt),
+    # que comparten.
+    preview_prompts.remove_unused_prefixed(CACHE_DIR, cfg, ("embed", "embed2"))
+    custom_prompts = preview_prompts.wanted(cfg, TRIGGER_WORD)
+    custom_src = preview_edit_source(samples) if edit and custom_prompts else None
     for f in ("_custom_ctrl.pt", "_custom_image.txt"):
         if not custom_src and os.path.exists(os.path.join(CACHE_DIR, f)):
             os.remove(os.path.join(CACHE_DIR, f))
-    if custom_prompt:
-        c_prompt = with_trigger(custom_prompt)
+    if custom_src:
+        with Image.open(custom_src) as im:
+            buckets["_custom"] = bucket_size(*im.size)
+    for slot, c_prompt in custom_prompts:
+        name = preview_prompts.prefix(slot)
         print("[Custom Prompt Cache] " + t("Encoding: '{prompt}'", prompt=c_prompt)
               + (f" + {os.path.basename(custom_src)}" if custom_src else ""))
-        if custom_src:
-            with Image.open(custom_src) as im:
-                buckets["_custom"] = bucket_size(*im.size)
         c_embeds, c_embeds2 = encode_prompt(model, processor, c_prompt,
                                             load_before(custom_src, buckets["_custom"]) if custom_src else None)
-        torch.save(c_embeds, os.path.join(CACHE_DIR, "_custom_embed.pt"))
-        torch.save(c_embeds2, os.path.join(CACHE_DIR, "_custom_embed2.pt"))
+        torch.save(c_embeds, os.path.join(CACHE_DIR, f"{name}_embed.pt"))
+        torch.save(c_embeds2, os.path.join(CACHE_DIR, f"{name}_embed2.pt"))
         # El trainer y el servidor comparan con estos textos para saber si la caché está al día.
-        with open(os.path.join(CACHE_DIR, "_custom_prompt.txt"), "w", encoding="utf-8") as f:
-            f.write(c_prompt)
-        if custom_src:
-            with open(os.path.join(CACHE_DIR, "_custom_image.txt"), "w", encoding="utf-8") as f:
-                f.write(PREVIEW_EDIT_IMAGE)
-        print(f"[custom] cap_feats {tuple(c_embeds.shape)} | directvlm {tuple(c_embeds2.shape)}")
-    else:
-        for f in ("_custom_embed.pt", "_custom_embed2.pt", "_custom_prompt.txt"):
-            if os.path.exists(os.path.join(CACHE_DIR, f)):
-                os.remove(os.path.join(CACHE_DIR, f))
+        preview_prompts.save_text(CACHE_DIR, slot, c_prompt)
+        print(f"[custom #{slot + 1}] cap_feats {tuple(c_embeds.shape)} | directvlm {tuple(c_embeds2.shape)}")
+    if custom_src:
+        preview_prompts.save_images_text(CACHE_DIR, [PREVIEW_EDIT_IMAGE] if PREVIEW_EDIT_IMAGE else [])
 
     missing = []
     with torch.inference_mode():
@@ -550,15 +548,17 @@ def preprocess_mingimage():
     print("\n✓ " + t("Pre-caching finished! VRAM freed."))
 
 
-def encode_preview_prompt(cache_dir, prompt, image_path, device):
+def encode_preview_prompts(cache_dir, device, items, images_arg=None):
     """
-    Codifica solo el prompt manual de las previews (y, en edición, su imagen de antes). Lo lanza
-    el servidor al guardar uno nuevo. Sin entrenamiento va en GPU; con el entrenamiento en marcha
-    va en CPU para no tocar su VRAM, y el trainer relee el embedding antes de la siguiente preview.
+    Codifica solo los prompts propios de las previews (Custom Prompts) y, en edición, su imagen de
+    antes (solo si ha cambiado). Lo lanza el servidor al guardar prompts o una imagen nuevos. Sin
+    entrenamiento va en GPU; con el entrenamiento en marcha va en CPU para no tocar su VRAM, y el
+    trainer relee cada embedding antes de la siguiente preview.
     """
     global CACHE_DIR, LORA_TYPE
     CACHE_DIR = cache_dir
     where = device.upper().replace("CUDA", "GPU")
+    image_path = images_arg[0] if images_arg else ""
 
     # La caché dice si el LoRA es de edición (los _ctrl.pt de las muestras), no los ajustes.
     edit = any(f.endswith("_ctrl.pt") and not cache_names.is_reserved(f) for f in os.listdir(cache_dir))
@@ -569,6 +569,9 @@ def encode_preview_prompt(cache_dir, prompt, image_path, device):
         with Image.open(src) as im:
             bucket = bucket_size(*im.size)
         image = load_before(src, bucket)
+    new_ref = image is not None and (preview_prompts.encoded_images(cache_dir) != image_path
+                                     or not os.path.exists(os.path.join(cache_dir, "_custom_ctrl.pt")))
+    if new_ref:
         # Se escribe aparte y se coloca al final junto al texto: el antes nuevo no encaja con el embedding viejo.
         # El servidor lee las líneas "[Custom Prompt] Image/Prompt" para mostrar la fase en la GUI.
         print("[Custom Prompt] Image: " + t("Encoding the reference image on {device}: {path}", device=where, path=src), flush=True)
@@ -578,11 +581,14 @@ def encode_preview_prompt(cache_dir, prompt, image_path, device):
         del vae
         free_vram()
 
-    print("[Custom Prompt] Prompt: " + t("Encoding the prompt on {device}: '{prompt}'", device=where, prompt=prompt), flush=True)
+    # El text encoder se carga una vez para todos los prompts (en CPU tarda).
     processor = load_bailingmm2_processor(os.path.join(MODEL_ID, "mllm"))
     model = load_text_encoder(device)
-    with torch.inference_mode():
-        embeds, embeds2 = encode_prompt(model, processor, prompt, image)
+    results = []
+    for slot, prompt in items:
+        print("[Custom Prompt] Prompt: " + t("Encoding the prompt on {device}: '{prompt}'", device=where, prompt=prompt), flush=True)
+        with torch.inference_mode():
+            results.append((slot, prompt) + tuple(encode_prompt(model, processor, prompt, image)))
     del model, processor
     free_vram()
 
@@ -598,21 +604,22 @@ def encode_preview_prompt(cache_dir, prompt, image_path, device):
                 f.write(text)
         return write
 
-    if image is not None:
+    if new_ref:
         os.replace(os.path.join(cache_dir, "_custom_ctrl.new"), os.path.join(cache_dir, "_custom_ctrl.pt"))
-        replace("_custom_image.txt", write_text(image_path))
-    replace("_custom_prompt.txt", write_text(prompt))
-    replace("_custom_embed2.pt", lambda f: torch.save(embeds2, f))
-    replace("_custom_embed.pt", lambda f: torch.save(embeds, f))
+    if image is not None:
+        preview_prompts.save_images_text(cache_dir, [image_path] if image_path else [])
+    for slot, prompt, embeds, embeds2 in results:
+        name = preview_prompts.prefix(slot)
+        preview_prompts.save_text(cache_dir, slot, prompt)
+        replace(f"{name}_embed2.pt", lambda f, v=embeds2: torch.save(v, f))
+        replace(f"{name}_embed.pt", lambda f, v=embeds: torch.save(v, f))
     print("[Custom Prompt] " + t("Ready."), flush=True)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 6 and sys.argv[1] == "--prompt-only":
-        # --prompt-only <carpeta de caché> <prompt con el trigger ya puesto> <imagen de antes o ""> <cuda|cpu>
-        encode_preview_prompt(*sys.argv[2:])
-    elif len(sys.argv) == 5 and sys.argv[1] == "--prompt-only":
-        # Forma anterior, sin imagen (la de un servidor arrancado antes de la edición).
-        encode_preview_prompt(sys.argv[2], sys.argv[3], "", sys.argv[4])
+    prompts_only = preview_prompts.parse_prompts_only(sys.argv)
+    if prompts_only:
+        # --prompts-only <carpeta de caché> <cuda|cpu> <json [[slot, prompt con el trigger ya puesto], ...]> [<json [imagen de antes]>]
+        encode_preview_prompts(*prompts_only)
     else:
         preprocess_mingimage()

@@ -95,6 +95,7 @@ import gpu_stats
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import lora_options
 import training_metrics
+import preview_prompts
 
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
 STEP_WORD = t("Step")
@@ -1039,6 +1040,7 @@ OPTIMIZER_TYPE = _normalize_optimizer_type(
 MAX_GRAD_NORM = float(cfg_get("max_grad_norm", DEFAULTS["max_grad_norm"]))
 
 PREVIEW_CAPTION_MODES = ("first", "random", "rotate", "custom")
+PREVIEW_PROMPTS = preview_prompts.settings(cfg)   # Custom Prompts (hasta 4); solo los codifica el Pre-Cache
 PREVIEW_CAPTION_MODE = str(
     cfg_get("preview_caption_mode", DEFAULTS["preview_caption_mode"])).strip().lower()
 if PREVIEW_CAPTION_MODE not in PREVIEW_CAPTION_MODES:
@@ -6421,12 +6423,18 @@ def preview_spatial_latent_hw(lat_h, lat_w, patch_h, patch_w):
 
 
 def run_training_preview(model, entries, step, output_dir, nf4_dir,
-                         patch_t, patch_h, patch_w, audio_channels=32):
+                         patch_t, patch_h, patch_w, audio_channels=32, custom=None, index=0):
     """Genera <output_dir>/preview_step_<step>.png con el LoRA en su estado actual.
+    custom = (nombre, prompt) de un Custom Prompt (_custom, _custom2...); index = su nº en la ronda.
     Renders the current LoRA state to <output_dir>/preview_step_<step>.png."""
     from diffusers import MiniMaxH3Scheduler
 
-    entry, prompt_result, prompt_label = pick_preview_prompt(entries, step)
+    if custom is not None:
+        entry, prompt_result = entries[0], load_prompt_structure(CACHE_DIR, custom[0])
+        prompt_label, prompt_text = "custom #{}: '{}'".format(index + 1, custom[1][:80]), custom[1]
+    else:
+        entry, prompt_result, prompt_label = pick_preview_prompt(entries, step)
+        prompt_text = preview_prompts.dataset_caption(cfg, entry.get("name", ""), TRIGGER_WORD)
     log_print("[PREVIEW] Prompt: {}".format(prompt_label), flush=True)
 
     was_training = model.training
@@ -6646,7 +6654,7 @@ def run_training_preview(model, entries, step, output_dir, nf4_dir,
 
         free_vram(clear_cache=True, collect=True)
 
-        out_path = os.path.join(output_dir, "preview_step_{}.png".format(step))
+        out_path = os.path.join(output_dir, preview_prompts.preview_name(step, index))
         # Con un clip, el fotograma del centro: los extremos temporales son los
         # que peor se resuelven. Con una imagen suelta manda preview_frame_index.
         # For a clip, take a middle frame: the temporal edges resolve worst.
@@ -6661,6 +6669,8 @@ def run_training_preview(model, entries, step, output_dir, nf4_dir,
         if not decoded:
             decode_latent_to_png(latent_out.cpu(), nf4_dir, out_path,
                                  device=PREVIEW_VAE_DEVICE, frame_index=_frame_idx)
+        # El prompt va dentro del PNG: la galería lo enseña al abrir la preview.
+        preview_prompts.tag_png(out_path, prompt_text)
         return out_path
 
     finally:
@@ -7336,6 +7346,7 @@ def hot_reload_live_settings():
         return v if v in PREVIEW_CAPTION_MODES else PREVIEW_CAPTION_MODE
 
     PREVIEW_CAPTION_MODE = _fresh("preview_caption_mode", _cast_mode, PREVIEW_CAPTION_MODE)
+    preview_prompts.live_update(PREVIEW_PROMPTS, raw, changes)
     PREVIEW_EVERY = _fresh("preview_every", lambda v: int(v or 0), PREVIEW_EVERY)
     PREVIEW_SIZE = _fresh("preview_size", lambda v: int(v or 0), PREVIEW_SIZE)
     PREVIEW_WIDTH = _fresh("preview_width", lambda v: int(v or 0), PREVIEW_WIDTH)
@@ -9033,10 +9044,27 @@ def train_minimaxh3():
                     _t_prev = time.time()
                     log_print("")
                     log_print("[PREVIEW] " + t("Rendering the step {0} preview ({1} steps, shift {2:g}, CFG {3:g}, VAE {4})", step, PREVIEW_STEPS, PREVIEW_SHIFT, PREVIEW_CFG, PREVIEW_VAE_DEVICE), flush=True)
-                    _p = run_training_preview(
-                        model, entries, step, OUTPUT_DIR, NF4_CACHE_DIR,
-                        PATCH_T, PATCH_H, PATCH_W, audio_channels=audio_channels)
-                    log_print("[PREVIEW] " + t("Saved to: {0} ({1:.1f}s)", _p, time.time() - _t_prev), flush=True)
+                    # Custom Prompts: una preview por prompt propio que el Pre-Cache haya codificado con
+                    # el texto de los ajustes (o una con uno al azar); sin ellos, la del Caption Mode.
+                    _ready, _stale = [], []
+                    for _slot, _wanted in preview_prompts.wanted(PREVIEW_PROMPTS, TRIGGER_WORD):
+                        _key = preview_prompts.prefix(_slot)
+                        if (os.path.exists(os.path.join(CACHE_DIR, _key + "_structure.json"))
+                                and preview_prompts.encoded_text(CACHE_DIR, _slot) == _wanted):
+                            _ready.append((_key, _wanted))
+                        else:
+                            _stale.append(_slot + 1)
+                    if _stale:
+                        log_print("[PREVIEW] " + t("Custom prompts {n} are not encoded: this model encodes them only in Pre-Cache "
+                                                   "(stop, run Pre-Cache and resume).", n=", ".join(map(str, _stale))), flush=True)
+                    if _ready and preview_prompts.random_one(PREVIEW_PROMPTS):
+                        _ready = [random.choice(_ready)]
+                    for _index, _custom in enumerate(_ready or [None]):
+                        _p = run_training_preview(
+                            model, entries, step, OUTPUT_DIR, NF4_CACHE_DIR,
+                            PATCH_T, PATCH_H, PATCH_W, audio_channels=audio_channels,
+                            custom=_custom, index=_index)
+                        log_print("[PREVIEW] " + t("Saved to: {0} ({1:.1f}s)", _p, time.time() - _t_prev), flush=True)
                 except Exception as _e_prev:
                     PREVIEW_EVERY = 0
                     release_preview_video_vae()

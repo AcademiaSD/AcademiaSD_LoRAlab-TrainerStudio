@@ -71,6 +71,7 @@ from text_io import read_text_file
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import lora_options
 import training_metrics
+import preview_prompts
 
 STEP_WORD = t("Step")
 
@@ -201,6 +202,8 @@ PREVIEW_SECONDS  = float(_g("preview_seconds"))
 PREVIEW_COMPARE_BASE = bool(_g("preview_compare_base"))
 PREVIEW_CFG      = float(_g("preview_cfg"))
 PREVIEW_CUSTOM   = str(_g("preview_custom_prompt")).strip()
+# Custom Prompts (hasta 4 letras); cambian en caliente. Sin trigger: es letra de canción.
+PREVIEW_PROMPTS  = preview_prompts.settings(cfg)
 PROJECT_NAME     = str(_g("project_name")).strip()
 
 if PROJECT_NAME:
@@ -811,15 +814,11 @@ def preview_sample_for_step(step, fallback=None):
         choices = names[:min(4, len(names))]
         interval = max(1, PREVIEW_EVERY)
         return choices[((step - 1) // interval) % len(choices)]
-    if PREVIEW_CAPTION_MODE == "custom" and fallback in SAMPLES:
-        return fallback
     return names[0]
 
 
 def _preview_letra(sample_name):
-    """La letra seleccionada para el preview o el prompt custom actual."""
-    if PREVIEW_CAPTION_MODE == "custom":
-        return PREVIEW_CUSTOM
+    """La letra del clip elegido para el preview."""
     if sample_name:
         path = os.path.join(DATASET_PATH, sample_name + ".txt")
         if os.path.isfile(path):
@@ -849,15 +848,20 @@ def nar_solve(model, base_ids, frames, generator):
     return result
 
 
-def run_preview(model, step, stage, sample_name=None):
-    """Genera preview con LoRA y, opcionalmente, también con los adapters desactivados."""
+def run_preview(model, step, stage, sample_name=None, index=0, letra=None):
+    """
+    Genera preview con LoRA y, opcionalmente, también con los adapters desactivados. letra = una de
+    las Custom Prompts (index = su nº dentro de la ronda); None = la letra del clip elegido.
+    """
+    if letra is None:
+        letra = _preview_letra(sample_name)
     model.eval()
     seed = SEED if SEED > 0 else random.randint(1, 2147483647)
     print("  ↳ " + t("Preview seed used: {seed}", seed=seed))
     try:
         frames = max(8, int(PREVIEW_SECONDS * 25))
         estilo = str(META.get("style_prompt", ""))
-        request = SongRequest(style=estilo, lyrics=_preview_letra(sample_name),
+        request = SongRequest(style=estilo, lyrics=letra,
                               cot=str(META.get("cot", "off")), id="preview")
         prefix = token_prefixes(request, TOKENIZER)
 
@@ -913,7 +917,7 @@ def run_preview(model, step, stage, sample_name=None):
                 print("  ↳ [Preview] " + t("audio decode skipped: out of VRAM"))
                 continue
             # Con stage=both las dos etapas pasan por los mismos pasos: la AR lleva su marca para no pisar a la NAR.
-            tag = f"preview_step_{step}_ar" if stage == "ar" else f"preview_step_{step}"
+            tag = preview_prompts.preview_name(step, index, "") + ("_ar" if stage == "ar" else "")
             name = f"{tag}_{suffix}.wav" if suffix else f"{tag}.wav"
             out = os.path.join(OUTPUT_DIR, name)
             muestras = audio[0].clamp(-1, 1).T.contiguous().cpu().numpy()   # [N, 2]
@@ -922,6 +926,7 @@ def run_preview(model, step, stage, sample_name=None):
                 w.setsampwidth(2)
                 w.setframerate(48000)
                 w.writeframes((muestras * 32767.0).astype("<i2").tobytes())
+            preview_prompts.save_sidecar(out, letra)
             print("  ↳ " + t("Preview saved to: {path}", path=out))
             del audio
         del vae
@@ -984,6 +989,7 @@ def reload_live_settings():
     elif mode != PREVIEW_CAPTION_MODE:
         changes.append(f"preview_caption_mode: {mode} ignored (unsupported)")
     SEED = fresh("seed", int, SEED)  # affects previews only after startup
+    preview_prompts.live_update(PREVIEW_PROMPTS, raw, changes)
     return changes
 
 
@@ -1227,7 +1233,16 @@ def train_stage(stage, base):
 
             if PREVIEW_EVERY > 0 and step % PREVIEW_EVERY == 0:
                 print()
-                run_preview(model, step, stage, sample_name=preview_sample_for_step(step, name))
+                # Una preview por letra propia (o una con una al azar); sin ellas, la del Caption Mode.
+                letras = [p for _, p in preview_prompts.prompts(PREVIEW_PROMPTS)]
+                if letras and preview_prompts.random_one(PREVIEW_PROMPTS):
+                    letras = [random.choice(letras)]
+                if letras:
+                    for index, letra in enumerate(letras):
+                        print(f"  [Preview] {t('Custom prompt')} #{index + 1}")
+                        run_preview(model, step, stage, index=index, letra=letra)
+                else:
+                    run_preview(model, step, stage, sample_name=preview_sample_for_step(step, name))
 
     except (KeyboardInterrupt, SystemExit):
         print()

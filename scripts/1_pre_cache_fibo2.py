@@ -30,6 +30,7 @@ import sys
 import cache_names
 from i18n import t
 import settings_limits
+import preview_prompts
 import gpu_stats
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import fibo2_caption
@@ -575,30 +576,33 @@ def preprocess_fibo2():
         save_tensor("_negcfg_embed.pt", neg_embeds[0])
         save_tensor("_negcfg_mask.pt", neg_mask[0])
 
-        # Prompt manual de las previews. En edición va con la imagen de antes de la preview;
-        # sin prompt manual se usa la instrucción del primer par.
-        custom_prompt = PREVIEW_CUSTOM_PROMPT or (read_caption(samples[0][0]) if edit else "")
-        if custom_prompt:
-            c_prompt = with_trigger(custom_prompt)
+        # Prompts propios de las previews (Custom Prompts, hasta 4), cada uno con su nombre de muestra
+        # (_custom, _custom2...). En edición van con la imagen de antes de la preview (_custom_ref.pt),
+        # que comparten.
+        preview_prompts.remove_unused_prefixed(CACHE_DIR, cfg, ("embed", "mask", "base_embed", "base_mask"))
+        custom_prompts = preview_prompts.wanted(cfg, TRIGGER_WORD, with_trigger)
+        images = None
+        if custom_prompts and edit and preview_src:
+            width, height = sizes["_custom"]
+            _, images = preprocess_images(proc, [load_image(preview_src)], width, height, TARGET_AREA)
+        for slot, c_prompt in custom_prompts:
+            name = preview_prompts.prefix(slot)
             print("[Custom Prompt Cache] " + t("Encoding: '{prompt}'", prompt=c_prompt) + (f" + {os.path.basename(preview_src)}" if edit else ""))
-            images = None
-            if edit and preview_src:
-                width, height = sizes["_custom"]
-                _, images = preprocess_images(proc, [load_image(preview_src)], width, height, TARGET_AREA)
             embeds, mask, base_embeds, base_mask = encode_prompt(pipe, c_prompt, "cuda", images, fonts)
-            save_prompt("_custom", embeds, mask, base_embeds, base_mask)
+            save_prompt(name, embeds, mask, base_embeds, base_mask)
+            if base_embeds is None:
+                for f in (f"{name}_base_embed.pt", f"{name}_base_mask.pt"):
+                    if os.path.exists(os.path.join(CACHE_DIR, f)):
+                        os.remove(os.path.join(CACHE_DIR, f))
             # El trainer y el servidor comparan con estos textos para saber si la caché está al día.
-            with open(os.path.join(CACHE_DIR, "_custom_prompt.txt"), "w", encoding="utf-8") as f:
-                f.write(c_prompt)
-            with open(os.path.join(CACHE_DIR, "_custom_image.txt"), "w", encoding="utf-8") as f:
-                f.write(PREVIEW_EDIT_IMAGE)
-        # Restos de un prompt anterior, o de la preview de edición si el dataset ya no es de pares.
-        stale = () if custom_prompt else ("_custom_embed.pt", "_custom_mask.pt", "_custom_prompt.txt", "_custom_image.txt")
-        if not (custom_prompt and edit):
-            stale += ("_custom_base_embed.pt", "_custom_base_mask.pt", "_custom_ref.pt")
-        for f in stale:
-            if os.path.exists(os.path.join(CACHE_DIR, f)):
-                os.remove(os.path.join(CACHE_DIR, f))
+            preview_prompts.save_text(CACHE_DIR, slot, c_prompt)
+        if custom_prompts:
+            preview_prompts.save_images_text(CACHE_DIR, [PREVIEW_EDIT_IMAGE] if PREVIEW_EDIT_IMAGE else [])
+        elif os.path.exists(os.path.join(CACHE_DIR, "_custom_image.txt")):
+            os.remove(os.path.join(CACHE_DIR, "_custom_image.txt"))
+        # Restos de la preview de edición si el dataset ya no es de pares.
+        if not (custom_prompts and edit) and os.path.exists(os.path.join(CACHE_DIR, "_custom_ref.pt")):
+            os.remove(os.path.join(CACHE_DIR, "_custom_ref.pt"))
 
         for idx, (name, target, control) in enumerate(samples, 1):
             width, height = sizes[name]
@@ -623,7 +627,7 @@ def preprocess_fibo2():
         jobs.append((target, f"{name}_latent.pt", sizes[name], name))
         if control:
             jobs.append((control, f"{name}_ref.pt", sizes[name], name))
-    if preview_src and custom_prompt and edit:
+    if preview_src and custom_prompts and edit:
         jobs.append((preview_src, "_custom_ref.pt", sizes["_custom"], "_custom"))
 
     pending = []
@@ -658,16 +662,18 @@ def encode_latents(vae, proc, jobs, device):
             print(f"[{idx}/{len(jobs)}] {t('Image')}: {os.path.basename(src)} -> {out} | {width}x{height}", flush=True)
 
 
-def encode_preview_prompt(cache_dir, prompt, image_path, device):
+def encode_preview_prompts(cache_dir, device, items, images_arg=None):
     """
-    Codifica solo el prompt manual de las previews (y en edición su imagen de antes). Lo lanza el
-    servidor al guardar un prompt o una imagen nuevos. Sin entrenamiento en marcha va en GPU, con el
-    text encoder elegido para el Pre-Cache; con el entrenamiento en marcha va en CPU (text encoder
-    BF16 exacto) para no tocar su VRAM, y el trainer relee el embedding antes de la siguiente preview.
+    Codifica solo los prompts propios de las previews (Custom Prompts) y, en edición, su imagen de
+    antes (solo si ha cambiado). Lo lanza el servidor al guardar prompts o una imagen nuevos. Sin
+    entrenamiento en marcha va en GPU, con el text encoder elegido para el Pre-Cache; con el
+    entrenamiento en marcha va en CPU (text encoder BF16 exacto) para no tocar su VRAM, y el trainer
+    relee cada embedding antes de la siguiente preview.
     """
     global CACHE_DIR
     CACHE_DIR = cache_dir
     where = device.upper().replace("CUDA", "GPU")
+    image_path = (images_arg or [""])[0] if images_arg else ""
     image = None
     proc = proc_or_default()
     samples = find_samples()
@@ -676,6 +682,9 @@ def encode_preview_prompt(cache_dir, prompt, image_path, device):
         width, height = image_size_capped(_aspect(src), TARGET_AREA, MAX_SIDE, MULTIPLE)
         vae_images, images = preprocess_images(proc, [load_image(src)], width, height, TARGET_AREA)
         image = images
+    new_ref = image is not None and (preview_prompts.encoded_images(cache_dir) != image_path
+                                     or not os.path.exists(os.path.join(cache_dir, "_custom_ref.pt")))
+    if new_ref:
         print("[Custom Prompt] Image: " + t("Encoding the reference image on {device}: {path}", device=where, path=src), flush=True)
         # Mismo dtype que las referencias del dataset: en float32 el latente_preview sería
         # ligeramente distinto del que se entrenó.
@@ -686,7 +695,7 @@ def encode_preview_prompt(cache_dir, prompt, image_path, device):
         del vae
         free_vram()
 
-    print("[Custom Prompt] Prompt: " + t("Encoding the prompt on {device}: '{prompt}'", device=where, prompt=prompt), flush=True)
+    # El text encoder se carga una vez para todos los prompts (en CPU tarda).
     if device == "cuda":
         te = load_text_encoder()
     else:
@@ -695,30 +704,32 @@ def encode_preview_prompt(cache_dir, prompt, image_path, device):
             os.path.join(MODEL_ID, "text_encoder_BF16"), dtype=torch.bfloat16, device_map="cpu")
     pipe = DiffusionPipeline.from_pretrained(MODEL_ID, transformer=None, vae=None, text_encoder=te, dtype=torch.bfloat16)
     pipe.tokenizer_max_length = MAX_SEQUENCE_LENGTH
-    with torch.inference_mode():
-        embeds, mask, base_embeds, base_mask = encode_prompt(pipe, prompt, device, image, load_fonts())
+    fonts = load_fonts()
+    results = []
+    for slot, prompt in items:
+        print("[Custom Prompt] Prompt: " + t("Encoding the prompt on {device}: '{prompt}'", device=where, prompt=prompt), flush=True)
+        with torch.inference_mode():
+            results.append((slot, prompt) + tuple(encode_prompt(pipe, prompt, device, image, fonts)))
     del pipe, te
     free_vram()
 
-    # Escrituras atómicas; el embedding el último, porque es el fichero que vigila el trainer.
-    def replace(name, write):
-        tmp = os.path.join(cache_dir, name + ".tmp")
-        write(tmp)
-        os.replace(tmp, os.path.join(cache_dir, name))
-
-    replace("_custom_mask.pt", lambda f: torch.save(mask[0].bool().cpu().contiguous(), f))
-    if base_embeds is not None:
-        replace("_custom_base_mask.pt", lambda f: torch.save(base_mask[0].bool().cpu().contiguous(), f))
-    replace("_custom_prompt.txt", lambda f: open(f, "w", encoding="utf-8").write(prompt))
-    replace("_custom_image.txt", lambda f: open(f, "w", encoding="utf-8").write(image_path))
-    replace("_custom_embed.pt", lambda f: torch.save(embeds[0].to(torch.bfloat16).cpu().contiguous(), f))
-    if base_embeds is not None:
-        replace("_custom_base_embed.pt", lambda f: torch.save(base_embeds[0].to(torch.bfloat16).cpu().contiguous(), f))
-    else:
-        # El prompt anterior sí tenía textos: sus embeddings sin ellos ya no valen.
-        for stale in ("_custom_base_embed.pt", "_custom_base_mask.pt"):
-            if os.path.exists(os.path.join(cache_dir, stale)):
-                os.remove(os.path.join(cache_dir, stale))
+    # Escrituras atómicas, por prompt: máscaras, texto y el embedding el último, porque es el fichero
+    # que vigila el trainer.
+    preview_prompts.save_images_text(cache_dir, [image_path] if image_path else [])
+    for slot, prompt, embeds, mask, base_embeds, base_mask in results:
+        name = preview_prompts.prefix(slot)
+        preview_prompts.write_atomic(cache_dir, f"{name}_mask.pt", lambda f, v=mask: torch.save(v[0].bool().cpu().contiguous(), f))
+        if base_embeds is not None:
+            preview_prompts.write_atomic(cache_dir, f"{name}_base_mask.pt", lambda f, v=base_mask: torch.save(v[0].bool().cpu().contiguous(), f))
+        preview_prompts.save_text(cache_dir, slot, prompt)
+        preview_prompts.write_atomic(cache_dir, f"{name}_embed.pt", lambda f, v=embeds: torch.save(v[0].to(torch.bfloat16).cpu().contiguous(), f))
+        if base_embeds is not None:
+            preview_prompts.write_atomic(cache_dir, f"{name}_base_embed.pt", lambda f, v=base_embeds: torch.save(v[0].to(torch.bfloat16).cpu().contiguous(), f))
+        else:
+            # El prompt anterior sí tenía textos: sus embeddings sin ellos ya no valen.
+            for stale in (f"{name}_base_embed.pt", f"{name}_base_mask.pt"):
+                if os.path.exists(os.path.join(cache_dir, stale)):
+                    os.remove(os.path.join(cache_dir, stale))
     print("[Custom Prompt] " + t("Ready."), flush=True)
 
 
@@ -735,8 +746,9 @@ def proc_or_default():
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 6 and sys.argv[1] == "--prompt-only":
-        # --prompt-only <carpeta de caché> <prompt con el trigger ya puesto> <imagen de antes o ""> <cuda|cpu>
-        encode_preview_prompt(*sys.argv[2:])
+    prompts_only = preview_prompts.parse_prompts_only(sys.argv)
+    if prompts_only:
+        # --prompts-only <carpeta de caché> <cuda|cpu> <json [[slot, prompt con el trigger ya puesto], ...]> [<json [imagen de antes]>]
+        encode_preview_prompts(*prompts_only)
     else:
         preprocess_fibo2()

@@ -27,6 +27,7 @@ import remote_access
 import file_transfer
 import queue_link
 import training_metrics
+import preview_prompts
 import face_match
 import dataset_forge
 import gpu_stats
@@ -93,7 +94,7 @@ UI_FILE = BASE_DIR / "GUI" / "trainer_ui_mossimage.html"
 LOGO_FILE = ASSETS_DIR / "logo.png" if (ASSETS_DIR / "logo.png").exists() else BASE_DIR / "logo.png"
 
 PRECACHE_CONFIG = Path(os.environ.get("LORALAB_PRECACHE_CONFIG") or SETTINGS_DIR / "pre_cache_settings_mossimage.json")
-PREVIEW_KEYS = ("lora_type", "preview_custom_prompt", "preview_edit_image", "preview_edit_images")
+PREVIEW_KEYS = ("lora_type", "preview_custom_prompt", "preview_edit_image", "preview_edit_images") + tuple(preview_prompts.DEFAULTS)
 PREVIEW_MAX = 4
 TRAIN_CONFIG = Path(os.environ.get("LORALAB_TRAIN_CONFIG") or SETTINGS_DIR / "train_settings_mossimage.json")
 HF_TOKEN_CONFIG = SETTINGS_DIR / "HF_token.json"
@@ -604,42 +605,9 @@ def save_precache():
         return jsonify({"status": "error", "error": str(exc)}), 500
 
 
-prompt_job = {"process": None, "args": None, "stage": None, "device": None}
-
-
-def encoding_stage():
-    # "loading", "image" o "prompt" mientras se codifica la preview manual; None si no hay nada en marcha.
-    process = prompt_job["process"]
-    return prompt_job["stage"] if process is not None and process.poll() is None else None
-
-
-def encode_preview_prompt(cache_dir, prompt, images):
-    # Un solo proceso a la vez: si se guarda otro prompt mientras codifica, gana el último.
-    # En GPU si está libre; con el entrenamiento en marcha, en CPU para no tocar su VRAM.
-    device = "cpu" if get_status()["script"] == "train" else "cuda"
-    args = [sys.executable, "-u", str(PRECACHE_SCRIPT), "--prompt-only", str(cache_dir), prompt,
-            json.dumps(images, ensure_ascii=False), device]
-    if encoding_stage() is not None:
-        if prompt_job["args"] == args:
-            return
-        prompt_job["process"].terminate()
-        prompt_job["process"].wait()
-    env = {**os.environ, "CUDA_VISIBLE_DEVICES": ""} if device == "cpu" else None
-    process = subprocess.Popen(args, cwd=str(BASE_DIR), env=env,
-                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                               encoding="utf-8", errors="replace", bufsize=1)
-    prompt_job.update(process=process, args=args, stage="loading", device="GPU" if device == "cuda" else "CPU")
-
-    def follow():
-        # Reenvía la salida a la consola del servidor y actualiza la fase que muestra la GUI.
-        for line in process.stdout:
-            print(line, end="", flush=True)
-            if prompt_job["process"] is process and line.startswith("[Custom Prompt] "):
-                stage = line[len("[Custom Prompt] "):].split(":", 1)[0].lower()
-                if stage in ("image", "prompt"):
-                    prompt_job["stage"] = stage
-
-    threading.Thread(target=follow, daemon=True).start()
+# Codifica en un proceso aparte los prompts propios de las previews que cambian (preview_prompts.py).
+prompt_encoder = preview_prompts.Encoder(PRECACHE_SCRIPT, BASE_DIR)
+encoding_stage = prompt_encoder.stage
 
 
 @app.route("/api/save-train", methods=["POST"])
@@ -669,19 +637,14 @@ def save_train():
             precache_cfg[key] = data.get(key, "")
         write_json_file(PRECACHE_CONFIG, precache_cfg)
 
-        # Si la caché no tiene el prompt o las imágenes de preview guardados, se codifican en CPU en
-        # paralelo (sin tocar la GPU del entrenamiento) y el trainer los relee antes de la siguiente preview.
-        prompt = data.get("preview_custom_prompt", "").strip()
-        trigger = data.get("trigger_word", "").strip()
-        if trigger and prompt and trigger.lower() not in prompt.lower():
-            prompt = f"{trigger}, {prompt}"
+        # Los prompts propios que la caché no tiene (o todos, si cambian las imágenes de referencia) se
+        # codifican en paralelo (en CPU si se está entrenando, sin tocar su GPU) y el trainer los
+        # relee antes de la siguiente preview.
         cache_dir = resolve_config_path(data["cache_dir"], cache_dir_name)
-        edit = data.get("lora_type") == "edit"
-        wanted = [prompt, "\n".join(preview_images) if edit else ""]
-        encoded = [(cache_dir / f).read_text(encoding="utf-8") if (cache_dir / f).exists() else None
-                   for f in ("_custom_prompt.txt", "_custom_image.txt")]
-        if prompt and wanted != encoded and (cache_dir / "_neg_embed.pt").exists() and get_status()["script"] != "precache":
-            encode_preview_prompt(cache_dir, wanted[0], preview_images if edit else [])
+        if get_status()["script"] != "precache":
+            prompt_encoder.update(cache_dir, read_json_file(TRAIN_CONFIG, {}),
+                                  training=get_status()["script"] == "train", ready=(cache_dir / "_neg_embed.pt").exists(),
+                                  images=preview_images if data.get("lora_type") == "edit" else [])
         saved_files = [TRAIN_CONFIG.name]
 
         # 2. Guardar copia dentro de la carpeta del proyecto
@@ -692,7 +655,7 @@ def save_train():
             write_json_file(output_json_file, data)
             saved_files.append(f"Outputs/{output_dir_name}/{output_json_file.name}")
 
-        return jsonify({"status": "ok", "previous": previous, "file": saved_files[0], "all_saved": saved_files, "encoding": encoding_stage(), "encoding_device": prompt_job["device"]})
+        return jsonify({"status": "ok", "previous": previous, "file": saved_files[0], "all_saved": saved_files, "encoding": encoding_stage(), "encoding_device": prompt_encoder.device})
     except Exception as exc:
         return jsonify({"status": "error", "error": str(exc)}), 500
 
@@ -703,7 +666,7 @@ def save_train():
 
 @app.route("/api/status", methods=["GET"])
 def api_status():
-    return jsonify({**get_status(), "encoding": encoding_stage(), "encoding_device": prompt_job["device"]})
+    return jsonify({**get_status(), "encoding": encoding_stage(), "encoding_device": prompt_encoder.device})
 
 
 @app.route("/api/checkpoint-info", methods=["GET"])
@@ -763,7 +726,9 @@ def get_previews():
     previews = previews[:50]
     # versions = mtime en ms, para que el navegador no reutilice una imagen vieja con el mismo nombre.
     return jsonify({"output_dir": str(output_dir), "previews": [n for n, _ in previews],
-                    "versions": {n: int(m * 1000) for n, m in previews}})
+                    "versions": {n: int(m * 1000) for n, m in previews},
+                    # Prompt de cada preview, guardado dentro del PNG por el trainer (preview_prompts.save_png).
+                    "prompts": {n: preview_prompts.png_prompt(str(output_dir / n)) for n, _ in previews}})
 
 
 @app.route("/api/preview/<path:filename>")

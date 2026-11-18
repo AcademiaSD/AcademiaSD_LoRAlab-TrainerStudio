@@ -65,6 +65,7 @@ import settings_limits
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import lora_options
 import training_metrics
+import preview_prompts
 import minimaxh3image_model as M
 
 STEP_WORD = t("Step")  # the GUI parses "<Step> N/Total" from the console
@@ -246,7 +247,7 @@ def reload_live_settings():
         return
     live = ("total_steps", "lr", "save_every", "max_grad_norm", "weight_decay", "caption_dropout", "preview_every",
             "preview_caption_mode", "preview_seed", "preview_size", "preview_width", "preview_height",
-            "preview_vae_device", "preview_lora_strength")
+            "preview_vae_device", "preview_lora_strength") + tuple(preview_prompts.DEFAULTS)
     changed = [k for k in live if k in fresh and fresh[k] != CFG.get(k)]
     for key in changed:
         CFG[key] = fresh[key]
@@ -806,12 +807,44 @@ def train_step(model, entry, step, empty_caption=None):
     return F.mse_loss(pred, target), sigma
 
 
+def custom_previews():
+    """
+    Custom Prompts listos para esta ronda: [(nombre, prompt)] de los que el Pre-Cache codificó con el
+    texto de los ajustes (_custom, _custom2...), o uno al azar. Solo los codifica el Pre-Cache. En una
+    caché de edición el prompt va con la imagen de antes, que el Pre-Cache no codifica para los
+    propios: ahí las previews siguen usando los pares del dataset.
+    """
+    ready, stale = [], []
+    for slot, wanted in preview_prompts.wanted(CFG, cfg("trigger_word") if "trigger_word" in CFG else ""):
+        key = preview_prompts.prefix(slot)
+        if (os.path.isfile(os.path.join(CACHE_DIR, key + "_root_prompt_embeds.pt"))
+                and preview_prompts.encoded_text(CACHE_DIR, slot) == wanted):
+            ready.append((key, wanted))
+        else:
+            stale.append(slot + 1)
+    if stale:
+        log("[PREVIEW] " + t("Custom prompts {n} are not encoded: this model encodes them only in Pre-Cache "
+                             "(stop, run Pre-Cache and resume).", n=", ".join(map(str, stale))))
+    if ready and preview_prompts.random_one(CFG):
+        ready = [random.choice(ready)]
+    return ready
+
+
 @torch.no_grad()
-def run_preview(model, entries, step):
+def run_preview(model, entries, step, custom=None, index=0):
+    # custom = (nombre, prompt) de un Custom Prompt; index = su nº dentro de la ronda.
     mode = str(cfg("preview_caption_mode")).lower()
     count = step // max(1, PREVIEW_EVERY)
     entry = entries[0] if mode == "first" else (entries[count % len(entries)] if mode.startswith("rotate")
                                                  else random.Random(step_seed(step, 7)).choice(entries))
+    prompt_text = entry["prompt"]
+    if custom is not None:
+        # El prompt propio no tiene imagen: la preview toma el tamaño de la primera muestra.
+        embeds = torch.load(os.path.join(CACHE_DIR, custom[0] + "_root_prompt_embeds.pt"),
+                            map_location="cpu", weights_only=True).to(torch.bfloat16)
+        entry = dict(entries[0], embeds=embeds, refs=[], prompt=custom[1],
+                     tags=torch.full((embeds.shape[1],), M.TEXT_TAG, dtype=torch.long))
+        prompt_text = custom[1]
     height, width = entry["latent"].shape[-2] * M.VAE_RATIO, entry["latent"].shape[-1] * M.VAE_RATIO
     if int(cfg("preview_width") or 0) > 0 and int(cfg("preview_height") or 0) > 0 and not entry["refs"]:
         width, height = int(cfg("preview_width")), int(cfg("preview_height"))
@@ -868,8 +901,9 @@ def run_preview(model, entries, step):
     finally:
         del vae
         gc_cuda()
-    path = os.path.join(OUTPUT_DIR, "preview_step_{}.png".format(step))
-    image.save(path)
+    path = os.path.join(OUTPUT_DIR, preview_prompts.preview_name(step, index))
+    # El prompt va dentro del PNG: la galería lo enseña al abrir la preview.
+    preview_prompts.save_png(image, path, prompt_text)
     log("[PREVIEW] {} | {}x{} | {} {} | CFG 1 | LoRA x{:g} | {:.0f}s | {}".format(
         os.path.basename(path), width, height, M.NUM_PDD_HEADS, t("steps"), strength, time.time() - t0, entry["prompt"][:80]))
 
@@ -1015,7 +1049,9 @@ def main():
                 log("[SAVE] {}_step_{}.safetensors ({} keys)".format(name, step, keys))
             if PREVIEW_EVERY > 0 and step % PREVIEW_EVERY == 0 and not STOP_REQUESTED:
                 try:
-                    run_preview(model, entries, step)
+                    customs = [] if any(e["refs"] for e in entries) else custom_previews()
+                    for index, custom in enumerate(customs or [None]):
+                        run_preview(model, entries, step, custom, index)
                 except Exception as exc:
                     log("[PREVIEW][WARN] {}".format(exc))
                     gc_cuda()

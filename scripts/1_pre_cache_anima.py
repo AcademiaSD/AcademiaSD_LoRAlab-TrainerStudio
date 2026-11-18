@@ -26,6 +26,7 @@ import sys
 import cache_names
 from i18n import t
 import settings_limits
+import preview_prompts
 from text_io import read_text_file
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 
@@ -277,18 +278,15 @@ def preprocess_anima():
 
     torch.save(encode_text(enc, NEGATIVE_PROMPT, "cuda"), os.path.join(CACHE_DIR, "_neg_embed.pt"))
 
-    custom_prompt = PREVIEW_CUSTOM_PROMPT
-    if custom_prompt:
-        c_prompt = with_trigger(custom_prompt)
+    # Prompts propios de las previews (Custom Prompts, hasta 4). El trainer y el servidor comparan
+    # con el texto guardado para saber si la caché está al día.
+    preview_prompts.remove_unused(CACHE_DIR, cfg)
+    for slot, c_prompt in preview_prompts.wanted(cfg, TRIGGER_WORD):
         print("[Custom Prompt Cache] " + t("Encoding: '{prompt}'", prompt=c_prompt))
-        torch.save(encode_text(enc, c_prompt, "cuda"), os.path.join(CACHE_DIR, "_custom_embed.pt"))
-        # El trainer y el servidor comparan con este texto para saber si la caché está al día.
-        with open(os.path.join(CACHE_DIR, "_custom_prompt.txt"), "w", encoding="utf-8") as f:
-            f.write(c_prompt)
-    else:
-        for f in ("_custom_embed.pt", "_custom_prompt.txt"):
-            if os.path.exists(os.path.join(CACHE_DIR, f)):
-                os.remove(os.path.join(CACHE_DIR, f))
+        embed = encode_text(enc, c_prompt, "cuda")
+        preview_prompts.write_atomic(CACHE_DIR, preview_prompts.slot_name("_custom_embed.pt", slot),
+                                     lambda f: torch.save(embed, f))
+        preview_prompts.save_text(CACHE_DIR, slot, c_prompt)
 
     for idx, (name, _) in enumerate(samples, 1):
         caption = with_trigger(read_caption(name))
@@ -326,33 +324,30 @@ def preprocess_anima():
     print("\n✓ " + t("Pre-caching finished! VRAM freed."))
 
 
-def encode_preview_prompt(cache_dir, prompt, device):
+def encode_preview_prompts(cache_dir, device, items):
     """
-    Codifica solo el prompt manual de las previews. Lo lanza el servidor al guardar un prompt nuevo.
-    Sin entrenamiento en marcha va en GPU; con el entrenamiento en marcha va en CPU para no tocar
-    su VRAM, y el trainer relee el embedding antes de la siguiente preview.
+    Codifica solo los prompts propios de las previews (Custom Prompts). Lo lanza el servidor al
+    guardar prompts nuevos: sin entrenamiento en marcha va en GPU; con el entrenamiento en marcha va
+    en CPU para no tocar su VRAM, y el trainer relee cada embedding antes de la siguiente preview.
     """
     where = device.upper().replace("CUDA", "GPU")
-    print("[Custom Prompt] Prompt: " + t("Encoding the prompt on {device}: '{prompt}'", device=where, prompt=prompt), flush=True)
     enc = load_text_encoders(device)
-    embed = encode_text(enc, prompt, device)
+    for slot, prompt in items:
+        print("[Custom Prompt] Prompt: " + t("Encoding the prompt on {device}: '{prompt}'", device=where, prompt=prompt), flush=True)
+        embed = encode_text(enc, prompt, device)
+        # El texto primero y el embedding el último, porque es el fichero que vigila el trainer.
+        preview_prompts.save_text(cache_dir, slot, prompt)
+        preview_prompts.write_atomic(cache_dir, preview_prompts.slot_name("_custom_embed.pt", slot),
+                                     lambda f, data=embed: torch.save(data, f))
     del enc
     free_vram()
-
-    # Escrituras atómicas; el embedding el último, porque es el fichero que vigila el trainer.
-    def replace(name, write):
-        tmp = os.path.join(cache_dir, name + ".tmp")
-        write(tmp)
-        os.replace(tmp, os.path.join(cache_dir, name))
-
-    replace("_custom_prompt.txt", lambda f: open(f, "w", encoding="utf-8").write(prompt))
-    replace("_custom_embed.pt", lambda f: torch.save(embed, f))
     print("[Custom Prompt] " + t("Ready."), flush=True)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 5 and sys.argv[1] == "--prompt-only":
-        # --prompt-only <carpeta de caché> <prompt con el trigger ya puesto> <cuda|cpu>
-        encode_preview_prompt(*sys.argv[2:])
+    prompts_only = preview_prompts.parse_prompts_only(sys.argv)
+    if prompts_only:
+        # --prompts-only <carpeta de caché> <cuda|cpu> <json [[slot, prompt con el trigger ya puesto], ...]>
+        encode_preview_prompts(*prompts_only)
     else:
         preprocess_anima()

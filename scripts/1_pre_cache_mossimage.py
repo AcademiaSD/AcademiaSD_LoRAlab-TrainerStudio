@@ -38,6 +38,7 @@ import sys
 import cache_names
 from i18n import t
 import settings_limits
+import preview_prompts
 from text_io import read_text_file
 import gpu_stats
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
@@ -543,28 +544,38 @@ def preprocess_mossimage():
     elif os.path.exists(base_file):
         os.remove(base_file)
 
-    # Prompt manual de las previews. En edición va con las imágenes de referencia de la preview;
-    # sin prompt manual se usa la instrucción del primer par.
-    custom_prompt = PREVIEW_CUSTOM_PROMPT or (read_caption(samples[0][0]) if edit else "")
-    if os.path.exists(os.path.join(CACHE_DIR, "_custom_uncond.pt")) and not (custom_prompt and vision):
+    # Prompts propios de las previews (Custom Prompts, hasta 4), cada uno con su nombre de muestra
+    # (_custom, _custom2...). En edición comparten las imágenes de referencia (_custom_ctrl*.pt) y,
+    # con armV5 / armV4, el negativo vacío codificado con ellas (_custom_uncond.pt).
+    custom_prompts = preview_prompts.wanted(cfg, TRIGGER_WORD)
+    # Imágenes de referencia de cada prompt: todas como <image1>, <image2>... o una por prompt (One
+    # image per prompt); en ese caso cada prompt lleva también su propio negativo (<prefix>_uncond.pt).
+    one_per_prompt = preview_prompts.per_prompt(cfg)
+    plan = preview_prompts.ref_plan(preview_sources, [s for s, _ in custom_prompts], one_per_prompt) if edit else {}
+    plan_sizes = {}
+    for refs in plan.values():
+        for src, ctrl in refs:
+            with Image.open(src) as im:
+                plan_sizes[ctrl] = (src, reference_size(*im.size))
+    if os.path.exists(os.path.join(CACHE_DIR, "_custom_uncond.pt")) and not (custom_prompts and vision):
         os.remove(os.path.join(CACHE_DIR, "_custom_uncond.pt"))
-    if custom_prompt:
-        c_prompt = with_trigger(custom_prompt)
-        print("[Custom Prompt Cache] " + t("Encoding: '{prompt}'", prompt=c_prompt) + (f" + {', '.join(os.path.basename(p) for p in preview_sources)}" if edit else ""))
-        images = [reference_image(src, size) for src, size in zip(preview_sources, preview_sizes)] if vision else ()
-        encode_and_save(te, tokenizer, c_prompt, "_custom", images)
-        if vision:
-            encode_and_save(te, tokenizer, "", "_custom", images, "uncond")
+    preview_prompts.remove_slot_refs(CACHE_DIR, {preview_prompts.prefix(s) for s in plan} if one_per_prompt else ())
+    preview_prompts.remove_unused_prefixed(CACHE_DIR, cfg, ("embed", "uncond"))
+    for slot, c_prompt in custom_prompts:
+        refs = plan.get(slot, [])
+        images = [reference_image(src, plan_sizes[ctrl][1]) for src, ctrl in refs] if vision else ()
+        print("[Custom Prompt Cache] " + t("Encoding: '{prompt}'", prompt=c_prompt) + (f" + {', '.join(os.path.basename(src) for src, _ in refs)}" if edit else ""))
+        encode_and_save(te, tokenizer, c_prompt, preview_prompts.prefix(slot), images)
+        if vision and (one_per_prompt or slot == custom_prompts[0][0]):
+            # El negativo vacío con las referencias: uno por prompt, o el de _custom para todos.
+            encode_and_save(te, tokenizer, "", preview_prompts.prefix(slot) if one_per_prompt else "_custom", images, "uncond")
         # El trainer y el servidor comparan con estos textos para saber si la caché está al día.
-        with open(os.path.join(CACHE_DIR, "_custom_prompt.txt"), "w", encoding="utf-8") as f:
-            f.write(c_prompt)
-        with open(os.path.join(CACHE_DIR, "_custom_image.txt"), "w", encoding="utf-8") as f:
-            f.write("\n".join(PREVIEW_EDIT_IMAGES))
-    else:
-        for f in ("_custom_embed.pt", "_custom_prompt.txt", "_custom_image.txt"):
-            if os.path.exists(os.path.join(CACHE_DIR, f)):
-                os.remove(os.path.join(CACHE_DIR, f))
-    expected_custom_ctrls = custom_ctrl_names(len(preview_sources)) if custom_prompt and edit else set()
+        preview_prompts.save_text(CACHE_DIR, slot, c_prompt)
+    if custom_prompts:
+        preview_prompts.save_images_text(CACHE_DIR, PREVIEW_EDIT_IMAGES, one_per_prompt)
+    elif os.path.exists(os.path.join(CACHE_DIR, "_custom_image.txt")):
+        os.remove(os.path.join(CACHE_DIR, "_custom_image.txt"))
+    expected_custom_ctrls = {c for c in plan_sizes if c.startswith("_custom_ctrl")}
 
     for idx, (name, _, control) in enumerate(samples, 1):
         # armV5 / armV4: con su referencia, y también el negativo vacío con ella (rama negativa de las previews).
@@ -584,8 +595,7 @@ def preprocess_mossimage():
     # edición se codifican siempre: pueden ser otros ficheros más antiguos.
     jobs = [(target, f"{name}_latent.pt", buckets[name]) for name, target, _ in samples]
     jobs += [(control, f"{name}_ctrl.pt", reference_size(*buckets[name])) for name, _, control in samples if control]
-    if custom_prompt and edit:
-        jobs += [(src, custom_ctrl_name(i), size) for i, (src, size) in enumerate(zip(preview_sources, preview_sizes))]
+    jobs += [(src, ctrl, size) for ctrl, (src, size) in plan_sizes.items()]
 
     pending = []
     for src, out, (bw, bh) in jobs:
@@ -621,17 +631,17 @@ def parse_preview_images_arg(value):
     return as_image_list(value)
 
 
-def encode_preview_prompt(cache_dir, prompt, images_arg, device):
+def encode_preview_prompts(cache_dir, device, items, images_arg=None):
     """
-    Codifica solo el prompt manual de las previews y, en edición, sus imágenes de referencia. Lo
-    lanza el servidor al guardar un prompt nuevo. Sin entrenamiento en marcha va en GPU; con el
-    entrenamiento en marcha va en CPU para no tocar su VRAM, y el trainer relee el embedding antes
-    de la siguiente preview.
+    Codifica solo los prompts propios de las previews (Custom Prompts) y, en edición, sus imágenes de
+    referencia (solo si han cambiado). Lo lanza el servidor al guardar prompts o imágenes nuevos. Sin
+    entrenamiento en marcha va en GPU; con el entrenamiento en marcha va en CPU para no tocar su VRAM,
+    y el trainer relee cada embedding antes de la siguiente preview.
     """
     global CACHE_DIR, EDIT_BASE
     CACHE_DIR = cache_dir
     where = device.upper().replace("CUDA", "GPU")
-    requested = parse_preview_images_arg(images_arg)
+    requested = as_image_list(images_arg or [])
     has_image = any(f.endswith("_ctrl.pt") and not cache_names.is_reserved(f) for f in os.listdir(cache_dir))
     sources = preview_edit_sources(find_samples(), requested) if has_image else []
     # La base con la que se codificó la caché (una caché anterior a armV4 es de chinoll).
@@ -639,11 +649,20 @@ def encode_preview_prompt(cache_dir, prompt, images_arg, device):
     EDIT_BASE = open(base_file, "r", encoding="utf-8").read().strip() if os.path.exists(base_file) else "chinoll"
     vision = bool(sources) and EDIT_BASE in AI_TOOLKIT_BASES
 
-    jobs = []
-    for i, src in enumerate(sources):
-        with Image.open(src) as im:
-            jobs.append((src, custom_ctrl_name(i) + ".new", reference_size(*im.size)))
-    if sources:
+    # Las referencias de cada prompt: todas como <image1>, <image2>... o una por prompt.
+    one_per_prompt = preview_prompts.per_prompt(cfg)
+    plan = preview_prompts.ref_plan(sources, [s for s, _ in items], one_per_prompt)
+    sizes = {}
+    for refs in plan.values():
+        for src, ctrl in refs:
+            with Image.open(src) as im:
+                sizes[ctrl] = (src, reference_size(*im.size))
+    jobs = [(src, ctrl + ".new", size) for ctrl, (src, size) in sizes.items()]
+    # Las referencias solo se recodifican si han cambiado (o faltan).
+    new_refs = bool(sources) and (
+        preview_prompts.encoded_images(cache_dir) != preview_prompts.images_key(requested, one_per_prompt)
+        or not all(os.path.exists(os.path.join(cache_dir, c)) for c in sizes))
+    if new_refs:
         # Se escriben aparte y se colocan al final junto al texto.
         # El servidor lee las líneas "[Custom Prompt] Image/Prompt" para mostrar la fase en la GUI.
         print("[Custom Prompt] Image: " + t("Encoding the reference image on {device}: {path}", device=where, path=", ".join(os.path.basename(p) for p in sources)), flush=True)
@@ -653,37 +672,46 @@ def encode_preview_prompt(cache_dir, prompt, images_arg, device):
         del vae
         free_vram()
 
-    print("[Custom Prompt] Prompt: " + t("Encoding the prompt on {device}: '{prompt}'", device=where, prompt=prompt), flush=True)
+    # El text encoder se carga una vez para todos los prompts (en CPU tarda).
     te, tokenizer = load_text_encoder(device)
-    images = [reference_image(src, size) for src, _, size in jobs] if vision else ()
-    embeds = encode_text(te, tokenizer, prompt, device, images)
-    uncond = encode_text(te, tokenizer, "", device, images) if vision else None
+    results, unconds = [], {}
+    for slot, prompt in items:
+        images = [reference_image(src, sizes[ctrl][1]) for src, ctrl in plan.get(slot, [])] if vision else ()
+        print("[Custom Prompt] Prompt: " + t("Encoding the prompt on {device}: '{prompt}'", device=where, prompt=prompt), flush=True)
+        results.append((slot, prompt, encode_text(te, tokenizer, prompt, device, images)))
+        # El negativo vacío con las referencias: uno por prompt, o el de _custom para todos.
+        name = preview_prompts.prefix(slot) if one_per_prompt else "_custom"
+        if vision and name not in unconds:
+            unconds[name] = encode_text(te, tokenizer, "", device, images)
     del te, tokenizer
     free_vram()
 
-    # Escrituras atómicas; el embedding el último, porque es el fichero que vigila el trainer.
-    def replace(name, write):
-        tmp = os.path.join(cache_dir, name + ".tmp")
-        write(tmp)
-        os.replace(tmp, os.path.join(cache_dir, name))
-
-    for i in range(len(sources)):
-        name = custom_ctrl_name(i)
-        os.replace(os.path.join(cache_dir, name + ".new"), os.path.join(cache_dir, name))
-    remove_stale_custom_ctrls(custom_ctrl_names(len(sources)))
-    replace("_custom_prompt.txt", lambda f: open(f, "w", encoding="utf-8").write(prompt))
-    replace("_custom_image.txt", lambda f: open(f, "w", encoding="utf-8").write("\n".join(requested)))
-    if uncond is not None:
-        replace("_custom_uncond.pt", lambda f: torch.save(uncond, f))
-    elif os.path.exists(os.path.join(cache_dir, "_custom_uncond.pt")):
+    # Escrituras atómicas: las referencias nuevas y, por prompt, el texto y el embedding el último,
+    # porque es el fichero que vigila el trainer.
+    if new_refs:
+        for name in sizes:
+            os.replace(os.path.join(cache_dir, name + ".new"), os.path.join(cache_dir, name))
+    if one_per_prompt:
+        remove_stale_custom_ctrls({"_custom_ctrl.pt"})
+    else:
+        remove_stale_custom_ctrls(custom_ctrl_names(len(sources)))
+        preview_prompts.remove_slot_refs(cache_dir)
+    preview_prompts.save_images_text(cache_dir, requested, one_per_prompt)
+    for name, uncond in unconds.items():
+        preview_prompts.write_atomic(cache_dir, f"{name}_uncond.pt", lambda f, v=uncond: torch.save(v, f))
+    if not vision and os.path.exists(os.path.join(cache_dir, "_custom_uncond.pt")):
         os.remove(os.path.join(cache_dir, "_custom_uncond.pt"))
-    replace("_custom_embed.pt", lambda f: torch.save(embeds, f))
+    for slot, prompt, embeds in results:
+        preview_prompts.save_text(cache_dir, slot, prompt)
+        preview_prompts.write_atomic(cache_dir, f"{preview_prompts.prefix(slot)}_embed.pt",
+                                     lambda f, v=embeds: torch.save(v, f))
     print("[Custom Prompt] " + t("Ready."), flush=True)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) == 6 and sys.argv[1] == "--prompt-only":
-        # --prompt-only <carpeta de caché> <prompt con el trigger ya puesto> <rutas JSON o una ruta> <cuda|cpu>
-        encode_preview_prompt(*sys.argv[2:])
+    prompts_only = preview_prompts.parse_prompts_only(sys.argv)
+    if prompts_only:
+        # --prompts-only <carpeta de caché> <cuda|cpu> <json [[slot, prompt con el trigger ya puesto], ...]> [<json rutas>]
+        encode_preview_prompts(*prompts_only)
     else:
         preprocess_mossimage()

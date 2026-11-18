@@ -13,6 +13,8 @@
     <script src="/dataset_forge_button.js"></script>
     <script src="/queue_client.js"></script>
     <script src="/number_limits.js"></script>
+    <script>window.PREVIEW_PROMPTS_PRECACHE_ONLY = true;   // Custom Prompts: solo los codifica el Pre-Cache</script>
+    <script src="/preview_prompts.js"></script>
 
     <!-- Favicon de la pestaña del navegador -->
     <link rel="icon" type="image/png" href="/assets/logo_128.png">
@@ -2091,7 +2093,7 @@
                     // correctly too.
                     syncVramProfileFromValues();
                     if (t.debug_training !== undefined) document.getElementById('train_debug_training').value = t.debug_training ? "true" : "false";
-                    if (t.preview_custom_prompt !== undefined) document.getElementById('train_preview_custom_prompt').value = t.preview_custom_prompt;
+                    if (t.preview_custom_prompt !== undefined) document.getElementById('train_preview_custom_prompt').value = t.preview_custom_prompt; PreviewPrompts.load(t);
 
                     if (t.use_turbo !== undefined) document.getElementById('train_use_turbo').checked = t.use_turbo;
                     if (t.turbo_lora_strength !== undefined) document.getElementById('train_turbo_strength').value = t.turbo_lora_strength;
@@ -2199,7 +2201,7 @@
                     if (data.vram_headroom_gb !== undefined) document.getElementById('train_vram_headroom_gb').value = data.vram_headroom_gb;
                     syncVramProfileFromValues();
                     if (data.debug_training !== undefined) document.getElementById('train_debug_training').value = data.debug_training ? "true" : "false";
-                    if (data.preview_custom_prompt !== undefined) document.getElementById('train_preview_custom_prompt').value = data.preview_custom_prompt;
+                    if (data.preview_custom_prompt !== undefined) document.getElementById('train_preview_custom_prompt').value = data.preview_custom_prompt; PreviewPrompts.load(data);
 
                     if (data.use_turbo !== undefined) document.getElementById('train_use_turbo').checked = data.use_turbo;
                     if (data.turbo_lora_strength !== undefined) document.getElementById('train_turbo_strength').value = data.turbo_lora_strength;
@@ -2273,7 +2275,7 @@
                 lora_type: window.H3_IMAGE ? document.getElementById('precache_lora_type').value : 'normal',
                 edit_reference_size: document.getElementById('precache_edit_reference_size').value,
                 cache_dir: document.getElementById('precache_cache_dir').value,
-                preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim()
+                preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim(), ...PreviewPrompts.values()
             };
             const res = await fetch('/api/save-precache', { method: 'POST', body: JSON.stringify(precacheData) });
             const data = await res.json();
@@ -2396,7 +2398,7 @@
                 // three numbers above, not this key.
                 vram_profile: document.getElementById('train_vram_profile').value,
                 debug_training: document.getElementById('train_debug_training').value === "true",
-                preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim(),
+                preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim(), ...PreviewPrompts.values(),
                 
                 use_turbo: document.getElementById('train_use_turbo').checked,
                 turbo_lora_strength: parseFloat(document.getElementById('train_turbo_strength').value),
@@ -3512,12 +3514,12 @@
                     const src = `/api/preview/${filename}?v=${versions[filename] || Date.now()}`;
                     const card = document.createElement('div');
                     card.className = 'preview-card';
-                    card.onclick = () => openModal(src, filename, `${t('Generated preview')}: ${filename}`);
+                    card.onclick = () => openModal(src, filename, `${t('Generated preview')}: ${filename}` + ((data.prompts || {})[filename] ? `\n\n${t('Prompt')}: ${data.prompts[filename]}` : ''));
 
                     let stepTag = filename;
-                    const match = filename.match(/preview_step_(\d+)\.png/i);
+                    const match = filename.match(/preview_step_(\d+)(?:_(\d+))?\.png/i);
                     if (match) {
-                        stepTag = t('Step {n}', { n: match[1] });
+                        stepTag = t('Step {n}', { n: match[1] }) + (match[2] ? ` · #${match[2]}` : '');
                     }
 
                     card.innerHTML = `

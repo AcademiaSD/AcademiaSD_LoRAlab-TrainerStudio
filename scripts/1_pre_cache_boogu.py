@@ -16,6 +16,7 @@ from boogu_model import (
 )
 from project_layout import resolve_cache_dir
 import settings_limits
+import preview_prompts
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 CONFIG = Path(os.environ.get("LORALAB_PRECACHE_CONFIG") or BASE_DIR / "settings" / "pre_cache_settings_boogu.json")
@@ -280,7 +281,7 @@ def _encode_latents(rows, dataset, cache, mode, target_area, multiple, max_side)
         gc_collect_cuda()
 
 
-def _encode_custom_reference(dataset, cache, reference_value, target_area, max_side, device="cuda"):
+def _encode_custom_reference(dataset, cache, reference_value, target_area, max_side, device="cuda", name="_custom"):
     if not reference_value:
         return
     from diffsynth.core import ModelConfig
@@ -288,7 +289,7 @@ def _encode_custom_reference(dataset, cache, reference_value, target_area, max_s
 
     reference = _resolve_edit_path(dataset, reference_value)
     reference_hash = _image_hash(_signature(reference), [target_area, max_side])
-    custom_path = cache_path(cache, {"image": "_custom"})
+    custom_path = cache_path(cache, {"image": name})
     saved = _load(custom_path)
     if saved.get("custom_reference_hash") == reference_hash and "reference_latents" in saved:
         return
@@ -321,25 +322,36 @@ def _encode_custom_reference(dataset, cache, reference_value, target_area, max_s
 
 
 def _custom_preview(config, mode, first_row):
-    # Prompt de la preview personalizada (con el trigger) y, en edición, su imagen de antes:
-    # la elegida o, si está vacía, la del primer par.
-    prompt = _with_trigger(config.get("preview_custom_prompt", ""), config.get("trigger_word", ""))
+    # Prompts propios de las previews (Custom Prompts, hasta 4): [(slot, prompt con el trigger)] y, en
+    # edición, su imagen de antes (la misma para todos): la elegida o, si está vacía, la del primer par.
+    prompts = preview_prompts.wanted(config, None, lambda p: _with_trigger(p, config.get("trigger_word", "")))
     reference = ""
-    if mode == "edit" and prompt:
+    if mode == "edit" and prompts:
         reference = str(config.get("preview_edit_image", "")).strip() or first_row["edit_image"]
-    return prompt, reference
+    return prompts, reference
 
 
-def _custom_size(cache, first_row):
+def _custom_rows(prompts, reference):
+    # Cada prompt propio es una muestra más de la caché: _custom, _custom2...
+    rows = []
+    for slot, prompt in prompts:
+        row = {"image": preview_prompts.prefix(slot), "prompt": prompt, "custom": True}
+        if reference:
+            row["edit_image"] = reference
+        rows.append(row)
+    return rows
+
+
+def _custom_size(cache, first_row, name="_custom"):
     # Sin imagen de antes, la preview personalizada sale del tamaño de la primera muestra.
-    custom_path = cache_path(cache, {"image": "_custom"})
+    custom_path = cache_path(cache, {"image": name})
     custom_saved = _load(custom_path)
     first_saved = _load(cache_path(cache, first_row))
     custom_saved.update({"width": first_saved["width"], "height": first_saved["height"]})
     _save(custom_path, custom_saved)
 
 
-def prompt_only(device):
+def prompt_only(device, items=None, images=None):
     """Codifica solo el prompt (y la imagen) de la preview personalizada en una caché ya hecha.
 
     Lo lanza el servidor al guardar los ajustes: en CPU si hay un entrenamiento en marcha, para no
@@ -352,21 +364,28 @@ def prompt_only(device):
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         with (cache / "metadata.jsonl").open(encoding="utf-8") as stream:
             first_row = json.loads(stream.readline())
-        prompt, reference = _custom_preview(config, mode, first_row)
-        if not prompt:
+        prompts, reference = _custom_preview(config, mode, first_row)
+        if items is not None:
+            # Lo que manda el servidor: los prompts que cambian y la imagen de antes de la preview.
+            prompts = list(items)
+            if mode == "edit" and prompts:
+                reference = (images[0] if images else "") or first_row["edit_image"]
+        if not prompts:
             return 0
-        row = {"image": "_custom", "prompt": prompt, "custom": True}
-        if reference:
-            row["edit_image"] = reference
-        print(f"[Custom Prompt] Prompt: {prompt}", flush=True)
-        _encode_text([row], dataset, cache, mode, config.get("trigger_word", ""), device)
-        if reference:
-            print(f"[Custom Prompt] Image: {reference}", flush=True)
-            _encode_custom_reference(dataset, cache, reference, area, max_side, device)
-        else:
-            _custom_size(cache, first_row)
+        for slot, prompt in prompts:
+            print(f"[Custom Prompt] Prompt: {prompt}", flush=True)
+        _encode_text(_custom_rows(prompts, reference), dataset, cache, mode, config.get("trigger_word", ""), device)
+        for slot, _ in prompts:
+            name = preview_prompts.prefix(slot)
+            if reference:
+                print(f"[Custom Prompt] Image: {reference}", flush=True)
+                _encode_custom_reference(dataset, cache, reference, area, max_side, device, name)
+            else:
+                _custom_size(cache, first_row, name)
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        manifest.update({"preview_custom_prompt": prompt, "preview_edit_image": reference})
+        encoded = dict(manifest.get("preview_custom_prompts") or {})
+        encoded.update({str(slot): prompt for slot, prompt in prompts})
+        manifest.update({"preview_custom_prompts": encoded, "preview_edit_image": reference})
         temporary = manifest_path.with_suffix(".json.tmp")
         temporary.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
         os.replace(temporary, manifest_path)
@@ -399,19 +418,17 @@ def main():
         cache.mkdir(parents=True, exist_ok=True)
         print(f"Boogu {mode}: {len(rows)} muestras | caché: embeddings + latentes", flush=True)
         text_rows = list(rows)
-        custom_prompt, custom_reference = _custom_preview(config, mode, rows[0])
-        if custom_prompt:
-            custom_row = {"image": "_custom", "prompt": custom_prompt, "custom": True}
-            if custom_reference:
-                custom_row["edit_image"] = custom_reference
-            text_rows.append(custom_row)
+        custom_prompts, custom_reference = _custom_preview(config, mode, rows[0])
+        text_rows += _custom_rows(custom_prompts, custom_reference)
         _encode_text(text_rows, dataset, cache, mode, config.get("trigger_word", ""))
         gc_collect_cuda()
         _encode_latents(rows, dataset, cache, mode, area, multiple, max_side)
-        if mode == "edit" and custom_prompt:
-            _encode_custom_reference(dataset, cache, custom_reference, area, max_side)
-        if custom_prompt and mode == "normal":
-            _custom_size(cache, rows[0])
+        for slot, _ in custom_prompts:
+            name = preview_prompts.prefix(slot)
+            if mode == "edit":
+                _encode_custom_reference(dataset, cache, custom_reference, area, max_side, name=name)
+            else:
+                _custom_size(cache, rows[0], name)
 
         manifest = {
             "cache_version": CACHE_VERSION,
@@ -421,7 +438,7 @@ def main():
             "sample_count": len(rows),
             "metadata_sha256": _file_hash(cache / "metadata.jsonl"),
             "trigger_word": str(config.get("trigger_word", "")).strip(),
-            "preview_custom_prompt": custom_prompt,
+            "preview_custom_prompts": {str(slot): prompt for slot, prompt in custom_prompts},
             "preview_edit_image": custom_reference,
             "target_area": area,
             "multiple": multiple,
@@ -440,4 +457,8 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(prompt_only(sys.argv[2]) if sys.argv[1:2] == ["--prompt-only"] else main())
+    prompts_only = preview_prompts.parse_prompts_only(sys.argv)
+    if prompts_only:
+        # --prompts-only <carpeta de caché> <cuda|cpu> <json [[slot, prompt con el trigger ya puesto], ...]> [<json [imagen de antes]>]
+        sys.exit(prompt_only(prompts_only[1], prompts_only[2], prompts_only[3] if len(prompts_only) > 3 else None))
+    sys.exit(main())

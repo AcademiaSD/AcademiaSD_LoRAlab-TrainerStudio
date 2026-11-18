@@ -13,6 +13,7 @@
     <script src="/dataset_forge_button.js"></script>
     <script src="/queue_client.js"></script>
     <script src="/number_limits.js"></script>
+    <script src="/preview_prompts.js"></script>
 
     <!-- Favicon de la pestaña del navegador -->
     <link rel="icon" type="image/png" href="/assets/logo_128.png">
@@ -1004,7 +1005,7 @@
                         document.getElementById('train_preview_caption_mode').value = t.preview_caption_mode;
                         toggleCaptionMode(t.preview_caption_mode);
                     }
-                    if (t.preview_custom_prompt !== undefined) document.getElementById('train_preview_custom_prompt').value = t.preview_custom_prompt;
+                    if (t.preview_custom_prompt !== undefined) document.getElementById('train_preview_custom_prompt').value = t.preview_custom_prompt; PreviewPrompts.load(t);
                     if (t.preview_edit_image !== undefined) document.getElementById('preview_edit_image').value = t.preview_edit_image;
                     if (t.preview_steps !== undefined) document.getElementById('train_preview_steps').value = t.preview_steps;
                     if (t.preview_cfg !== undefined) document.getElementById('train_preview_cfg').value = t.preview_cfg;
@@ -1081,7 +1082,7 @@
                         document.getElementById('train_preview_caption_mode').value = data.preview_caption_mode;
                         toggleCaptionMode(data.preview_caption_mode);
                     }
-                    if (data.preview_custom_prompt !== undefined) document.getElementById('train_preview_custom_prompt').value = data.preview_custom_prompt;
+                    if (data.preview_custom_prompt !== undefined) document.getElementById('train_preview_custom_prompt').value = data.preview_custom_prompt; PreviewPrompts.load(data);
                     if (data.preview_edit_image !== undefined) document.getElementById('preview_edit_image').value = data.preview_edit_image;
                     if (data.preview_steps !== undefined) document.getElementById('train_preview_steps').value = data.preview_steps;
                     if (data.preview_cfg !== undefined) document.getElementById('train_preview_cfg').value = data.preview_cfg;
@@ -1171,7 +1172,7 @@
                 max_side: parseInt(document.getElementById('precache_max_side').value),
                 cache_dir: document.getElementById('precache_cache_dir').value,
                 lora_type: 'normal',
-                preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim(),
+                preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim(), ...PreviewPrompts.values(),
                 preview_edit_image: document.getElementById('preview_edit_image').value.trim()
             };
             const res = await fetch('/api/save-precache', { method: 'POST', body: JSON.stringify(precacheData) });
@@ -1283,7 +1284,7 @@
                 seed: parseInt(document.getElementById('train_seed').value),
                 preview_every: parseInt(document.getElementById('train_preview_every').value) || 0,
                 preview_caption_mode: document.getElementById('train_preview_caption_mode').value,
-                preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim(),
+                preview_custom_prompt: document.getElementById('train_preview_custom_prompt').value.trim(), ...PreviewPrompts.values(),
                 preview_edit_image: document.getElementById('preview_edit_image').value.trim(),
                 lora_type: 'normal',
                 preview_steps: parseInt(document.getElementById('train_preview_steps').value),
@@ -1841,12 +1842,12 @@
                     const src = `/api/preview/${filename}?v=${versions[filename] || Date.now()}`;
                     const card = document.createElement('div');
                     card.className = 'preview-card';
-                    card.onclick = () => openModal(src, filename, `${t('Generated preview')}: ${filename}`);
+                    card.onclick = () => openModal(src, filename, `${t('Generated preview')}: ${filename}` + ((data.prompts || {})[filename] ? `\n\n${t('Prompt')}: ${data.prompts[filename]}` : ''));
 
                     let stepTag = filename;
-                    const match = filename.match(/preview_step_(\d+)\.png/i);
+                    const match = filename.match(/preview_step_(\d+)(?:_(\d+))?\.png/i);
                     if (match) {
-                        stepTag = t('Step {n}', { n: match[1] });
+                        stepTag = t('Step {n}', { n: match[1] }) + (match[2] ? ` · #${match[2]}` : '');
                     }
 
                     card.innerHTML = `

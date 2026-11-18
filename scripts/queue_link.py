@@ -240,6 +240,10 @@ def register(app, trainer_id, runtime, train_config, precache_config):
     def number_limits_js():
         return send_from_directory(str(GUI_DIR), "number_limits.js")
 
+    @app.route("/preview_prompts.js")
+    def preview_prompts_js():
+        return send_from_directory(str(GUI_DIR), "preview_prompts.js")
+
     @app.route("/api/queue-gate", methods=["POST"])
     def queue_gate():
         script = (request.get_json(force=True) or {}).get("script")

@@ -52,6 +52,7 @@ from PIL import Image
 from safetensors import safe_open
 from i18n import t
 import settings_limits
+import preview_prompts
 from text_io import read_text_file
 from project_layout import resolve_cache_dir, resolve_model_dir
 
@@ -3506,15 +3507,15 @@ def preprocess_minimaxh3():
     gc_cuda()
 
     # ---------- custom preview prompt ----------
-    if PREVIEW_CUSTOM_PROMPT:
-        custom_prompt = PREVIEW_CUSTOM_PROMPT
-        if TRIGGER_WORD and TRIGGER_WORD.lower() not in custom_prompt.lower():
-            custom_prompt = "{}, {}".format(TRIGGER_WORD, custom_prompt).strip(", ")
+    # Custom Prompts (hasta 4), cada uno con su nombre de muestra (_custom, _custom2...). Solo los
+    # codifica el Pre-Cache: el text encoder no cabe para hacerlo al vuelo.
+    for slot, custom_prompt in preview_prompts.wanted(cfg, TRIGGER_WORD):
         log_dev(L("[1.2] Encoding custom prompt: {}",
                   "[1.2] Codificando prompt custom: {}").format(custom_prompt))
         with torch.inference_mode():
             custom_result = encode_prompt_minimax(text_encoder, processor, custom_prompt, "cuda")
-        save_prompt_result(custom_result, "_custom")
+        save_prompt_result(custom_result, preview_prompts.prefix(slot))
+        preview_prompts.save_text(CACHE_DIR, slot, custom_prompt)
         del custom_result
         gc_cuda()
 

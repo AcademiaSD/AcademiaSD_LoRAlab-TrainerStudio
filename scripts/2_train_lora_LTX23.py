@@ -59,6 +59,7 @@ import settings_limits
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import lora_options
 import training_metrics
+import preview_prompts
 
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
 STEP_WORD = t("Step")
@@ -257,6 +258,8 @@ PREVIEW_CFG_MAX = float(cfg_get("preview_cfg_max", DEFAULTS["preview_cfg_max"]))
 PREVIEW_CFG_RESCALE = float(cfg_get("preview_cfg_rescale", DEFAULTS["preview_cfg_rescale"]))
 PREVIEW_CAPTION_MODE = str(cfg_get("preview_caption_mode", DEFAULTS["preview_caption_mode"])).strip().lower()
 PREVIEW_CUSTOM_PROMPT = str(cfg_get("preview_custom_prompt", DEFAULTS["preview_custom_prompt"])).strip()
+PREVIEW_PROMPTS = preview_prompts.settings(cfg)   # Custom Prompts (hasta 4); solo los codifica el Pre-Cache
+PREVIEW_NOW = {"index": 0, "prompt": ""}          # preview en curso: nº dentro de la ronda y su prompt
 
 PREVIEW_MODE = str(cfg_get("preview_mode", DEFAULTS["preview_mode"])).strip().lower()
 PREVIEW_RECON_SIGMA = float(cfg_get("preview_recon_sigma", DEFAULTS["preview_recon_sigma"]))
@@ -1033,7 +1036,7 @@ def prepare_text_conditioning(entries, connectors, max_text_tokens=0):
         entry.pop("prompt", None)
 
 
-def prepare_special_text_conditioning(connectors, max_text_tokens, preview_custom_prompt):
+def prepare_special_text_conditioning(connectors, max_text_tokens, preview_custom_prompt=None):
     special = {}
     prefixes = []
 
@@ -1043,8 +1046,11 @@ def prepare_special_text_conditioning(connectors, max_text_tokens, preview_custo
     if os.path.exists(neg_path):
         prefixes.append("_neg")
 
-    if preview_custom_prompt and os.path.exists(custom_path):
-        prefixes.append("_custom")
+    # Custom Prompts: todos los que el Pre-Cache haya codificado (_custom, _custom2...).
+    for slot in range(preview_prompts.MAX):
+        prefix = preview_prompts.prefix(slot)
+        if os.path.exists(os.path.join(CACHE_DIR, f"{prefix}_structure.json")):
+            prefixes.append(prefix)
 
     if not prefixes:
         return special
@@ -2139,6 +2145,7 @@ def reload_preview_settings():
 
         PREVIEW_CAPTION_MODE = str(g("preview_caption_mode", PREVIEW_CAPTION_MODE)).strip().lower()
         PREVIEW_CUSTOM_PROMPT = str(g("preview_custom_prompt", PREVIEW_CUSTOM_PROMPT)).strip()
+        preview_prompts.live_update(PREVIEW_PROMPTS, pcfg, [])
 
         PREVIEW_MODE = str(g("preview_mode", PREVIEW_MODE)).strip().lower()
         PREVIEW_RECON_SIGMA = float(g("preview_recon_sigma", PREVIEW_RECON_SIGMA))
@@ -2225,10 +2232,10 @@ def _fmt_num(x):
 
 
 def preview_filename(step):
-    parts = [
-        "preview_step_{:05d}".format(int(step)),
-        str(PREVIEW_MODE or "gen"),
-    ]
+    parts = ["preview_step_{:05d}".format(int(step))]
+    if PREVIEW_NOW["index"]:
+        parts.append(str(PREVIEW_NOW["index"] + 1))   # 2.º, 3.º, 4.º prompt propio de la ronda
+    parts.append(str(PREVIEW_MODE or "gen"))
 
     if PREVIEW_MODE != "gen":
         parts.append("sig{}".format(_fmt_num(PREVIEW_RECON_SIGMA)))
@@ -2252,7 +2259,9 @@ def run_preview_diagnostic(
     special_texts,
     step,
     audio_channels,
+    custom_key=None,
 ):
+    # custom_key: el prompt propio de esta preview (_custom, _custom2...); None = Caption Mode.
     if not entries:
         return
 
@@ -2282,13 +2291,14 @@ def run_preview_diagnostic(
         else:
             entry = valid_entries[0]
 
-        if PREVIEW_CAPTION_MODE == "custom" and "_custom" in special_texts:
-            video_text, audio_text = special_texts["_custom"]
-            sample_name = "_custom"
+        if custom_key is not None and custom_key in special_texts:
+            video_text, audio_text = special_texts[custom_key]
+            sample_name = custom_key
         else:
             video_text = entry["video_text"]
             audio_text = entry["audio_text"]
             sample_name = entry["name"]
+            PREVIEW_NOW["prompt"] = preview_prompts.dataset_caption(cfg, entry["name"], TRIGGER_WORD)
 
         device = "cuda"
 
@@ -2462,7 +2472,7 @@ def run_preview_diagnostic(
             out_name = preview_filename(step).replace(".png", "_compare_BASE_LoRA.png")
             out_path = os.path.join(OUTPUT_DIR, out_name)
 
-            Image.fromarray(img).save(out_path)
+            preview_prompts.save_png(img, out_path, PREVIEW_NOW["prompt"])
 
             print("  -> " + t("Compare preview saved: {path}", path=out_path))
 
@@ -2484,7 +2494,8 @@ def run_preview_diagnostic(
             vae.to("cpu")
 
             out_path = os.path.join(OUTPUT_DIR, preview_filename(step))
-            Image.fromarray(img).save(out_path)
+            # El prompt va dentro del PNG: la galería lo enseña al abrir la preview.
+            preview_prompts.save_png(img, out_path, PREVIEW_NOW["prompt"])
 
             print("  -> " + t("Preview saved to: {path}", path=out_path))
 
@@ -3118,14 +3129,32 @@ def train_ltx23():
             )
 
             if PREVIEW_EVERY > 0 and step % PREVIEW_EVERY == 0:
-                run_preview_diagnostic(
-                    model,
-                    scheduler,
-                    entries,
-                    special_texts,
-                    step,
-                    AUDIO_CHANNELS,
-                )
+                # Custom Prompts: una preview por prompt propio que el Pre-Cache haya codificado con el
+                # texto de los ajustes (o una con uno al azar); sin ellos, la del Caption Mode.
+                reload_preview_settings()
+                ready, stale = [], []
+                for slot, wanted in preview_prompts.wanted(PREVIEW_PROMPTS, TRIGGER_WORD):
+                    key = preview_prompts.prefix(slot)
+                    if key in special_texts and preview_prompts.encoded_text(CACHE_DIR, slot) == wanted:
+                        ready.append((key, wanted))
+                    else:
+                        stale.append(slot + 1)
+                if stale:
+                    print("\n  [Preview] " + t("Custom prompts {n} are not encoded: this model encodes them only in Pre-Cache "
+                                               "(stop, run Pre-Cache and resume).", n=", ".join(map(str, stale))))
+                if ready and preview_prompts.random_one(PREVIEW_PROMPTS):
+                    ready = [random.choice(ready)]
+                for index, (key, text) in enumerate(ready or [(None, "")]):
+                    PREVIEW_NOW.update(index=index, prompt=text)
+                    run_preview_diagnostic(
+                        model,
+                        scheduler,
+                        entries,
+                        special_texts,
+                        step,
+                        AUDIO_CHANNELS,
+                        custom_key=key,
+                    )
 
     except KeyboardInterrupt:
         save_checkpoint_now(last_step_executed)

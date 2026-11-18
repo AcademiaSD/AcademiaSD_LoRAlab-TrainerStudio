@@ -32,6 +32,7 @@ import gpu_stats
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import lora_options
 import training_metrics
+import preview_prompts
 import qwen_image2512_model as qm
 
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
@@ -139,6 +140,8 @@ PREVIEW_WIDTH     = int(cfg.get("preview_width",  DEFAULTS["preview_width"]))
 PREVIEW_HEIGHT    = int(cfg.get("preview_height", DEFAULTS["preview_height"]))
 PREVIEW_CAPTION_MODE  = cfg.get("preview_caption_mode",  DEFAULTS["preview_caption_mode"])
 PREVIEW_CUSTOM_PROMPT = cfg.get("preview_custom_prompt", DEFAULTS["preview_custom_prompt"]).strip()
+PREVIEW_PROMPTS = preview_prompts.settings(cfg)   # Custom Prompts (hasta 4), cambian en caliente
+PREVIEW_NOW = {"index": 0, "prompt": ""}          # preview en curso: nº dentro de la ronda y su prompt
 
 # Previews rápidas con Lightning de lightx2v (Apache-2.0): 4 pasos, sin CFG.
 USE_TURBO           = cfg.get("use_turbo",           DEFAULTS["use_turbo"])
@@ -494,8 +497,8 @@ def run_preview(model, scheduler, sample, neg, size, step):
             vae.to("cpu")
 
         from PIL import Image
-        out = os.path.join(OUTPUT_DIR, f"preview_step_{step}.png")
-        Image.fromarray(img).save(out)
+        out = os.path.join(OUTPUT_DIR, preview_prompts.preview_name(step, PREVIEW_NOW["index"]))
+        preview_prompts.save_png(img, out, PREVIEW_NOW["prompt"])
         print("  ↳ " + t("Preview saved to: {path}", path=out))
     finally:
         for h in hooks:
@@ -505,28 +508,20 @@ def run_preview(model, scheduler, sample, neg, size, step):
         free_vram()
 
 
-def check_custom_prompt(has_custom):
+def check_custom_prompt(custom):
     """
-    El trainer no tiene text encoder (es la razón de ser del pre-cache): el prompt manual
-    lo codifica el Pre-Cache, que al relanzarlo salta las imágenes ya cacheadas.
-    Aquí solo se avisa si falta o si el de los ajustes ya no es el codificado.
+    El trainer no tiene text encoder (es la razón de ser del pre-cache): los prompts propios los
+    codifica el Pre-Cache, o el servidor en CPU al guardarlos con el entrenamiento en marcha.
+    Aquí solo se dice cuáles hay y si alguno aún no está codificado.
     """
-    if PREVIEW_CAPTION_MODE != "custom":
+    if not preview_prompts.prompts(PREVIEW_PROMPTS):
         return
-    if not has_custom:
-        print("\n[PREVIEW] " + t("Custom mode but the cache has no encoded prompt: set it, Save JSON and run Pre-Cache "
-                                "(it only re-encodes the texts). Using the first caption meanwhile."))
-        return
-
-    wanted = PREVIEW_CUSTOM_PROMPT
-    if TRIGGER_WORD and wanted and TRIGGER_WORD.lower() not in wanted.lower():
-        wanted = f"{TRIGGER_WORD}, {wanted}"
-    prompt_file = os.path.join(CACHE_DIR, "_custom_prompt.txt")
-    encoded = open(prompt_file, "r", encoding="utf-8").read() if os.path.exists(prompt_file) else ""
-    print(f"\n[PREVIEW] {t('Custom prompt')}: '{encoded}'")
-    if wanted and wanted != encoded:
-        print("[PREVIEW] " + t("The new prompt is being encoded on CPU (Save JSON); previews switch to it when ready."))
-
+    print("\n[PREVIEW] " + t("Custom prompts:"))
+    for line in preview_prompts.describe(PREVIEW_PROMPTS, CACHE_DIR, TRIGGER_WORD):
+        print(line)
+    if custom.missing(PREVIEW_PROMPTS):
+        print("[PREVIEW] " + t("Prompts marked ... are not encoded yet: they are encoded on CPU when you Save JSON "
+                              "(or by Pre-Cache). Until then previews use the ones that are ready, or the dataset captions."))
 
 _live_mtime = None
 
@@ -583,6 +578,7 @@ def reload_live_settings():
     PREVIEW_HEIGHT        = fresh("preview_height",        int,   PREVIEW_HEIGHT)
     PREVIEW_CAPTION_MODE  = fresh("preview_caption_mode",  str,   PREVIEW_CAPTION_MODE)
     PREVIEW_CUSTOM_PROMPT = fresh("preview_custom_prompt", lambda v: str(v).strip(), PREVIEW_CUSTOM_PROMPT)
+    preview_prompts.live_update(PREVIEW_PROMPTS, raw, changes)
     USE_TURBO             = fresh("use_turbo",             bool,  USE_TURBO)
     TURBO_LORA_STRENGTH   = fresh("turbo_lora_strength",   float, TURBO_LORA_STRENGTH)
     SEED                  = fresh("seed",                  int,   SEED)  # solo previews
@@ -791,12 +787,28 @@ def train_qwenimage2512():
         cache_data[nombre] = load_sample(nombre)
         buckets[tuple(cache_data[nombre]["lat"].shape[2:])].append(nombre)
 
+    # En edición las previews usan siempre _custom (la imagen de antes, con la instrucción del primer par
+    # si no hay prompts propios) y su negativo _custom_neg.
     if os.path.exists(f"{CACHE_DIR}/_custom_embed.pt"):
         cache_data["_custom"] = load_sample("_custom")
     if os.path.exists(f"{CACHE_DIR}/_custom_neg_embed.pt"):
         cache_data["_custom_neg"] = load_sample("_custom_neg")
-    check_custom_prompt("_custom" in cache_data)
-    custom_mtime = [os.path.getmtime(f"{CACHE_DIR}/_custom_embed.pt") if "_custom" in cache_data else None]
+
+    def load_custom(slot):
+        # Cada prompt tiene su embedding y máscara (<prefix>_*.pt); las imágenes de referencia (ctrl) se
+        # codifican una vez como _custom y las comparten todos.
+        sample = load_sample(preview_prompts.prefix(slot))
+        if slot:
+            shared = load_sample("_custom")
+            for key in ("ctrl", "ctrls"):
+                if key in shared:
+                    sample.setdefault(key, shared[key])
+        return sample
+
+    # Custom Prompts: los embeddings se releen cuando el servidor los recodifica en CPU.
+    custom = preview_prompts.Embeds(CACHE_DIR, load_custom, prefixed=True)
+    custom.refresh(PREVIEW_PROMPTS)
+    check_custom_prompt(custom)
 
     neg = None
     if os.path.exists(f"{CACHE_DIR}/_neg_embed.pt"):
@@ -808,7 +820,7 @@ def train_qwenimage2512():
     def get_preview_sample(step):
         # Edición: siempre la imagen de antes de la preview, que es donde se ve el efecto y la única
         # con negativo para el CFG (sin CFG, Edit-2511 deja una cuadrícula en la imagen).
-        if PREVIEW_CAPTION_MODE == "custom" and "_custom" in cache_data or edit_cache and "_custom_neg" in cache_data:
+        if edit_cache and "_custom_neg" in cache_data:
             return "_custom"
         elif PREVIEW_CAPTION_MODE == "random":
             return random.choice(all_preview_names)
@@ -836,8 +848,9 @@ def train_qwenimage2512():
                 print("\n[LIVE] " + t("Settings reloaded without stopping:"))
                 for c in changes:
                     print(f"[LIVE]   {c}")
-                if any(c.startswith(("preview_custom_prompt", "preview_caption_mode")) for c in changes):
-                    check_custom_prompt("_custom" in cache_data)
+                if any(c.startswith(("preview_custom", "preview_caption_mode")) for c in changes):
+                    custom.refresh(PREVIEW_PROMPTS)
+                    check_custom_prompt(custom)
                 if step > TOTAL_STEPS:
                     break
 
@@ -908,34 +921,52 @@ def train_qwenimage2512():
                 save_checkpoint_now(step)
 
             if PREVIEW_EVERY > 0 and step % PREVIEW_EVERY == 0:
-                # El servidor codifica en CPU los prompts nuevos: aquí solo se relee el embedding si cambió.
-                custom_path = f"{CACHE_DIR}/_custom_embed.pt"
-                if os.path.exists(custom_path) and os.path.getmtime(custom_path) != custom_mtime[0]:
-                    custom_mtime[0] = os.path.getmtime(custom_path)
-                    cache_data["_custom"] = load_sample("_custom")
+                # El servidor codifica en CPU los prompts nuevos: aquí solo se releen los embeddings que
+                # cambiaron (y con ellos el negativo, que se recodifica si cambian las referencias).
+                if custom.refresh(PREVIEW_PROMPTS):
                     if os.path.exists(f"{CACHE_DIR}/_custom_neg_embed.pt"):
                         cache_data["_custom_neg"] = load_sample("_custom_neg")
-                    check_custom_prompt(True)
-                p_name = get_preview_sample(step)
-                sample = cache_data[p_name]
-                # Tamaño de la preview: el del objetivo; en edición, el de la imagen de antes
-                # (como en ComfyUI, la salida hereda el tamaño de la referencia).
-                ref = sample.get("ctrl", sample.get("lat", next(iter(cache_data.values()))["lat"]))
-                print(f"\n  [Preview] {t('Mode')}: {PREVIEW_CAPTION_MODE} | {t('Sample')}: {p_name}")
-                p_neg = neg
-                if "ctrl" in sample:
-                    p_neg = (cache_data["_custom_neg"]["emb"], cache_data["_custom_neg"]["msk"]) if "_custom_neg" in cache_data else None
-                size = (ref.shape[2], ref.shape[3])
-                if PREVIEW_WIDTH > 0 and PREVIEW_HEIGHT > 0 and not edit_cache:
-                    # Lados explícitos en píxeles: VAE 8x y parches 2x2 (16 px).
-                    size = (max(2, round(PREVIEW_HEIGHT / 8 / 2) * 2),
-                            max(2, round(PREVIEW_WIDTH / 8 / 2) * 2))
-                elif PREVIEW_SIZE > 0:
-                    # Área clásica: conserva la proporción de la referencia.
-                    s = PREVIEW_SIZE / 8 / math.sqrt(size[0] * size[1])
-                    size = (max(2, round(size[0] * s / 2) * 2),
-                            max(2, round(size[1] * s / 2) * 2))
-                run_preview(model, scheduler, sample, p_neg, size, step)
+                    check_custom_prompt(custom)
+                # Una preview por prompt propio (o una con uno al azar); sin prompts, la de siempre.
+                slots = custom.round(PREVIEW_PROMPTS)
+                for preview_index, preview_slot in enumerate(slots or [None]):
+                    if preview_slot is None:
+                        p_name = get_preview_sample(step)
+                        if p_name == "_custom":
+                            # Puede haber quedado con un prompt propio de una ronda anterior.
+                            cache_data["_custom"] = load_sample("_custom")
+                            preview_text = preview_prompts.custom_text(CACHE_DIR, 0)
+                        else:
+                            preview_text = preview_prompts.dataset_caption(cfg, p_name, TRIGGER_WORD)
+                    else:
+                        cache_data["_custom"] = custom.items[preview_slot]
+                        p_name = "_custom"
+                        preview_text = preview_prompts.custom_text(CACHE_DIR, preview_slot)
+                    PREVIEW_NOW.update(index=preview_index, prompt=preview_text)
+                    sample = cache_data[p_name]
+                    # Tamaño de la preview: el del objetivo; en edición, el de la imagen de antes
+                    # (como en ComfyUI, la salida hereda el tamaño de la referencia).
+                    ref = sample.get("ctrl", sample.get("lat", next(iter(cache_data.values()))["lat"]))
+                    print(f"\n  [Preview] {t('Mode')}: {PREVIEW_CAPTION_MODE} | {t('Sample')}: {p_name}")
+                    p_neg = neg
+                    if "ctrl" in sample:
+                        p_neg = (cache_data["_custom_neg"]["emb"], cache_data["_custom_neg"]["msk"]) if "_custom_neg" in cache_data else None
+                        # One image per prompt: cada prompt lleva su negativo, codificado con su imagen.
+                        slot_neg = f"{preview_prompts.prefix(preview_slot)}_neg" if preview_slot else None
+                        if slot_neg and os.path.exists(f"{CACHE_DIR}/{slot_neg}_embed.pt"):
+                            own = load_sample(slot_neg)
+                            p_neg = (own["emb"], own["msk"])
+                    size = (ref.shape[2], ref.shape[3])
+                    if PREVIEW_WIDTH > 0 and PREVIEW_HEIGHT > 0 and not edit_cache:
+                        # Lados explícitos en píxeles: VAE 8x y parches 2x2 (16 px).
+                        size = (max(2, round(PREVIEW_HEIGHT / 8 / 2) * 2),
+                                max(2, round(PREVIEW_WIDTH / 8 / 2) * 2))
+                    elif PREVIEW_SIZE > 0:
+                        # Área clásica: conserva la proporción de la referencia.
+                        s = PREVIEW_SIZE / 8 / math.sqrt(size[0] * size[1])
+                        size = (max(2, round(size[0] * s / 2) * 2),
+                                max(2, round(size[1] * s / 2) * 2))
+                    run_preview(model, scheduler, sample, p_neg, size, step)
 
     except (KeyboardInterrupt, SystemExit):
         save_checkpoint_now(last_step_executed)
