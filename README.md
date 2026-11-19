@@ -10,7 +10,7 @@ What was added, newest first. Each entry links to its commit.
 
 **2026-11-19**
 
-- **FLUX.2 Klein 9B from 8 GB of VRAM** — block swap and **VRAM Profile** as in LTX 2.5: edit LoRAs at 1024² peak at 5.8 GB instead of 11.5 GB, with the same results and a few % slower ([details](#flux2-klein-9b--image-and-edit-loras)) [`555de89`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/555de89)
+- **FLUX.2 Klein 9B from 8 GB of VRAM** — block swap and **VRAM Profile** as in LTX 2.5: edit LoRAs at 1024² peak at 5.8 GB instead of 11.5 GB, with the same results and a few % slower. If a step runs out of VRAM, it moves 2 more blocks to RAM and goes on. In Klein 9B and LTX 2.5 the profile now also counts the VRAM your other apps already use ([details](#flux2-klein-9b--image-and-edit-loras)) [`555de89`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/555de89) [`001624e`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/001624e) [`95c6879`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/95c6879)
 
 **2026-11-18**
 
