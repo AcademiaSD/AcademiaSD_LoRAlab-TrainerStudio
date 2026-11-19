@@ -168,63 +168,95 @@ class BlockSwap:
         self.pinned = False
         self._order = {id(b): i for i, b in enumerate(self.blocks)}
         self.park = park if park in ("ram", "disk", "auto") else "ram"
-        parked_bytes = 0
-        ram_bytes = disk_bytes = 0
-        try:
-            import psutil
-        except Exception:
-            psutil = None
+        self._pin = pin
+        self._ram_reserve_gb = ram_reserve_gb
+        self._ram_limit_gb = ram_limit_gb
+        self.log = log
+        self.ram_bytes = self.disk_bytes = 0
         for i, block in enumerate(self.blocks):
             mods = [m for m in block.modules() if isinstance(m, Linear4bit)]
             block._swap_mods = mods
             block._swap_index = i
             block._swap_parked = i >= self.resident
+            block._swap_hooked = False
             if not block._swap_parked:
                 for m in mods:
                     if m.weight.data.device.type != "cuda":
                         m.weight.data = m.weight.data.to("cuda")
                 continue
-            nbytes = block_nf4_bytes(block)
-            to_ram = self.park == "ram"
-            if self.park == "auto":
-                vm = psutil.virtual_memory() if psutil else None
-                avail = vm.available if vm else 0
-                to_ram = avail - nbytes > ram_reserve_gb * 1e9
-                if to_ram and ram_limit_gb and ram_limit_gb > 0 and vm is not None:
-                    to_ram = (vm.total - avail) + nbytes <= ram_limit_gb * 1e9
-            for m in mods:
-                mm = getattr(m, "_mmap_home", None)
-                if not to_ram and mm is not None:
-                    home = mm                              # disco: mapeado, sin RAM propia
-                else:
-                    home = m.weight.data.to("cpu")
-                    if home.data_ptr() == getattr(mm, "data_ptr", lambda: -1)():
-                        home = home.clone()                # de mapeado a RAM: copia real
-                    if pin:
-                        try:
-                            home = home.pin_memory()
-                            self.pinned = True
-                        except RuntimeError:
-                            pin = False
-                m._swap_home = home
-                m.weight.data = home  # en CPU: la copia CUDA se libera
-                parked_bytes += home.numel()
-            if to_ram or all(getattr(m, "_mmap_home", None) is None for m in mods):
-                ram_bytes += nbytes
-            else:
-                disk_bytes += nbytes
-            block._swap_on_gpu = False
-            block.register_forward_pre_hook(self._pre_hook)
-            block.register_forward_hook(self._post_hook)
-            block.register_full_backward_hook(self._bwd_hook)
+            self._park(block)
         global ACTIVE_SWAP
         ACTIVE_SWAP = self
         self._resident_offloaded = False
         torch.cuda.empty_cache()
         log("[SWAP] resident blocks / bloques residentes: {}/{} | parked / aparcados: {} ({:.2f} GB: {:.2f} GB {}, "
             "{:.2f} GB disk / disco) | storage: {}".format(
-                self.resident, self.n, self.n - self.resident, parked_bytes / 1e9, ram_bytes / 1e9,
-                "pinned RAM" if self.pinned else "RAM", disk_bytes / 1e9, self.park))
+                self.resident, self.n, self.n - self.resident, (self.ram_bytes + self.disk_bytes) / 1e9,
+                self.ram_bytes / 1e9, "pinned RAM" if self.pinned else "RAM", self.disk_bytes / 1e9, self.park))
+
+    def _park(self, block):
+        """Aparca un bloque: su dato NF4 pasa a su sitio en RAM o en disco y se sube solo mientras corre."""
+        try:
+            import psutil
+        except Exception:
+            psutil = None
+        mods = block._swap_mods
+        nbytes = block_nf4_bytes(block)
+        to_ram = self.park == "ram"
+        if self.park == "auto":
+            vm = psutil.virtual_memory() if psutil else None
+            avail = vm.available if vm else 0
+            to_ram = avail - nbytes > self._ram_reserve_gb * 1e9
+            if to_ram and self._ram_limit_gb and self._ram_limit_gb > 0 and vm is not None:
+                to_ram = (vm.total - avail) + nbytes <= self._ram_limit_gb * 1e9
+        for m in mods:
+            mm = getattr(m, "_mmap_home", None)
+            if not to_ram and mm is not None:
+                home = mm                              # disco: mapeado, sin RAM propia
+            else:
+                home = m.weight.data.to("cpu")
+                if home.data_ptr() == getattr(mm, "data_ptr", lambda: -1)():
+                    home = home.clone()                # de mapeado a RAM: copia real
+                if self._pin:
+                    try:
+                        home = home.pin_memory()
+                        self.pinned = True
+                    except RuntimeError:
+                        self._pin = False
+            m._swap_home = home
+            m.weight.data = home  # en CPU: la copia CUDA se libera
+        if to_ram or all(getattr(m, "_mmap_home", None) is None for m in mods):
+            self.ram_bytes += nbytes
+        else:
+            self.disk_bytes += nbytes
+        block._swap_parked = True
+        block._swap_on_gpu = False
+        if not block._swap_hooked:
+            block.register_forward_pre_hook(self._pre_hook)
+            block.register_forward_hook(self._post_hook)
+            block.register_full_backward_hook(self._bwd_hook)
+            block._swap_hooked = True
+
+    def reset(self):
+        """Tras un error a mitad de paso (OOM): suelta los bloques aparcados que se quedaron subidos."""
+        for block in self.blocks[self.resident:]:
+            block._swap_on_gpu = True
+            self._release(block)
+        self.events.clear()
+
+    def park_more(self, k=2):
+        """
+        Aparca los k últimos bloques residentes (como MiniMax-H3 cuando falta VRAM: más lento, pero sigue).
+        Devuelve cuántos aparcó.
+        """
+        self.reset()
+        k = min(int(k), self.resident)
+        for block in self.blocks[self.resident - k:self.resident]:
+            self._park(block)
+        self.resident -= k
+        torch.cuda.synchronize()
+        torch.cuda.empty_cache()
+        return k
 
     # -- movimiento --------------------------------------------------------------------------------------------
     def _upload(self, block, stream=None):

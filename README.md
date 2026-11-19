@@ -755,7 +755,7 @@ The official image-edit task works at 1024: 512 and 768 are out of its distribut
 - **Captioner:** Qwen3-VL-8B NF4, shared with LTX-2.3, Z-Image and Anima, with **Normal** and **Edit** modes.
 - **Previews:** 28 steps / CFG 4, or **Turbo** with kalle07's Klein 9B turbo LoRA (4 steps / CFG 1; downloaded the first time, ~350 MB), and **Preview Size** as in Z-Image.
 - **LoRA Targets:** *Blocks* (attention + MLP of the 8 double and 24 single blocks, default) or *All*. ComfyUI loads the exported LoRA directly.
-- **From 8 GB of VRAM:** **VRAM Profile** (Auto / 8 / 10 / 12 / 16 / 24 / 32 GB) simulates a smaller card with a hard cap, and the blocks that do not fit wait in RAM or on disk (**Block Swap Storage**, with **RAM Limit**, as in LTX 2.5 and MiniMax-H3) and come to the GPU just in time. **Resident Blocks** -1 lets the plan decide. With DoRA at 1024² use the 10 GB profile or more; the console warns when a run does not fit.
+- **From 8 GB of VRAM:** **VRAM Profile** (Auto / 8 / 10 / 12 / 16 / 24 / 32 GB) simulates a smaller card with a hard cap, and the blocks that do not fit wait in RAM or on disk (**Block Swap Storage**, with **RAM Limit**, as in LTX 2.5 and MiniMax-H3) and come to the GPU just in time. **Resident Blocks** -1 lets the plan decide. With DoRA at 1024² use the 10 GB profile or more; the console warns when a run does not fit. If a step still runs out of VRAM (many bucket sizes fragment it), 2 more blocks go to RAM and the step is repeated, as in MiniMax-H3.
 
 | Verified starting point | |
 | :--- | :--- |

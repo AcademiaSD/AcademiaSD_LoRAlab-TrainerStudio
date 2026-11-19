@@ -817,7 +817,9 @@ def setup_block_swap(transformer, model, card_gb, usable_gb, max_tokens):
         # DoRA descomprime cada peso para su norma, y en el backward de un bloque viven a la vez todos sus pesos
         # descomprimidos. Medido: el pico sube 2,5 GB más que sin DoRA (10,57 frente a 8,07 GB con 3.520 tokens).
         act_gb += DORA_EXTRA_GB
-    headroom = 0.4
+    # Margen para la fragmentación: con muchos tamaños de bucket la VRAM queda en trozos (medido: 1,1 GiB
+    # reservados sin usar a los 34 pasos con 10 buckets). Si aun así falta, el paso aparca más bloques y se repite.
+    headroom = 0.8
     free = usable_gb - headroom - in_use - optim_gb - act_gb
     if RESIDENT_BLOCKS >= 0:
         resident = min(RESIDENT_BLOCKS, len(blocks))
@@ -1161,18 +1163,33 @@ def train_klein9b():
             if edit_mode:
                 batch["ctrl"] = torch.cat([cache_data[n]["ctrl"] for n in names])
             hidden, img_ids, txt_ids = model_inputs(batch, noisy, H, W, "cuda")
-            with (block_swap.SaveOnCpu() if offload else block_swap._null()):
-                pred = model(
-                    hidden_states=hidden,
-                    encoder_hidden_states=embeds,
-                    timestep=sigma.to(COMPUTE_DTYPE),
-                    img_ids=img_ids,
-                    txt_ids=txt_ids,
-                    return_dict=False,
-                )[0][:, :H * W]
+            while True:
+                try:
+                    with (block_swap.SaveOnCpu() if offload else block_swap._null()):
+                        pred = model(
+                            hidden_states=hidden,
+                            encoder_hidden_states=embeds,
+                            timestep=sigma.to(COMPUTE_DTYPE),
+                            img_ids=img_ids,
+                            txt_ids=txt_ids,
+                            return_dict=False,
+                        )[0][:, :H * W]
 
-            loss = F.mse_loss(pred.float(), target.float()) / GRAD_ACCUM_STEPS
-            scaler.scale(loss).backward()
+                    loss = F.mse_loss(pred.float(), target.float()) / GRAD_ACCUM_STEPS
+                    scaler.scale(loss).backward()
+                    break
+                except torch.OutOfMemoryError:
+                    if swap.resident == 0:
+                        raise
+                # Sin VRAM (fragmentación, un bucket mayor): como MiniMax-H3, se aparcan 2 bloques más y el paso se
+                # repite. Los gradientes a medias de este paso no valen: se descarta la acumulación en curso.
+                pred = loss = None
+                optimizer.zero_grad(set_to_none=True)
+                free_vram()
+                parked = swap.park_more(2)
+                offload = ACTIVATION_OFFLOAD
+                print("\n[VRAM] " + t("Out of VRAM at step {s}: {k} more blocks to RAM ({r}/{n} resident now), and the "
+                                      "step is repeated.", s=step, k=parked, r=swap.resident, n=swap.n))
             step_loss = loss.item() * GRAD_ACCUM_STEPS
             running_loss += step_loss
 
