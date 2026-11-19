@@ -8,6 +8,10 @@
 
 What was added, newest first. Each entry links to its commit.
 
+**2026-11-19**
+
+- **FLUX.2 Klein 9B from 8 GB of VRAM** — block swap and **VRAM Profile** as in LTX 2.5: edit LoRAs at 1024² peak at 5.8 GB instead of 11.5 GB, with the same results and a few % slower ([details](#flux2-klein-9b--image-and-edit-loras)) [`555de89`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/555de89)
+
 **2026-11-18**
 
 - **Up to 4 custom prompts per preview round, in every trainer** — **Custom Prompts (0-4)** next to Caption Mode: each round makes one preview per prompt, or one with a random prompt. Prompts changed while training are encoded on CPU and the trainer switches to them (LTX and MiniMax-H3 encode them in Pre-Cache only). In edit trainers with several reference images, **One image per prompt** makes each prompt edit its own image. The preview viewer shows the prompt of each preview ([details](#-custom-prompts-in-the-previews)) [`589c917`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/589c917) ([#87](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/issues/87))
