@@ -248,7 +248,7 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 | **Anima** | Anime and illustration LoRAs (characters, styles) | **4 GB** (NF4) / 6 GB (BF16) |
 | **ERNIE-Image** | Image LoRAs (characters, objects, styles); supports rsLoRA, LoRA+ and LoKr | **Under 8 GB** (NF4; verified during training) |
 | **FLUX.1 Dev** | Image LoRAs (characters, objects, styles) | 12 GB (~10 GB measured at 512², ~11 GB at 768²) |
-| **FLUX.2 Klein 9B** | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) | 12 GB |
+| **FLUX.2 Klein 9B** | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) | 8 GB |
 | **FLUX.3 Image Klein** | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) | 8 GB |
 | **MOSS-Image** | Image LoRAs (characters, objects, styles) on MOSS-Image Base or SFT **and edit LoRAs** (before → after, on top of armV5, armV4 or Moss-Image-Edit); supports rsLoRA, LoRA+ and LoKr | **6 GB** (512²) / 8 GB |
 | **Ideogram 4** | Image LoRAs (characters, objects, styles), with JSON captions | 12 GB (16 GB for previews with CFG) |
@@ -273,7 +273,7 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 5. **Desde otro equipo:** el botón **🌐 Remote access** del lanzador abre el entrenador a tu red con usuario y contraseña. Con **⬆ Subir** (o arrastrando archivos o un `.zip` al Dataset Manager) mandas el dataset desde ese equipo, y con **⬇ Descargar LoRA** te bajas el resultado.
 6. **Previsualizaciones nítidas en ComfyUI:** algunos de estos modelos son lentos al generar, y conviene ver el resultado de forma anticipada, mientras se genera, para cancelar si no va bien. Para eso hace falta una buena previsualización. Mi recomendación: al usar tus LoRAs de Qwen-Image 2.1, Krea 2 o FLUX.2 / Klein 9B, pon el nodo **Model Preview Override** de [KJNodes](https://github.com/kijai/ComfyUI-KJNodes) con el TAE de AcademiaSD correspondiente ([Qwen-Image 2.1](https://huggingface.co/AcademiaSD/TAE-Qwen-Image-2.1) · [Krea 2](https://huggingface.co/AcademiaSD/TAE-Krea-2) · [FLUX.2](https://huggingface.co/AcademiaSD/TAE_Flux2_AcademiaSD)) en `ComfyUI/models/vae_approx/`. Detalles en la sección *Sharp previews in ComfyUI*.
 7. **Sin GPU potente:** entrena en la nube con **[RunPod](https://console.runpod.io/deploy?template=lfxvtg5rrb&ref=jbvdshm0)**. Es una plantilla ya preparada: eliges una GPU con CUDA 13, entras con el usuario `loralab` y la contraseña que aparece en *Logs → Container*, y al terminar paras y borras el pod. Detalles en la sección *RunPod*.
-8. **Requisitos:** Windows 10/11, GPU NVIDIA **RTX 20xx / GTX 16xx o posterior** con driver **580 o superior** (o AMD **RX 7000 / RX 9000** de 16 GB, experimental), 8 GB de VRAM (4 GB para Anima y SDXL en NF4, 12 GB para LTX-2.3, FLUX.2 Klein 9B, Ideogram 4, SDXL en BF16 y Wan 2.2 con imágenes a 448×448, 16 GB para Wan 2.2 con vídeo) y 16 GB de RAM (32 GB recomendados).
+8. **Requisitos:** Windows 10/11, GPU NVIDIA **RTX 20xx / GTX 16xx o posterior** con driver **580 o superior** (o AMD **RX 7000 / RX 9000** de 16 GB, experimental), 8 GB de VRAM (4 GB para Anima y SDXL en NF4, 12 GB para LTX-2.3, Ideogram 4, SDXL en BF16 y Wan 2.2 con imágenes a 448×448, 16 GB para Wan 2.2 con vídeo) y 16 GB de RAM (32 GB recomendados).
 
 **Cola de trabajos:** con un entrenamiento en marcha, *Iniciar / Reanudar* o *Iniciar Pre-Caché* en cualquier entrenador pregunta si añadirlo a la cola, con una copia de los ajustes de ese momento. Los trabajos se ejecutan uno tras otro en la GPU. El botón **Cola** del lanzador y de cada entrenador abre la página de la cola: lo que entrena ahora (progreso, tiempo restante y curva de loss) y lo que espera, que puedes reordenar arrastrando, pausar, continuar o quitar. Pausar guarda un checkpoint y deja el trabajo pausado en la cola; continuar sigue desde ese paso. Mientras un entrenador entrena, **➕ Nuevo entrenamiento en cola** abre un borrador del mismo entrenador en otro puerto para preparar el siguiente sin tocar el que entrena (ponle otro nombre de proyecto). Si un trabajo falla, se queda en la lista en rojo diciendo por qué (no se encuentra la pre-caché o el dataset, falta VRAM…); corrígelo y pulsa **↻** para reintentarlo. **✎** en un trabajo de la cola abre su entrenador con sus ajustes para cambiarlos: el botón de empezar pasa a ser **💾 Guardar cambios en la cola**. Mientras se hace la pre-caché, *Iniciar / Reanudar* sigue disponible y manda el entrenamiento a la cola. **⏻ Pausar todo y salir**, abajo en el lanzador, pausa el entrenamiento en curso guardando su checkpoint y cierra todo desde el navegador; al volver a abrir el lanzador la cola sigue sola donde estaba, empezando por ese entrenamiento. En RunPod y otras nubes el lanzador sigue abierto, con la cola pausada.
 
@@ -343,7 +343,7 @@ The automatic captioner adds, only the first time you use it: **nothing** for Kr
 | | Minimum | Recommended |
 | :--- | :--- | :--- |
 | **OS** | Windows 10 / 11, or 64-bit Linux ([docs/Linux.md](docs/Linux.md)) | Windows 11 |
-| **GPU** | NVIDIA **RTX 20xx / GTX 16xx or newer** (compute capability 7.5+) with **8 GB VRAM** (4 GB for Anima and SDXL in NF4, 10 GB for MiniMax-H3 Image edit LoRAs, 12 GB for LTX-2.3, FLUX.2 Klein 9B, Ideogram 4, SDXL in BF16 and Wan 2.2 with images at 448×448, 16 GB for Wan 2.2 with video) | 12–24 GB VRAM |
+| **GPU** | NVIDIA **RTX 20xx / GTX 16xx or newer** (compute capability 7.5+) with **8 GB VRAM** (4 GB for Anima and SDXL in NF4, 10 GB for MiniMax-H3 Image edit LoRAs, 12 GB for LTX-2.3, Ideogram 4, SDXL in BF16 and Wan 2.2 with images at 448×448, 16 GB for Wan 2.2 with video) | 12–24 GB VRAM |
 | **AMD GPU** *(experimental)* | Radeon **RX 7000 / RX 9000** or Ryzen AI Max (Strix Halo) with 16 GB of VRAM, using the AMD installer (see *Installation*). Confirmed on an RX 7800 XT 16 GB under Windows with MiniMax-H3 | — |
 | **Driver** | NVIDIA **580 or newer** (CUDA 13). AMD: a recent Adrenalin driver on Windows, or `amdgpu` on Linux | Latest |
 | **RAM** | 16 GB | 32 GB |
@@ -751,6 +751,7 @@ The official image-edit task works at 1024: 512 and 768 are out of its distribut
 - **Captioner:** Qwen3-VL-8B NF4, shared with LTX-2.3, Z-Image and Anima, with **Normal** and **Edit** modes.
 - **Previews:** 28 steps / CFG 4, or **Turbo** with kalle07's Klein 9B turbo LoRA (4 steps / CFG 1; downloaded the first time, ~350 MB), and **Preview Size** as in Z-Image.
 - **LoRA Targets:** *Blocks* (attention + MLP of the 8 double and 24 single blocks, default) or *All*. ComfyUI loads the exported LoRA directly.
+- **From 8 GB of VRAM:** **VRAM Profile** (Auto / 8 / 10 / 12 / 16 / 24 / 32 GB) simulates a smaller card with a hard cap, and the blocks that do not fit wait in RAM or on disk (**Block Swap Storage**, with **RAM Limit**, as in LTX 2.5 and MiniMax-H3) and come to the GPU just in time. **Resident Blocks** -1 lets the plan decide. With DoRA at 1024² use the 10 GB profile or more; the console warns when a run does not fit.
 
 | Verified starting point | |
 | :--- | :--- |
@@ -760,6 +761,7 @@ The official image-edit task works at 1024: 512 and 768 are out of its distribut
 | Steps | 1,000 (14 images): the likeness shows from ~500, but in ComfyUI the 1,000-step LoRA looks better than the 600 and 700 ones |
 | LoRA strength in ComfyUI | 1.0 for characters (1,000 steps) · 1.0–1.5 for edit LoRAs |
 | Speed and VRAM | 512²: ~1.5 s/step, ~8 GB · 768²: ~2.6 s/step, ~10 GB · edit at 512²: ~2.3 s/step, ~8 GB · edit at 768²: ~5.7 s/step, ~11 GB |
+| 8 GB profile (RTX 5080, rank 16) | 768²: 2.2 s/step (2.0 with everything in VRAM), 6.5 GB peak · 1024²: 3.1 s/step (2.8), 5.8 GB · edit at 1024²: 10.7 s/step (10.0), 5.8 GB instead of 11.5 GB · DoRA at 768²: 3.6 s/step, 5.9 GB. Same losses as with everything in VRAM |
 
 ### FLUX.3 Image Klein — image and edit LoRAs
 

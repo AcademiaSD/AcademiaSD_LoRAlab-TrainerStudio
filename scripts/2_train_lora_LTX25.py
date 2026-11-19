@@ -59,6 +59,7 @@ import settings_limits
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import lora_options
 import ltx25_model
+import block_swap
 import training_metrics
 import preview_prompts
 
@@ -2675,7 +2676,7 @@ def run_preview_diagnostic(
             # mientras se decodifica (como el experto de Wan 2.2) y vuelven en el finally.
             # Sin swap (perfil grande) también, si no cabe: VAE en FP32 (~3 GB) + decodificación (~1.5 GB)
             # sobre lo ya asignado, contra lo que el perfil deja a PyTorch.
-            sw = ltx25_model.ACTIVE_SWAP
+            sw = block_swap.ACTIVE_SWAP
             need_gb = torch.cuda.memory_allocated() / (1024 ** 3) + 4.5
             if sw is not None and (clip or sw.swapping or need_gb > VRAM_USABLE_GB):
                 sw.offload_resident()
@@ -2782,9 +2783,9 @@ def run_preview_diagnostic(
                 vae.to("cpu")
             except Exception:
                 pass
-        if ltx25_model.ACTIVE_SWAP is not None:
+        if block_swap.ACTIVE_SWAP is not None:
             free_vram()
-            ltx25_model.ACTIVE_SWAP.restore_resident()
+            block_swap.ACTIVE_SWAP.restore_resident()
 
         if was_training:
             model.train()
