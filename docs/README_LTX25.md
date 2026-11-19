@@ -32,7 +32,7 @@ The trainer uses `transformer_full/` of `Lightricks/LTX-2.5-Diffusers` (the full
 
 ## 8 GB of VRAM
 
-Everything is measured with the **VRAM Profile** set to 8 GB on a 16 GB card. The profile is a hard cap on PyTorch's allocator at **card − 1 GB** (7 GiB), the memory PyTorch does not see on a real card (CUDA context, cuBLAS, Windows desktop), so a run that fits the profile fits a real 8 GB card.
+Everything is measured with the **VRAM Profile** set to 8 GB on a 16 GB card. The profile is a hard cap on PyTorch's allocator at **the card minus what is already in use when the training starts** (the Windows desktop and other apps, plus this process's CUDA context and ~0.3 GB it grows later; at least 1 GB). The console says how much that was. So a run that fits the profile fits a real 8 GB card with the same apps open. The measurements below were taken with 7 GiB for PyTorch.
 
 | Stage | Peak | How |
 | :--- | ---: | :--- |

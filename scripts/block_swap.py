@@ -415,28 +415,39 @@ def plan_resident_sized(free_gb, sizes_gb, swap_slots=2):
     return resident
 
 
-NON_TORCH_VRAM_GB = 1.0
+NON_TORCH_VRAM_GB = 1.0   # mínimo que se deja fuera de PyTorch (contexto CUDA, cuBLAS, escritorio)
+LATE_CONTEXT_GB = 0.3     # lo que el contexto CUDA de este proceso crece después (kernels que se cargan al usarlos)
 
 
 def apply_vram_profile(profile, log=print, t=lambda s, **k: s.format(**k)):
     """
     Tope duro de VRAM del perfil (como H3): simular una tarjeta menor es fiable porque el proceso no puede pasar.
-    Lo que PyTorch puede usar de una tarjeta es su VRAM menos ~1 GB que no ve el allocator (contexto CUDA, cuBLAS,
-    escritorio de Windows): el tope se pone ahí, así el perfil de 8 GB cabe en una tarjeta real de 8 GB.
-    Devuelve (GB de la tarjeta, GB para PyTorch).
+    PyTorch puede usar la VRAM de la tarjeta menos lo que ya está ocupado al arrancar: el escritorio y las demás
+    aplicaciones (Windows, el navegador... medido: 0,5-1,3 GB) y el contexto CUDA de este proceso, más lo que ese
+    contexto crece después. Se mide al arrancar (mem_get_info), con 1 GB como mínimo: así el perfil de 8 GB cabe
+    en una tarjeta real de 8 GB con ese mismo escritorio. Devuelve (GB de la tarjeta, GB para PyTorch).
     """
-    total = torch.cuda.get_device_properties(0).total_memory / (1024 ** 3)
+    gib = 1024 ** 3
+    total = torch.cuda.get_device_properties(0).total_memory / gib
     try:
         card = total if str(profile).strip().lower() in ("", "auto") else min(float(profile), total)
     except ValueError:
         card = total
-    usable = card - NON_TORCH_VRAM_GB
+    try:
+        free_b, total_b = torch.cuda.mem_get_info(0)
+        in_use = (total_b - free_b) / gib     # las demás aplicaciones + el contexto CUDA de este proceso
+    except Exception:
+        in_use = 0.0
+    outside = max(NON_TORCH_VRAM_GB, in_use + LATE_CONTEXT_GB)
+    usable = max(1.0, card - outside)
     if card < total:
         torch.cuda.set_per_process_memory_fraction(usable / total, 0)
-        log("[VRAM] " + t("Profile: {cap:.0f} GB card simulated on a {gb:.1f} GB GPU (hard cap {u:.2f} GB for PyTorch).",
-                          cap=card, gb=total, u=usable))
+        log("[VRAM] " + t("Profile: {cap:.0f} GB card simulated on a {gb:.1f} GB GPU (hard cap {u:.2f} GB for PyTorch; "
+                          "{o:.2f} GB already in use by other apps and the CUDA context).",
+                          cap=card, gb=total, u=usable, o=in_use))
     else:
-        log("[VRAM] " + t("Profile: auto ({gb:.1f} GB, {u:.2f} GB for PyTorch)", gb=total, u=usable))
+        log("[VRAM] " + t("Profile: auto ({gb:.1f} GB, {u:.2f} GB for PyTorch; {o:.2f} GB already in use by other "
+                          "apps and the CUDA context)", gb=total, u=usable, o=in_use))
     return card, usable
 
 

@@ -2857,7 +2857,6 @@ def sample_sigma(batch, seq_len, device="cuda"):
     return torch.where(use_u, u, x).clamp(1e-4, 1.0 - 1e-4)
 
 
-NON_TORCH_VRAM_GB = 1.0
 VRAM_USABLE_GB = 1e9   # lo fija apply_vram_profile()
 
 
@@ -2876,23 +2875,10 @@ def ram_report(label=""):
 
 
 def apply_vram_profile():
-    """Tope duro de VRAM del perfil (como H3): simular una tarjeta menor es fiable porque el proceso no puede pasar."""
-    # Lo que PyTorch puede usar de una tarjeta: su VRAM menos ~1 GB que no ve el allocator (contexto CUDA,
-    # cuBLAS, escritorio de Windows). El tope duro se pone ahí, así el perfil de 8 GB cabe en una tarjeta real de 8 GB.
-    total = torch.cuda.get_device_properties(0).total_memory / (1024 ** 3)
-    try:
-        card = total if VRAM_PROFILE in ("", "auto") else min(float(VRAM_PROFILE), total)
-    except ValueError:
-        card = total
-    usable = card - NON_TORCH_VRAM_GB
+    """Tope duro de VRAM del perfil (como H3), descontando lo que ya ocupan las demás aplicaciones: block_swap."""
+    _card, usable = block_swap.apply_vram_profile(VRAM_PROFILE, log=print, t=t)
     global VRAM_USABLE_GB
     VRAM_USABLE_GB = usable
-    if card < total:
-        torch.cuda.set_per_process_memory_fraction(usable / total, 0)
-        print("[VRAM] " + t("Profile: {cap:.0f} GB card simulated on a {gb:.1f} GB GPU (hard cap {u:.2f} GB for PyTorch).",
-                            cap=card, gb=total, u=usable))
-    else:
-        print("[VRAM] " + t("Profile: auto ({gb:.1f} GB, {u:.2f} GB for PyTorch)", gb=total, u=usable))
     return usable
 
 
