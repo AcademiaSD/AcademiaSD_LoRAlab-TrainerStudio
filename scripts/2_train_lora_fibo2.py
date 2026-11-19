@@ -39,6 +39,7 @@ import settings_limits
 import lora_options
 import training_metrics
 import preview_prompts
+import block_swap
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import fibo2_caption
 import fibo2_lora
@@ -105,6 +106,8 @@ DEFAULTS = {
     "preview_custom_prompt": "",
     "project_name": "",
     "trigger_word": "",
+    # Memoria (como FLUX.2 Klein 9B): VRAM Profile, Resident Blocks, Block Swap Storage y RAM Limit;
+    # sus valores por defecto están en block_swap.SETTINGS_DEFAULTS.
 }
 
 CONFIG_PATH = os.environ.get("LORALAB_TRAIN_CONFIG") or "settings/train_settings_fibo2.json"
@@ -193,6 +196,8 @@ print(f"  {t('LR Scheduler'):<22}: {lora_options.lr_scheduler_label(LR_SCHEDULER
 print(f"  {'LoRA Rank/Alpha':<22}: {LORA_RANK}/{LORA_ALPHA}")
 print(f"  {'rsLoRA / LoRA+':<22}: {'on' if USE_RSLORA else 'off'} / {f'x{LORAPLUS_RATIO:g}' if USE_LORAPLUS else 'off'}")
 print(f"  {'DoRA':<22}: {('on, NormFix' if DORA_NORMFIX else 'on') if USE_DORA else 'off'}")
+SWAP_CFG = block_swap.settings(cfg)
+print(f"  {'VRAM Profile':<22}: {block_swap.describe(SWAP_CFG)}")
 print(f"  {'Precision':<22}: {PRECISION.upper()}{' (auto)' if PRECISION_CFG not in ('bf16', 'fp16') else ''}")
 print(f"  {'LoKr':<22}: {f'factor {LOKR_FACTOR}' if USE_LOKR else 'off'}")
 print(f"  {t('LoRA Targets'):<22}: {LORA_TARGETS}")
@@ -318,67 +323,18 @@ def sample_sigma(batch_size, image_seq_len, device, shift_cfg):
     return torch.where(pick_uniform, uniform, normal)
 
 
-def load_nf4_transformer(model_dir):
-    """
-    Construye el Transformer vacío desde transformer/config.json y lo rellena con la
-    caché NF4 (weights/ + others.safetensors). No hace falta el Transformer en BF16.
-    """
-    from diffusers import BriaFibo2Transformer2DModel
+BLOCK_PREFIXES = ("noise_refiner.", "layers.")
 
-    cache_dir = os.path.join(model_dir, "transformer")
-    index_path = os.path.join(cache_dir, "index.json")
 
-    if not os.path.exists(index_path):
-        raise FileNotFoundError(t("index.json not found in the NF4 cache: {path}", path=cache_dir))
+def swap_blocks(transformer):
+    """Bloques en el orden en que corren: los 2 del noise refiner y después los 44 principales."""
+    return list(transformer.noise_refiner) + list(transformer.layers)
 
-    with open(index_path, "r", encoding="utf-8") as f:
-        index = json.load(f)
 
-    with init_empty_weights():
-        transformer = BriaFibo2Transformer2DModel.from_config(BriaFibo2Transformer2DModel.load_config(cache_dir))
-
-    weights_dir = os.path.join(cache_dir, "weights")
-
-    def set_module(name, module):
-        parent_name, _, child_name = name.rpartition(".")
-        setattr(transformer.get_submodule(parent_name) if parent_name else transformer, child_name, module)
-
-    for name, info in index["quantized"].items():
-        with safe_open(os.path.join(weights_dir, info["file"]), framework="pt", device="cpu") as f:
-            weight_data = f.get_tensor("weight")
-            qs_dict = {k[len("quant_state."):]: f.get_tensor(k) for k in f.keys() if k.startswith("quant_state.")}
-            bias_data = f.get_tensor("bias") if "bias" in f.keys() else None
-
-        weight = Params4bit(weight_data, requires_grad=False, quant_type="nf4", quant_storage=torch.uint8)
-        weight.quant_state = QuantState.from_dict(qs_dict, device="cpu")
-        weight.bnb_quantized = True
-
-        # En meta: nn.Linear.__init__ reserva y rellena con kaiming una matriz FP32 que se tira
-        # en la línea siguiente.
-        with torch.device("meta"):
-            layer = Linear4bit(info["in_features"], info["out_features"], bias=info.get("bias", False),
-                                quant_type="nf4", compute_dtype=COMPUTE_DTYPE)
-        layer.weight = weight
-        if bias_data is not None:
-            layer.bias = torch.nn.Parameter(bias_data.to(COMPUTE_DTYPE), requires_grad=False)
-        set_module(name, layer)
-
-    for name, info in index["unquantized"].items():
-        with torch.device("meta"):
-            layer = torch.nn.Linear(info["in_features"], info["out_features"], bias=info.get("bias", False),
-                                    dtype=COMPUTE_DTYPE)
-        layer.load_state_dict(load_file(os.path.join(weights_dir, info["file"])), assign=True)
-        layer.requires_grad_(False)
-        set_module(name, layer)
-
-    transformer.load_state_dict(load_file(os.path.join(cache_dir, index["others"])), strict=False, assign=True)
-
-    missing = [n for n, t in list(transformer.named_parameters()) + list(transformer.named_buffers()) if t.is_meta]
-    if missing:
-        raise RuntimeError(t("NF4 cache incomplete: {names}", names=missing[:5]))
-
-    print("[OK] " + t("NF4 layers: {a} | BF16 layers: {b}", a=len(index['quantized']), b=len(index['unquantized'])))
-    return transformer
+# Activaciones del paso (GiB) en función de los tokens (imagen + contexto + gist), con checkpoint reentrante.
+ACT_GB_BASE = 0.6
+ACT_GB_PER_TOKEN = 0.00045
+DORA_EXTRA_GB = 1.3   # medido a 768²: el pico sube ~1,25 GB con DoRA
 
 
 def is_block_target(name):
@@ -742,11 +698,16 @@ def train_fibo2():
 
     ensure_model_downloaded(local_path=MODEL_ID)
 
+    card_gb, usable_gb = block_swap.apply_vram_profile(SWAP_CFG.vram_profile, log=print, t=t)
+
     print(t("Loading {name}...", name="Fibo 2.0 Transformer (NF4)"))
     t0 = time.time()
-    transformer = load_nf4_transformer(MODEL_ID)
+    # Los bloques quedan mapeados a sus ficheros: block_swap.setup sube después los que caben.
+    from diffusers import BriaFibo2Transformer2DModel
+    transformer, nq, nu = block_swap.load_index_nf4(BriaFibo2Transformer2DModel, os.path.join(MODEL_ID, "transformer"),
+                                                    BLOCK_PREFIXES, "cuda", COMPUTE_DTYPE)
+    print("[OK] " + t("NF4 layers: {a} | BF16 layers: {b}", a=nq, b=nu))
     lora_options.to_compute_dtype(transformer, COMPUTE_DTYPE)
-    transformer.to("cuda")
     free_vram()
     print(t("Transformer loaded in {s:.1f}s.", s=time.time() - t0) + f" VRAM: {torch.cuda.memory_allocated()/1e9:.1f} GB", flush=True)
 
@@ -758,8 +719,6 @@ def train_fibo2():
         scheduler.config.get("max_shift", 1.15),
     )
     patch = transformer.config.patch_size
-
-    transformer.enable_gradient_checkpointing()
 
     # "blocks": atención + MLP de los 44 bloques. "all": además el perceptor, la modulación
     # adaLN y las capas de entrada y salida (415 lineales, la receta de BRIA).
@@ -836,6 +795,10 @@ def train_fibo2():
             target_modules=target_modules, use_dora=USE_DORA, init_lora_weights=True, use_rslora=USE_RSLORA
         )
 
+        if USE_DORA:
+            # La magnitud inicial descomprime cada peso NF4: con los bloques aún en el fichero, se sube a la GPU
+            # solo para eso (y sin la copia profunda de PEFT).
+            block_swap.patch_peft_dora_init(len(target_modules))
         model = get_peft_model(transformer, lora_config)
         if USE_DORA:
             lora_options.attach_dora_norms(model, os.path.join(MODEL_ID, "transformer"), DORA_NORMFIX, repo_id=HF_REPO_ID, root=MODEL_ID)
@@ -843,6 +806,12 @@ def train_fibo2():
     for p in model.parameters():
         if p.requires_grad:
             p.data = p.data.float()
+    # El LoRA de las capas con el peso aún en el fichero se creó en la CPU: a la GPU, sin subir los bloques.
+    block_swap.to_device_except_nf4(model, "cuda")
+    # Checkpoint REENTRANTE: el no reentrante guarda el peso NF4 de cada capa y lo fijaría en VRAM (no habría
+    # block swap). El reentrante solo da gradiente si alguna entrada del bloque lo pide: la de x_embedder.
+    block_swap.enable_reentrant_checkpointing(transformer)
+    block_swap.inputs_require_grad(transformer.x_embedder)
     model.print_trainable_parameters()
 
     trainable = [p for p in model.parameters() if p.requires_grad]
@@ -980,6 +949,22 @@ def train_fibo2():
         else:
             return all_preview_names[0]
 
+    # Tokens del paso más grande: imagen y, en edición, la de antes, más ~512 de texto y gist.
+    def _tokens(v):
+        n = v["lat"].shape[-2] * v["lat"].shape[-1] // (patch * patch)
+        if "ref" in v:
+            n += v["ref"].shape[-2] * v["ref"].shape[-1] // (patch * patch)
+        return n + 512
+    max_tokens = max(_tokens(v) for v in cache_data.values() if "lat" in v)
+    act_gb = ACT_GB_BASE + max_tokens * ACT_GB_PER_TOKEN + (DORA_EXTRA_GB if USE_DORA else 0.0)
+    swap = block_swap.setup(swap_blocks(transformer), model, card_gb, usable_gb, act_gb,
+                            resident_blocks=SWAP_CFG.resident_blocks, park=SWAP_CFG.park_mode,
+                            ram_limit_gb=SWAP_CFG.ram_limit_gb, ram_reserve_gb=SWAP_CFG.ram_reserve_gb,
+                            dora=USE_DORA, dora_margin_gb=0.0, log=print, t=t)
+    offload = SWAP_CFG.activation_offload and swap.swapping
+    if offload:
+        print("[VRAM] " + t("Activation offload ON: the inputs of each block wait in pinned RAM."))
+
     running_loss, t_step_avg, grad_norm = 0.0, 0.0, 0.0
     kind = t("before/after pairs") if edit_mode else t("images")
     print("\n" + t("STARTING TRAINING! {n} {kind} in {b} buckets.", n=len(all_preview_names), kind=kind, b=len(buckets)))
@@ -1052,17 +1037,25 @@ def train_fibo2():
                 if random.random() >= CONTEXT_DROPOUT:
                     context = [refs.to(COMPUTE_DTYPE)]
 
-            pred = model(
-                hidden_states=noisy,
-                encoder_hidden_states=embeds,
-                encoder_attention_mask=masks,
-                timestep=sigma,
-                context_latents=context,
-                return_dict=False,
-            )[0]
-
-            loss = F.mse_loss(pred.float(), target.float()) / GRAD_ACCUM_STEPS
-            scaler.scale(loss).backward()
+            while True:
+                try:
+                    with (block_swap.SaveOnCpu() if offload else block_swap._null()):
+                        pred = model(
+                            hidden_states=noisy,
+                            encoder_hidden_states=embeds,
+                            encoder_attention_mask=masks,
+                            timestep=sigma,
+                            context_latents=context,
+                            return_dict=False,
+                        )[0]
+                    loss = F.mse_loss(pred.float(), target.float()) / GRAD_ACCUM_STEPS
+                    scaler.scale(loss).backward()
+                    break
+                except torch.OutOfMemoryError:
+                    pred = loss = None
+                    if not block_swap.oom_recover(swap, optimizer, step, log=print, t=t):
+                        raise
+                    offload = SWAP_CFG.activation_offload
             step_loss = loss.item() * GRAD_ACCUM_STEPS
             running_loss += step_loss
 
@@ -1133,6 +1126,7 @@ def train_fibo2():
         return
 
     print("\n\n" + t("Training completed!"))
+    print(block_swap.peak_report(t))
     final = os.path.join(OUTPUT_DIR, "Fibo2_FINAL_LoRA.safetensors")
     _export_lora(model, final, min(last_step_executed, TOTAL_STEPS))
     print("✓ " + t("Final LoRA saved to: {path}", path=final))

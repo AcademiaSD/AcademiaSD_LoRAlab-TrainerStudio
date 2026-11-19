@@ -471,14 +471,22 @@ class SaveOnCpu(torch.autograd.graph.saved_tensors_hooks):
             hit = seen.get(key)
             if hit is not None and hit[0]() is t:
                 return (t.device, hit[1])
-            cpu = torch.empty(t.size(), dtype=t.dtype, layout=t.layout, pin_memory=pin_memory)
+            # Con los mismos strides: algún backward (la atención de Fibo 2.0) lee el tensor con la disposición en
+            # memoria con que se guardó, y uno contiguo le daba NaN. Solo si hay solapes (stride 0) va contiguo.
+            if all(st != 0 or sz <= 1 for st, sz in zip(t.stride(), t.size())):
+                cpu = torch.empty_strided(t.size(), t.stride(), dtype=t.dtype, layout=t.layout, pin_memory=pin_memory)
+            else:
+                cpu = torch.empty(t.size(), dtype=t.dtype, layout=t.layout, pin_memory=pin_memory)
             cpu.copy_(t)
             seen[key] = (weakref.ref(t), cpu)
             return (t.device, cpu)
 
         def unpack(packed):
             device, cpu = packed
-            return cpu if device is None else cpu.to(device, non_blocking=pin_memory)
+            if device is None:
+                return cpu
+            gpu = torch.empty_strided(cpu.size(), cpu.stride(), dtype=cpu.dtype, layout=cpu.layout, device=device)
+            return gpu.copy_(cpu, non_blocking=pin_memory)
 
         super().__init__(pack, unpack)
 
@@ -688,3 +696,63 @@ def describe(s):
 def peak_report(t=lambda s, **k: s.format(**k)):
     return "[VRAM] " + t("Peak: {a:.2f} GB allocated · {r:.2f} GB reserved by PyTorch",
                          a=torch.cuda.max_memory_allocated() / 1e9, r=torch.cuda.max_memory_reserved() / 1e9)
+
+
+def load_index_nf4(model_cls, cache_dir, block_prefixes, device="cuda", compute_dtype=torch.bfloat16):
+    """
+    Como load_bnb_nf4, para las cachés NF4 propias (transformer/index.json + weights/<capa>.safetensors +
+    others.safetensors, las de tools/): el dato NF4 de las capas de los bloques queda mapeado a su fichero.
+    """
+    from accelerate import init_empty_weights
+    from bitsandbytes.functional import QuantState
+    from safetensors.torch import load_file
+    with open(os.path.join(cache_dir, "index.json"), "r", encoding="utf-8") as f:
+        index = json.load(f)
+    with init_empty_weights():
+        model = model_cls.from_config(model_cls.load_config(cache_dir))
+    weights_dir = os.path.join(cache_dir, "weights")
+    block_prefixes = tuple(block_prefixes)
+
+    def set_module(name, module):
+        parent, _, child = name.rpartition(".")
+        setattr(model.get_submodule(parent) if parent else model, child, module)
+
+    for name, info in index["quantized"].items():
+        path = os.path.join(weights_dir, info["file"])
+        in_block = name.startswith(block_prefixes)
+        with safe_open(path, framework="pt", device="cpu") as f:
+            keys = list(f.keys())
+            data = None if in_block else f.get_tensor("weight").to(device)
+            qs = {k[len("quant_state."):]: f.get_tensor(k) for k in keys if k.startswith("quant_state.")}
+            bias = f.get_tensor("bias") if "bias" in keys else None
+        if in_block:
+            data = mmap_tensor(path, "weight")
+        w = Params4bit(data, requires_grad=False, quant_type="nf4", quant_storage=torch.uint8)
+        w.quant_state = QuantState.from_dict(qs, device=device)
+        w.bnb_quantized = True
+        with torch.device("meta"):
+            layer = Linear4bit(info["in_features"], info["out_features"], bias=bias is not None,
+                               quant_type="nf4", compute_dtype=compute_dtype)
+        layer.weight = w
+        if bias is not None:
+            layer.bias = torch.nn.Parameter(bias.to(device, compute_dtype), requires_grad=False)
+        layer._nf4_file = path
+        if in_block:
+            layer._mmap_home = data
+        set_module(name, layer)
+
+    for name, info in index["unquantized"].items():
+        with torch.device("meta"):
+            layer = torch.nn.Linear(info["in_features"], info["out_features"], bias=info.get("bias", False),
+                                    dtype=compute_dtype)
+        layer.load_state_dict(load_file(os.path.join(weights_dir, info["file"]), device=device), assign=True)
+        layer.requires_grad_(False)
+        set_module(name, layer)
+
+    model.load_state_dict(load_file(os.path.join(cache_dir, index["others"]), device=device), strict=False, assign=True)
+    for n, t in list(model.named_parameters()) + list(model.named_buffers()):
+        if t.is_meta:
+            raise RuntimeError("NF4 cache incomplete: " + n)
+    to_device_except_nf4(model, device)
+    model.requires_grad_(False)
+    return model, len(index["quantized"]), len(index["unquantized"])
