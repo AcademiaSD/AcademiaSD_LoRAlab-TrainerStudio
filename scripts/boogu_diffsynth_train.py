@@ -23,6 +23,7 @@ from boogu_model import NF4_DIR, NF4_REPO, quiet
 from i18n import t
 import training_metrics
 import preview_prompts
+import block_swap
 from diffsynth.core.data.operators import *  # noqa: F401,F403
 from diffsynth.diffusion import *  # noqa: F401,F403
 from diffsynth.pipelines.boogu_image import BooguImagePipeline, ModelConfig
@@ -303,7 +304,47 @@ def boogu_image_parser():
     parser.add_argument("--preview_size", type=int, default=0)
     parser.add_argument("--preview_width", type=int, default=0)
     parser.add_argument("--preview_height", type=int, default=0)
+    # Memoria (como FLUX.2 Klein 9B): VRAM Profile, Resident Blocks, Block Swap Storage y RAM Limit.
+    parser.add_argument("--vram_profile", type=str, default="auto")
+    parser.add_argument("--resident_blocks", type=int, default=-1)
+    parser.add_argument("--park_mode", choices=("auto", "ram", "disk"), default="auto")
+    parser.add_argument("--ram_limit_gb", type=float, default=0.0)
+    parser.add_argument("--no_activation_offload", action="store_true")
     return parser
+
+
+# Activaciones del paso (GiB) en función de los tokens (imagen, la de antes en edición, y texto).
+ACT_GB_BASE = 0.6
+ACT_GB_PER_TOKEN = 0.00045
+DORA_EXTRA_GB = 1.3
+
+
+def _reentrant_checkpoint(model, use_gradient_checkpointing, use_gradient_checkpointing_offload, *args, **kwargs):
+    """
+    Como gradient_checkpoint_forward de DiffSynth, pero REENTRANTE: el no reentrante guarda el peso NF4 de cada
+    capa y lo fijaría en VRAM (no habría block swap). Las activaciones van a la RAM con block_swap.SaveOnCpu.
+    """
+    if use_gradient_checkpointing and torch.is_grad_enabled():
+        fn = (lambda *a: model(*a, **kwargs)) if kwargs else model
+        return torch.utils.checkpoint.checkpoint(fn, *args, use_reentrant=True)
+    return model(*args, **kwargs)
+
+
+def setup_boogu_swap(unwrapped, args):
+    """Block swap de los bloques dobles y simples del DiT (los refinadores, pequeños, se quedan en la GPU)."""
+    import diffsynth.models.boogu_image_dit as boogu_dit
+    dit = unwrapped.pipe.dit
+    boogu_dit.gradient_checkpoint_forward = _reentrant_checkpoint
+    # El reentrante solo da gradiente si alguna entrada del bloque lo pide: la salida de x_embedder lo pide.
+    block_swap.inputs_require_grad(dit.x_embedder)
+    blocks = list(dit.double_stream_layers) + list(dit.single_stream_layers)
+    # Parches de 16 px: la imagen, en edición también la de antes, y ~512 de texto.
+    tokens = int(args.max_pixels) // 256 * (2 if args.lora_type == "edit" else 1) + 512
+    act_gb = ACT_GB_BASE + tokens * ACT_GB_PER_TOKEN + (DORA_EXTRA_GB if args.use_dora else 0.0)
+    return block_swap.setup(blocks, unwrapped, args.card_gb, args.usable_gb, act_gb,
+                            resident_blocks=args.resident_blocks, park=args.park_mode,
+                            ram_limit_gb=args.ram_limit_gb, ram_reserve_gb=8.0,
+                            dora=args.use_dora, dora_margin_gb=0.0, log=lambda m: print(m, flush=True), t=t)
 
 
 # Ajustes en caliente: clave del json de la GUI -> (atributo de args, tipo). Rank, alpha, batch,
@@ -385,6 +426,10 @@ def launch_boogu_training_task(accelerator, dataset, model, model_logger, args):
     model, optimizer, dataloader = accelerator.prepare(model, optimizer, dataloader)
     unwrapped = accelerator.unwrap_model(model)
     trainable = {name: param for name, param in unwrapped.named_parameters() if param.requires_grad}
+    swap = setup_boogu_swap(unwrapped, args)
+    offload = (not args.no_activation_offload) and swap.swapping
+    if offload:
+        print("[VRAM] " + t("Activation offload ON: the inputs of each block wait in pinned RAM."), flush=True)
 
     # Reanudar es seguir EL MISMO entrenamiento: pesos entrenables, optimizador, scheduler y paso. Un
     # checkpoint con otras capas o formas (otro rank, LoKr...) no encaja: se avisa y se empieza de cero.
@@ -451,9 +496,18 @@ def launch_boogu_training_task(accelerator, dataset, model, model_logger, args):
                 if global_step >= args.total_steps:
                     break
             with accelerator.accumulate(model):
-                losses = [model(sample) for sample in samples]
-                loss = torch.stack(losses).mean()
-                accelerator.backward(loss)
+                try:
+                    with (block_swap.SaveOnCpu() if offload else block_swap._null()):
+                        losses = [model(sample) for sample in samples]
+                        loss = torch.stack(losses).mean()
+                    accelerator.backward(loss)
+                except torch.OutOfMemoryError:
+                    # Como MiniMax-H3: se aparcan 2 bloques más y se sigue con otra muestra.
+                    losses = loss = None
+                    if not block_swap.oom_recover(swap, optimizer, global_step + 1, log=lambda m: print(m, flush=True), t=t):
+                        raise
+                    offload = not args.no_activation_offload
+                    continue
                 optimizer.step()
                 optimizer.zero_grad()
             running_loss += loss.item()
@@ -484,7 +538,9 @@ def launch_boogu_training_task(accelerator, dataset, model, model_logger, args):
                 if accelerator.is_main_process:
                     print(flush=True)
                     for preview_index, (slot, prompt) in enumerate(custom_previews(args) or [(None, "")]):
-                        run_boogu_preview(unwrapped, dataset, args, global_step, slot, preview_index, prompt)
+                        # Con block swap, los bloques residentes se aparcan mientras dura la preview.
+                        with block_swap.preview_room():
+                            run_boogu_preview(unwrapped, dataset, args, global_step, slot, preview_index, prompt)
                 accelerator.wait_for_everyone()
                 t0 = time.time()
             if global_step >= args.total_steps or stop["requested"]:
@@ -498,6 +554,7 @@ def launch_boogu_training_task(accelerator, dataset, model, model_logger, args):
     model_logger._last_step = global_step
     model_logger.save_model(accelerator, model, "Boogu_FINAL_LoRA.safetensors")
     print("\n\n" + t("Training completed!"), flush=True)
+    print(block_swap.peak_report(t), flush=True)
     print("✓ " + t("Final LoRA saved to: {path}", path=os.path.join(args.output_path, "Boogu_FINAL_LoRA.safetensors")), flush=True)
 
 
@@ -571,7 +628,8 @@ def run_boogu_preview(model, dataset, args, step, slot=None, preview_index=0, pr
                     model_configs=[ModelConfig(path=[str(path) for path in vae_files])],
                 )
             preview_pipe.dit = pipe.dit
-            preview_pipe.dit.to(device)
+            # Sin subir los bloques NF4: los gestiona block swap.
+            block_swap.to_device_except_nf4(preview_pipe.dit, device)
             preview_pipe.vae_decoder.to(device)
             preview_pipe.scheduler.set_timesteps(max(1, args.preview_steps), training=False)
 
@@ -725,6 +783,7 @@ def main():
     configure_console_encoding()
     args = boogu_image_parser().parse_args()
     accelerate.utils.set_seed(args.seed)
+    args.card_gb, args.usable_gb = block_swap.apply_vram_profile(args.vram_profile, log=lambda m: print(m, flush=True), t=t)
     if args.model_paths and "Boogu-image-edit-NF4" in args.model_paths:
         from boogu_model import register_nf4_models
         register_nf4_models()

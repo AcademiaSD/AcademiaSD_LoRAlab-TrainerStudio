@@ -14,6 +14,7 @@ from i18n import t
 import settings_limits
 from project_layout import resolve_cache_dir, resolve_output_dir
 import lora_options
+import block_swap
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 SETTINGS_DIR = BASE_DIR / "settings"
@@ -160,6 +161,12 @@ def main():
         elif train_cfg.get("use_loraplus", False):
             args += ["--use_loraplus", "--loraplus_ratio", str(max(1.0, float(train_cfg.get("loraplus_ratio", 16))))]
             args += ["--customized_optimizer", "boogu_loraplus.LoRAPlusAdamW"]
+        # Memoria (como FLUX.2 Klein 9B): VRAM Profile, Resident Blocks, Block Swap Storage y RAM Limit.
+        swap_cfg = block_swap.settings(train_cfg)
+        args += ["--vram_profile", swap_cfg.vram_profile, "--resident_blocks", str(swap_cfg.resident_blocks),
+                 "--park_mode", swap_cfg.park_mode, "--ram_limit_gb", str(swap_cfg.ram_limit_gb)]
+        if not swap_cfg.activation_offload:
+            args.append("--no_activation_offload")
         save_every = max(0, int(train_cfg.get("save_every", 50)))
         if save_every:
             args += ["--save_steps", str(save_every)]

@@ -683,6 +683,11 @@ def setup(blocks, model, card_gb, usable_gb, act_gb, resident_blocks=-1, park="a
     torch.cuda.empty_cache()
     torch.cuda.synchronize()
     in_use = torch.cuda.memory_allocated() / gib
+    # Bloques que ya están en la GPU (Boogu: DiffSynth carga el modelo entero): ese sitio es para el plan.
+    for b, size in zip(blocks, sizes):
+        mods = [m for m in b.modules() if isinstance(m, Linear4bit)]
+        if mods and mods[0].weight.data.device.type == "cuda":
+            in_use -= size
     models = model if isinstance(model, (list, tuple)) else [model]
     optim_gb = sum(p.numel() * 4 for m in models for p in m.parameters() if p.requires_grad) * 3 / gib
     free = usable_gb - headroom_gb - in_use - optim_gb - act_gb
