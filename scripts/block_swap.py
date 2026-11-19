@@ -2,7 +2,7 @@
 """
 block_swap.py — block swap para entrenar modelos NF4 en poca VRAM / block swap to train NF4 models on little VRAM.
 
-Lo usan LTX 2.5 y FLUX.2 Klein 9B. Al estilo de MiniMax-H3:
+Lo usan LTX 2.5, FLUX.2 Klein 9B, FLUX.1 Dev, Fibo 2.0, Ideogram 4, Ming-Image, Wan 2.2 y LTX-2.3. Al estilo de MiniMax-H3:
 * BlockSwap: los N primeros bloques quedan residentes en VRAM; el resto se aparca en RAM fijada o se queda
   mapeado a su .safetensors (disco), y se sube justo a tiempo, con prefetch del siguiente en un stream aparte.
     - Solo se mueve el dato NF4 empaquetado (uint8). quant_state, bias, normas y tablas se quedan en CUDA.
@@ -336,7 +336,7 @@ class BlockSwap:
             for m in block._swap_mods:
                 if m._res_home is None:
                     with safe_open(m._nf4_file, framework="pt", device="cpu") as f:
-                        data = f.get_tensor("weight")
+                        data = f.get_tensor(getattr(m, "_nf4_key", "weight"))
                     shape, dtype = m._res_shape
                     m.weight.data = data.view(dtype).reshape(shape).to("cuda")
                 else:
@@ -505,3 +505,186 @@ def ram_report(label=""):
             (label + ": ") if label else "", own / 1e9, mi.rss / 1e9, (vm.total - vm.available) / 1e9, vm.total / 1e9)
     except Exception:
         return "[RAM] -"
+
+
+def inputs_require_grad(module):
+    """
+    Con checkpoint reentrante un bloque solo da gradiente si alguna de sus entradas lo pide. Se engancha a la capa
+    de entrada (x_embedder...): su salida lo pide aunque esa capa no tenga LoRA.
+    """
+    def hook(mod, inputs, output):
+        if torch.is_grad_enabled() and torch.is_tensor(output):
+            output.requires_grad_(True)
+    return module.register_forward_hook(hook)
+
+
+def load_bnb_nf4(model_cls, transformer_dir, block_prefixes, device="cuda", compute_dtype=torch.bfloat16):
+    """
+    Construye un transformer de diffusers guardado en NF4 por bitsandbytes (un .safetensors con `x.weight`,
+    `x.weight.absmax`, `x.weight.quant_map`, `x.weight.quant_state.bitsandbytes__nf4`) sin cargarlo en la GPU:
+    el dato NF4 de las capas de los bloques (`block_prefixes`) queda mapeado al fichero (BlockSwap decide qué
+    sube), y todo lo demás va a `device`.
+    """
+    import glob
+    from accelerate import init_empty_weights
+    from bitsandbytes.functional import QuantState
+    cfg = model_cls.load_config(transformer_dir)
+    cfg = {k: v for k, v in cfg.items() if k != "quantization_config"}
+    with init_empty_weights():
+        model = model_cls.from_config(cfg)
+    files = sorted(glob.glob(os.path.join(transformer_dir, "diffusion_pytorch_model*.safetensors")))
+    if not files:
+        raise FileNotFoundError(transformer_dir)
+    block_prefixes = tuple(block_prefixes)
+    marker = ".weight.quant_state.bitsandbytes__nf4"
+    plain = {}
+    n_q = 0
+    for path in files:
+        with safe_open(path, framework="pt", device="cpu") as f:
+            keys = list(f.keys())
+            quantized = [k[:-len(marker)] for k in keys if k.endswith(marker)]
+            qset = set(quantized)
+            for name in quantized:
+                pre = name + ".weight."
+                qs = {k[len(pre):]: f.get_tensor(k) for k in keys if k.startswith(pre)}
+                in_block = name.startswith(block_prefixes)
+                data = mmap_tensor(path, name + ".weight") if in_block else f.get_tensor(name + ".weight").to(device)
+                old = model.get_submodule(name)
+                with torch.device("meta"):
+                    layer = Linear4bit(old.in_features, old.out_features, bias=old.bias is not None,
+                                       quant_type="nf4", compute_dtype=compute_dtype)
+                w = Params4bit(data, requires_grad=False, quant_type="nf4", quant_storage=torch.uint8)
+                w.quant_state = QuantState.from_dict(qs, device=device)
+                w.bnb_quantized = True
+                layer.weight = w
+                if old.bias is not None:
+                    layer.bias = torch.nn.Parameter(f.get_tensor(name + ".bias").to(device, compute_dtype),
+                                                    requires_grad=False)
+                layer._nf4_file = path
+                layer._nf4_key = name + ".weight"
+                if in_block:
+                    layer._mmap_home = data
+                parent, _, child = name.rpartition(".")
+                setattr(model.get_submodule(parent) if parent else model, child, layer)
+                n_q += 1
+            for k in keys:
+                if k.endswith(".bias"):
+                    owner = k[:-5]
+                elif ".weight" in k:
+                    owner = k[:k.rindex(".weight")]
+                else:
+                    owner = None
+                if owner in qset:
+                    continue                      # ya está en su Linear4bit
+                plain[k] = f.get_tensor(k).to(device)
+    model.load_state_dict(plain, strict=False, assign=True)
+    for n, t in list(model.named_parameters()) + list(model.named_buffers()):
+        if t.is_meta:
+            raise RuntimeError("NF4 model incomplete: " + n)
+    to_device_except_nf4(model, device)
+    model.requires_grad_(False)
+    return model, n_q, len(plain)
+
+
+def setup(blocks, model, card_gb, usable_gb, act_gb, resident_blocks=-1, park="auto", ram_limit_gb=0.0,
+          ram_reserve_gb=8.0, dora=False, headroom_gb=0.8, dora_margin_gb=0.5, log=print,
+          t=lambda s, **k: s.format(**k)):
+    """
+    Plan del block swap y BlockSwap, como en FLUX.2 Klein 9B. Lo que ya hay en VRAM (resto del transformer, LoRA,
+    contexto) se mide; el optimizador (AdamW: 2 estados FP32 + el gradiente por parámetro) y las activaciones del
+    paso (`act_gb`, medidas en cada trainer) se estiman. `headroom_gb` deja margen para la fragmentación: con
+    muchos tamaños de bucket la VRAM queda en trozos; si aun así falta, el paso aparca más bloques (park_more).
+    """
+    gib = 1024 ** 3
+    sizes = [block_nf4_bytes(b) / gib for b in blocks]
+    import gc
+    gc.collect()
+    torch.cuda.empty_cache()
+    torch.cuda.synchronize()
+    in_use = torch.cuda.memory_allocated() / gib
+    optim_gb = sum(p.numel() * 4 for p in model.parameters() if p.requires_grad) * 3 / gib
+    free = usable_gb - headroom_gb - in_use - optim_gb - act_gb
+    if resident_blocks is not None and int(resident_blocks) >= 0:
+        resident = min(int(resident_blocks), len(blocks))
+    else:
+        resident = plan_resident_sized(free, sizes)
+    # Ni con todos los bloques aparcados queda sitio para el que corre y el siguiente. Con DoRA, en Klein 9B hizo
+    # falta medio GB más: sus pesos descomprimidos, de tamaños distintos, fragmentan la VRAM.
+    need = 2 * max(sizes) + (dora_margin_gb if dora else 0.0)
+    if free < need:
+        log("[VRAM] " + t("Warning: this run does not fit the {c:.0f} GB profile even with every block in RAM "
+                          "(~{need:.1f} GB more). Pre-cache at a lower resolution, turn DoRA off or choose a larger "
+                          "VRAM Profile.", c=card_gb, need=need - free))
+    log("[VRAM] " + t("Plan: card {c:.1f} GB | in use {f:.2f} GB | optimizer ~{o:.2f} GB | activations ~{a:.2f} GB "
+                      "| blocks {b:.2f} GB -> {r}/{n} resident",
+                      c=card_gb, f=in_use, o=optim_gb, a=act_gb, b=sum(sizes), r=resident, n=len(blocks)))
+    swap = BlockSwap(blocks, resident, pin=True, log=log, park=park, ram_reserve_gb=ram_reserve_gb,
+                     ram_limit_gb=ram_limit_gb)
+    torch.cuda.synchronize()
+    log("[VRAM] " + t("After placing the blocks: {gb:.2f} GB allocated", gb=torch.cuda.memory_allocated() / 1e9))
+    log(ram_report())
+    return swap
+
+
+def oom_recover(swap, optimizer, step, log=print, t=lambda s, **k: s.format(**k)):
+    """
+    Un paso se quedó sin VRAM (fragmentación, un bucket mayor): como MiniMax-H3, se aparcan 2 bloques más y el
+    paso se repite. Los gradientes a medias del paso no valen: se descarta la acumulación en curso. Devuelve
+    False si ya no queda nada que aparcar (el error se relanza).
+    """
+    if swap is None or swap.resident == 0:
+        return False
+    optimizer.zero_grad(set_to_none=True)
+    import gc
+    gc.collect()
+    torch.cuda.empty_cache()
+    parked = swap.park_more(2)
+    log("\n[VRAM] " + t("Out of VRAM at step {s}: {k} more blocks to RAM ({r}/{n} resident now), and the "
+                        "step is repeated.", s=step, k=parked, r=swap.resident, n=swap.n))
+    return True
+
+
+# Ajustes de memoria comunes (GUI: VRAM Profile, Resident Blocks, Block Swap Storage, RAM Limit).
+SETTINGS_DEFAULTS = {
+    "vram_profile": "auto",     # simula una tarjeta menor con un tope duro
+    "resident_blocks": -1,      # -1 = lo decide el plan
+    "park_mode": "auto",        # ram / disk / auto (RAM + disco)
+    "ram_limit_gb": 0.0,        # techo de RAM total del sistema en auto (0 = sin límite)
+    "ram_reserve_gb": 8.0,      # RAM que queda libre en auto
+    "activation_offload": True, # entradas de cada bloque a RAM fijada mientras hay block swap
+}
+
+
+def settings(cfg):
+    """Lee los ajustes de memoria del JSON del trainer (con los valores por defecto de arriba)."""
+    from types import SimpleNamespace
+    g = lambda k: cfg.get(k, SETTINGS_DEFAULTS[k])
+    park = str(g("park_mode") or "auto").strip().lower()
+    try:
+        limit = max(0.0, float(g("ram_limit_gb") or 0))
+    except (TypeError, ValueError):
+        limit = 0.0
+    try:
+        resident = int(g("resident_blocks") if g("resident_blocks") is not None else -1)
+    except (TypeError, ValueError):
+        resident = -1
+    return SimpleNamespace(
+        vram_profile=str(g("vram_profile") or "auto").strip().lower(),
+        resident_blocks=resident,
+        park_mode=park if park in ("auto", "ram", "disk") else "auto",
+        ram_limit_gb=limit,
+        ram_reserve_gb=float(g("ram_reserve_gb")),
+        activation_offload=bool(g("activation_offload")),
+    )
+
+
+def describe(s):
+    """Línea de la cabecera del trainer."""
+    return "{} | Resident Blocks {} | Block Swap Storage {}{}".format(
+        s.vram_profile, "auto" if s.resident_blocks < 0 else s.resident_blocks, s.park_mode,
+        " (RAM Limit {:g} GB)".format(s.ram_limit_gb) if s.park_mode == "auto" and s.ram_limit_gb > 0 else "")
+
+
+def peak_report(t=lambda s, **k: s.format(**k)):
+    return "[VRAM] " + t("Peak: {a:.2f} GB allocated · {r:.2f} GB reserved by PyTorch",
+                         a=torch.cuda.max_memory_allocated() / 1e9, r=torch.cuda.max_memory_reserved() / 1e9)

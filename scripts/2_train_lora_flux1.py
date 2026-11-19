@@ -37,6 +37,7 @@ from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_
 import lora_options
 import training_metrics
 import preview_prompts
+import block_swap
 
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
 STEP_WORD = t("Step")
@@ -90,6 +91,8 @@ DEFAULTS = {
     "preview_custom_prompt": "",
     "project_name": "",
     "trigger_word": "",
+    # Memoria (como FLUX.2 Klein 9B): VRAM Profile, Resident Blocks, Block Swap Storage y RAM Limit;
+    # sus valores por defecto están en block_swap.SETTINGS_DEFAULTS.
 }
 
 CONFIG_PATH = os.environ.get("LORALAB_TRAIN_CONFIG") or "settings/train_settings_flux1.json"
@@ -176,6 +179,8 @@ print(f"  {'LoRA Rank/Alpha':<22}: {LORA_RANK}/{LORA_ALPHA}")
 print(f"  {'rsLoRA / LoRA+':<22}: {'on' if USE_RSLORA else 'off'} / {f'x{LORAPLUS_RATIO:g}' if USE_LORAPLUS else 'off'}")
 print(f"  {'LoKr':<22}: {f'factor {LOKR_FACTOR}' if USE_LOKR else 'off'}")
 print(f"  {'DoRA':<22}: {('on, NormFix' if DORA_NORMFIX else 'on') if USE_DORA else 'off'}")
+SWAP_CFG = block_swap.settings(cfg)
+print(f"  {'VRAM Profile':<22}: {block_swap.describe(SWAP_CFG)}")
 print(f"  {'Precision':<22}: {PRECISION.upper()}{' (auto)' if PRECISION_CFG not in ('bf16', 'fp16') else ''}")
 print(f"  {t('LoRA Targets'):<22}: {LORA_TARGETS}")
 print(f"  {'Batch / Grad Accum':<22}: {BATCH_SIZE}/{GRAD_ACCUM_STEPS}")
@@ -370,13 +375,30 @@ def load_nf4_transformer(model_dir):
     return transformer
 
 
+BLOCK_PREFIXES = ("transformer_blocks.", "single_transformer_blocks.")
+
+
 def load_transformer(model_dir):
     # Sin index.json es el repo de diffusers, ya en NF4; con él, una caché de tools/flux1.
     if os.path.exists(os.path.join(model_dir, "transformer", "index.json")):
-        transformer = load_nf4_transformer(model_dir)
+        transformer = load_nf4_transformer(model_dir).to("cuda")
     else:
-        transformer = FluxTransformer2DModel.from_pretrained(model_dir, subfolder="transformer", torch_dtype=torch.bfloat16)
+        # Los bloques quedan mapeados a su .safetensors: block_swap.setup sube después los que caben.
+        transformer, nq, _ = block_swap.load_bnb_nf4(FluxTransformer2DModel, os.path.join(model_dir, "transformer"),
+                                                     BLOCK_PREFIXES, "cuda", torch.bfloat16)
+        print("[OK] " + t("NF4 layers: {a} | BF16 layers: {b}", a=nq, b="-"))
     return lora_options.to_compute_dtype(transformer, COMPUTE_DTYPE)
+
+
+def swap_blocks(transformer):
+    """Bloques en el orden en que corren: los 19 dobles y después los 38 simples."""
+    return list(transformer.transformer_blocks) + list(transformer.single_transformer_blocks)
+
+
+# Activaciones del paso (GiB) en función de los tokens (imagen + 512 de T5), con checkpoint reentrante.
+ACT_GB_BASE = 0.6
+ACT_GB_PER_TOKEN = 0.00045
+DORA_EXTRA_GB = 1.8   # medido: el pico sube ~1,7 GB con DoRA (bloques menores que los de Klein)
 
 
 def build_lora_metadata(step):
@@ -631,16 +653,15 @@ def train_flux1():
 
     ensure_model_downloaded(local_path=MODEL_ID, repo_id=HF_REPO_ID)
 
+    card_gb, usable_gb = block_swap.apply_vram_profile(SWAP_CFG.vram_profile, log=print, t=t)
+
     print(t("Loading {name}...", name="FLUX.1 Dev Transformer (NF4)"))
     t0 = time.time()
     transformer = load_transformer(MODEL_ID)
-    transformer.to("cuda")
     free_vram()
     print(t("Transformer loaded in {s:.1f}s.", s=time.time() - t0) + f" VRAM: {torch.cuda.memory_allocated()/1e9:.1f} GB", flush=True)
 
     scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(MODEL_ID, subfolder="scheduler")
-
-    transformer.enable_gradient_checkpointing()
 
     # "blocks" deja intactas la modulación adaLN, el timestep y las capas de entrada/salida:
     # no hacen falta para una cara o un estilo y así el LoRA combina mejor con otros.
@@ -714,6 +735,10 @@ def train_flux1():
             target_modules=target_modules, use_dora=USE_DORA, init_lora_weights=True, use_rslora=USE_RSLORA
         )
 
+        if USE_DORA:
+            # La magnitud inicial descomprime cada peso NF4: con los bloques aún en el fichero, se sube a la GPU
+            # solo para eso (y sin la copia profunda de PEFT).
+            block_swap.patch_peft_dora_init(len(target_modules))
         model = get_peft_model(transformer, lora_config)
         if USE_DORA:
             lora_options.attach_dora_norms(model, os.path.join(MODEL_ID, "transformer"), DORA_NORMFIX,
@@ -722,6 +747,12 @@ def train_flux1():
     for p in model.parameters():
         if p.requires_grad:
             p.data = p.data.float()
+    # El LoRA de las capas con el peso aún en el fichero se creó en la CPU: a la GPU, sin subir los bloques.
+    block_swap.to_device_except_nf4(model, "cuda")
+    # Checkpoint REENTRANTE: el no reentrante guarda el peso NF4 de cada capa y lo fijaría en VRAM (no habría
+    # block swap). El reentrante solo da gradiente si alguna entrada del bloque lo pide: la de x_embedder.
+    block_swap.enable_reentrant_checkpointing(transformer)
+    block_swap.inputs_require_grad(transformer.x_embedder)
     model.print_trainable_parameters()
 
     trainable = [p for p in model.parameters() if p.requires_grad]
@@ -832,6 +863,17 @@ def train_flux1():
         else:
             return all_preview_names[0]
 
+    # Tokens del paso más grande: imagen (latente / 4) + 512 de T5.
+    max_tokens = max(v["lat"].shape[2] * v["lat"].shape[3] // 4 for v in cache_data.values()) + 512
+    act_gb = ACT_GB_BASE + max_tokens * ACT_GB_PER_TOKEN + (DORA_EXTRA_GB if USE_DORA else 0.0)
+    swap = block_swap.setup(swap_blocks(transformer), model, card_gb, usable_gb, act_gb,
+                            resident_blocks=SWAP_CFG.resident_blocks, park=SWAP_CFG.park_mode,
+                            ram_limit_gb=SWAP_CFG.ram_limit_gb, ram_reserve_gb=SWAP_CFG.ram_reserve_gb,
+                            dora=USE_DORA, dora_margin_gb=0.0, log=print, t=t)   # medido: DoRA cabe sin margen extra
+    offload = SWAP_CFG.activation_offload and swap.swapping
+    if offload:
+        print("[VRAM] " + t("Activation offload ON: the inputs of each block wait in pinned RAM."))
+
     running_loss, t_step_avg, grad_norm = 0.0, 0.0, 0.0
     print("\n" + t("STARTING TRAINING! {n} {kind} in {b} buckets.", n=len(all_preview_names), kind=t("images"), b=len(buckets)))
 
@@ -870,10 +912,18 @@ def train_flux1():
             noisy = pack_latents((1 - t_exp) * latents + t_exp * noise).to(COMPUTE_DTYPE)
             target = pack_latents(noise - latents)
 
-            pred = predict(model, noisy, sigma, embeds, H, W, TRAIN_GUIDANCE)
-
-            loss = F.mse_loss(pred.float(), target) / GRAD_ACCUM_STEPS
-            scaler.scale(loss).backward()
+            while True:
+                try:
+                    with (block_swap.SaveOnCpu() if offload else block_swap._null()):
+                        pred = predict(model, noisy, sigma, embeds, H, W, TRAIN_GUIDANCE)
+                    loss = F.mse_loss(pred.float(), target) / GRAD_ACCUM_STEPS
+                    scaler.scale(loss).backward()
+                    break
+                except torch.OutOfMemoryError:
+                    pred = loss = None
+                    if not block_swap.oom_recover(swap, optimizer, step, log=print, t=t):
+                        raise
+                    offload = SWAP_CFG.activation_offload
             step_loss = loss.item() * GRAD_ACCUM_STEPS
             running_loss += step_loss
 
@@ -941,6 +991,7 @@ def train_flux1():
         return
 
     print("\n\n" + t("Training completed!"))
+    print(block_swap.peak_report(t))
     final = os.path.join(OUTPUT_DIR, "Flux1_FINAL_LoRA.safetensors")
     _export_lora(model, final, min(last_step_executed, TOTAL_STEPS))
     print("✓ " + t("Final LoRA saved to: {path}", path=final))
