@@ -764,8 +764,8 @@ The official image-edit task works at 1024: 512 and 768 are out of its distribut
 | Learning rate | 3e-4 |
 | Steps | 1,000 (14 images): the likeness shows from ~500, but in ComfyUI the 1,000-step LoRA looks better than the 600 and 700 ones |
 | LoRA strength in ComfyUI | 1.0 for characters (1,000 steps) · 1.0–1.5 for edit LoRAs |
-| Speed and VRAM | 512²: ~1.5 s/step, ~8 GB · 768²: ~2.6 s/step, ~10 GB · edit at 512²: ~2.3 s/step, ~8 GB · edit at 768²: ~5.7 s/step, ~11 GB |
-| 8 GB profile (RTX 5080, rank 16) | 768²: 2.2 s/step (2.0 with everything in VRAM), 6.5 GB peak · 1024²: 3.1 s/step (2.8), 5.8 GB · edit at 1024²: 10.7 s/step (10.0), 5.8 GB instead of 11.5 GB · DoRA at 768²: 3.6 s/step, 5.9 GB. Same losses as with everything in VRAM |
+| Speed and VRAM, **Auto** profile (everything in VRAM) | 512²: ~1.5 s/step, ~8 GB · 768²: ~2.6 s/step, ~10 GB · edit at 512²: ~2.3 s/step, ~8 GB · edit at 768²: ~5.7 s/step, ~11 GB |
+| 8 GB profile (RTX 5080, rank 16) | 768²: 2.2 s/step (2.0 with everything in VRAM), 6.5 GB peak · 1024²: 3.1 s/step (2.8), 5.8 GB · edit at 1024²: 10.7 s/step (10.0), 5.8 GB instead of 11.5 GB · DoRA at 768²: 3.6 s/step, 5.9 GB. Same losses as with everything in VRAM. Measured with 7 GiB for PyTorch; the profile also leaves out what your other apps use (with 1.3 GB open, 6.4 GiB: a 14-image dataset at 768² ran at 3.0 s/step, 6.0 GB peak) |
 
 ### FLUX.3 Image Klein — image and edit LoRAs
 
