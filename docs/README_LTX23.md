@@ -25,7 +25,7 @@ https://www.youtube.com/watch?v=52Kyr7GZ6Y0
 
 ## 🔬 Technical Deep-Dive: Why is it so fast, light, & high quality?
 
-Training a 22-Billion parameter Diffusion Transformer (DiT) like **LTX-2.3** typically requires enterprise-grade hardware (30GB+ VRAM, 64GB+ System RAM) and hours of compute. **AcademiaSD LoRAlab LTX 2.3** breaks this barrier, allowing training on consumer GPUs (12GB-16GB VRAM) in record time while preserving 100% of the model's generation quality. 
+Training a 22-Billion parameter Diffusion Transformer (DiT) like **LTX-2.3** typically requires enterprise-grade hardware (30GB+ VRAM, 64GB+ System RAM) and hours of compute. **AcademiaSD LoRAlab LTX 2.3** breaks this barrier, allowing training on consumer GPUs (from 8 GB of VRAM) in record time while preserving 100% of the model's generation quality. 
 
 Here is the exact architectural breakdown of how this is achieved:
 
@@ -33,12 +33,12 @@ Here is the exact architectural breakdown of how this is achieved:
 
 ### 1. 📉 VRAM Usage is Reduced to 8 GB
 
-* **Block swap and VRAM Profile** (as in FLUX.2 Klein 9B and LTX 2.5): the 48 transformer blocks are memory-mapped from their NF4 files and only the ones that fit stay on the GPU (**Resident Blocks**, chosen by the plan); the rest wait in RAM or on disk (**Block Swap Storage**, **RAM Limit**) and come in just in time. **VRAM Profile** simulates a smaller card with a hard cap, minus what other apps already use. Measured on an RTX 5080 with the 8 GB profile at 768² (rank 16): 5.2 GB of peak VRAM and ~5.0 s/step, the same speed as with everything in VRAM (11.1 GB peak); previews 6.4 GB.
-
+* **Block swap and VRAM Profile** (as in FLUX.2 Klein 9B and LTX 2.5): the 48 transformer blocks are memory-mapped from their NF4 files and only the ones that fit stay on the GPU (**Resident Blocks**, chosen by the plan); the rest wait in RAM or on disk (**Block Swap Storage**, **RAM Limit**) and come in just in time. **VRAM Profile** simulates a smaller card with a hard cap, minus what other apps already use. Measured on an RTX 5080 with the 8 GB profile at 768² (rank 16): 5.2 GB of peak VRAM and ~5.0 s/step, the same speed as with everything in VRAM (11.1 GB peak); previews 6.4 GB. If a step still runs out of VRAM, 2 more blocks go to RAM and the step is repeated. With the **Auto** profile on a large card every block stays on the GPU, as before.
 * **4-Bit NormalFloat (NF4) Quantization (`bitsandbytes`)**: The 22-Billion parameter DiT backbone is stored as frozen 4-bit NF4 weights (`Linear4bit`): ~38 GB in BF16 → ~9.8 GB. The model is built empty and filled directly from the NF4 weights, so the BF16 transformer is never downloaded or loaded. The Gemma 3 text encoder used by the pre-cache is also pre-quantized (FP32 ~49 GB → NF4 ~7.8 GB).
 * **Zero VRAM Wasted on Encoders (Offline Pre-Caching)**: During training (`2_train_lora_ltx23.py`), **neither the Text Encoder nor the VAE are loaded into VRAM**. All text embeddings and image latents are pre-computed once during the pre-cache stage and stored on disk.
 * **Paged 8-Bit AdamW Optimizer (`bitsandbytes.optim.PagedAdamW8bit`)**: Optimizer states are stored in 8-bit precision instead of 32-bit float and can page out of VRAM under pressure.
-* **Gradient Checkpointing**: Intermediate activation tensors are recomputed during backward passes rather than stored in memory, keeping activation VRAM flat regardless of resolution.
+* **Gradient Checkpointing (reentrant)**: each block's activations are recomputed during the backward pass instead of stored. It is reentrant so that it does not keep the NF4 weights of the parked blocks in VRAM.
+* **Activation Offload** (on by default): the inputs each block saves for the backward wait in pinned RAM, one copy per tensor even when several blocks save the same one.
 
 ---
 
