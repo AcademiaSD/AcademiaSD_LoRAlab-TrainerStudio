@@ -555,8 +555,10 @@ def inputs_require_grad(module):
     de entrada (x_embedder...): su salida lo pide aunque esa capa no tenga LoRA.
     """
     def hook(mod, inputs, output):
-        if torch.is_grad_enabled() and torch.is_tensor(output):
-            output.requires_grad_(True)
+        if torch.is_grad_enabled() and torch.is_tensor(output) and not output.requires_grad:
+            # clone: si no, la salida sería una hoja con gradiente y el modelo no podría modificarla in-place
+            # (Ming-Image rellena así sus tokens de padding).
+            return output.requires_grad_(True).clone()
     return module.register_forward_hook(hook)
 
 
