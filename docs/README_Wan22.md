@@ -52,7 +52,7 @@ The expert that is not trained is only downloaded if you convert it (train it on
 - **Activation Offload** (on by default): the checkpoint is reentrant, so what it keeps (the input of each half) goes through `save_for_backward`, and `torch.autograd.graph.save_on_cpu` sends it to pinned RAM instead of VRAM.
 - The rope buffers are cast from float64 (diffusers' default on CUDA) to float32, as diffusers already does on MPS: it halves the rope temporaries of every block.
 - `expandable_segments` in the CUDA allocator: images and clips of different sizes fragmented the VRAM.
-- **No silent slowdown:** on Windows, when the VRAM is full the NVIDIA driver spills into shared system memory instead of failing, and a step takes 30 times longer without any message (a 33-frame clip at 480p on 16 GB: 544 s instead of ~43 s). The trainer caps PyTorch's allocator to the free VRAM, so a sample that does not fit fails at once; that bucket is left out of the run with a message saying which size it was.
+- **No silent slowdown:** on Windows, when the VRAM is full the NVIDIA driver spills into shared system memory instead of failing, and a step takes 30 times longer without any message (a 33-frame clip at 480p on 16 GB: 544 s instead of ~43 s). The trainer caps PyTorch's allocator (VRAM Profile, minus what the other apps already use), so a sample that does not fit fails at once: first 2 more blocks go to RAM and the step is repeated; when no block is left to park, that bucket is left out of the run with a message saying which size it was.
 - Flow matching: `x_t = (1 − σ)·x0 + σ·noise`, target `noise − x0`, model time `σ·1000`.
 
 ### Measured (RTX 5080 16 GB, low noise expert, rank 16, Activation Offload on, 480p)
@@ -64,11 +64,17 @@ The expert that is not trained is only downloaded if you convert it (train it on
 | Clip 33 frames | 14.3 GB (15.6 GB reserved) | ~43 s — does not fit next to a desktop on a 16 GB card |
 | Clip 33 frames, before the two-half checkpoint | 16.6 GB | 544 s (driver spilling into system RAM) |
 
-### 12 GB of VRAM
+### 8 GB of VRAM (block swap)
 
-Images pre-cached at **448 x 448** (200,704 px²), rank 8 / alpha 8, both experts, Activation Offload on: **10.37 GB** peak while training. A 1-frame preview uses a bit less; a 17-frame video preview goes slightly over 12 GB, so keep *Preview Frames* at 1 on a 12 GB card. 480 x 480 (230,400 px²) sits in between; 512 x 512 is just over 12 GB.
+The 40 blocks of each expert are memory-mapped from its `part_XX` files when loading. **VRAM Profile** sets the cap and the plan decides how many blocks of the expert in use stay on the GPU (**Resident Blocks**); the rest wait in pinned RAM or on disk (**Block Swap Storage**, **RAM Limit**) and come in one by one, the next one already copying. Everything that is not a block (embeddings, the LoRA of both experts and their optimizer states) stays on the GPU, so switching experts only parks the resident blocks of one and brings in those of the other, instead of moving a whole 14B expert. The two-half checkpoint does not call the block's `forward`, so each half uploads its block by hand and the block is released when the gradient of its input arrives.
 
-The expert itself takes 8.1 GB on the GPU (7.2 GB of NF4 weights plus the LoRA and its optimizer). With *Both*, each expert swap adds about 4 s.
+Measured on the 8 GB profile (RTX 5080, 1.3 GB used by other apps, rank 16):
+
+| Sample | Peak VRAM | Time per step |
+| :--- | ---: | ---: |
+| Images 512², both experts | 5.2 GB | ~3.0 s (7.0 s and 10.4 GB before block swap) |
+| Clip 17 frames, 480p | 5.2 GB | ~22 s |
+| 17-frame video preview, turbo | 5.7 GB | — |
 
 ## Previews
 
@@ -76,7 +82,7 @@ UniPC with the repository's scheduler config, like `WanPipeline`: steps with `t 
 
 Video previews use at least **40 sampling steps** and at most **0.5 MP** (the same shape, about 832x480 or 608x800), whatever *Preview Steps* and *Preview Size* say; the page says so under *Preview Frames* and the console when it applies. Wan A14B works at 480p (0.4 MP), and a larger preview only takes longer (17 frames, 40 steps: ~5 min at 480p, ~10 min at 672x864) without showing more of the likeness or the motion. With the experts in NF4 and fewer steps, the first and last frames of the clip come out with 16 px blocks (one transformer patch). They come from the model, not from the LoRA or the trainer: the official `WanPipeline` with the same NF4 experts and the same initial noise gives the same blocks, also without LoRA; the VAE in FP32 does not change them. More steps or `flow_shift` 12 (the Wan repository's value) do not clear the first frame: it is the first latent frame that comes out wrong. So a video preview samples one more latent frame at the start and drops its 4 frames after decoding, as `--trim-first-frames` in mlx-video does with the 14B models quantized: the 17 frames you see are clean, at about 20% more time (560x864, 40 steps, both experts with LoRA: ~9.5 min, 10.8 GB peak). Images are clean with fewer steps. The LoRA is applied in ComfyUI on the normal (BF16 / FP8) model, so this does not reach the final result.
 
-Before decoding a video the expert goes to RAM: next to it the VAE does not fit, not even tiled. The prompt and the negative one run one after the other instead of in a batch of two (same result, half the activations). Measured on 16 GB with both experts and their LoRAs: 17 frames at 672x864, 12.0 GB peak.
+Before decoding a video the resident blocks of the expert go to RAM: next to them the VAE does not fit, not even tiled. The prompt and the negative one run one after the other instead of in a batch of two (same result, half the activations). Measured on 16 GB with both experts and their LoRAs: 17 frames at 672x864, 12.0 GB peak.
 
 ### Turbo previews (lightx2v)
 

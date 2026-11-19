@@ -104,7 +104,7 @@ The conversion needs diffusers with `BriaFibo2Transformer2DModel` (merged upstre
 | Requirement | Tested | Notes |
 | :--- | :--- | :--- |
 | **OS** | Windows 11 | Linux has the same `.sh` entry point |
-| **GPU** | NVIDIA, **10 GB VRAM minimum** ✅ verified (512²) | Developed on an RTX 5080 16 GB. 1024² needs 12 GB; **edit** at 1024² needs 16 GB, because the before image adds its tokens to the sequence |
+| **GPU** | NVIDIA, **8 GB VRAM minimum** with block swap ✅ verified (768²) | Developed on an RTX 5080 16 GB. With everything in VRAM (Auto profile) 1024² needs 12 GB and **edit** at 1024² 16 GB, because the before image adds its tokens to the sequence; smaller **VRAM Profiles** park the blocks that do not fit in RAM or on disk |
 | **RAM** | **16 GB minimum** (measured) | The NF4 conversion loads the 15.5 GB BF16 transformer in RAM: 32 GB recommended |
 | **Python** | 3.13 (inside `venv`) | Installed automatically if missing |
 

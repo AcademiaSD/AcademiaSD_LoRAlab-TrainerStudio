@@ -10,6 +10,7 @@ What was added, newest first. Each entry links to its commit.
 
 **2026-11-19**
 
+- **FLUX.1 Dev, Fibo 2.0, Ideogram 4, Ming-Image, Wan 2.2, LTX-2.3 and Boogu from 8 GB of VRAM** — the block swap and **VRAM Profile** of Klein 9B, with the same results. Wan 2.2 also trains 480p clips on 8 GB and switches experts more than twice as fast ([details](#flux2-klein-9b--image-and-edit-loras)) [`9e4b126`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/9e4b126) [`16b0258`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/16b0258) [`3e06b88`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/3e06b88) [`8d61581`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/8d61581) [`1a95d86`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/1a95d86) [`c48468b`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/c48468b) [`9478139`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/9478139)
 - **FLUX.2 Klein 9B from 8 GB of VRAM** — block swap and **VRAM Profile** as in LTX 2.5: edit LoRAs at 1024² peak at 5.8 GB instead of 11.5 GB, with the same results and a few % slower. If a step runs out of VRAM, it moves 2 more blocks to RAM and goes on. In Klein 9B and LTX 2.5 the profile now also counts the VRAM your other apps already use ([details](#flux2-klein-9b--image-and-edit-loras)) [`555de89`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/555de89) [`001624e`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/001624e) [`95c6879`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/95c6879)
 
 **2026-11-18**
@@ -242,26 +243,26 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 
 | Trainer | Trains | Minimum VRAM |
 | :--- | :--- | :--- |
-| **Fibo 2.0** *(experimental)* | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) on BRIA Fibo 2.0 Dev | 10 GB (512²) / 12 GB (1024²) |
+| **Fibo 2.0** *(experimental)* | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) on BRIA Fibo 2.0 Dev | **8 GB** with block swap (measured: image LoRAs at 768²) |
 | **Qwen-Image 2.1** | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) | 8 GB |
 | **Qwen-Image 2512 / Edit 2511** | Image LoRAs on Qwen-Image-2512 **and edit LoRAs** on Qwen-Image-Edit-2511 (before → after); 20B in NF4 with block swap | **~4 GB** (512², measured) / 8 GB (edit at 1024²) |
 | **Krea 2** | Image LoRAs (characters, objects, styles) for Krea 2 Raw and Turbo | 8 GB |
-| **Boogu Image Edit 0.1** | Edit LoRAs (before → after) and image LoRAs on Boogu-Image-0.1-Edit | **10 GB** (512², ~8 GB measured) |
+| **Boogu Image Edit 0.1** | Edit LoRAs (before → after) and image LoRAs on Boogu-Image-0.1-Edit | **8 GB** with block swap (measured: edit LoRAs at 512²) |
 | **Z-Image** | Image LoRAs (characters, objects, styles) for Z-Image and Z-Image-Turbo | 8 GB |
-| **Ming-Image** *(experimental)* | Image LoRAs for transparent designs and edit LoRAs (before → after) on inclusionAI's Ming-Image 0.1 Design | 7 GB (512²) / 13 GB (1024²) |
+| **Ming-Image** *(experimental)* | Image LoRAs for transparent designs and edit LoRAs (before → after) on inclusionAI's Ming-Image 0.1 Design | **8 GB** with block swap (measured at 1024²) |
 | **Anima** | Anime and illustration LoRAs (characters, styles) | **4 GB** (NF4) / 6 GB (BF16) |
 | **ERNIE-Image** | Image LoRAs (characters, objects, styles); supports rsLoRA, LoRA+ and LoKr | **Under 8 GB** (NF4; verified during training) |
-| **FLUX.1 Dev** | Image LoRAs (characters, objects, styles) | 12 GB (~10 GB measured at 512², ~11 GB at 768²) |
+| **FLUX.1 Dev** | Image LoRAs (characters, objects, styles) | **8 GB** with block swap (measured at 512²) |
 | **FLUX.2 Klein 9B** | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) | 8 GB |
 | **FLUX.3 Image Klein** | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) | 8 GB |
 | **MOSS-Image** | Image LoRAs (characters, objects, styles) on MOSS-Image Base or SFT **and edit LoRAs** (before → after, on top of armV5, armV4 or Moss-Image-Edit); supports rsLoRA, LoRA+ and LoKr | **6 GB** (512²) / 8 GB |
-| **Ideogram 4** | Image LoRAs (characters, objects, styles), with JSON captions | 12 GB (16 GB for previews with CFG) |
+| **Ideogram 4** | Image LoRAs (characters, objects, styles), with JSON captions | **8 GB** with block swap, previews with CFG included (measured at 1024²) |
 | **SDXL** | Image LoRAs for SDXL Base, Pony, Illustrious, NoobAI, Juggernaut, RealVis or your own SDXL checkpoint | **4 GB** (NF4) / 12 GB (BF16) |
 | **LTX 2.5** | Image LoRAs, video LoRAs from clips, **video + audio** LoRAs and **edit IC-LoRAs** (before → after), on LTX-2.5; block swap | **8 GB** |
-| **LTX-2.3** | Character and style LoRAs for LTX-2.3, trained from images (they usually load in LTX-2.5 too) | 12 GB |
+| **LTX-2.3** | Character and style LoRAs for LTX-2.3, trained from images (they usually load in LTX-2.5 too) | **8 GB** with block swap (measured at 768²) |
 | **MiniMax-H3** | Video LoRAs from images, clips and audio, plus training-free **RefMods** | 8 GB |
 | **MiniMax-H3 Image** *(experimental)* | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) on the 6-step distilled MiniMax-H3-Image, trained with a de-distillation adapter; 33B in NF4 with block swap | 8 GB (image LoRAs) / 10 GB (edit LoRAs), estimated from the VRAM plan with Resident Blocks on 0 |
-| **Wan 2.2 (T2V-A14B)** | Video and image LoRAs from images and clips, for the **high noise** and/or **low noise** expert | **12 GB** (images at 448×448 with image previews), **16 GB** (17-frame clips at 480p), measured |
+| **Wan 2.2 (T2V-A14B)** | Video and image LoRAs from images and clips, for the **high noise** and/or **low noise** expert | **8 GB** with block swap: images and 17-frame clips at 480p, both experts and video previews, measured |
 | **YuE2-3B** *(experimental / beta)* | Song LoRAs: the AR clones the singer's voice, the NAR learns lyrics and phrasing | ~8 GB (NF4, measured on NAR) |
 
 ---
@@ -277,7 +278,7 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 5. **Desde otro equipo:** el botón **🌐 Remote access** del lanzador abre el entrenador a tu red con usuario y contraseña. Con **⬆ Subir** (o arrastrando archivos o un `.zip` al Dataset Manager) mandas el dataset desde ese equipo, y con **⬇ Descargar LoRA** te bajas el resultado.
 6. **Previsualizaciones nítidas en ComfyUI:** algunos de estos modelos son lentos al generar, y conviene ver el resultado de forma anticipada, mientras se genera, para cancelar si no va bien. Para eso hace falta una buena previsualización. Mi recomendación: al usar tus LoRAs de Qwen-Image 2.1, Krea 2 o FLUX.2 / Klein 9B, pon el nodo **Model Preview Override** de [KJNodes](https://github.com/kijai/ComfyUI-KJNodes) con el TAE de AcademiaSD correspondiente ([Qwen-Image 2.1](https://huggingface.co/AcademiaSD/TAE-Qwen-Image-2.1) · [Krea 2](https://huggingface.co/AcademiaSD/TAE-Krea-2) · [FLUX.2](https://huggingface.co/AcademiaSD/TAE_Flux2_AcademiaSD)) en `ComfyUI/models/vae_approx/`. Detalles en la sección *Sharp previews in ComfyUI*.
 7. **Sin GPU potente:** entrena en la nube con **[RunPod](https://console.runpod.io/deploy?template=lfxvtg5rrb&ref=jbvdshm0)**. Es una plantilla ya preparada: eliges una GPU con CUDA 13, entras con el usuario `loralab` y la contraseña que aparece en *Logs → Container*, y al terminar paras y borras el pod. Detalles en la sección *RunPod*.
-8. **Requisitos:** Windows 10/11, GPU NVIDIA **RTX 20xx / GTX 16xx o posterior** con driver **580 o superior** (o AMD **RX 7000 / RX 9000** de 16 GB, experimental), 8 GB de VRAM (4 GB para Anima y SDXL en NF4, 12 GB para LTX-2.3, Ideogram 4, SDXL en BF16 y Wan 2.2 con imágenes a 448×448, 16 GB para Wan 2.2 con vídeo) y 16 GB de RAM (32 GB recomendados).
+8. **Requisitos:** Windows 10/11, GPU NVIDIA **RTX 20xx / GTX 16xx o posterior** con driver **580 o superior** (o AMD **RX 7000 / RX 9000** de 16 GB, experimental), 8 GB de VRAM (4 GB para Anima y SDXL en NF4, 12 GB para SDXL en BF16) y 16 GB de RAM (32 GB recomendados).
 
 **Cola de trabajos:** con un entrenamiento en marcha, *Iniciar / Reanudar* o *Iniciar Pre-Caché* en cualquier entrenador pregunta si añadirlo a la cola, con una copia de los ajustes de ese momento. Los trabajos se ejecutan uno tras otro en la GPU. El botón **Cola** del lanzador y de cada entrenador abre la página de la cola: lo que entrena ahora (progreso, tiempo restante y curva de loss) y lo que espera, que puedes reordenar arrastrando, pausar, continuar o quitar. Pausar guarda un checkpoint y deja el trabajo pausado en la cola; continuar sigue desde ese paso. Mientras un entrenador entrena, **➕ Nuevo entrenamiento en cola** abre un borrador del mismo entrenador en otro puerto para preparar el siguiente sin tocar el que entrena (ponle otro nombre de proyecto). Si un trabajo falla, se queda en la lista en rojo diciendo por qué (no se encuentra la pre-caché o el dataset, falta VRAM…); corrígelo y pulsa **↻** para reintentarlo. **✎** en un trabajo de la cola abre su entrenador con sus ajustes para cambiarlos: el botón de empezar pasa a ser **💾 Guardar cambios en la cola**. Mientras se hace la pre-caché, *Iniciar / Reanudar* sigue disponible y manda el entrenamiento a la cola. **⏻ Pausar todo y salir**, abajo en el lanzador, pausa el entrenamiento en curso guardando su checkpoint y cierra todo desde el navegador; al volver a abrir el lanzador la cola sigue sola donde estaba, empezando por ese entrenamiento. En RunPod y otras nubes el lanzador sigue abierto, con la cola pausada.
 
@@ -297,7 +298,7 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 
 **MOSS-Image:** nuevo entrenador de LoRAs de imagen para MOSS-Image de OpenMOSS (Apache 2.0), sobre **Base** (el recomendado para LoRAs) o **SFT**, con la misma pre-caché para los dos. Entrena a 512² con menos de 6 GB de VRAM. El text encoder (Qwen3.5-9B) se elige en el pre-caché: BF16 exacto repartido entre GPU y RAM (por defecto), INT8 o NF4. Las previews pueden usar el adaptador turbo de 4 pasos de darask0 (unos 4 s por imagen en vez de 43 s). Detalles en la sección *MOSS-Image*.
 
-**Wan 2.2:** nuevo entrenador de LoRAs de vídeo e imagen para **Wan 2.2 T2V-A14B** (Apache 2.0), con imágenes y clips en el mismo dataset. Wan 2.2 tiene dos expertos de 14B: el de **ruido alto** (composición y movimiento) y el de **ruido bajo** (detalle, caras, estilo). *Experto a entrenar* elige cuál aprende: ruido bajo (basta para personajes y estilos), ruido alto (movimientos nuevos) o los dos (por defecto), con un LoRA para cada uno (`_high_noise` / `_low_noise`); en ComfyUI cada uno va en su modelo. Los expertos se descargan ya en NF4 (~7,6 GB cada uno) de `AcademiaSD/Wan22-T2V-A14B-NF4-for-LoRA-Training`; si ese repo aún no tiene uno, se descarga del original shard a shard (57 GB en FP32), se convierte a NF4 en tu PC y se borra cada shard. Las previews pueden usar el LoRA turbo lightx2v (12 pasos, unos 2 minutos por clip de 1 s). Con 12 GB de VRAM: pre-caché a 448 x 448 y previews de 1 frame (10,4 GB de pico con rank 8 y los dos expertos). Los clips necesitan **ffmpeg** en el PATH. Detalles en la sección *Wan 2.2*.
+**Wan 2.2:** nuevo entrenador de LoRAs de vídeo e imagen para **Wan 2.2 T2V-A14B** (Apache 2.0), con imágenes y clips en el mismo dataset. Wan 2.2 tiene dos expertos de 14B: el de **ruido alto** (composición y movimiento) y el de **ruido bajo** (detalle, caras, estilo). *Experto a entrenar* elige cuál aprende: ruido bajo (basta para personajes y estilos), ruido alto (movimientos nuevos) o los dos (por defecto), con un LoRA para cada uno (`_high_noise` / `_low_noise`); en ComfyUI cada uno va en su modelo. Los expertos se descargan ya en NF4 (~7,6 GB cada uno) de `AcademiaSD/Wan22-T2V-A14B-NF4-for-LoRA-Training`; si ese repo aún no tiene uno, se descarga del original shard a shard (57 GB en FP32), se convierte a NF4 en tu PC y se borra cada shard. Las previews pueden usar el LoRA turbo lightx2v (12 pasos, unos 2 minutos por clip de 1 s). Desde 8 GB de VRAM con block swap: imágenes y clips de 17 fotogramas a 480p, con los dos expertos. Los clips necesitan **ffmpeg** en el PATH. Detalles en la sección *Wan 2.2*.
 
 **Parecido facial:** encima de las previews, **👤 Parecido facial → Activar...** pone en cada preview (y sobre su círculo en la gráfica del entrenamiento) el % de parecido de su cara con la del dataset. En las previews de un LoRA, un 45% o más es mucho parecido (verde) y un 30-45%, parecido parcial (naranja); las fotos reales de la misma persona suelen dar más. También en las previews de vídeo, con su primer fotograma. No se descarga por defecto: los modelos de InsightFace son solo para investigación no comercial, y antes de descargarlos hay que aceptar en una ventana que se usan bajo tu responsabilidad y sin fines comerciales. Funciona en la CPU, también en RunPod. Detalles en la sección *Face likeness in the previews*.
 
@@ -347,7 +348,7 @@ The automatic captioner adds, only the first time you use it: **nothing** for Kr
 | | Minimum | Recommended |
 | :--- | :--- | :--- |
 | **OS** | Windows 10 / 11, or 64-bit Linux ([docs/Linux.md](docs/Linux.md)) | Windows 11 |
-| **GPU** | NVIDIA **RTX 20xx / GTX 16xx or newer** (compute capability 7.5+) with **8 GB VRAM** (4 GB for Anima and SDXL in NF4, 10 GB for MiniMax-H3 Image edit LoRAs, 12 GB for LTX-2.3, Ideogram 4, SDXL in BF16 and Wan 2.2 with images at 448×448, 16 GB for Wan 2.2 with video) | 12–24 GB VRAM |
+| **GPU** | NVIDIA **RTX 20xx / GTX 16xx or newer** (compute capability 7.5+) with **8 GB VRAM** (4 GB for Anima and SDXL in NF4, 10 GB for MiniMax-H3 Image edit LoRAs, 12 GB for SDXL in BF16) | 12–24 GB VRAM |
 | **AMD GPU** *(experimental)* | Radeon **RX 7000 / RX 9000** or Ryzen AI Max (Strix Halo) with 16 GB of VRAM, using the AMD installer (see *Installation*). Confirmed on an RX 7800 XT 16 GB under Windows with MiniMax-H3 | — |
 | **Driver** | NVIDIA **580 or newer** (CUDA 13). AMD: a recent Adrenalin driver on Windows, or `amdgpu` on Linux | Latest |
 | **RAM** | 16 GB | 32 GB |
@@ -603,14 +604,16 @@ All times were measured on an RTX 5080 16 GB.
 - **To convert a LoRA trained before this change** (with the `transformer.*` keys), without retraining: `python tools/fibo2/7_conversor_lora_comfyui.py <lora.safetensors>`. It rewrites the keys in place and keeps the metadata.
 - **Technical notes:** [docs/README_Fibo2.md](docs/README_Fibo2.md).
 
-| Measured on an RTX 5080 16 GB (rank 8, LoRA Targets: all) | s/step | Peak VRAM |
+- **From 8 GB of VRAM:** **VRAM Profile**, **Resident Blocks**, **Block Swap Storage** and **RAM Limit**, as in [FLUX.2 Klein 9B](#flux2-klein-9b--image-and-edit-loras): the blocks that do not fit wait in RAM or on disk and come to the GPU just in time. Measured with the 8 GB profile (rank 16, image LoRAs at 768²): 3.5 s/step and 5.3 GB of peak VRAM, against 3.2 s/step with everything in VRAM; DoRA fits too (5.9 s/step).
+
+| Measured on an RTX 5080 16 GB, **Auto** profile (rank 8, LoRA Targets: all) | s/step | Peak VRAM |
 | :--- | :--- | :--- |
 | Image 512² | 2.0 | 8.7 GB |
 | Image 1024² | 6.2 | 11.2 GB |
 | Edit 512² | 3.1 | 9.9 GB |
 | Edit 1024² | 14.9 | 15.9 GB |
 
-The edit mode adds the tokens of the before image to the sequence, so at 1024² it needs 16 GB: train edit LoRAs at 512² (about 10 GB).
+The edit mode adds the tokens of the before image to the sequence, so edit LoRAs at 1024² need much more memory: on small cards train them at 512².
 
 ### Qwen-Image 2.1 — image and edit LoRAs
 
@@ -662,10 +665,12 @@ Copying the blocks from RAM costs little on a x16 slot (2.2 against 1.8 s/step a
 - The LoRA trains the attention layers and is exported as `diffusion_model.*`, which ComfyUI's native Boogu support loads with the standard LoRA loader. rsLoRA, LoRA+ and LoKr are available.
 - **Previews:** 30 steps / CFG 4 on the preview reference image; the negative is empty and does not see the image, as in ComfyUI.
 - Default settings: 500 steps, LR 0.0002, cosine, rank 16 / alpha 16.
+- **From 8 GB of VRAM:** **VRAM Profile**, **Resident Blocks**, **Block Swap Storage** and **RAM Limit**, as in [FLUX.2 Klein 9B](#flux2-klein-9b--image-and-edit-loras): the blocks that do not fit wait in RAM or on disk and come to the GPU just in time. DiffSynth loads the whole transformer first (~5 GB) and then parks what does not fit.
 
 | Measured on an RTX 5080 (rank 16, edit, 512²) | |
 | :--- | :--- |
-| Training | ~2.1 s/step, ~7.8 GB (8.3 GB with previews) |
+| Training, **Auto** profile | ~2.1 s/step, ~7.8 GB (8.3 GB with previews) |
+| Training, **8 GB** profile | ~2.8 s/step, 5.5 GB of peak VRAM, previews included |
 
 ### Krea 2 — image LoRAs for Krea 2 Raw and Turbo
 
@@ -714,7 +719,9 @@ Copying the blocks from RAM costs little on a x16 slot (2.2 against 1.8 s/step a
 - **Previews:** 12 steps / CFG 1.0, the official pipeline's `pos + cfg·(pos−neg)`, and up to **4 reference images** for the edit preview (`<image1>`, `<image2>`, …).
 - **Live settings:** the changes saved with *Save JSON* while the training runs are applied on the next step, and the console says what changed.
 
-Measured on an RTX 5080 16 GB (rank 8, batch 1): **1024² → 12 s/step and 13.2 GB of peak VRAM**; **512² → 2.4 s/step and 7 GB of peak VRAM** (a real run of 960 steps at 512² averaged 1.3 s/step). The pre-cache proposes 768² by default.
+- **From 8 GB of VRAM:** **VRAM Profile**, **Resident Blocks**, **Block Swap Storage** and **RAM Limit**, as in [FLUX.2 Klein 9B](#flux2-klein-9b--image-and-edit-loras): the blocks that do not fit wait in RAM or on disk and come to the GPU just in time. Measured with the 8 GB profile at 1024² (rank 16): 5.2 s/step and 5.8 GB of peak VRAM, previews included, against 4.9 s/step with everything in VRAM.
+
+Measured on an RTX 5080 16 GB with the **Auto** profile (rank 8, batch 1): **1024² → 12 s/step and 13.2 GB of peak VRAM**; **512² → 2.4 s/step and 7 GB of peak VRAM** (a real run of 960 steps at 512² averaged 1.3 s/step). The pre-cache proposes 768² by default.
 
 The official image-edit task works at 1024: 512 and 768 are out of its distribution, so train edit LoRAs at 1024 if your card allows it.
 
@@ -743,7 +750,8 @@ The official image-edit task works at 1024: 512 and 768 are out of its distribut
 - **Previews:** 28 steps / **Preview Guidance** 3.5 (the same input as ComfyUI's FluxGuidance node, with no negative pass). There is no turbo option.
 - **Captioner:** Qwen3-VL-8B NF4, shared with Z-Image and FLUX.2 Klein 9B.
 - **Defaults:** 512², 800 steps, rank / alpha 8 / 8, previews off (**Preview Every** 0).
-- **Speed and VRAM** (RTX 5080, with previews): ~1.2 s/step and ~10 GB at 512², ~2.6 s/step and ~11 GB at 768² · pre-cache ~5 GB.
+- **Speed and VRAM** (RTX 5080, with previews, **Auto** profile): ~1.2 s/step and ~10 GB at 512², ~2.6 s/step and ~11 GB at 768² · pre-cache ~5 GB.
+- **From 8 GB of VRAM:** **VRAM Profile**, **Resident Blocks**, **Block Swap Storage** and **RAM Limit**, as in [FLUX.2 Klein 9B](#flux2-klein-9b--image-and-edit-loras): the blocks that do not fit wait in RAM or on disk and come to the GPU just in time. Measured with the 8 GB profile at 512² (rank 16): 2.0 s/step and 5.0 GB of peak VRAM, against 1.55 s/step with everything in VRAM; DoRA fits too (3.8 s/step).
 - **LoRA Targets:** *Blocks* (attention + MLP of the 19 double and 38 single blocks, default) or *All*. The LoRA is exported in diffusers format, which ComfyUI maps to FLUX.1's layers.
 - `tools/flux1/5_conversor_Flux1_NF4.py` is optional: it builds your own NF4 cache from the gated official repo (accept the license on Hugging Face first).
 
@@ -811,9 +819,10 @@ The official image-edit task works at 1024: 512 and 768 are out of its distribut
 - Trains on the official **Ideogram 4 NF4** release (9.3B, diffusers). It is a single-stream transformer: text and image tokens share one sequence.
 - **Captioner:** Qwen3-VL-8B NF4 (the same model as Ideogram's text encoder) writes Ideogram's native JSON caption with a **bounding box for every subject, object and piece of text** — the format Ideogram 4.5 and FLUX.3 Image will also use. A second **OCR pass** reads every sign with its box (in one pass the model misses many texts in busy scenes). **JSON detailed** also boxes each part of every person or animal (face, nose, ears, hands, legs...), each garment and accessory, for edit LoRAs. Captions are saved in the official format (key order, `[y1, x1, y2, x2]` boxes in 0–1000, no repeated elements) with the trigger word at the start of the description. **Natural language** is also available.
 - **Use JSON for captions and preview prompts.** Ideogram 4 depends on its JSON format: in our tests a short plain prompt ("a woman with blonde hair in a green sweater reading in a library") gave odd crops or was blocked, while the same scene written as a JSON caption came out right. For the custom preview prompt, copy a caption from the dataset and edit it.
-- **Previews:** 28 steps / CFG 7 with the last 3 steps at CFG 3, as in the official pipeline. Ideogram's guidance uses a second, **unconditional transformer** (4.3 GB): it is loaded only for the previews and moved to the GPU while each one runs, so previews with CFG need ~15 GB at 1024². On 12 GB cards set **Preview CFG to 1**. **Preview Size** as in Z-Image.
+- **Previews:** 28 steps / CFG 7 with the last 3 steps at CFG 3, as in the official pipeline. Ideogram's guidance uses a second, **unconditional transformer** (4.3 GB): it is loaded only for the previews and moved to the GPU while each one runs, so with the **Auto** profile previews with CFG need ~15 GB at 1024². With a smaller **VRAM Profile** its blocks come to the GPU one by one too, and the training's blocks wait in RAM during the preview. **Preview Size** as in Z-Image.
 - **Built-in safety filter:** Ideogram 4 was trained to output a grey "Image blocked by safety filter" image for some prompts (for example a woman at the beach). It is the model itself, not the trainer, and its license forbids circumventing it: change the preview prompt if it happens.
 - **LoRA Targets:** *Blocks* (attention + MLP of the 34 blocks, default) or *All*. The LoRA is exported with ComfyUI's own layer names (q, k and v merged into `attention.qkv`), so ComfyUI loads it directly.
+- **From 8 GB of VRAM:** **VRAM Profile**, **Resident Blocks**, **Block Swap Storage** and **RAM Limit**, as in [FLUX.2 Klein 9B](#flux2-klein-9b--image-and-edit-loras): the blocks that do not fit wait in RAM or on disk and come to the GPU just in time. Measured with the 8 GB profile at 1024² (rank 16): 7.5 s/step and 6.4 GB of peak VRAM with a CFG preview, against 6.5 s/step with everything in VRAM.
 
 | Tested starting point | |
 | :--- | :--- |
@@ -823,7 +832,7 @@ The official image-edit task works at 1024: 512 and 768 are out of its distribut
 | Learning rate | 3e-4 |
 | Steps | 1,000 (14 images): the likeness shows from ~500 |
 | LoRA strength in ComfyUI | 1.0 |
-| Speed and VRAM | ~5.7 s/step (~1 h 35 min for 1,000 steps plus previews) and ~10 GB at 1024²; ~15 GB during previews with CFG |
+| Speed and VRAM, **Auto** profile | ~5.7 s/step (~1 h 35 min for 1,000 steps plus previews) and ~10 GB at 1024²; ~15 GB during previews with CFG |
 
 ### SDXL — Base, Pony, Illustrious, NoobAI, Juggernaut, RealVis or your own checkpoint
 
@@ -872,7 +881,8 @@ Each expert exports its own LoRA, named `_high_noise` / `_low_noise`. In ComfyUI
 - **Datasets:** images, video clips (`.mp4`, `.mov`, `.mkv`, `.webm`, `.avi`) or a mix, each with its `.txt`. Clips are read at **16 fps** from their start, up to *Max Frames* (4k+1: 17, 33, 49, 81…); a shorter clip uses all it has.
 - **Model:** the first run downloads each expert it needs already in NF4 (~7.6 GB) from `AcademiaSD/Wan22-T2V-A14B-NF4-for-LoRA-Training`. If that repo does not have it, it downloads the original **one shard at a time** (57 GB in FP32), converts it to NF4 and deletes the shard; if it stops, it continues from the next shard. The other expert is only downloaded when you train it.
 - **Captioner:** Qwen3-VL-8B NF4 (shared with the other trainers), with one prompt for images and another for clips. Of each clip it sees only the part that is trained.
-- **Activation Offload** (on by default) keeps the activations in RAM, and the checkpoint works in half blocks: that is what lets clips fit in 16 GB.
+- **Activation Offload** (on by default) keeps the activations in RAM, and the checkpoint works in half blocks.
+- **From 8 GB of VRAM:** **VRAM Profile**, **Resident Blocks**, **Block Swap Storage** and **RAM Limit**, as in [FLUX.2 Klein 9B](#flux2-klein-9b--image-and-edit-loras): the blocks that do not fit wait in RAM or on disk and come to the GPU just in time. Each expert has its own blocks in RAM or on disk: switching experts no longer moves a whole 14B model, so with both experts it is also faster than before (rank 16, images at 512², 8 GB profile: 3.0 s/step and 5.2 GB, against 7.0 s/step and 10.4 GB before).
 - **Previews:** an image (1 frame) or an `.mp4`, generated with both experts like ComfyUI when the other one is converted. *Turbo LoRA* (on by default) uses Kijai's lightx2v distill LoRA: 12 steps at CFG 1, high noise for the first 4 and low noise for the rest, about 2 minutes for a 17-frame clip instead of 9. Previews are off until you set *Preview Every*.
 
 | Default starting point | |
@@ -885,11 +895,10 @@ Each expert exports its own LoRA, named `_high_noise` / `_low_noise`. In ComfyUI
 
 | Measured on an RTX 5080 16 GB (low noise, rank 16, 480p) | s/step | Peak VRAM |
 | :--- | ---: | ---: |
-| Image | ~3 | 10.0 GB |
-| Clip, 17 frames | ~18.5 | 12.0 GB |
-| Clip, 33 frames | ~43 | 14.3 GB (does not fit next to a desktop on 16 GB; lower the resolution or use a bigger card) |
-
-**12 GB cards:** pre-cache at **448 x 448** and keep the previews at 1 frame. Measured with rank 8 / alpha 8 and both experts: 10.4 GB peak while training, a bit less for an image preview. A 17-frame video preview goes slightly over 12 GB. 480 x 480 is in between; 512 x 512 is just over 12 GB.
+| Image, before block swap | ~3 | 10.0 GB |
+| Clip, 17 frames, before block swap | ~18.5 | 12.0 GB |
+| Clip, 33 frames, before block swap | ~43 | 14.3 GB |
+| Clip, 17 frames, **8 GB** profile | ~22 | 5.2 GB (a 17-frame video preview: 5.7 GB) |
 
 On Windows a sample that does not fit in VRAM is left out with a message instead of letting the driver spill into system RAM, where a step takes 30 times longer. More in [docs/README_Wan22.md](docs/README_Wan22.md).
 
@@ -922,10 +931,11 @@ More in [docs/README_LTX25.md](docs/README_LTX25.md).
 - The 22B transformer and the Gemma 3 text encoder come pre-quantized in NF4; the BF16 / FP32 originals are never downloaded (see the table above).
 - **Captioner:** Qwen3-VL-8B NF4 (~5.5 GB VRAM, ~13 s per image).
 - Paged 8-bit AdamW and gradient checkpointing.
+- **From 8 GB of VRAM:** **VRAM Profile**, **Resident Blocks**, **Block Swap Storage** and **RAM Limit**, as in [FLUX.2 Klein 9B](#flux2-klein-9b--image-and-edit-loras): the blocks that do not fit wait in RAM or on disk and come to the GPU just in time. Measured with the 8 GB profile at 768² (rank 16): 5.0 s/step and 5.2 GB of peak VRAM, the same speed as with everything in VRAM (11.1 GB).
 
 | Default starting point | |
 | :--- | :--- |
-| Resolution | 768×768 (448 / 576 / 512 for less VRAM) |
+| Resolution | 768×768 |
 | Rank / Alpha | 32 / 32 |
 | Learning rate | 1e-4 |
 | Steps | 800 |
