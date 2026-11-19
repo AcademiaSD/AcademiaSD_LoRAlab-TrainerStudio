@@ -47,6 +47,7 @@ from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_
 import lora_options
 import training_metrics
 import preview_prompts
+import block_swap
 import wan22_model as wan
 
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
@@ -212,6 +213,9 @@ print(f"  {t('LoRA Targets'):<22}: {LORA_TARGETS}")
 print(f"  {'Batch / Grad Accum':<22}: {BATCH_SIZE}/{GRAD_ACCUM_STEPS}")
 print(f"  {'Timesteps / Shift':<22}: {TIMESTEP_SAMPLING} / {TRAIN_SHIFT}")
 print(f"  {t('Activation Offload'):<22}: {t('ON') if ACTIVATION_OFFLOAD else t('OFF')}")
+# Memoria (como FLUX.2 Klein 9B): VRAM Profile, Resident Blocks, Block Swap Storage y RAM Limit.
+SWAP_CFG = block_swap.settings(cfg)
+print(f"  {'VRAM Profile':<22}: {block_swap.describe(SWAP_CFG)}")
 print(f"  {t('Preview'):<22}: {t('Mode')}={PREVIEW_CAPTION_MODE} | Prompt='{PREVIEW_CUSTOM_PROMPT}'")
 print(f"  {t('Preview Every'):<22}: {PREVIEW_EVERY} | {t('Preview Steps')} {PREVIEW_STEPS} | CFG {PREVIEW_CFG_HIGH}/{PREVIEW_CFG} | "
       f"{t('Frames')} {PREVIEW_FRAMES} | {t('Preview Size')} {PREVIEW_SIZE or t('Training')}"
@@ -269,6 +273,12 @@ def sample_sigma(batch_size, expert, device):
 def pad_text(emb):
     """[L, 4096] -> [512, 4096] con ceros detrás, como hace WanPipeline."""
     return F.pad(emb, (0, 0, 0, wan.TEXT_LEN - emb.shape[0]))
+
+
+# Activaciones del paso (GiB) en función de los tokens del vídeo o la imagen, con el checkpoint en dos mitades.
+ACT_GB_BASE = 0.5
+ACT_GB_PER_TOKEN = 0.0004   # medido: ~3,5 GB con 7.950 tokens (17 fotogramas a 480p)
+DORA_EXTRA_GB = 1.6   # medido: el pico sube ~1,5 GB con DoRA
 
 
 def predict(model, latents, sigma, embeds):
@@ -391,9 +401,20 @@ class Experts:
 
     def __init__(self):
         self.models = {}
+        self.swaps = {}
         self.on_gpu = None
 
     def use(self, expert):
+        if self.swaps:
+            # Block swap: lo que no son bloques (y el LoRA) de los dos expertos vive en la GPU; de los bloques,
+            # los residentes del experto en uso. Los del otro esperan en la RAM o mapeados a su fichero.
+            if self.on_gpu != expert:
+                if self.on_gpu is not None:
+                    self.swaps[self.on_gpu].suspend()
+                self.swaps[expert].resume(keep=True)
+                block_swap.ACTIVE_SWAP = self.swaps[expert]
+                self.on_gpu = expert
+            return self.models[expert]
         if self.on_gpu != expert:
             if self.on_gpu is not None:
                 self.models[self.on_gpu].to("cpu")
@@ -404,6 +425,12 @@ class Experts:
 
     def release(self):
         """Deja la GPU sin experto (para el VAE de las previews de vídeo)."""
+        if self.swaps:
+            if self.on_gpu is not None:
+                self.swaps[self.on_gpu].suspend()
+                self.on_gpu = None
+                free_vram()
+            return
         if self.on_gpu is not None:
             self.models[self.on_gpu].to("cpu")
             self.on_gpu = None
@@ -749,15 +776,16 @@ def train_wan22():
     # compartida y cada paso tarda 30 veces más sin avisar (un clip de 33 fotogramas a 480p en 16 GB:
     # 544 s en vez de ~30). Con el asignador limitado a la VRAM libre, una muestra que no cabe da
     # OutOfMemoryError al momento y el bucle la aparta (ver más abajo).
-    free, total = torch.cuda.mem_get_info()
-    torch.cuda.set_per_process_memory_fraction(max(0.5, (free - 512 * 1024 ** 2) / total))
+    # Con VRAM Profile el tope es el de la tarjeta simulada, descontando lo que ya usan las demás aplicaciones.
+    card_gb, usable_gb = block_swap.apply_vram_profile(SWAP_CFG.vram_profile, log=print, t=t)
 
     experts = Experts()
     lora_models = {}
     for e in TRAINED:
         print(t("Loading {name}...", name=f"Wan 2.2 Transformer ({'high' if e == 'high' else 'low'} noise, NF4)"))
         t0 = time.time()
-        transformer = lora_options.to_compute_dtype(wan.load_expert(MODEL_ID, e), COMPUTE_DTYPE)
+        # Los bloques quedan mapeados a sus part_XX: el plan sube después los que caben.
+        transformer = lora_options.to_compute_dtype(wan.load_expert(MODEL_ID, e, "cuda", mmap_blocks=True), COMPUTE_DTYPE)
         print(t("Transformer loaded in {s:.1f}s.", s=time.time() - t0), flush=True)
 
         # Checkpoint reentrante en dos mitades por bloque (ver wan.split_block_checkpoint): guarda la entrada
@@ -810,6 +838,10 @@ def train_wan22():
                 r=LORA_RANK, lora_alpha=LORA_ALPHA, lora_dropout=0.0,
                 target_modules=target_modules, use_dora=USE_DORA, init_lora_weights=True, use_rslora=USE_RSLORA
             )
+            if USE_DORA:
+                # La magnitud inicial descomprime cada peso NF4: con los bloques aún en el fichero, se sube a la
+                # GPU solo para eso (y sin la copia profunda de PEFT).
+                block_swap.patch_peft_dora_init(len(target_modules))
             model = get_peft_model(transformer, lora_config)
             if USE_DORA:
                 lora_options.attach_dora_norms(model, wan.nf4_dir(MODEL_ID, e), DORA_NORMFIX, repo_id=wan.NF4_REPO_ID, root=MODEL_ID)
@@ -817,6 +849,8 @@ def train_wan22():
         for p in model.parameters():
             if p.requires_grad:
                 p.data = p.data.float()
+        # El LoRA de las capas con el peso aún en el fichero se creó en la CPU: a la GPU, sin subir los bloques.
+        block_swap.to_device_except_nf4(model, "cuda")
         model.print_trainable_parameters()
         lora_models[e] = model
         experts.models[e] = model
@@ -828,15 +862,14 @@ def train_wan22():
     if other and PREVIEW_EVERY > 0:
         if wan.expert_ready(MODEL_ID, other):
             print(t("Loading {name}...", name=f"Wan 2.2 Transformer ({other} noise, NF4, previews)"))
-            experts.models[other] = lora_options.to_compute_dtype(wan.load_expert(MODEL_ID, other), COMPUTE_DTYPE).eval()
+            experts.models[other] = lora_options.to_compute_dtype(
+                wan.load_expert(MODEL_ID, other, "cuda", mmap_blocks=True), COMPUTE_DTYPE).eval()
         else:
             preview_note = t("The {other} noise expert is not converted: previews use the trained expert for every step "
                              "(rougher than the final result in ComfyUI).", other=other)
             print("[PREVIEW] " + preview_note)
 
     current = TRAINED[0]
-    experts.use(current)
-    print(f"VRAM: {torch.cuda.memory_allocated()/1e9:.1f} GB", flush=True)
 
     scheduler = UniPCMultistepScheduler.from_pretrained(MODEL_ID, subfolder="scheduler")
 
@@ -960,6 +993,33 @@ def train_wan22():
         else:
             return all_preview_names[0]
 
+    # Block swap: cuántos bloques del experto en uso caben residentes. Lo que no son bloques de los expertos, su
+    # LoRA y el optimizador viven en la GPU; las activaciones dependen de los tokens del paso más grande.
+    max_tokens = max(v["lat"].shape[2] * v["lat"].shape[3] * v["lat"].shape[4] // 4 for v in cache_data.values())
+    act_gb = ACT_GB_BASE + max_tokens * ACT_GB_PER_TOKEN + (DORA_EXTRA_GB if USE_DORA else 0.0)
+    swap = block_swap.setup(list(experts.models[current].get_base_model().blocks
+                                 if hasattr(experts.models[current], "get_base_model") else experts.models[current].blocks),
+                            [lora_models[e] for e in TRAINED], card_gb, usable_gb, act_gb,
+                            resident_blocks=SWAP_CFG.resident_blocks, park=SWAP_CFG.park_mode,
+                            ram_limit_gb=SWAP_CFG.ram_limit_gb, ram_reserve_gb=SWAP_CFG.ram_reserve_gb,
+                            dora=USE_DORA, dora_margin_gb=0.0, log=print, t=t)
+    experts.swaps[current] = swap
+    for e, m in experts.models.items():
+        if e == current:
+            continue
+        # Los demás expertos con los mismos residentes, que esperan fuera de la GPU hasta que se usen.
+        swap.suspend()
+        base = m.get_base_model() if hasattr(m, "get_base_model") else m
+        experts.swaps[e] = block_swap.BlockSwap(list(base.blocks), swap.resident, pin=True, log=print,
+                                                park=SWAP_CFG.park_mode, ram_reserve_gb=SWAP_CFG.ram_reserve_gb,
+                                                ram_limit_gb=SWAP_CFG.ram_limit_gb)
+        experts.swaps[e].suspend()
+        swap.resume(keep=True)
+    experts.on_gpu = current
+    block_swap.ACTIVE_SWAP = swap
+    torch.cuda.synchronize()
+    print(f"VRAM: {torch.cuda.memory_allocated()/1e9:.1f} GB", flush=True)
+
     share = high_share()
     if len(TRAINED) == 2:
         print(t("Both experts: {p:.0f}% of the steps go to the high noise one (shift {s:g}).", p=share * 100, s=TRAIN_SHIFT))
@@ -1009,18 +1069,23 @@ def train_wan22():
             target = noise - latents
 
             try:
-                if ACTIVATION_OFFLOAD:
-                    with torch.autograd.graph.save_on_cpu(pin_memory=True):
-                        pred = predict(model, noisy, sigma, embeds)
-                else:
+                with (block_swap.SaveOnCpu() if ACTIVATION_OFFLOAD else block_swap._null()):
                     pred = predict(model, noisy, sigma, embeds)
 
                 loss = F.mse_loss(pred.float(), target) / GRAD_ACCUM_STEPS
                 scaler.scale(loss).backward()
             except torch.OutOfMemoryError:
+                pred = loss = None
+                # Con block swap, primero se aparcan 2 bloques más y el paso se repite (como MiniMax-H3).
+                if block_swap.oom_recover(experts.swaps.get(current), optimizer, step, log=print, t=t):
+                    # Los demás expertos, con los mismos residentes: si no, al usarlos volvería a faltar.
+                    for e_, sw_ in experts.swaps.items():
+                        if e_ != current:
+                            sw_.limit_resident(experts.swaps[current].resident)
+                    step -= 1
+                    continue
                 # El tamaño de este bucket no cabe: se aparta y el paso se repite con otro. Se tiran los
                 # gradientes que llevaba acumulados el grupo.
-                pred = loss = None
                 optimizer.zero_grad(set_to_none=True)
                 free_vram()
                 f_, h_, w_ = size
@@ -1111,6 +1176,7 @@ def train_wan22():
         return
 
     print("\n\n" + t("Training completed!"))
+    print(block_swap.peak_report(t))
     for e in TRAINED:
         final = os.path.join(OUTPUT_DIR, f"Wan22_{EXPERT_LABEL[e]}_FINAL_LoRA.safetensors")
         _export_lora(lora_models[e], final, min(last_step_executed, TOTAL_STEPS), e)

@@ -286,11 +286,14 @@ def ensure_expert(model_dir, expert):
     print("[OK] " + t("{label} expert ready: {path}", label=label, path=out_dir), flush=True)
 
 
-def load_expert(model_dir, expert):
+def load_expert(model_dir, expert, device="cpu", mmap_blocks=False):
     """
-    Construye el experto vacío desde su config.json y lo rellena con los part_XX en CPU.
+    Construye el experto vacío desde su config.json y lo rellena con los part_XX en `device`.
     No hace falta el modelo en BF16: cada Linear de los bloques se crea ya como Linear4bit.
+    mmap_blocks (block swap): el dato NF4 de los bloques queda mapeado a su part_XX, sin copia en RAM ni en
+    VRAM; BlockSwap decide qué sube.
     """
+    import block_swap
     folder = nf4_dir(model_dir, expert)
     with open(os.path.join(folder, "index.json"), "r", encoding="utf-8") as f:
         index = json.load(f)
@@ -315,12 +318,19 @@ def load_expert(model_dir, expert):
                 module = key.rpartition(".")[0]
                 if module in index["quantized"] and key.endswith(".weight"):
                     qs = {k.split(".qs.", 1)[1]: f.get_tensor(k) for k in keys if k.startswith(key + ".qs.")}
-                    weight = Params4bit(f.get_tensor(key), requires_grad=False, quant_type="nf4", quant_storage=torch.uint8)
-                    weight.quant_state = QuantState.from_dict(qs, device="cpu")
+                    path = os.path.join(folder, part)
+                    in_block = mmap_blocks and module.startswith("blocks.")
+                    data = block_swap.mmap_tensor(path, key) if in_block else f.get_tensor(key).to(device)
+                    weight = Params4bit(data, requires_grad=False, quant_type="nf4", quant_storage=torch.uint8)
+                    weight.quant_state = QuantState.from_dict(qs, device=device)
                     weight.bnb_quantized = True
-                    model.get_submodule(module).weight = weight
+                    layer = model.get_submodule(module)
+                    layer.weight = weight
+                    layer._nf4_file, layer._nf4_key = path, key
+                    if in_block:
+                        layer._mmap_home = data
                 else:
-                    others[key] = f.get_tensor(key)
+                    others[key] = f.get_tensor(key).to(device)
 
     model.load_state_dict(others, strict=False, assign=True)
     model.requires_grad_(False)
@@ -328,6 +338,8 @@ def load_expert(model_dir, expert):
     # temporales que en float32, que es lo que ya usa con MPS. Con 33 fotogramas eran ~1 GB por bloque.
     model.rope.freqs_cos = model.rope.freqs_cos.float()
     model.rope.freqs_sin = model.rope.freqs_sin.float()
+    if mmap_blocks:
+        block_swap.to_device_except_nf4(model, device)
 
     missing = [n for n, p in list(model.named_parameters()) + list(model.named_buffers()) if p.is_meta]
     if missing:
@@ -337,6 +349,9 @@ def load_expert(model_dir, expert):
 
 def _attn_half(block, hidden_states, temb, rotary_emb):
     # Primera mitad de WanTransformerBlock.forward (diffusers, temb [B, 6, D] de los 14B): autoatención.
+    # Con block swap: el bloque sube aquí; en el backward se suelta cuando su entrada recibe el gradiente.
+    from block_swap import BlockSwap
+    BlockSwap.enter(block, hidden_states)
     shift_msa, scale_msa, gate_msa, _, _, _ = (block.scale_shift_table + temb.float()).chunk(6, dim=1)
     norm_hidden_states = (block.norm1(hidden_states.float()) * (1 + scale_msa) + shift_msa).type_as(hidden_states)
     attn_output = block.attn1(norm_hidden_states, None, None, rotary_emb)
@@ -344,7 +359,15 @@ def _attn_half(block, hidden_states, temb, rotary_emb):
 
 
 def _ffn_half(block, hidden_states, encoder_hidden_states, temb):
-    # Segunda mitad: atención al texto y FFN.
+    # Segunda mitad: atención al texto y FFN. Sin grad (forward del checkpoint) el bloque se suelta al acabar.
+    from block_swap import BlockSwap
+    BlockSwap.enter(block)
+    out = _ffn_half_body(block, hidden_states, encoder_hidden_states, temb)
+    BlockSwap.leave(block)
+    return out
+
+
+def _ffn_half_body(block, hidden_states, encoder_hidden_states, temb):
     _, _, _, c_shift_msa, c_scale_msa, c_gate_msa = (block.scale_shift_table + temb.float()).chunk(6, dim=1)
     norm_hidden_states = block.norm2(hidden_states.float()).type_as(hidden_states)
     hidden_states = hidden_states + block.attn2(norm_hidden_states, encoder_hidden_states, None, None)

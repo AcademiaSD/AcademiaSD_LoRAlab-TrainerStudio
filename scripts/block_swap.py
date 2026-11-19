@@ -177,6 +177,7 @@ class BlockSwap:
             mods = [m for m in block.modules() if isinstance(m, Linear4bit)]
             block._swap_mods = mods
             block._swap_index = i
+            block._swap_owner = self
             block._swap_parked = i >= self.resident
             block._swap_hooked = False
             if not block._swap_parked:
@@ -212,7 +213,11 @@ class BlockSwap:
                 to_ram = (vm.total - avail) + nbytes <= self._ram_limit_gb * 1e9
         for m in mods:
             mm = getattr(m, "_mmap_home", None)
-            if not to_ram and mm is not None:
+            kept = getattr(m, "_kept_home", None)
+            if kept is not None:
+                home = kept                            # la copia en RAM de una suspensión anterior
+                to_ram = to_ram or mm is None or kept.data_ptr() != mm.data_ptr()
+            elif not to_ram and mm is not None:
                 home = mm                              # disco: mapeado, sin RAM propia
             else:
                 home = m.weight.data.to("cpu")
@@ -364,18 +369,50 @@ class BlockSwap:
         torch.cuda.synchronize()
         torch.cuda.empty_cache()
 
-    def resume(self):
+    def limit_resident(self, r):
+        """Con el bloque suspendido: al reanudarlo, solo quedan residentes los r primeros (los demás, aparcados)."""
+        if self._suspended is not None and r < self._suspended:
+            self._suspended = r or None
+            self.resident = r
+
+    def resume(self, keep=False):
+        """keep: la copia en RAM de los residentes se guarda para la próxima suspensión (sin volver a copiarlos)."""
         if self._suspended is None:
             return
         self.reset()
         for block in self.blocks[:self._suspended]:
             for m in block._swap_mods:
-                m.weight.data = m._swap_home.to("cuda")
+                m.weight.data = m._swap_home.to("cuda", non_blocking=True)
+                m._kept_home = m._swap_home if keep else None
                 m._swap_home = None
             block._swap_parked = False
             block._swap_on_gpu = True
         self._suspended = None
         torch.cuda.synchronize()
+
+    # -- uso manual (Wan 2.2 parte cada bloque en dos mitades y no llama a block.forward) -----------------------
+    @staticmethod
+    def enter(block, grad_input=None):
+        """
+        Antes de usar las capas de `block` fuera de su forward. Con grad, `grad_input` es la entrada que recibirá
+        el gradiente al terminar el backward del bloque: entonces se suelta.
+        """
+        sw = getattr(block, "_swap_owner", None)
+        if sw is None or not block._swap_parked:
+            return
+        sw._pre_hook(block, None)
+        if grad_input is not None and torch.is_grad_enabled() and grad_input.requires_grad:
+            def _done(g, b=block, s=sw):
+                s._release(b)
+            grad_input.register_hook(_done)
+
+    @staticmethod
+    def leave(block):
+        """Después de usar `block` sin grad (forward del checkpoint reentrante): se suelta ya."""
+        sw = getattr(block, "_swap_owner", None)
+        if sw is None or not block._swap_parked or torch.is_grad_enabled():
+            return
+        sw._release(block)
 
     def _pre_hook(self, block, args):
         if not block._swap_parked:
@@ -646,7 +683,8 @@ def setup(blocks, model, card_gb, usable_gb, act_gb, resident_blocks=-1, park="a
     torch.cuda.empty_cache()
     torch.cuda.synchronize()
     in_use = torch.cuda.memory_allocated() / gib
-    optim_gb = sum(p.numel() * 4 for p in model.parameters() if p.requires_grad) * 3 / gib
+    models = model if isinstance(model, (list, tuple)) else [model]
+    optim_gb = sum(p.numel() * 4 for m in models for p in m.parameters() if p.requires_grad) * 3 / gib
     free = usable_gb - headroom_gb - in_use - optim_gb - act_gb
     if resident_blocks is not None and int(resident_blocks) >= 0:
         resident = min(int(resident_blocks), len(blocks))
