@@ -823,7 +823,8 @@ def load_index_nf4(model_cls, cache_dir, block_prefixes, device="cuda", compute_
         layer.requires_grad_(False)
         set_module(name, layer)
 
-    model.load_state_dict(load_file(os.path.join(cache_dir, index["others"]), device=device), strict=False, assign=True)
+    model.load_state_dict(load_file(os.path.join(cache_dir, index.get("others", "others.safetensors")), device=device),
+                          strict=False, assign=True)
     for n, t in list(model.named_parameters()) + list(model.named_buffers()):
         if t.is_meta:
             raise RuntimeError("NF4 cache incomplete: " + n)

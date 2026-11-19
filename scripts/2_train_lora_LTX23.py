@@ -60,6 +60,7 @@ from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_
 import lora_options
 import training_metrics
 import preview_prompts
+import block_swap
 
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
 STEP_WORD = t("Step")
@@ -342,6 +343,9 @@ print("  Activation Offload          : {} (PyTorch save_on_cpu: {})".format(
     "OK" if _SAVE_ON_CPU_AVAILABLE else t("NOT AVAILABLE")
 ))
 print("  Loss Chunk Elements         : {}".format(LOSS_CHUNK_ELEMENTS))
+# Memoria (como FLUX.2 Klein 9B): VRAM Profile, Resident Blocks, Block Swap Storage y RAM Limit.
+SWAP_CFG = block_swap.settings(cfg)
+print("  VRAM Profile                : {}".format(block_swap.describe(SWAP_CFG)))
 print("=" * 80)
 
 
@@ -511,6 +515,12 @@ def filter_forward_kwargs(kwargs, forward_fn):
 # ===========================================================================
 # NF4 CACHE
 # ===========================================================================
+# Activaciones del paso (GiB) en función de los tokens, con checkpoint reentrante (como LTX 2.5).
+ACT_GB_BASE = 0.8
+ACT_GB_PER_TOKEN = 0.0007
+DORA_EXTRA_GB = 0.5   # medido: con DoRA el pico apenas sube (1,7 GB de activaciones con 1 bloque residente)
+
+
 def load_nf4_transformer(cache_dir):
     """
     Construye el Transformer vacío desde config.json y lo rellena con la caché NF4
@@ -2622,7 +2632,11 @@ def train_ltx23():
 
     t0 = time.time()
 
-    transformer = load_nf4_transformer(MODEL_ID)
+    card_gb, usable_gb = block_swap.apply_vram_profile(SWAP_CFG.vram_profile, log=print, t=t)
+    # Los bloques quedan mapeados a sus ficheros: block_swap.setup sube después los que caben.
+    transformer, nq, nu = block_swap.load_index_nf4(LTX2VideoTransformer3DModel, MODEL_ID, ("transformer_blocks.",),
+                                                    "cuda", COMPUTE_DTYPE)
+    print(t("NF4 layers rebuilt: {n}", n=nq))
     CURRENT_CONFIG = transformer.config
     CURRENT_TRANSFORMER = transformer
 
@@ -2632,7 +2646,6 @@ def train_ltx23():
         cast_frozen_to_bf16(transformer)
         lora_options.to_compute_dtype(transformer, COMPUTE_DTYPE)
 
-    transformer.to("cuda")
     free_vram()
 
     print("[NF4] " + t("Cache loaded in {s:.1f}s", s=time.time() - t0))
@@ -2640,12 +2653,10 @@ def train_ltx23():
 
     enable_memory_efficient_attention(transformer)
 
-    if hasattr(transformer, "enable_gradient_checkpointing"):
-        try:
-            transformer.enable_gradient_checkpointing()
-            print(t("Gradient checkpointing on."))
-        except Exception:
-            pass
+    # Checkpoint REENTRANTE: el no reentrante guarda el peso NF4 de cada capa y lo fijaría en VRAM (no habría
+    # block swap). El reentrante solo da gradiente si alguna entrada del bloque lo pide (ver el hook de proj_in).
+    block_swap.enable_reentrant_checkpointing(transformer)
+    print(t("Gradient checkpointing on."))
 
     target_modules = discover_lora_targets(transformer)
     print(t("Target LoRA layers: {n}", n=len(target_modules)))
@@ -2698,6 +2709,10 @@ def train_ltx23():
         use_dora=USE_DORA,
     )
 
+    if USE_DORA:
+        # La magnitud inicial descomprime cada peso NF4: con los bloques aún en el fichero, se sube a la GPU solo
+        # para eso (y sin la copia profunda de PEFT).
+        block_swap.patch_peft_dora_init(len(target_modules))
     model = get_peft_model(transformer, lora_config)
     if USE_DORA:
         lora_options.attach_dora_norms(model, MODEL_ID, DORA_NORMFIX, repo_id=HF_NF4_REPO_ID, root=MODEL_ID)
@@ -2711,12 +2726,10 @@ def train_ltx23():
             for adapter in module.lora_B.values():
                 adapter.to(dtype=ADAPTER_DTYPE)
 
-    enable_gradient_checkpointing_safe(transformer, model)
-
-    try:
-        model.to("cuda")
-    except Exception:
-        pass
+    # El LoRA de las capas con el peso aún en el fichero se creó en la CPU: a la GPU, sin subir los bloques.
+    block_swap.to_device_except_nf4(model, "cuda")
+    # PEFT puede reactivar el checkpoint por defecto (no reentrante): se fija de nuevo.
+    block_swap.enable_reentrant_checkpointing(transformer)
 
     model.print_trainable_parameters()
 
@@ -2742,6 +2755,18 @@ def train_ltx23():
                 pass
 
     trainable = [p for p in model.parameters() if p.requires_grad]
+
+    # Block swap: tokens del paso más grande (vídeo latente) y activaciones estimadas.
+    max_tokens = 0
+    for e_ in entries:
+        lat_ = e_.get("video")
+        if torch.is_tensor(lat_) and lat_.ndim >= 4:
+            max_tokens = max(max_tokens, int(lat_.shape[-3] * lat_.shape[-2] * lat_.shape[-1]))
+    act_gb = ACT_GB_BASE + max_tokens * ACT_GB_PER_TOKEN + (DORA_EXTRA_GB if USE_DORA else 0.0)
+    swap = block_swap.setup(list(transformer.transformer_blocks), model, card_gb, usable_gb, act_gb,
+                            resident_blocks=SWAP_CFG.resident_blocks, park=SWAP_CFG.park_mode,
+                            ram_limit_gb=SWAP_CFG.ram_limit_gb, ram_reserve_gb=SWAP_CFG.ram_reserve_gb,
+                            dora=USE_DORA, dora_margin_gb=0.0, log=print, t=t)
 
     optimizer = bnb.optim.PagedAdamW8bit(
         lora_options.loraplus_groups(model.named_parameters(), LORAPLUS_RATIO) if USE_LORAPLUS else trainable,
@@ -2988,19 +3013,16 @@ def train_ltx23():
 
             forward_kwargs = filter_forward_kwargs(forward_kwargs, transformer.forward)
 
-            if ACTIVATION_OFFLOAD_ACTIVE:
-                try:
-                    with _save_on_cpu_ctx(pin_memory=True):
-                        output = model(**forward_kwargs)
-                except Exception as e_offload:
-                    print()
-                    print("[VRAM] " + t("save_on_cpu failed at runtime ({error}).", error=e_offload))
-                    print("       " + t("Turning activation_offload off and retrying the step without offload."))
-
-                    ACTIVATION_OFFLOAD_ACTIVE = False
+            try:
+                with (block_swap.SaveOnCpu() if ACTIVATION_OFFLOAD_ACTIVE else block_swap._null()):
                     output = model(**forward_kwargs)
-            else:
-                output = model(**forward_kwargs)
+            except torch.OutOfMemoryError:
+                # Como MiniMax-H3: se aparcan 2 bloques más y el paso se repite (con otra muestra).
+                output = None
+                if not block_swap.oom_recover(swap, optimizer, step, log=print, t=t):
+                    raise
+                step -= 1
+                continue
 
             pred_video = None
             pred_audio = None
@@ -3146,15 +3168,17 @@ def train_ltx23():
                     ready = [random.choice(ready)]
                 for index, (key, text) in enumerate(ready or [(None, "")]):
                     PREVIEW_NOW.update(index=index, prompt=text)
-                    run_preview_diagnostic(
-                        model,
-                        scheduler,
-                        entries,
-                        special_texts,
-                        step,
-                        AUDIO_CHANNELS,
-                        custom_key=key,
-                    )
+                    # Con block swap, los bloques residentes se aparcan mientras dura la preview (deja sitio al VAE).
+                    with block_swap.preview_room():
+                        run_preview_diagnostic(
+                            model,
+                            scheduler,
+                            entries,
+                            special_texts,
+                            step,
+                            AUDIO_CHANNELS,
+                            custom_key=key,
+                        )
 
     except KeyboardInterrupt:
         save_checkpoint_now(last_step_executed)
@@ -3166,6 +3190,7 @@ def train_ltx23():
     print()
     print()
     print(t("Training completed!"))
+    print(block_swap.peak_report(t))
 
     # Pasos realmente entrenados: si se bajan los pasos en caliente por debajo del actual, se para aquí.
     save_checkpoint_now(last_step_executed)
