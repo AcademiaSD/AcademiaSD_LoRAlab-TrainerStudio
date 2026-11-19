@@ -36,6 +36,7 @@ from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_
 import lora_options
 import training_metrics
 import preview_prompts
+import block_swap
 
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
 STEP_WORD = t("Step")
@@ -88,6 +89,8 @@ DEFAULTS = {
     "preview_custom_prompt": "",
     "project_name": "",
     "trigger_word": "",
+    # Memoria (como FLUX.2 Klein 9B): VRAM Profile, Resident Blocks, Block Swap Storage y RAM Limit;
+    # sus valores por defecto están en block_swap.SETTINGS_DEFAULTS.
 }
 
 CONFIG_PATH = os.environ.get("LORALAB_TRAIN_CONFIG") or "settings/train_settings_ideogram4.json"
@@ -172,6 +175,8 @@ print(f"  {t('LR Scheduler'):<22}: {lora_options.lr_scheduler_label(LR_SCHEDULER
 print(f"  {'LoRA Rank/Alpha':<22}: {LORA_RANK}/{LORA_ALPHA}")
 print(f"  {'rsLoRA / LoRA+':<22}: {'on' if USE_RSLORA else 'off'} / {f'x{LORAPLUS_RATIO:g}' if USE_LORAPLUS else 'off'}")
 print(f"  {'DoRA':<22}: {('on, NormFix' if DORA_NORMFIX else 'on') if USE_DORA else 'off'}")
+SWAP_CFG = block_swap.settings(cfg)
+print(f"  {'VRAM Profile':<22}: {block_swap.describe(SWAP_CFG)}")
 print(f"  {'Precision':<22}: {PRECISION.upper()}{' (auto)' if PRECISION_CFG not in ('bf16', 'fp16') else ''}")
 print(f"  {'LoKr':<22}: {f'factor {LOKR_FACTOR}' if USE_LOKR else 'off'}")
 print(f"  {t('LoRA Targets'):<22}: {LORA_TARGETS}")
@@ -411,14 +416,42 @@ class VaeHolder:
 class UncondHolder:
     # Transformer incondicional (CFG asimétrico, ~4.3 GB en NF4). Solo lo usan las previews:
     # se lee del disco una vez, vive en RAM y sube a la GPU mientras dura cada preview.
+    # Con block swap no cabe entero: sus bloques se quedan aparcados (como los del entrenamiento) y suben uno a uno.
     model = None
+    swap = None
+
     @classmethod
     def get(cls):
+        train_swap = block_swap.ACTIVE_SWAP
         if cls.model is None:
             print("  " + t("Loading the unconditional transformer (preview CFG)..."))
-            cls.model = lora_options.to_compute_dtype(Ideogram4Transformer2DModel.from_pretrained(
-                MODEL_ID, subfolder="unconditional_transformer", torch_dtype=COMPUTE_DTYPE), COMPUTE_DTYPE).eval()
-        return cls.model.to("cuda")
+            if train_swap is not None and train_swap.swapping:
+                cls.model, _, _ = block_swap.load_bnb_nf4(
+                    Ideogram4Transformer2DModel, os.path.join(MODEL_ID, "unconditional_transformer"),
+                    BLOCK_PREFIXES, "cuda", COMPUTE_DTYPE)
+                lora_options.to_compute_dtype(cls.model, COMPUTE_DTYPE).eval()
+                cls.swap = block_swap.BlockSwap(list(cls.model.layers), 0, pin=True, log=print,
+                                                park=SWAP_CFG.park_mode, ram_reserve_gb=SWAP_CFG.ram_reserve_gb,
+                                                ram_limit_gb=SWAP_CFG.ram_limit_gb)
+                block_swap.ACTIVE_SWAP = train_swap   # el del entrenamiento sigue siendo el activo
+            else:
+                cls.model = lora_options.to_compute_dtype(Ideogram4Transformer2DModel.from_pretrained(
+                    MODEL_ID, subfolder="unconditional_transformer", torch_dtype=COMPUTE_DTYPE), COMPUTE_DTYPE).eval()
+        return cls.model if cls.swap is not None else cls.model.to("cuda")
+
+    @classmethod
+    def release(cls):
+        if cls.model is not None and cls.swap is None:
+            cls.model.to("cpu")
+
+
+BLOCK_PREFIXES = ("layers.",)
+
+
+# Activaciones del paso (GiB) en función de los tokens (texto + imagen), con checkpoint reentrante.
+ACT_GB_BASE = 0.6
+ACT_GB_PER_TOKEN = 0.00045
+DORA_EXTRA_GB = 2.4
 
 
 def denoise(model, scheduler, feat, gh, gw, generator):
@@ -450,7 +483,7 @@ def denoise(model, scheduler, feat, gh, gw, generator):
             latents = scheduler.step(-v, t, latents, return_dict=False)[0]
     finally:
         if uncond is not None:
-            uncond.to("cpu")
+            UncondHolder.release()
 
     return latents
 
@@ -464,7 +497,8 @@ def run_preview(model, scheduler, feat, size, step):
     print("  ↳ " + t("Preview seed used: {seed}", seed=actual_seed))
 
     try:
-        with torch.no_grad():
+        # Con block swap, los bloques residentes del entrenamiento se aparcan mientras dura la preview.
+        with torch.no_grad(), block_swap.preview_room():
             g = torch.Generator(device="cuda").manual_seed(actual_seed)
             latents = denoise(model, scheduler, feat, gh, gw, g)
             free_vram()
@@ -583,17 +617,19 @@ def train_ideogram4():
 
     ensure_model_downloaded(local_path=MODEL_ID, repo_id=HF_REPO_ID)
 
+    card_gb, usable_gb = block_swap.apply_vram_profile(SWAP_CFG.vram_profile, log=print, t=t)
+
     print(t("Loading {name}...", name="Ideogram 4 Transformer (NF4)"))
     t0 = time.time()
-    transformer = Ideogram4Transformer2DModel.from_pretrained(MODEL_ID, subfolder="transformer", torch_dtype=COMPUTE_DTYPE)
+    # Los bloques quedan mapeados a su .safetensors: block_swap.setup sube después los que caben.
+    transformer, nq, _ = block_swap.load_bnb_nf4(Ideogram4Transformer2DModel, os.path.join(MODEL_ID, "transformer"),
+                                                 BLOCK_PREFIXES, "cuda", COMPUTE_DTYPE)
+    print("[OK] " + t("NF4 layers: {a} | BF16 layers: {b}", a=nq, b="-"))
     lora_options.to_compute_dtype(transformer, COMPUTE_DTYPE)
-    transformer.to("cuda")
     free_vram()
     print(t("Transformer loaded in {s:.1f}s.", s=time.time() - t0) + f" VRAM: {torch.cuda.memory_allocated()/1e9:.1f} GB", flush=True)
 
     scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(MODEL_ID, subfolder="scheduler")
-
-    transformer.enable_gradient_checkpointing()
 
     # "blocks": atención + MLP de los 34 bloques. La modulación adaLN, el timestep y las capas de
     # entrada/salida (texto incluido) se dejan intactas: no hacen falta para una cara o un estilo.
@@ -669,6 +705,10 @@ def train_ideogram4():
             target_modules=target_modules, use_dora=USE_DORA, init_lora_weights=True, use_rslora=USE_RSLORA
         )
 
+        if USE_DORA:
+            # La magnitud inicial descomprime cada peso NF4: con los bloques aún en el fichero, se sube a la GPU
+            # solo para eso (y sin la copia profunda de PEFT).
+            block_swap.patch_peft_dora_init(len(target_modules))
         model = get_peft_model(transformer, lora_config)
         if USE_DORA:
             lora_options.attach_dora_norms(model, os.path.join(MODEL_ID, "transformer"), DORA_NORMFIX,
@@ -677,6 +717,12 @@ def train_ideogram4():
     for p in model.parameters():
         if p.requires_grad:
             p.data = p.data.float()
+    # El LoRA de las capas con el peso aún en el fichero se creó en la CPU: a la GPU, sin subir los bloques.
+    block_swap.to_device_except_nf4(model, "cuda")
+    # Checkpoint REENTRANTE: el no reentrante guarda el peso NF4 de cada capa y lo fijaría en VRAM (no habría
+    # block swap). El reentrante solo da gradiente si alguna entrada del bloque lo pide: la de input_proj.
+    block_swap.enable_reentrant_checkpointing(transformer)
+    block_swap.inputs_require_grad(transformer.input_proj)
     model.print_trainable_parameters()
 
     trainable = [p for p in model.parameters() if p.requires_grad]
@@ -784,6 +830,17 @@ def train_ideogram4():
         else:
             return all_preview_names[0]
 
+    # Tokens del paso más grande: texto + imagen.
+    max_tokens = max(v["lat"].shape[0] * v["lat"].shape[1] + v["emb"].shape[0] for v in cache_data.values())
+    act_gb = ACT_GB_BASE + max_tokens * ACT_GB_PER_TOKEN + (DORA_EXTRA_GB if USE_DORA else 0.0)
+    swap = block_swap.setup(list(transformer.layers), model, card_gb, usable_gb, act_gb,
+                            resident_blocks=SWAP_CFG.resident_blocks, park=SWAP_CFG.park_mode,
+                            ram_limit_gb=SWAP_CFG.ram_limit_gb, ram_reserve_gb=SWAP_CFG.ram_reserve_gb,
+                            dora=USE_DORA, log=print, t=t)
+    offload = SWAP_CFG.activation_offload and swap.swapping
+    if offload:
+        print("[VRAM] " + t("Activation offload ON: the inputs of each block wait in pinned RAM."))
+
     running_loss, t_step_avg, grad_norm = 0.0, 0.0, 0.0
     print("\n" + t("STARTING TRAINING! {n} {kind} in {b} buckets.", n=len(all_preview_names), kind=t("images"), b=len(buckets)))
 
@@ -824,18 +881,26 @@ def train_ideogram4():
             target = latents - noise
 
             hidden = torch.cat([noisy.new_zeros(len(names), n_text, 128), noisy], dim=1).to(COMPUTE_DTYPE)
-            pred = model(
-                hidden_states=hidden,
-                timestep=(1.0 - sigma).to(COMPUTE_DTYPE),
-                encoder_hidden_states=llm,
-                position_ids=position_ids,
-                segment_ids=segment_ids,
-                indicator=indicator,
-                return_dict=False,
-            )[0][:, n_text:]
-
-            loss = F.mse_loss(pred.float(), target.float()) / GRAD_ACCUM_STEPS
-            scaler.scale(loss).backward()
+            while True:
+                try:
+                    with (block_swap.SaveOnCpu() if offload else block_swap._null()):
+                        pred = model(
+                            hidden_states=hidden,
+                            timestep=(1.0 - sigma).to(COMPUTE_DTYPE),
+                            encoder_hidden_states=llm,
+                            position_ids=position_ids,
+                            segment_ids=segment_ids,
+                            indicator=indicator,
+                            return_dict=False,
+                        )[0][:, n_text:]
+                    loss = F.mse_loss(pred.float(), target.float()) / GRAD_ACCUM_STEPS
+                    scaler.scale(loss).backward()
+                    break
+                except torch.OutOfMemoryError:
+                    pred = loss = None
+                    if not block_swap.oom_recover(swap, optimizer, step, log=print, t=t):
+                        raise
+                    offload = SWAP_CFG.activation_offload
             step_loss = loss.item() * GRAD_ACCUM_STEPS
             running_loss += step_loss
 
@@ -903,6 +968,7 @@ def train_ideogram4():
         return
 
     print("\n\n" + t("Training completed!"))
+    print(block_swap.peak_report(t))
     final = os.path.join(OUTPUT_DIR, "Ideogram4_FINAL_LoRA.safetensors")
     _export_lora(model, final, min(last_step_executed, TOTAL_STEPS))
     print("✓ " + t("Final LoRA saved to: {path}", path=final))

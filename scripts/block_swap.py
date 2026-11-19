@@ -188,6 +188,7 @@ class BlockSwap:
         global ACTIVE_SWAP
         ACTIVE_SWAP = self
         self._resident_offloaded = False
+        self._suspended = None
         torch.cuda.empty_cache()
         log("[SWAP] resident blocks / bloques residentes: {}/{} | parked / aparcados: {} ({:.2f} GB: {:.2f} GB {}, "
             "{:.2f} GB disk / disco) | storage: {}".format(
@@ -239,9 +240,10 @@ class BlockSwap:
 
     def reset(self):
         """Tras un error a mitad de paso (OOM): suelta los bloques aparcados que se quedaron subidos."""
-        for block in self.blocks[self.resident:]:
-            block._swap_on_gpu = True
-            self._release(block)
+        for block in self.blocks:
+            if block._swap_parked:
+                block._swap_on_gpu = True
+                self._release(block)
         self.events.clear()
 
     def park_more(self, k=2):
@@ -346,7 +348,38 @@ class BlockSwap:
         self._resident_offloaded = False
 
     # -- hooks ---------------------------------------------------------------------------------------------------
+    def suspend(self):
+        """
+        Para una preview (va sin grad): aparca también los bloques residentes, así la preview tiene la VRAM que
+        ocupaban (Ideogram 4 sube además su transformer incondicional). resume() los vuelve a subir.
+        """
+        if self._suspended is not None or not self.resident:
+            return
+        self.reset()
+        counters = (self.ram_bytes, self.disk_bytes)
+        for block in self.blocks[:self.resident]:
+            self._park(block)
+        self.ram_bytes, self.disk_bytes = counters
+        self._suspended = self.resident
+        torch.cuda.synchronize()
+        torch.cuda.empty_cache()
+
+    def resume(self):
+        if self._suspended is None:
+            return
+        self.reset()
+        for block in self.blocks[:self._suspended]:
+            for m in block._swap_mods:
+                m.weight.data = m._swap_home.to("cuda")
+                m._swap_home = None
+            block._swap_parked = False
+            block._swap_on_gpu = True
+        self._suspended = None
+        torch.cuda.synchronize()
+
     def _pre_hook(self, block, args):
+        if not block._swap_parked:
+            return
         self._upload(block)
         self._wait(block)
         if self.prefetch:
@@ -358,12 +391,13 @@ class BlockSwap:
     def _post_hook(self, block, args, output):
         # Con checkpoint reentrante el forward va sin grad: se suelta ya. En el recompute (con grad) el peso hace
         # falta hasta el backward del bloque, y lo suelta _bwd_hook.
-        if not torch.is_grad_enabled():
+        if block._swap_parked and not torch.is_grad_enabled():
             self._release(block)
         return output
 
     def _bwd_hook(self, block, grad_input, grad_output):
-        self._release(block)
+        if block._swap_parked:
+            self._release(block)
         return None
 
 
@@ -756,3 +790,18 @@ def load_index_nf4(model_cls, cache_dir, block_prefixes, device="cuda", compute_
     to_device_except_nf4(model, device)
     model.requires_grad_(False)
     return model, len(index["quantized"]), len(index["unquantized"])
+
+
+class preview_room:
+    """Contexto para las previews: con block swap, todos los bloques del entrenamiento quedan aparcados mientras dura."""
+
+    def __enter__(self):
+        self.swap = ACTIVE_SWAP if (ACTIVE_SWAP is not None and ACTIVE_SWAP.swapping) else None
+        if self.swap is not None:
+            self.swap.suspend()
+        return self
+
+    def __exit__(self, *exc):
+        if self.swap is not None:
+            self.swap.resume()
+        return False

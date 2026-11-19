@@ -535,6 +535,40 @@
                         </div>
                     </div>
 
+                    <div class="form-row">
+                        <div class="form-group" title="VRAM Profile: the card size the trainer plans for. Auto uses this GPU. Choosing a smaller card SIMULATES it with a hard cap, so you know whether a run fits on 8, 10 or 12 GB. The blocks that do not fit stay in RAM and are brought to the GPU just in time (block swap): slower, but it fits. Applies when the training starts or resumes.">
+                            <label>VRAM Profile:</label>
+                            <select id="train_vram_profile" class="no-i18n">
+                                <option value="auto" selected>Auto</option>
+                                <option value="8">8 GB</option>
+                                <option value="10">10 GB</option>
+                                <option value="12">12 GB</option>
+                                <option value="16">16 GB</option>
+                                <option value="24">24 GB</option>
+                                <option value="32">32 GB</option>
+                            </select>
+                        </div>
+                        <div class="form-group" title="Resident Blocks: how many of the 34 transformer blocks (the 34 main blocks) stay in VRAM. -1 lets the plan choose from the profile and your cached resolution. Each block left in RAM saves ~0.12 GB of VRAM and costs some speed.">
+                            <label>Resident Blocks:</label>
+                            <input type="number" id="train_resident_blocks" value="-1" min="-1" max="34">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group" title="Where the blocks that do not fit in VRAM wait. RAM: a pinned copy in RAM, the fastest. Disk: they stay memory-mapped from the model files, with no RAM of their own (Windows frees those pages when it needs memory, so a machine short on RAM slows down instead of running out); no file is written. Auto (RAM + Disk): RAM up to the RAM Limit (and while the system keeps 8 GB free), the rest on disk. Applies when the training starts or resumes.">
+                            <label>Block Swap Storage:</label>
+                            <select id="train_park_mode" class="no-i18n">
+                                <option value="auto" selected>Auto (RAM + Disk)</option>
+                                <option value="ram">RAM</option>
+                                <option value="disk">Disk</option>
+                            </select>
+                        </div>
+                        <div class="form-group" title="Only used in Auto mode. Ceiling for the TOTAL system RAM, the figure you see in Task Manager, when the blocks are placed. 0 = no limit: every block goes to RAM while the system keeps 8 GB free. Above 0, the blocks that would push the machine past it stay on disk. The training itself adds a few GB later (activations, optimizer), so leave some margin. Applies when the training starts or resumes.">
+                            <label>RAM Limit (GB, 0 = off):</label>
+                            <input type="number" step="1" min="0" id="train_ram_limit_gb" value="0">
+                        </div>
+                    </div>
+
                     <div class="form-group">
                         <label>LoRA Targets:</label>
                         <select id="train_lora_targets"
@@ -955,6 +989,10 @@
                     if (t.use_dora !== undefined) document.getElementById('train_use_dora').checked = t.use_dora;
                     if (t.dora_normfix !== undefined) document.getElementById('train_dora_normfix').checked = t.dora_normfix;
                     if (t.precision) document.getElementById('train_precision').value = t.precision;
+                    if (t.vram_profile) document.getElementById('train_vram_profile').value = t.vram_profile;
+                    if (t.resident_blocks !== undefined) document.getElementById('train_resident_blocks').value = t.resident_blocks;
+                    if (t.park_mode) document.getElementById('train_park_mode').value = t.park_mode;
+                    if (t.ram_limit_gb !== undefined) document.getElementById('train_ram_limit_gb').value = t.ram_limit_gb;
                     if (t.lora_targets) document.getElementById('train_lora_targets').value = t.lora_targets;
                     if (t.batch_size) document.getElementById('train_batch_size').value = t.batch_size;
                     if (t.grad_accum_steps) document.getElementById('train_grad_accum').value = t.grad_accum_steps;
@@ -1023,6 +1061,10 @@
                     if (data.use_dora !== undefined) document.getElementById('train_use_dora').checked = data.use_dora;
                     if (data.dora_normfix !== undefined) document.getElementById('train_dora_normfix').checked = data.dora_normfix;
                     if (data.precision) document.getElementById('train_precision').value = data.precision;
+                    if (data.vram_profile) document.getElementById('train_vram_profile').value = data.vram_profile;
+                    if (data.resident_blocks !== undefined) document.getElementById('train_resident_blocks').value = data.resident_blocks;
+                    if (data.park_mode) document.getElementById('train_park_mode').value = data.park_mode;
+                    if (data.ram_limit_gb !== undefined) document.getElementById('train_ram_limit_gb').value = data.ram_limit_gb;
                     if (data.lora_targets !== undefined) document.getElementById('train_lora_targets').value = data.lora_targets;
                     if (data.batch_size !== undefined) document.getElementById('train_batch_size').value = data.batch_size;
                     if (data.grad_accum_steps !== undefined) document.getElementById('train_grad_accum').value = data.grad_accum_steps;
@@ -1164,7 +1206,9 @@
                     preview_aspect_ratio: 'train_preview_aspect', preview_size: 'train_preview_size' },
             resume: { trigger_word: 'trigger_word', lr_scheduler: 'train_lr_scheduler',
                       warmup_steps: 'train_warmup_steps', lr_cycles: 'train_lr_cycles', batch_size: 'train_batch_size',
-                      grad_accum_steps: 'train_grad_accum', precision: 'train_precision' },
+                      grad_accum_steps: 'train_grad_accum', precision: 'train_precision',
+                      vram_profile: 'train_vram_profile', resident_blocks: 'train_resident_blocks',
+                      park_mode: 'train_park_mode', ram_limit_gb: 'train_ram_limit_gb' },
             new: { lora_rank: 'train_lora_rank', lora_alpha: 'train_lora_alpha', use_rslora: 'train_use_rslora',
                    use_loraplus: 'train_use_loraplus', use_dora: 'train_use_dora', dora_normfix: 'train_dora_normfix', lora_targets: 'train_lora_targets' },
         };
@@ -1189,6 +1233,10 @@
                 use_dora: document.getElementById('train_use_dora').checked,
                 dora_normfix: document.getElementById('train_dora_normfix').checked,
                 precision: document.getElementById('train_precision').value,
+                vram_profile: document.getElementById('train_vram_profile').value,
+                resident_blocks: parseInt(document.getElementById('train_resident_blocks').value),
+                park_mode: document.getElementById('train_park_mode').value,
+                ram_limit_gb: parseFloat(document.getElementById('train_ram_limit_gb').value) || 0,
                 lora_targets: document.getElementById('train_lora_targets').value,
                 batch_size: parseInt(document.getElementById('train_batch_size').value),
                 grad_accum_steps: parseInt(document.getElementById('train_grad_accum').value),
