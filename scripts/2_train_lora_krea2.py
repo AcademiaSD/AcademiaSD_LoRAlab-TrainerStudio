@@ -1,4 +1,11 @@
 import os
+import platform
+
+# Con un VRAM Profile (tope de memoria), PyTorch devuelve la caché que no usa antes de llegar al 80 % del tope, en
+# vez de quedársela hasta el final: con muchos tamaños de bucket la reserva subía hasta el tope (como en LTX).
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "garbage_collection_threshold:0.8" if platform.system() == "Windows"
+                      else "expandable_segments:True,garbage_collection_threshold:0.8")
+
 import gc
 import math
 import time
