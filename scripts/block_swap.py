@@ -2,7 +2,7 @@
 """
 block_swap.py — block swap para entrenar modelos NF4 en poca VRAM / block swap to train NF4 models on little VRAM.
 
-Lo usan LTX 2.5, FLUX.2 Klein 9B, FLUX.1 Dev, Fibo 2.0, Ideogram 4, Ming-Image, Wan 2.2 y LTX-2.3. Al estilo de MiniMax-H3:
+Lo usan LTX 2.5, FLUX.2 Klein 9B, FLUX.1 Dev, Fibo 2.0, Ideogram 4, Ming-Image, Wan 2.2, LTX-2.3 y Krea 2. Al estilo de MiniMax-H3:
 * BlockSwap: los N primeros bloques quedan residentes en VRAM; el resto se aparca en RAM fijada o se queda
   mapeado a su .safetensors (disco), y se sube justo a tiempo, con prefetch del siguiente en un stream aparte.
     - Solo se mueve el dato NF4 empaquetado (uint8). quant_state, bias, normas y tablas se quedan en CUDA.

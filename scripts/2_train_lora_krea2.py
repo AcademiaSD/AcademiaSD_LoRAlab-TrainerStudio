@@ -27,6 +27,7 @@ from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_
 import lora_options
 import training_metrics
 import preview_prompts
+import block_swap
 
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
 STEP_WORD = t("Step")
@@ -80,6 +81,11 @@ DEFAULTS = {
     "filter_bypass_strength": 10.0,
     "project_name": "",
     "trigger_word": "",
+    # Memoria (como FLUX.1 y FLUX.2 Klein 9B): VRAM Profile, Resident Blocks, Block Swap Storage y RAM Limit;
+    # sus valores por defecto están en block_swap.SETTINGS_DEFAULTS.
+    # Libera la caché de CUDA tras cada actualización del optimizador (issue 89). Desactivado: con VRAM de sobra
+    # solo cuesta velocidad; ayuda si Windows desborda la VRAM a la memoria compartida (Sysmem Fallback).
+    "free_cuda_cache": False,
 }
 
 CONFIG_PATH = os.environ.get("LORALAB_TRAIN_CONFIG") or "settings/train_settings_krea2.json"
@@ -143,6 +149,7 @@ WEIGHT_DECAY      = cfg.get("weight_decay",      DEFAULTS["weight_decay"])
 MAX_GRAD_NORM     = cfg.get("max_grad_norm",     DEFAULTS["max_grad_norm"])
 SAVE_EVERY        = cfg.get("save_every",        DEFAULTS["save_every"])
 SEED              = cfg.get("seed",              DEFAULTS["seed"])
+FREE_CUDA_CACHE   = bool(cfg.get("free_cuda_cache", DEFAULTS["free_cuda_cache"]))
 TIMESTEP_SAMPLING = cfg.get("timestep_sampling", DEFAULTS["timestep_sampling"])
 PREVIEW_EVERY     = int(cfg.get("preview_every", DEFAULTS["preview_every"]) or 0)   # null (campo vacío) = 0, sin previews
 PREVIEW_STEPS     = cfg.get("preview_steps",     DEFAULTS["preview_steps"])
@@ -182,6 +189,9 @@ print(f"  {'rsLoRA / LoRA+':<22}: {'on' if USE_RSLORA else 'off'} / {f'x{LORAPLU
 print(f"  {'LoKr':<22}: {f'factor {LOKR_FACTOR}' if USE_LOKR else 'off'}")
 print(f"  {'DoRA':<22}: {('on, NormFix' if DORA_NORMFIX else 'on') if USE_DORA else 'off'}")
 print(f"  {'Precision':<22}: {PRECISION.upper()}{' (auto)' if PRECISION_CFG not in ('bf16', 'fp16') else ''}")
+SWAP_CFG = block_swap.settings(cfg)
+print(f"  {'VRAM Profile':<22}: {block_swap.describe(SWAP_CFG)}")
+print(f"  {'Free CUDA cache':<22}: {'on' if FREE_CUDA_CACHE else 'off'}")
 print(f"  {'Batch / Grad Accum':<22}: {BATCH_SIZE}/{GRAD_ACCUM_STEPS}")
 print(f"  {t('Preview'):<22}: {t('Mode')}={PREVIEW_CAPTION_MODE} | Prompt='{PREVIEW_CUSTOM_PROMPT}'")
 print(f"  {t('Preview Every'):<22}: {PREVIEW_EVERY} | {t('Preview Steps')} {PREVIEW_STEPS} | CFG {PREVIEW_CFG}")
@@ -1091,7 +1101,7 @@ def reload_live_settings():
     """
     global _live_mtime, TOTAL_STEPS, SAVE_EVERY, LR, MAX_GRAD_NORM
     global PREVIEW_EVERY, PREVIEW_STEPS, PREVIEW_CFG, PREVIEW_SIZE, PREVIEW_WIDTH, PREVIEW_HEIGHT, PREVIEW_CAPTION_MODE, PREVIEW_CUSTOM_PROMPT
-    global USE_TURBO, TURBO_LORA_STRENGTH, USE_FILTER_BYPASS, FILTER_BYPASS_STRENGTH, SEED
+    global USE_TURBO, TURBO_LORA_STRENGTH, USE_FILTER_BYPASS, FILTER_BYPASS_STRENGTH, SEED, FREE_CUDA_CACHE
 
     try:
         mtime = os.path.getmtime(CONFIG_PATH)
@@ -1139,8 +1149,34 @@ def reload_live_settings():
     USE_FILTER_BYPASS      = fresh("use_filter_bypass",      bool,  USE_FILTER_BYPASS)
     FILTER_BYPASS_STRENGTH = fresh("filter_bypass_strength", float, FILTER_BYPASS_STRENGTH)
     SEED                   = fresh("seed",                   int,   SEED)  # solo previews
+    FREE_CUDA_CACHE        = fresh("free_cuda_cache",        bool,  FREE_CUDA_CACHE)
     preview_prompts.live_update(PREVIEW_PROMPTS, raw, changes)
     return changes
+
+
+BLOCK_PREFIXES = ("transformer_blocks.",)
+
+# Activaciones del paso (GiB) en función de los tokens (imagen + texto), con checkpoint reentrante. Medido en una
+# RTX 5080 con rank 16 y todos los bloques en VRAM: ~1,5 GB a 1.170 tokens (640x416) y ~3,7 GB a 4.220 (1024²).
+# Con block swap el offload de activaciones gasta bastante menos; el plan deja además el margen de setup.
+ACT_GB_BASE = 0.6
+ACT_GB_PER_TOKEN = 0.00075
+DORA_EXTRA_GB = 1.0   # medido: +1,4 GB con todos los bloques en VRAM; con offload de activaciones, bastante menos
+
+
+def load_transformer_swap(model_dir):
+    """
+    Como load_nf4_transformer, pero el dato NF4 de los 28 bloques queda mapeado a su .safetensors (disco):
+    block_swap.setup sube después a la GPU los que caben y el resto se trae justo a tiempo en cada paso.
+    """
+    transformer, nq, nu = block_swap.load_index_nf4(Krea2Transformer2DModel, model_dir, BLOCK_PREFIXES,
+                                                    "cuda", COMPUTE_DTYPE)
+    if COMPUTE_DTYPE != torch.bfloat16:      # FP16: las tablas BF16 pasan a FP16 (las normas siguen en FP32)
+        for tensor in list(transformer.parameters()) + list(transformer.buffers()):
+            if tensor.dtype == torch.bfloat16:
+                tensor.data = tensor.data.to(COMPUTE_DTYPE)
+    print("[OK] " + t("NF4 layers: {a} | BF16 layers: {b}", a=nq, b=nu))
+    return transformer
 
 
 def train_krea2():
@@ -1161,13 +1197,13 @@ def train_krea2():
     # Instalaciones anteriores traían el Transformer en BF16 en vez de others.safetensors.
     ensure_file_downloaded(os.path.join(MODEL_ID, "others.safetensors"), HF_REPO_ID, "others.safetensors")
 
+    card_gb, usable_gb = block_swap.apply_vram_profile(SWAP_CFG.vram_profile, log=print, t=t)
+
     print(t("Loading {name}...", name="Krea-2 Transformer (NF4)"))
     t0 = time.time()
-    transformer = load_nf4_transformer(MODEL_ID)
+    transformer = load_transformer_swap(MODEL_ID)
     print("[NF4] " + t("Loaded in {s:.1f}s", s=time.time() - t0), flush=True)
-    transformer.to("cuda")
     free_vram()
-    print(t("Transformer pinned in VRAM. Usage: {gb:.1f} GB", gb=torch.cuda.memory_allocated()/1e9), flush=True)
 
     scheduler = FlowMatchEulerDiscreteScheduler.from_pretrained(MODEL_ID, subfolder="scheduler")
 
@@ -1177,8 +1213,6 @@ def train_krea2():
         scheduler.config.get("base_shift", 0.5),
         scheduler.config.get("max_shift", 1.15),
     )
-
-    transformer.enable_gradient_checkpointing()
 
     target_modules = [name for name, m in transformer.named_modules()
                       if isinstance(m, (torch.nn.Linear, bnb.nn.Linear4bit))]
@@ -1251,6 +1285,10 @@ def train_krea2():
             target_modules=target_modules, use_dora=USE_DORA, init_lora_weights=True, use_rslora=USE_RSLORA
         )
 
+        if USE_DORA:
+            # La magnitud inicial descomprime cada peso NF4: con los bloques aún en el fichero, se sube a la GPU
+            # solo para eso (y sin la copia profunda de PEFT).
+            block_swap.patch_peft_dora_init(len(target_modules))
         model = get_peft_model(transformer, lora_config)
         if USE_DORA:
             lora_options.attach_dora_norms(model, MODEL_ID, DORA_NORMFIX, repo_id=HF_REPO_ID, root=MODEL_ID)
@@ -1271,10 +1309,12 @@ def train_krea2():
 
     model.print_trainable_parameters()
 
-    def _make_inputs_require_grad(module, input, output):
-        output.requires_grad_(True)
-
-    transformer.img_in.register_forward_hook(_make_inputs_require_grad)
+    # El LoRA de las capas con el peso aún en el fichero se creó en la CPU: a la GPU, sin subir los bloques.
+    block_swap.to_device_except_nf4(model, "cuda")
+    # Checkpoint REENTRANTE: el no reentrante guarda el peso NF4 de cada capa y lo fijaría en VRAM (no habría
+    # block swap). El reentrante solo da gradiente si alguna entrada del bloque lo pide: la de img_in.
+    block_swap.enable_reentrant_checkpointing(transformer)
+    block_swap.inputs_require_grad(transformer.img_in)
 
     trainable = [p for p in model.parameters() if p.requires_grad]
     # LoRA+: lora_B en su propio grupo, con el LR multiplicado (lr_mult se aplica en cada paso).
@@ -1415,6 +1455,18 @@ def train_krea2():
         else:
             return all_preview_names[0]
 
+    # Tokens del paso más grande: imagen (latente / 4) + texto.
+    max_tokens = max(v[0].shape[2] * v[0].shape[3] // 4 + v[1].shape[1] for k, v in cache_data.items()
+                     if not cache_names.is_reserved(k))
+    act_gb = ACT_GB_BASE + max_tokens * ACT_GB_PER_TOKEN + (DORA_EXTRA_GB if USE_DORA else 0.0)
+    swap = block_swap.setup(list(transformer.transformer_blocks), model, card_gb, usable_gb, act_gb,
+                            resident_blocks=SWAP_CFG.resident_blocks, park=SWAP_CFG.park_mode,
+                            ram_limit_gb=SWAP_CFG.ram_limit_gb, ram_reserve_gb=SWAP_CFG.ram_reserve_gb,
+                            dora=USE_DORA, dora_margin_gb=0.0, log=print, t=t)   # medido: DoRA cabe sin margen extra
+    offload = SWAP_CFG.activation_offload and swap.swapping
+    if offload:
+        print("[VRAM] " + t("Activation offload ON: the inputs of each block wait in pinned RAM."))
+
     running_loss, t_step_avg, grad_norm = 0.0, 0.0, 0.0
     print("\n" + t("STARTING TRAINING! {n} {kind} in {b} buckets.", n=len(all_preview_names), kind=t("images"), b=len(buckets)))
 
@@ -1459,17 +1511,26 @@ def train_krea2():
 
             pos_ids = get_pos_ids(embeds.shape[1], size[0], size[1])
 
-            pred = model(
-                hidden_states=noisy,
-                encoder_hidden_states=embeds,
-                timestep=sigma,
-                position_ids=pos_ids,
-                encoder_attention_mask=masks,
-                return_dict=False,
-            )[0]
-
-            loss = F.mse_loss(pred.float(), target.float()) / GRAD_ACCUM_STEPS
-            scaler.scale(loss).backward()
+            while True:
+                try:
+                    with (block_swap.SaveOnCpu() if offload else block_swap._null()):
+                        pred = model(
+                            hidden_states=noisy,
+                            encoder_hidden_states=embeds,
+                            timestep=sigma,
+                            position_ids=pos_ids,
+                            encoder_attention_mask=masks,
+                            return_dict=False,
+                        )[0]
+                    loss = F.mse_loss(pred.float(), target.float()) / GRAD_ACCUM_STEPS
+                    scaler.scale(loss).backward()
+                    break
+                except torch.OutOfMemoryError:
+                    # Fragmentación o un bucket mayor: 2 bloques más a RAM y se repite el paso.
+                    pred = loss = None
+                    if not block_swap.oom_recover(swap, optimizer, step, log=print, t=t):
+                        raise
+                    offload = SWAP_CFG.activation_offload
             step_loss = loss.item() * GRAD_ACCUM_STEPS
             running_loss += step_loss
 
@@ -1482,6 +1543,10 @@ def train_krea2():
                 scaler.step(optimizer)      # sin FP16 es optimizer.step(); en FP16 se salta si hubo inf
                 scaler.update()
                 optimizer.zero_grad(set_to_none=True)
+                if FREE_CUDA_CACHE:
+                    # Devuelve al driver la VRAM que PyTorch tiene reservada sin usar (issue 89): en Windows evita
+                    # que el driver desborde a la memoria compartida, a cambio de volver a pedirla en el paso siguiente.
+                    torch.cuda.empty_cache()
 
             t_step     = time.time() - t0
             t_step_avg = t_step if t_step_avg == 0 else 0.1 * t_step + 0.9 * t_step_avg
@@ -1535,6 +1600,7 @@ def train_krea2():
         return
 
     print("\n\n" + t("Training completed!"))
+    print(block_swap.peak_report(t))
     final = os.path.join(OUTPUT_DIR, "Krea2_FINAL_LoRA.safetensors")
     _export_lora(model, final, min(last_step_executed, TOTAL_STEPS))
     print("✓ " + t("Final LoRA saved to: {path}", path=final))
