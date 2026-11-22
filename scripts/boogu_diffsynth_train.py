@@ -290,6 +290,7 @@ def boogu_image_parser():
     parser.add_argument("--lr_scheduler", choices=("constant", "constant_with_warmup", "cosine", "linear", "cosine_with_restarts"), default="cosine")
     parser.add_argument("--warmup_steps", type=int, default=0)
     parser.add_argument("--lr_cycles", type=int, default=1)
+    parser.add_argument("--lr_new_curve", type=lambda v: str(v).lower() in ("1", "true", "yes"), default=False)
     parser.add_argument("--preview_every", type=int, default=0)
     parser.add_argument("--preview_steps", type=int, default=30)
     parser.add_argument("--preview_cfg", type=float, default=4.0)
@@ -412,9 +413,14 @@ def launch_boogu_training_task(accelerator, dataset, model, model_logger, args):
     warmup = min(max(0, args.warmup_steps), max(1, args.total_steps))
     cycles = max(1, args.lr_cycles)
     # args.total_steps se lee en cada paso: puede cambiar en caliente.
+    # New LR curve on resume (issue 88): la curva se fija con curve.begin() al saber desde qué paso se reanuda.
+    from lora_options import LrCurve
+    curve = LrCurve(args.output_path, args.lr_new_curve)
     scheduler = torch.optim.lr_scheduler.LambdaLR(
         optimizer,
-        lr_lambda=lambda step: lr_factor(args.lr_scheduler, step, max(1, args.total_steps), warmup, 0.1, cycles),
+        lr_lambda=lambda step: (curve.factor(args.lr_scheduler, step, max(1, args.total_steps), warmup, 0.1, cycles,
+                                             args.learning_rate) if curve.start is not None
+                                else lr_factor(args.lr_scheduler, step, max(1, args.total_steps), warmup, 0.1, cycles)),
     )
     dataloader = DataLoader(
         dataset, batch_size=max(1, args.lora_batch_size), shuffle=True,
@@ -451,6 +457,11 @@ def launch_boogu_training_task(accelerator, dataset, model, model_logger, args):
             print(t("Resuming training from step {n}...", n=global_step), flush=True)
         else:
             print("[!] " + t("The saved checkpoint does not match these LoRA settings (rank, LoKr...); starting a new training."), flush=True)
+    curve.begin(global_step, args.learning_rate, args.total_steps)
+    if curve.start:
+        # El LR del paso en curso ya se calculó con la curva de siempre: se recalcula con la nueva.
+        for group, base in zip(optimizer.param_groups, scheduler.base_lrs):
+            group["lr"] = base * scheduler.lr_lambdas[0](global_step)
 
     def save_checkpoint(step):
         if not accelerator.is_main_process or step <= 0:

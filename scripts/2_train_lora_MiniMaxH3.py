@@ -7851,6 +7851,9 @@ def train_minimaxh3():
     except Exception:
         pass
 
+    # New LR curve on resume (issue 88): al reanudar, la curva puede empezar de nuevo en ese paso.
+    LR_CURVE = lora_options.LrCurve(OUTPUT_DIR, cfg_get("lr_new_curve", False))
+
     def lr_at(step):
         # El schedule va en ACTUALIZACIONES del optimizador, no en micro-pasos: con
         # grad_accum=4 el warmup de "100 pasos" eran en realidad 25 updates y el coseno
@@ -7859,7 +7862,7 @@ def train_minimaxh3():
         opt_step = step / float(max(1, GRAD_ACCUM_STEPS))
         opt_total = TOTAL_STEPS / float(max(1, GRAD_ACCUM_STEPS))
 
-        return LR * lora_options.lr_factor(LR_SCHEDULER, opt_step, opt_total, WARMUP_STEPS, MIN_LR_RATIO, LR_CYCLES)
+        return LR * LR_CURVE.factor(LR_SCHEDULER, opt_step, opt_total, WARMUP_STEPS, MIN_LR_RATIO, LR_CYCLES, LR)
 
     if SEED > 0:
         torch.manual_seed(SEED)

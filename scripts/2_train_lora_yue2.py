@@ -1082,9 +1082,12 @@ def train_stage(stage, base):
         optimizer = torch.optim.AdamW(trainable, lr=LR, weight_decay=WEIGHT_DECAY)
     scaler = lora_options.grad_scaler(COMPUTE_PRECISION)   # FP16: loss escalada; BF16: no hace nada
 
+    # New LR curve on resume (issue 88): al reanudar, la curva puede empezar de nuevo en ese paso.
+    LR_CURVE = lora_options.LrCurve(OUTPUT_DIR, cfg.get("lr_new_curve", False))
+
     def lr_at(idx):
-        return LR * lora_options.lr_factor(LR_SCHEDULER, idx, TOTAL_STEPS,
-                                           WARMUP_STEPS, MIN_LR_RATIO, LR_CYCLES)
+        return LR * LR_CURVE.factor(LR_SCHEDULER, idx, TOTAL_STEPS,
+                                    WARMUP_STEPS, MIN_LR_RATIO, LR_CYCLES, LR)
 
     start_step = 0
     if os.path.exists(step_file) and os.path.exists(resume_weights) and os.path.exists(opt_file):

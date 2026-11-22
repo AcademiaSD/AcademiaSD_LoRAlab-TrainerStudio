@@ -142,10 +142,17 @@ const PreviewPrompts = (function () {
         refresh();
     }
 
+    // Otros ajustes que van por el mismo camino (las páginas ya llaman a values() al guardar y a load() al cargar):
+    // un script los registra con PreviewPrompts.register({ values(), load(data) }). Lo usa lr_curve.js.
+    const extras = [];
+    function register(extra) { extras.push(extra); }
+    function extraValues() { return Object.assign({}, ...extras.map(e => e.values() || {})); }
+
     // Claves para el json (el prompt 1 ya lo envía cada página como preview_custom_prompt).
     function values() {
-        if (!ready) return {};
+        if (!ready) return extraValues();
         const out = {
+            ...extraValues(),
             preview_custom_count: count(),
             preview_custom_random: !!($('train_preview_custom_random') || {}).checked,
         };
@@ -158,6 +165,7 @@ const PreviewPrompts = (function () {
 
     // Pone los valores de unos ajustes cargados. Un json antiguo con Caption Mode = custom es 1 prompt.
     function load(data) {
+        if (data) extras.forEach(e => e.load(data));
         if (!ready || !data) return;
         const countEl = $('train_preview_custom_count');
         const mode = $('train_preview_caption_mode');
@@ -181,5 +189,5 @@ const PreviewPrompts = (function () {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', build);
     else build();
 
-    return { values, load, refresh };
+    return { values, load, refresh, register };
 })();

@@ -200,7 +200,9 @@ def main():
     else: optimizer=torch.optim.AdamW(trainable,lr=LR,weight_decay=WEIGHT_DECAY)
     scaler=lora_options.grad_scaler(PRECISION)   # FP16: loss escalada; BF16: no hace nada
     for p in trainable: p.data=p.data.float()
-    def lr_at(s): return LR*lora_options.lr_factor(LR_SCHEDULER,s,STEPS,WARMUP,MIN_LR_RATIO,LR_CYCLES)
+    # New LR curve on resume (issue 88): al reanudar, la curva puede empezar de nuevo en ese paso.
+    LR_CURVE=lora_options.LrCurve(OUT,cfg.get("lr_new_curve",False))
+    def lr_at(s): return LR*LR_CURVE.factor(LR_SCHEDULER,s,STEPS,WARMUP,MIN_LR_RATIO,LR_CYCLES,LR)
     scheduler=FlowMatchEulerDiscreteScheduler.from_pretrained(MODEL,subfolder="scheduler")
     cache={}; buckets=defaultdict(list)
     for f in os.listdir(CACHE):

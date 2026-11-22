@@ -244,6 +244,10 @@ def register(app, trainer_id, runtime, train_config, precache_config):
     def preview_prompts_js():
         return send_from_directory(str(GUI_DIR), "preview_prompts.js")
 
+    @app.route("/lr_curve.js")
+    def lr_curve_js():
+        return send_from_directory(str(GUI_DIR), "lr_curve.js")
+
     @app.route("/api/queue-gate", methods=["POST"])
     def queue_gate():
         script = (request.get_json(force=True) or {}).get("script")

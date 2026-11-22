@@ -983,6 +983,7 @@ def main():
         log("[RESUME] " + t("Resuming from step {0}", start_step))
     metrics = training_metrics.MetricsLog(OUTPUT_DIR, start_step)
     warmup = int(cfg("warmup_steps"))
+    LR_CURVE = lora_options.LrCurve(OUTPUT_DIR, bool(CFG.get("lr_new_curve", False)))
     name = "MiniMaxH3Image_LoRA"
 
     run_start = time.time()
@@ -1005,8 +1006,9 @@ def main():
             random.Random(step_seed(epoch, 3)).shuffle(order)
             entry = entries[order[pos]]
             t0 = time.time()
-            factor = lora_options.lr_factor(str(cfg("lr_scheduler")), step // GRAD_ACCUM, max(1, TOTAL_STEPS // GRAD_ACCUM),
-                                            warmup, float(cfg("min_lr_ratio")), int(cfg("lr_cycles")))
+            # New LR curve on resume (issue 88): al reanudar, la curva puede empezar de nuevo en ese paso.
+            factor = LR_CURVE.factor(str(cfg("lr_scheduler")), step // GRAD_ACCUM, max(1, TOTAL_STEPS // GRAD_ACCUM),
+                                     warmup, float(cfg("min_lr_ratio")), int(cfg("lr_cycles")), LR)
             for group in optimizer.param_groups:
                 group["lr"] = LR * factor * group.get("lr_mult", 1.0)
                 group["weight_decay"] = float(cfg("weight_decay"))

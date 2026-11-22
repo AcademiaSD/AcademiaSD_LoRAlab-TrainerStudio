@@ -3248,8 +3248,10 @@ def train_ltx25():
     # ------------------------------------------------------------
     # LR
     # ------------------------------------------------------------
+    # New LR curve on resume (issue 88): al reanudar, la curva puede empezar de nuevo en ese paso.
+    LR_CURVE = lora_options.LrCurve(OUTPUT_DIR, cfg.get("lr_new_curve", False))
     def lr_at(step):
-        return LR * lora_options.lr_factor(LR_SCHEDULER, step, TOTAL_STEPS, WARMUP_STEPS, MIN_LR_RATIO, LR_CYCLES)
+        return LR * LR_CURVE.factor(LR_SCHEDULER, step, TOTAL_STEPS, WARMUP_STEPS, MIN_LR_RATIO, LR_CYCLES, LR)
 
     # ------------------------------------------------------------
     # Seed

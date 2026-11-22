@@ -61,6 +61,63 @@ def lr_factor(scheduler, step, total, warmup, min_ratio, cycles):
     return min_ratio + (1 - min_ratio) * decay
 
 
+class LrCurve:
+    """
+    New LR curve on resume (issue 88). Al reanudar con la opción activa, la curva del scheduler vuelve a
+    empezar en el paso de reanudación: del LR actual al mínimo en el último paso, sin warmup (los pesos ya
+    están entrenados). Así se puede entrenar 1000 pasos de 4e-4 a 4e-5 y seguir otros 1000 de 1e-4 a 1e-5.
+    Sin la opción, o en un entrenamiento nuevo, la curva es la de siempre: del paso 0 al total.
+
+    El paso donde empezó la curva se guarda en <carpeta>/lr_curve.json con el LR y el total de ese momento:
+    reanudar otra vez con los mismos sigue en esa curva; con otro LR u otro total, empieza una nueva.
+    El paso de reanudación se toma de la primera llamada (el primer paso que se entrena).
+    """
+
+    def __init__(self, folder, enabled, log=print):
+        self.path = os.path.join(str(folder), "lr_curve.json")
+        self.enabled = bool(enabled)
+        self.log = log
+        self.start = None
+
+    def _resolve(self, first_step, lr, total):
+        resume = max(0, int(first_step) - 1)
+        if resume <= 0:
+            # Entrenamiento nuevo: una curva de otro entrenamiento en la misma carpeta ya no vale.
+            if os.path.exists(self.path):
+                os.remove(self.path)
+            return 0
+        if not self.enabled:
+            return 0
+        try:
+            with open(self.path, "r", encoding="utf-8") as f:
+                saved = json.load(f)
+        except (OSError, ValueError):
+            saved = None
+        if (saved and 0 < int(saved.get("start", 0)) <= resume and math.isclose(float(saved.get("lr", 0)), float(lr))
+                and int(saved.get("total", 0)) == int(total)):
+            self.log("[LR] New LR curve on resume: continuing the curve that started at step {} ({:.2e} -> end at {})."
+                     .format(saved["start"], float(lr), int(total)))
+            return int(saved["start"])
+        os.makedirs(os.path.dirname(self.path), exist_ok=True)
+        with open(self.path, "w", encoding="utf-8") as f:
+            json.dump({"start": resume, "lr": float(lr), "total": int(total)}, f)
+        self.log("[LR] New LR curve on resume: a new curve starts at step {}, from {:.2e} down to the minimum at "
+                 "step {} (no warmup).".format(resume, float(lr), int(total)))
+        return resume
+
+    def begin(self, resume_step, lr, total):
+        """Fija el paso de reanudación sin esperar a la primera llamada (LambdaLR pide el paso 0 al crearse)."""
+        self.start = self._resolve(int(resume_step) + 1, lr, total)
+
+    def factor(self, scheduler, step, total, warmup, min_ratio, cycles, lr):
+        """Como lr_factor, con la curva que empieza en el paso de reanudación si la opción está activa."""
+        if self.start is None:
+            self.start = self._resolve(step, lr, total)
+        if self.start <= 0:
+            return lr_factor(scheduler, step, total, warmup, min_ratio, cycles)
+        return lr_factor(scheduler, step - self.start, max(1, total - self.start), 0, min_ratio, cycles)
+
+
 def lr_scheduler_label(scheduler, warmup, cycles):
     """Texto del scheduler para el resumen de la consola: "cosine (warmup 100)"."""
     if scheduler == "constant":
