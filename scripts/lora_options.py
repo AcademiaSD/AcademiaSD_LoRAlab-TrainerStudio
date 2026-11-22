@@ -451,8 +451,14 @@ class LoKrModel(torch.nn.Module):
         for name in target_modules:
             parent_name, _, child = name.rpartition(".")
             parent = transformer.get_submodule(parent_name) if parent_name else transformer
-            # El dispositivo del primer parámetro: no todos los modelos tienen .device (el DiT de DiffSynth no).
-            setattr(parent, child, LoKrLinear(getattr(parent, child), rank, alpha, factor).to(next(transformer.parameters()).device))
+            # Solo los pesos del LoKr van al dispositivo del primer parámetro (no todos los modelos tienen .device: el
+            # DiT de DiffSynth no). La capa base se queda donde está: con block swap su peso NF4 sigue en RAM o en el
+            # fichero, y .to() lo subiría a la GPU (con todos los bloques no cabe en 8 GB).
+            layer = LoKrLinear(getattr(parent, child), rank, alpha, factor)
+            device = next(transformer.parameters()).device
+            for p in (layer.lokr_w1, layer.lokr_w2_a, layer.lokr_w2_b):
+                p.data = p.data.to(device)
+            setattr(parent, child, layer)
         self.config = {"r": rank, "lora_alpha": alpha, "lokr_factor": factor}
 
     def forward(self, *args, **kwargs):
