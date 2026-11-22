@@ -8,6 +8,11 @@
 
 What was added, newest first. Each entry links to its commit.
 
+**2026-11-22**
+
+- **Krea 2 from 8 GB of VRAM** — the block swap and **VRAM Profile** of FLUX.1 and Klein 9B. At 1024² Krea 2 peaked at 11.6 GB, enough to spill into Windows shared memory on a 12 GB card and slow down several times; with the 12 GB profile it peaks at 8.0 GB and with the 8 GB one at 4.2 GB, with the same results. A new **Free CUDA cache after each update** checkbox (off by default) hands the unused cached VRAM back to the driver after every optimizer update ([details](#krea-2--image-loras-for-krea-2-raw-and-turbo)) [`c37ae55`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/c37ae55) [`52ea284`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/52ea284) ([#89](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/issues/89))
+- **LoKr with block swap** keeps the blocks out of VRAM while the model is built: at small VRAM profiles LoKr uploaded the whole model first (Krea 2 ran out of VRAM, FLUX.1 planned 0 of 57 blocks in VRAM). Applies to FLUX.1, FLUX.2 Klein 9B, Fibo 2.0, Ideogram 4, Ming-Image, Wan 2.2 and Krea 2 [`31435cb`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/31435cb)
+
 **2026-11-19**
 
 - **FLUX.1 Dev, Fibo 2.0, Ideogram 4, Ming-Image, Wan 2.2, LTX-2.3 and Boogu from 8 GB of VRAM** — the block swap and **VRAM Profile** of Klein 9B, with the same results. Wan 2.2 also trains 480p clips on 8 GB and switches experts more than twice as fast ([details](#flux2-klein-9b--image-and-edit-loras)) [`9e4b126`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/9e4b126) [`16b0258`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/16b0258) [`3e06b88`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/3e06b88) [`8d61581`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/8d61581) [`1a95d86`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/1a95d86) [`c48468b`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/c48468b) [`9478139`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/9478139)
@@ -246,7 +251,7 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 | **Fibo 2.0** *(experimental)* | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) on BRIA Fibo 2.0 Dev | **8 GB** with block swap (5.3 GB peak with image LoRAs at 768², measured) |
 | **Qwen-Image 2.1** | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) | 8 GB |
 | **Qwen-Image 2512 / Edit 2511** | Image LoRAs on Qwen-Image-2512 **and edit LoRAs** on Qwen-Image-Edit-2511 (before → after); 20B in NF4 with block swap | **~4 GB** (512², measured) / 8 GB (edit at 1024²) |
-| **Krea 2** | Image LoRAs (characters, objects, styles) for Krea 2 Raw and Turbo | 8 GB |
+| **Krea 2** | Image LoRAs (characters, objects, styles) for Krea 2 Raw and Turbo | **8 GB** with block swap (5.2 GB peak with previews at ~640×416, 4.2 GB at 1024², measured) |
 | **Boogu Image Edit 0.1** | Edit LoRAs (before → after) and image LoRAs on Boogu-Image-0.1-Edit | **8 GB** with block swap (5.5 GB peak with edit LoRAs at 512², measured) |
 | **Z-Image** | Image LoRAs (characters, objects, styles) for Z-Image and Z-Image-Turbo | 8 GB |
 | **Ming-Image** *(experimental)* | Image LoRAs for transparent designs and edit LoRAs (before → after) on inclusionAI's Ming-Image 0.1 Design | **8 GB** with block swap (5.8 GB peak at 1024², measured) |
@@ -674,10 +679,22 @@ Copying the blocks from RAM costs little on a x16 slot (2.2 against 1.8 s/step a
 
 ### Krea 2 — image LoRAs for Krea 2 Raw and Turbo
 
-- The 12B transformer is built directly from its **NF4** weights (no BF16 copy is ever downloaded or loaded): ~7.5 GB of VRAM while training.
+- The 12B transformer is built directly from its **NF4** weights (no BF16 copy is ever downloaded or loaded).
+- **From 8 GB of VRAM** with block swap, as in FLUX.1 and Klein 9B: **VRAM Profile**, **Resident Blocks**, **Block Swap Storage** and **RAM Limit** under the LoRA options. Of its 28 blocks (5.7 GB), the ones that do not fit stay in RAM and come to the GPU just in time. Measured on an RTX 5080 (rank 16, same loss in every case):
+
+  | | Resident blocks | Peak VRAM | Speed |
+  | :--- | :--- | :--- | :--- |
+  | ~640×416, Auto (16 GB) | 28 / 28 | 9.4 GB | 1.57 s/step |
+  | ~640×416, 8 GB profile | 9 / 28 | 4.9 GB (5.2 GB with previews) | 2.10 s/step |
+  | 1024², Auto (16 GB) | 28 / 28 | 11.6 GB | 5.97 s/step |
+  | 1024², 12 GB profile | 18 / 28 | 8.0 GB | 6.8 s/step |
+  | 1024², 8 GB profile | 0 / 28 | 4.2 GB | 6.9 s/step |
+
+  DoRA, LoKr and the previews also train on the 8 GB profile.
+- **Free CUDA cache after each update** (off by default, can change while training): hands the VRAM that PyTorch keeps reserved but unused back to the driver after every optimizer update. Turn it on if a training on Windows suddenly gets several times slower and Task Manager shows the trainer using shared GPU memory: the driver is spilling VRAM into RAM. A smaller VRAM Profile is the other fix, and you can also stop the spill in the NVIDIA Control Panel (**CUDA - Sysmem Fallback Policy → Prefer No Sysmem Fallback**): then a run that does not fit stops with an out-of-memory error instead of slowing down.
 - **Captioner:** Qwen3-VL-4B, Krea 2's own text encoder (NF4, ~3.5 GB VRAM, no extra download).
 - **Previews** with the Krea 2 Turbo LoRA (8 steps). A new custom preview prompt is encoded on the CPU without stopping the training.
-- 8-bit AdamW, gradient checkpointing, Krea 2's own noise-shift schedule.
+- 8-bit AdamW, reentrant gradient checkpointing, Krea 2's own noise-shift schedule.
 - The exported LoRA works with Krea 2 Raw and Krea 2 Turbo and carries its alpha, so ComfyUI applies it at the same strength as the previews.
 
 | Starting point | |
