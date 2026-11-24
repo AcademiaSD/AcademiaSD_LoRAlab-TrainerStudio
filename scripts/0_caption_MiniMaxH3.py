@@ -485,12 +485,23 @@ def extract_frames(path, count, max_side, window=0):
 
     with tempfile.TemporaryDirectory() as tmp:
         patron = os.path.join(tmp, "f%04d.png")
-        subprocess.run(
-            [ffmpeg, "-v", "error", "-y", "-i", str(path),
-             "-vf", "select='{}'{}".format(expr, escala),
-             "-vsync", "0", "-frames:v", str(len(set(wanted))), patron],
-            capture_output=True, text=True, timeout=300, check=True,
-        )
+        # -fps_mode passthrough (ffmpeg 5.1+) en vez de -vsync 0, que ffmpeg 8 ya no acepta
+        # (sale con AVERROR_OPTION_NOT_FOUND). Si el ffmpeg es anterior a 5.1, se repite con -vsync.
+        # -fps_mode passthrough (ffmpeg 5.1+) instead of -vsync 0, which ffmpeg 8 no longer accepts
+        # (it exits with AVERROR_OPTION_NOT_FOUND). With an ffmpeg older than 5.1, retry with -vsync.
+        def run(sync):
+            return subprocess.run(
+                [ffmpeg, "-v", "error", "-y", "-i", str(path),
+                 "-vf", "select='{}'{}".format(expr, escala),
+                 *sync, "-frames:v", str(len(set(wanted))), patron],
+                capture_output=True, text=True, timeout=300,
+            )
+        res = run(["-fps_mode", "passthrough"])
+        if res.returncode != 0:
+            res = run(["-vsync", "0"])
+        if res.returncode != 0:
+            raise RuntimeError("ffmpeg: " + ((res.stderr or "").strip().splitlines() or
+                                             ["exit code {}".format(res.returncode)])[-1])
         salida = sorted(os.listdir(tmp))
         if not salida:
             raise RuntimeError(L("ffmpeg extracted no frames",
