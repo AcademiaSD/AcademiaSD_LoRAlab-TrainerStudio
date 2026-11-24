@@ -420,8 +420,57 @@ def preprocess_qwen_image21():
         # El tamaño de la preview es el de <image1>, reducido si hay más referencias.
         buckets["_custom"] = preview_buckets[0]
 
-    # ── FASE 1: TEXT ENCODER (Qwen3-VL-8B) ──────────────────────────────────
-    # El text encoder y el VAE nunca coinciden en VRAM.
+    # Prompts propios de las previews (Custom Prompts, hasta 4), cada uno con su nombre de muestra
+    # (_custom, _custom2...). En edición van con las imágenes de referencia: todas como <image1>,
+    # <image2>... de una misma edición, o una por prompt (One image per prompt).
+    custom_prompts = preview_prompts.wanted(cfg, TRIGGER_WORD)
+    one_per_prompt = preview_prompts.per_prompt(cfg)
+    plan = preview_prompts.ref_plan(preview_sources, [s for s, _ in custom_prompts], one_per_prompt) if edit else {}
+    plan_buckets = {}
+    for slot, refs in plan.items():
+        area = preview_image_area(len(refs))
+        for src, ctrl in refs:
+            with Image.open(src) as im:
+                plan_buckets[ctrl] = (src, bucket_size(*im.size, area=area))
+    # Latentes de referencia que ya no corresponden a las imágenes actuales.
+    expected_custom_ctrls = {c for c in plan_buckets if c.startswith("_custom_ctrl")}
+    preview_prompts.remove_slot_refs(CACHE_DIR, {c[:-len("_ctrl.pt")] for c in plan_buckets})
+
+    # ── FASE 1: VAE (Qwen-Image 2.1, 64 canales, RGBA) ──────────────────────
+    # El VAE va antes que el text encoder y los dos nunca coinciden en VRAM. En AMD Strix Halo
+    # (gfx1151, ROCm 7.13 en Windows) subir el VAE a la GPU después del text encoder INT8 en el
+    # mismo proceso rompe el driver (0xC0000005 en amdhip64_7.dll, issue 90); en un proceso limpio no.
+    # The VAE runs before the text encoder, and they never share VRAM. On AMD Strix Halo (gfx1151,
+    # ROCm 7.13 on Windows) moving the VAE to the GPU after the INT8 text encoder in the same process
+    # crashes the driver (0xC0000005 in amdhip64_7.dll, issue 90); in a clean process it works.
+    #
+    # Un latente ya cacheado con el tamaño de bucket actual y más nuevo que su imagen no se
+    # vuelve a codificar: relanzar el pre-caché para cambiar el prompt manual o los captions
+    # solo cuesta la fase de texto. En edición, el antes se guarda como <nombre>_ctrl.pt.
+    # Las imágenes de referencia de la preview de edición se codifican siempre: pueden ser otros ficheros más antiguos.
+    jobs = [(target, f"{name}_latent.pt", buckets[name]) for name, target, _ in samples]
+    jobs += [(control, f"{name}_ctrl.pt", buckets[name]) for name, _, control in samples if control]
+    jobs += [(src, ctrl, bucket) for ctrl, (src, bucket) in plan_buckets.items()]
+
+    pending = []
+    for src, out, (bw, bh) in jobs:
+        lat_path = os.path.join(CACHE_DIR, out)
+        if (not out.startswith("_custom") and os.path.exists(lat_path) and os.path.getmtime(lat_path) > os.path.getmtime(src)
+                and tuple(torch.load(lat_path, weights_only=True).shape[-2:]) == (bh // 16, bw // 16)):
+            continue
+        pending.append((src, out, (bw, bh)))
+
+    if len(pending) < len(jobs):
+        print("\n" + t("{n} latents already cached, skipped.", n=len(jobs) - len(pending)))
+    if pending:
+        print("\n" + t("Loading {name}...", name="VAE (Qwen-Image 2.1)"))
+        vae = AutoencoderKLQwenImage21.from_pretrained(MODEL_ID, subfolder="vae", dtype=torch.bfloat16).to("cuda")
+        encode_latents(vae, pending, "cuda")
+        del vae
+        free_vram()
+    remove_stale_custom_ctrls(expected_custom_ctrls)
+
+    # ── FASE 2: TEXT ENCODER (Qwen3-VL-8B) ──────────────────────────────────
     print("\n" + t("Loading {name}...", name=f"Text Encoder (Qwen3-VL-8B {TEXT_ENCODER})"))
     pipe = DiffusionPipeline.from_pretrained(
         MODEL_ID,
@@ -434,18 +483,6 @@ def preprocess_qwen_image21():
     with torch.inference_mode():
         encode_and_save(pipe, "", "_neg")
 
-        # Prompts propios de las previews (Custom Prompts, hasta 4), cada uno con su nombre de muestra
-        # (_custom, _custom2...). En edición van con las imágenes de referencia: todas como <image1>,
-        # <image2>... de una misma edición, o una por prompt (One image per prompt).
-        custom_prompts = preview_prompts.wanted(cfg, TRIGGER_WORD)
-        one_per_prompt = preview_prompts.per_prompt(cfg)
-        plan = preview_prompts.ref_plan(preview_sources, [s for s, _ in custom_prompts], one_per_prompt) if edit else {}
-        plan_buckets = {}
-        for slot, refs in plan.items():
-            area = preview_image_area(len(refs))
-            for src, ctrl in refs:
-                with Image.open(src) as im:
-                    plan_buckets[ctrl] = (src, bucket_size(*im.size, area=area))
         for slot, c_prompt in custom_prompts:
             preview_images = []
             for src, ctrl in plan.get(slot, []):
@@ -466,9 +503,6 @@ def preprocess_qwen_image21():
             preview_prompts.save_images_text(CACHE_DIR, PREVIEW_EDIT_IMAGES, one_per_prompt)
         elif os.path.exists(os.path.join(CACHE_DIR, "_custom_image.txt")):
             os.remove(os.path.join(CACHE_DIR, "_custom_image.txt"))
-        # Latentes de referencia que ya no corresponden a las imágenes actuales.
-        expected_custom_ctrls = {c for c in plan_buckets if c.startswith("_custom_ctrl")}
-        preview_prompts.remove_slot_refs(CACHE_DIR, {c[:-len("_ctrl.pt")] for c in plan_buckets})
 
         for idx, (name, target, control) in enumerate(samples, 1):
             images = [fit(Image.open(control).convert("RGBA"), *buckets[name])] if control else None
@@ -476,37 +510,6 @@ def preprocess_qwen_image21():
             print(f"[{idx}/{len(samples)}] {t('Text')}: {name} | {tokens} tokens")
 
     del pipe
-    free_vram()
-
-    # ── FASE 2: VAE (Qwen-Image 2.1, 64 canales, RGBA) ──────────────────────
-    # Un latente ya cacheado con el tamaño de bucket actual y más nuevo que su imagen no se
-    # vuelve a codificar: relanzar el pre-caché para cambiar el prompt manual o los captions
-    # solo cuesta la fase de texto. En edición, el antes se guarda como <nombre>_ctrl.pt.
-    # Las imágenes de referencia de la preview de edición se codifican siempre: pueden ser otros ficheros más antiguos.
-    jobs = [(target, f"{name}_latent.pt", buckets[name]) for name, target, _ in samples]
-    jobs += [(control, f"{name}_ctrl.pt", buckets[name]) for name, _, control in samples if control]
-    jobs += [(src, ctrl, bucket) for ctrl, (src, bucket) in plan_buckets.items()]
-
-    pending = []
-    for src, out, (bw, bh) in jobs:
-        lat_path = os.path.join(CACHE_DIR, out)
-        if (not out.startswith("_custom") and os.path.exists(lat_path) and os.path.getmtime(lat_path) > os.path.getmtime(src)
-                and tuple(torch.load(lat_path, weights_only=True).shape[-2:]) == (bh // 16, bw // 16)):
-            continue
-        pending.append((src, out, (bw, bh)))
-
-    if len(pending) < len(jobs):
-        print("\n" + t("{n} latents already cached, skipped.", n=len(jobs) - len(pending)))
-    if not pending:
-        remove_stale_custom_ctrls(expected_custom_ctrls)
-        print("\n✓ " + t("Pre-caching finished!"))
-        return
-
-    print("\n" + t("Loading {name}...", name="VAE (Qwen-Image 2.1)"))
-    vae = AutoencoderKLQwenImage21.from_pretrained(MODEL_ID, subfolder="vae", dtype=torch.bfloat16).to("cuda")
-    encode_latents(vae, pending, "cuda")
-    remove_stale_custom_ctrls(expected_custom_ctrls)
-    del vae
     free_vram()
     print("\n✓ " + t("Pre-caching finished! VRAM freed."))
 
