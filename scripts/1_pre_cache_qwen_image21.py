@@ -145,6 +145,52 @@ def free_vram():
     torch.cuda.empty_cache()
 
 
+# ── AMD (ROCm): VAE EN UN PROCESO APARTE / VAE IN A SEPARATE PROCESS ─────────
+# En AMD Strix Halo (gfx1151, ROCm 7.13 en Windows) el segundo modelo que se sube a la GPU en el mismo
+# proceso rompe el driver (0xC0000005 en amdhip64_7.dll, issue 90): primero el VAE tras el text encoder
+# y, con el orden al revés, el text encoder tras el VAE. Cada uno por separado funciona, así que con
+# ROCm el VAE va en un proceso hijo (este mismo script con --vae-phase) y el text encoder en este.
+# En NVIDIA todo sigue en un proceso. LORALAB_PRECACHE_SPLIT=1 / 0 lo fuerza o lo quita.
+# On AMD Strix Halo (gfx1151, ROCm 7.13 on Windows) the second model moved to the GPU in the same
+# process crashes the driver (issue 90), whichever it is. Each one alone works, so with ROCm the VAE
+# runs in a child process (this script with --vae-phase) and the text encoder in this one.
+VAE_PHASE_FLAG = "--vae-phase"
+VAE_ONLY = VAE_PHASE_FLAG in sys.argv[1:]
+
+
+def vae_in_child():
+    forced = os.environ.get("LORALAB_PRECACHE_SPLIT", "").strip()
+    if forced in ("0", "1"):
+        return forced == "1"
+    return bool(getattr(torch.version, "hip", None))
+
+
+def run_vae_child():
+    """Codifica las imágenes en un proceso hijo. Su salida se muestra desde «Loading VAE»: lo de antes
+    (la configuración) ya está en pantalla. Si falla, se muestra entera y se para."""
+    import subprocess
+    print("\n" + t("AMD GPU: encoding the images in a separate process."), flush=True)
+    mark = t("Loading {name}...", name="VAE (Qwen-Image 2.1)")
+    proc = subprocess.Popen(
+        [sys.executable, os.path.abspath(__file__), VAE_PHASE_FLAG],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace",
+        env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+    )
+    head, shown = [], False
+    for line in proc.stdout:
+        shown = shown or mark in line
+        if shown:
+            print(line, end="", flush=True)
+        else:
+            head.append(line)
+    code = proc.wait()
+    if code != 0:
+        if not shown:
+            print("".join(head), end="", flush=True)
+        print("[!] " + t("The image encoding process failed (exit code {code}).", code=code), flush=True)
+        sys.exit(1)
+
+
 def get_hf_token():
     if os.path.exists("settings/HF_token.json"):
         try:
@@ -462,12 +508,16 @@ def preprocess_qwen_image21():
 
     if len(pending) < len(jobs):
         print("\n" + t("{n} latents already cached, skipped.", n=len(jobs) - len(pending)))
-    if pending:
-        print("\n" + t("Loading {name}...", name="VAE (Qwen-Image 2.1)"))
+    if pending and not VAE_ONLY and vae_in_child():
+        run_vae_child()
+    elif pending:
+        print("\n" + t("Loading {name}...", name="VAE (Qwen-Image 2.1)"), flush=True)
         vae = AutoencoderKLQwenImage21.from_pretrained(MODEL_ID, subfolder="vae", dtype=torch.bfloat16).to("cuda")
         encode_latents(vae, pending, "cuda")
         del vae
         free_vram()
+    if VAE_ONLY:
+        return
     remove_stale_custom_ctrls(expected_custom_ctrls)
 
     # ── FASE 2: TEXT ENCODER (Qwen3-VL-8B) ──────────────────────────────────
