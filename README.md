@@ -8,6 +8,10 @@
 
 What was added, newest first. Each entry links to its commit.
 
+**2026-11-25**
+
+- <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **Anima 2.9B: anime and illustration LoRAs on the 40-block Anima** — Anima-Base with 12 more blocks (preview v1), trained in NF4 in under 6 GB of VRAM. It has its own card, settings, cache and outputs, and shares the code of the Anima trainer ([details](#anima-29b--anime-and-illustration-loras-on-the-40-block-anima)) [`fedc57b`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/fedc57b)
+
 **2026-11-22**
 
 - **New LR curve on resume**, in every trainer: a checkbox under the LR Scheduler. The LR curve always covered the whole training, so raising Total Steps and resuming continued half-way along the longer curve. With the checkbox, resuming starts a new curve at that step, from the current LR down to its minimum: for example 1000 steps from 4e-4 to 4e-5, then 1000 more from 1e-4 to 1e-5 ([details](#lr-scheduler)) [`dfca123`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/dfca123) ([#88](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/issues/88))
@@ -257,6 +261,7 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 | **Z-Image** | Image LoRAs (characters, objects, styles) for Z-Image and Z-Image-Turbo | 8 GB |
 | **Ming-Image** *(experimental)* | Image LoRAs for transparent designs and edit LoRAs (before → after) on inclusionAI's Ming-Image 0.1 Design | **8 GB** with block swap (5.8 GB peak at 1024², measured) |
 | **Anima** | Anime and illustration LoRAs (characters, styles) | **4 GB** (NF4) / 6 GB (BF16) |
+| **Anima 2.9B** *(preview)* | Anime and illustration LoRAs (characters, styles) on Anima-2.9B, the 40-block Anima | **Under 6 GB** (NF4 at 512², measured) |
 | **ERNIE-Image** | Image LoRAs (characters, objects, styles); supports rsLoRA, LoRA+ and LoKr | **Under 8 GB** (NF4; verified during training) |
 | **FLUX.1 Dev** | Image LoRAs (characters, objects, styles) | **8 GB** with block swap (5.0 GB peak at 512², measured) |
 | **FLUX.2 Klein 9B** | Image LoRAs (characters, objects, styles) **and edit LoRAs** (before → after) | **8 GB** with block swap (6.0 GB peak at 768², 5.8 GB with edit LoRAs at 1024², measured) |
@@ -336,6 +341,7 @@ Each trainer downloads **only what it uses**, already quantized. The table compa
 | **MiniMax-H3 Image** | 204.0 | — | **38.4** | New trainer: the 33B transformer in NF4 (17.2 GB), its VAE (2.3 GB) and the de-distillation adapter (0.5 GB) from `AcademiaSD/MiniMax-H3-Image-NF4-for-LoRA-Training`, plus the Qwen3-VL text encoder in NF4 (18.4 GB) from the MiniMax-H3 NF4 repo. If MiniMax-H3 is already installed, the text encoder is not downloaded again (~20 GB). |
 | **Z-Image** | 20.5 | — | **5.9** | New trainer: the 6B transformer (12.3 GB) and the Qwen3-4B text encoder (8.0 GB) in NF4 (3.4 GB + 2.7 GB). |
 | **Anima** | 5.6 | — | **5.6** | New trainer: the official diffusers version of Anima-Base. The 2B model trains in BF16, or in NF4 quantized when loading (nothing extra to download). |
+| **Anima 2.9B** | 5.8 (transformer only) | — | **7.3** | New trainer: the diffusers version of Anima-2.9B (`v2ray/Anima-2.9B-preview-v1-diffusers`), with its 40-block transformer (5.6 GB), its own LLM adapter, and the Qwen3-0.6B text encoder and VAE of Anima. It trains in BF16, or in NF4 quantized when loading. |
 | **SDXL** | ~7 per model | — | **~7 per model** | New trainer: only the preset you pick is downloaded (one `.safetensors` file); your own checkpoint downloads nothing. |
 | **Ideogram 4** | 16.1 (NF4) | — | **16.1** | New trainer: the official NF4 release, which includes the unconditional transformer used only by the previews. It is downloaded from Unsloth's ungated mirror (same weights, no license gate or token needed); the Ideogram license still applies. |
 | **FLUX.1 Dev** | 33.7 | — | **13.5** | New trainer: the 12B transformer (23.8 GB) and the T5-XXL text encoder (9.5 GB) in NF4 (6.7 GB + 6.3 GB), from `diffusers/FLUX.1-dev-bnb-4bit`. |
@@ -763,6 +769,23 @@ The official image-edit task works at 1024: 512 and 768 are out of its distribut
 | Learning rate | 2e-5 |
 | Speed | ~0.65 s/step at 512² in BF16, ~0.8 s/step in NF4 (under 4 GB of VRAM); ~1.6 s/step at 1024² in BF16 |
 
+### Anima 2.9B — anime and illustration LoRAs on the 40-block Anima
+
+- **Anima-2.9B** (by Gazingstars123) is Anima-Base with **40 blocks instead of 28**: the 12 new blocks are copies of their neighbours, trained on about 1.7 M more anime and illustration images. In this **preview v1** only the new blocks have been trained. Same width, VAE and Qwen3-0.6B text encoder as Anima, but its own **LLM adapter**.
+- It is a **separate trainer** with its own launcher card, settings, cache (`cached_data_anima29b_*`) and outputs (`anima29b_lora_output_*`), so its caches and checkpoints never mix with Anima's. It shares the code of the Anima trainer: the interface, the captioner, the previews and the LoRA options are the same.
+- The model is the diffusers version `v2ray/Anima-2.9B-preview-v1-diffusers` (the one OneTrainer recommends), downloaded to `Models/Anima-2.9B` on the first pre-cache (~7.3 GB).
+- **A LoRA for Anima does not work on Anima 2.9B, nor the other way round:** the new blocks are interleaved (2, 5, 8…), so the original blocks change index. Load the LoRA in ComfyUI with the Anima 2.9B model. According to its model card, ComfyUI supports it natively from version 0.33.1; older versions need its custom node.
+- **Model Precision:** *BF16* (~5.2 GB for the transformer) or *NF4* (~1.7 GB): with NF4 a character LoRA at 512² trained in **under 6 GB of VRAM**.
+
+| Default settings (a tested character LoRA) | |
+| :--- | :--- |
+| Resolution | 512×512, Max Side 1024 |
+| Precision | NF4 |
+| Rank / Alpha | 16 / 16 |
+| Learning rate | 2e-5, cosine, 50 warmup steps |
+| Steps | 800 (batch 1, Grad Accum 4) |
+| Previews | every 50 steps, random caption, 768 area at 16:9 |
+
 ### FLUX.1 Dev — image LoRAs
 
 - Trains on **FLUX.1 [dev]** (11.9B) in **NF4**. The first run downloads `diffusers/FLUX.1-dev-bnb-4bit`, which is not gated and needs no token; the FLUX.1 [dev] license still applies.
@@ -1143,7 +1166,7 @@ AcademiaSD_LoRAlab-TrainerStudio/
 └── settings/                         # Your settings, HF token, network.json and ui.json (created on first use, never uploaded)
 ```
 
-Models (`Krea-2-NF4`, `LTX23-NF4`, `LTX25-NF4`, `MiniMax-H3-NF4`, `Qwen-Image21-NF4`, `Z-Image_NF4`, `Anima-Base`, `FLUX.1-Dev_NF4`, `FLUX.2-Klein-9B_NF4`, `FLUX.3-Image-Klein_NF4`, `Ideogram4-NF4`, `MOSS-Image-NF4`, `Ming-Image_NF4`, `Fibo2_Dev-NF4`, `Wan22-T2V-A14B-NF4`, `SDXL-Models`, captioners) are created inside `Models/` on first use, and the caches and the LoRA outputs inside `Cache_Data/` and `Outputs/`. Legacy folders in the project root are moved into these folders automatically. A collision keeps both folders and prints a warning, so nothing is overwritten.
+Models (`Krea-2-NF4`, `LTX23-NF4`, `LTX25-NF4`, `MiniMax-H3-NF4`, `Qwen-Image21-NF4`, `Z-Image_NF4`, `Anima-Base`, `Anima-2.9B`, `FLUX.1-Dev_NF4`, `FLUX.2-Klein-9B_NF4`, `FLUX.3-Image-Klein_NF4`, `Ideogram4-NF4`, `MOSS-Image-NF4`, `Ming-Image_NF4`, `Fibo2_Dev-NF4`, `Wan22-T2V-A14B-NF4`, `SDXL-Models`, captioners) are created inside `Models/` on first use, and the caches and the LoRA outputs inside `Cache_Data/` and `Outputs/`. Legacy folders in the project root are moved into these folders automatically. A collision keeps both folders and prints a warning, so nothing is overwritten.
 
 ---
 
@@ -1162,7 +1185,7 @@ The code is released under the **MIT License**. The models keep their own licens
 | MiniMax-H3-Image | MiniMax-H3-Image Community License Agreement |
 | Wan 2.2 T2V-A14B | Apache 2.0 |
 | Z-Image (and the Z-Image-Fun-Lora-Distill preview LoRA) | Apache 2.0 |
-| Anima | CircleStone Labs Non-Commercial License (plus the NVIDIA Open Model License for Cosmos). Images you generate can be used commercially |
+| Anima and Anima 2.9B | CircleStone Labs Non-Commercial License (plus the NVIDIA Open Model License for Cosmos). Images you generate can be used commercially |
 | FLUX.1 [dev] | FLUX.1 [dev] Non-Commercial License — non-commercial |
 | FLUX.2 Klein 9B (and the Klein 9B turbo preview LoRA) | FLUX Non-Commercial License — non-commercial |
 | FLUX.3 Image Klein (and NoiseToNova's PDD turbo LoRA) | FLUX Kommunity License (see the model card) |
