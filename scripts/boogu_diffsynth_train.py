@@ -23,6 +23,7 @@ from boogu_model import NF4_DIR, NF4_REPO, quiet
 from i18n import t
 import training_metrics
 import preview_prompts
+import xy_grid
 import block_swap
 from diffsynth.core.data.operators import *  # noqa: F401,F403
 from diffsynth.diffusion import *  # noqa: F401,F403
@@ -491,6 +492,14 @@ def launch_boogu_training_task(accelerator, dataset, model, model_logger, args):
     model.train()
     start_step, running_loss, t_avg = global_step, 0.0, 0.0
     metrics, logged_loss = training_metrics.MetricsLog(args.output_path, start_step), 0.0
+    # Rejilla XY final: instantáneas del LoRA en los pasos de sus filas (xy_grid.py).
+    grid_cfg = {}
+    try:
+        grid_cfg = json.loads(Path(args.live_settings).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        pass
+    grid = xy_grid.XYGrid(args.output_path, args.live_settings, grid_cfg)
+    grid.begin(start_step)
     t0 = time.time()
     live = {}
     reload_live_settings(args, live)
@@ -542,6 +551,8 @@ def launch_boogu_training_task(accelerator, dataset, model, model_logger, args):
             metrics.log(global_step, (running_loss - logged_loss) / max(1, args.gradient_accumulation_steps),
                         scheduler.get_last_lr()[0], None, dt, total_steps)
             logged_loss = running_loss
+            if accelerator.is_main_process:
+                grid.maybe_snapshot(unwrapped, global_step, args.total_steps)
             if args.save_steps and global_step % args.save_steps == 0:
                 save_checkpoint(global_step)
             if args.preview_every > 0 and global_step % args.preview_every == 0:
@@ -567,6 +578,17 @@ def launch_boogu_training_task(accelerator, dataset, model, model_logger, args):
     print("\n\n" + t("Training completed!"), flush=True)
     print(block_swap.peak_report(t), flush=True)
     print("✓ " + t("Final LoRA saved to: {path}", path=os.path.join(args.output_path, "Boogu_FINAL_LoRA.safetensors")), flush=True)
+    if accelerator.is_main_process:
+        # Rejilla XY final: la misma preview (Custom Prompts listos o la primera muestra), con su semilla.
+        args.preview_caption_mode = "first"
+        items = custom_previews(args) or [(None, str(dataset.rows[0].get("prompt", "")))]
+
+        def grid_preview(slot, _size):
+            with block_swap.preview_room():
+                run_boogu_preview(unwrapped, dataset, args, 0, slot)
+        grid.run(unwrapped, global_step, [(prompt, slot, None) for slot, prompt in items],
+                 xy_grid.preview_renderer(grid_preview, vars(args), seed_key="seed"),
+                 args.seed if args.seed > 0 else random.randint(1, 2147483647))
 
 
 def custom_previews(args):

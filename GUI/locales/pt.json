@@ -1578,5 +1578,19 @@
   "New LR curve on resume": "Nova curva de LR ao retomar",
   "When you Resume (for example after raising Total Steps), the LR curve starts again at that step: from the current Learning Rate down to its minimum at the last step, with no warmup. Example: 1000 steps from 4e-4 to 4e-5, then raise Total Steps to 2000, set the LR to 1e-4 and resume: the next 1000 steps go from 1e-4 to 1e-5. Off: the curve always covers the whole training, from step 0 to Total Steps, so resuming with more steps continues half-way along the longer curve. Resuming again with the same LR and Total Steps continues the same new curve. No effect with constant or on a new training.": "Ao retomar (por exemplo depois de aumentar Total Steps), a curva do LR recomeça nesse passo: do Learning Rate atual até o mínimo no último passo, sem warmup. Exemplo: 1000 passos de 4e-4 a 4e-5; depois Total Steps em 2000, LR em 1e-4 e retome: os 1000 passos seguintes vão de 1e-4 a 1e-5. Desligado: a curva cobre sempre todo o treino, do passo 0 a Total Steps, então ao retomar com mais passos ele continua no meio da curva mais longa. Retomar de novo com o mesmo LR e Total Steps continua a mesma curva nova. Sem efeito com constant ou num treino novo.",
   "AMD GPU: encoding the images in a separate process.": "GPU AMD: codificando as imagens num processo separado.",
-  "The image encoding process failed (exit code {code}).": "O processo de codificação das imagens falhou (código de saída {code})."
+  "The image encoding process failed (exit code {code}).": "O processo de codificação das imagens falhou (código de saída {code}).",
+  "Final XY grid": "Grade XY final",
+  "When the training ends, the same image (same prompt and seed) is made with several checkpoints (rows) and LoRA strengths (columns), and joined into one image per prompt, shown above the previews and saved in the xy_grid folder of the output. It shows which step and strength to use without going to ComfyUI. The strength works as in ComfyUI. It adds time at the end: one preview per image. With Face likeness installed, each image shows its % and the console says which one is the most alike.": "Ao terminar o treino, a mesma imagem (mesmo prompt e seed) é gerada com vários checkpoints (linhas) e forças do LoRA (colunas), e unida numa imagem por prompt, que aparece acima das previews e é guardada na pasta xy_grid da saída. Assim vê que passo e que força usar sem ir ao ComfyUI. A força funciona como no ComfyUI. Acrescenta tempo no final: uma preview por imagem. Com o Face likeness instalado, cada imagem mostra a sua % e a consola indica a mais parecida.",
+  "Checkpoints:": "Checkpoints:",
+  "Rows: checkpoints spread over the training (with 4 and 800 steps: 200, 400, 600 and the final one). They are saved while training, so turn it on before the training ends.": "Linhas: checkpoints distribuídos pelo treino (com 4 e 800 passos: 200, 400, 600 e o final). São guardados durante o treino, por isso ative-a antes de terminar.",
+  "Strengths:": "Forças:",
+  "Columns: LoRA strengths, separated by commas (0 to 3). 0 shows the model without the LoRA.": "Colunas: forças do LoRA separadas por vírgulas (de 0 a 3). 0 mostra o modelo sem o LoRA.",
+  "{n} images per prompt at the end of the training (Custom Prompts, or the first caption).": "{n} imagens por prompt no final do treino (Custom Prompts, ou a primeira legenda).",
+  "XY grid: snapshot of step {n} saved.": "Grade XY: instantâneo do passo {n} guardado.",
+  "XY grid: {r} checkpoints × {c} strengths × {p} prompts = {n} images.": "Grade XY: {r} checkpoints × {c} forças × {p} prompts = {n} imagens.",
+  "Checkpoints: {steps} | Strengths: {s} | Seed: {seed}": "Checkpoints: {steps} | Forças: {s} | Seed: {seed}",
+  "XY grid saved to: {path}": "Grade XY guardada em: {path}",
+  "Face likeness of each image ({n} dataset images as reference)...": "Semelhança facial de cada imagem ({n} imagens do dataset como referência)...",
+  "Face likeness not available: {error}": "Semelhança facial não disponível: {error}",
+  "Prompt {p}: best likeness {v}% at step {step}, ×{s}": "Prompt {p}: melhor semelhança {v}% no passo {step}, ×{s}"
 }

@@ -66,6 +66,7 @@ from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_
 import lora_options
 import training_metrics
 import preview_prompts
+import xy_grid
 import minimaxh3image_model as M
 
 STEP_WORD = t("Step")  # the GUI parses "<Step> N/Total" from the console
@@ -982,6 +983,9 @@ def main():
     if start_step:
         log("[RESUME] " + t("Resuming from step {0}", start_step))
     metrics = training_metrics.MetricsLog(OUTPUT_DIR, start_step)
+    # Rejilla XY final: instantáneas del LoRA en los pasos de sus filas (xy_grid.py).
+    grid = xy_grid.XYGrid(OUTPUT_DIR, CONFIG_PATH, CFG, log=log)
+    grid.begin(start_step)
     warmup = int(cfg("warmup_steps"))
     LR_CURVE = lora_options.LrCurve(OUTPUT_DIR, bool(CFG.get("lr_new_curve", False)))
     name = "MiniMaxH3Image_LoRA"
@@ -1039,6 +1043,7 @@ def main():
                 STEP_WORD, step, TOTAL_STEPS, bar, pct * 100, running_loss / max(1, step - start_step), gnorm, LR * factor,
                 avg_time, int(eta_s // 3600), int(eta_s % 3600 // 60), int(eta_s % 60)))
             metrics.log(step, step_loss, LR * factor, gnorm, dt, TOTAL_STEPS)
+            grid.maybe_snapshot(model, step, TOTAL_STEPS)
             if DEBUG:
                 log("[DEBUG] step {} | sigma {:.4f} | loss {:.4f} | {:.2f}s | VRAM peak {:.2f} GB".format(
                     step, sigma, step_loss, dt, torch.cuda.max_memory_allocated() / 2**30))
@@ -1080,6 +1085,15 @@ def main():
                 keys = export_lora(model, path)
                 log("[SAVE] {} ({} keys)".format(os.path.basename(path), keys))
             log("[STOP] Resume continues from step {0}. / Reanudar sigue desde el paso {0}.".format(last_update))
+    if finished:
+        # Rejilla XY final: la misma preview (Custom Prompts listos o la primera muestra), con su semilla.
+        CFG["preview_caption_mode"] = "first"
+        customs = [] if any(e["refs"] for e in entries) else custom_previews()
+        items = [(text, (key, text)) for key, text in customs] or [(entries[0]["prompt"], None)]
+        grid.run(model, step, [(text, custom, None) for text, custom in items],
+                 xy_grid.preview_renderer(lambda custom, _size: run_preview(model, entries, 0, custom, 0),
+                                          CFG, seed_key="preview_seed"),
+                 int(cfg("preview_seed")) if int(cfg("preview_seed")) >= 0 else random.randint(1, 2**31 - 1))
     log("Total training time / Tiempo total de entrenamiento: " + fmt_time(total))
 
 

@@ -36,6 +36,7 @@ from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_
 import lora_options
 import training_metrics
 import preview_prompts
+import xy_grid
 from anima_models import VARIANT
 
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
@@ -752,6 +753,10 @@ def train_anima():
 
     last_step_executed = start_step
 
+    # Rejilla XY final: instantáneas del LoRA en los pasos de sus filas (xy_grid.py).
+    grid = xy_grid.XYGrid(OUTPUT_DIR, CONFIG_PATH, cfg)
+    grid.begin(start_step)
+
     def save_checkpoint_now(current_s):
         if current_s <= 0:
             return
@@ -890,6 +895,7 @@ def train_anima():
             )
             print(f"\r{progress_line}", end="", flush=True)
             metrics.log(step, step_loss, lr_at(step), grad_norm, t_step, TOTAL_STEPS)
+            grid.maybe_snapshot(model, step, TOTAL_STEPS)
 
             if SAVE_EVERY > 0 and step % SAVE_EVERY == 0:
                 print()
@@ -932,6 +938,25 @@ def train_anima():
     final = os.path.join(OUTPUT_DIR, f"{VARIANT['file_prefix']}_FINAL_LoRA.safetensors")
     _export_lora(model, final, min(last_step_executed, TOTAL_STEPS))
     print("✓ " + t("Final LoRA saved to: {path}", path=final))
+
+    # Rejilla XY: los Custom Prompts listos o, sin ellos, el caption de la primera imagen del dataset,
+    # con el tamaño de las previews.
+    def xy_size(ref):
+        H, W = ref.shape[2], ref.shape[3]
+        if PREVIEW_WIDTH > 0 and PREVIEW_HEIGHT > 0:
+            return max(2, round(PREVIEW_HEIGHT / 8 / 2) * 2), max(2, round(PREVIEW_WIDTH / 8 / 2) * 2)
+        if PREVIEW_SIZE > 0:
+            s = PREVIEW_SIZE / 8 / math.sqrt(H * W)
+            return max(2, round(H * s / 2) * 2), max(2, round(W * s / 2) * 2)
+        return H, W
+    first = all_preview_names[0]
+    ready = [slot for slot, _ in preview_prompts.prompts(PREVIEW_PROMPTS) if slot in custom.items]
+    items = ([(preview_prompts.custom_text(CACHE_DIR, s), custom.items[s]["emb"]) for s in ready] or
+             [(preview_prompts.dataset_caption(cfg, first, TRIGGER_WORD), cache_data[first]["emb"])])
+    size = xy_size(cache_data[first]["lat"])
+    grid.run(model, min(last_step_executed, TOTAL_STEPS), [(text, emb, size) for text, emb in items],
+             xy_grid.preview_renderer(lambda emb, hw: run_preview(model, scheduler, emb, neg, hw, 0), globals()),
+             random.randint(1, 2147483647) if SEED <= 0 else SEED)
 
 
 if __name__ == "__main__":

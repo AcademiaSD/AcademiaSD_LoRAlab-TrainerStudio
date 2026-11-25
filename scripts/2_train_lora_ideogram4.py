@@ -36,6 +36,7 @@ from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_
 import lora_options
 import training_metrics
 import preview_prompts
+import xy_grid
 import block_swap
 
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
@@ -765,6 +766,10 @@ def train_ideogram4():
 
     last_step_executed = start_step
 
+    # Rejilla XY final: instantáneas del LoRA en los pasos de sus filas (xy_grid.py).
+    grid = xy_grid.XYGrid(OUTPUT_DIR, CONFIG_PATH, cfg)
+    grid.begin(start_step)
+
     def save_checkpoint_now(current_s):
         if current_s <= 0:
             return
@@ -848,6 +853,32 @@ def train_ideogram4():
 
     reload_live_settings()
     metrics = training_metrics.MetricsLog(OUTPUT_DIR, start_step)
+
+    def make_preview(step, preview_index, preview_slot):
+        # Una preview (la de un Custom Prompt o, con slot None, la de Caption Mode). La usan las
+        # previews del entrenamiento y la rejilla XY final.
+        if preview_slot is None:
+            p_name = get_preview_sample(step)
+            preview_text = preview_prompts.dataset_caption(cfg, p_name, TRIGGER_WORD)
+        else:
+            cache_data["_custom"] = custom.items[preview_slot]
+            p_name = "_custom"
+            preview_text = preview_prompts.custom_text(CACHE_DIR, preview_slot)
+        PREVIEW_NOW.update(index=preview_index, prompt=preview_text)
+        # El prompt manual no tiene imagen: la preview usa el tamaño de la primera del dataset.
+        ref = cache_data[p_name if p_name != "_custom" else all_preview_names[0]]["lat"]
+        print(f"\n  [Preview] {t('Mode')}: {PREVIEW_CAPTION_MODE} | {t('Sample')}: {p_name}")
+        gh, gw = ref.shape[0], ref.shape[1]
+        if PREVIEW_WIDTH > 0 and PREVIEW_HEIGHT > 0:
+            # Lados explícitos en píxeles: cada token es un parche de 16x16 px.
+            gh = max(1, round(PREVIEW_HEIGHT / 16))
+            gw = max(1, round(PREVIEW_WIDTH / 16))
+        elif PREVIEW_SIZE > 0:
+            # Cada token es un parche de 16x16 px.
+            s = PREVIEW_SIZE / 16 / math.sqrt(gh * gw)
+            gh, gw = max(1, round(gh * s)), max(1, round(gw * s))
+        run_preview(model, scheduler, cache_data[p_name]["emb"], (gh, gw), step)
+
     step = start_step
     try:
         # while y no range(): TOTAL_STEPS puede cambiar en caliente, en ambos sentidos.
@@ -931,6 +962,7 @@ def train_ideogram4():
             )
             print(f"\r{progress_line}", end="", flush=True)
             metrics.log(step, step_loss, lr_at(step), grad_norm, t_step, TOTAL_STEPS)
+            grid.maybe_snapshot(model, step, TOTAL_STEPS)
 
             if SAVE_EVERY > 0 and step % SAVE_EVERY == 0:
                 print()
@@ -943,27 +975,7 @@ def train_ideogram4():
                 # Una preview por prompt propio (o una con uno al azar); sin prompts, la de Caption Mode.
                 slots = custom.round(PREVIEW_PROMPTS)
                 for preview_index, preview_slot in enumerate(slots or [None]):
-                    if preview_slot is None:
-                        p_name = get_preview_sample(step)
-                        preview_text = preview_prompts.dataset_caption(cfg, p_name, TRIGGER_WORD)
-                    else:
-                        cache_data["_custom"] = custom.items[preview_slot]
-                        p_name = "_custom"
-                        preview_text = preview_prompts.custom_text(CACHE_DIR, preview_slot)
-                    PREVIEW_NOW.update(index=preview_index, prompt=preview_text)
-                    # El prompt manual no tiene imagen: la preview usa el tamaño de la primera del dataset.
-                    ref = cache_data[p_name if p_name != "_custom" else all_preview_names[0]]["lat"]
-                    print(f"\n  [Preview] {t('Mode')}: {PREVIEW_CAPTION_MODE} | {t('Sample')}: {p_name}")
-                    gh, gw = ref.shape[0], ref.shape[1]
-                    if PREVIEW_WIDTH > 0 and PREVIEW_HEIGHT > 0:
-                        # Lados explícitos en píxeles: cada token es un parche de 16x16 px.
-                        gh = max(1, round(PREVIEW_HEIGHT / 16))
-                        gw = max(1, round(PREVIEW_WIDTH / 16))
-                    elif PREVIEW_SIZE > 0:
-                        # Cada token es un parche de 16x16 px.
-                        s = PREVIEW_SIZE / 16 / math.sqrt(gh * gw)
-                        gh, gw = max(1, round(gh * s)), max(1, round(gw * s))
-                    run_preview(model, scheduler, cache_data[p_name]["emb"], (gh, gw), step)
+                    make_preview(step, preview_index, preview_slot)
 
     except (KeyboardInterrupt, SystemExit):
         save_checkpoint_now(last_step_executed)
@@ -974,6 +986,20 @@ def train_ideogram4():
     final = os.path.join(OUTPUT_DIR, "Ideogram4_FINAL_LoRA.safetensors")
     _export_lora(model, final, min(last_step_executed, TOTAL_STEPS))
     print("✓ " + t("Final LoRA saved to: {path}", path=final))
+
+    # Rejilla XY final: la misma preview que durante el entrenamiento (make_preview), con los Custom
+    # Prompts listos o, sin ellos, la primera muestra del dataset.
+    globals()["PREVIEW_CAPTION_MODE"] = "first"
+    ready = [slot for slot, _ in preview_prompts.prompts(PREVIEW_PROMPTS) if slot in custom.items]
+    if ready:
+        xy_items = [(preview_prompts.custom_text(CACHE_DIR, s), s) for s in ready]
+    else:
+        p0 = get_preview_sample(0)
+        xy_items = [(preview_prompts.custom_text(CACHE_DIR, 0) if p0 == "_custom"
+                     else preview_prompts.dataset_caption(cfg, p0, TRIGGER_WORD), None)]
+    grid.run(model, min(last_step_executed, TOTAL_STEPS), [(text, slot, None) for text, slot in xy_items],
+             xy_grid.preview_renderer(lambda slot, _size: make_preview(0, 0, slot), globals()),
+             random.randint(1, 2147483647) if SEED <= 0 else SEED)
 
 
 if __name__ == "__main__":

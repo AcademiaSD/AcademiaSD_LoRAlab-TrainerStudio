@@ -29,6 +29,7 @@ import queue_link
 import training_metrics
 import preview_prompts
 import face_match
+import xy_grid
 import dataset_forge
 from anima_models import VARIANT
 import gpu_stats
@@ -934,6 +935,7 @@ runtime.register(app)
 queue_link.register(app, VID, runtime, TRAIN_CONFIG, PRECACHE_CONFIG)
 training_metrics.register(app, get_train_output_dir)
 face_match.register(app, get_dataset_dir, get_train_output_dir)
+xy_grid.register(app, get_train_output_dir)
 dataset_forge.register(app, get_dataset_dir)
 
 

@@ -1578,5 +1578,19 @@
   "New LR curve on resume": "재개 시 새 LR 곡선",
   "When you Resume (for example after raising Total Steps), the LR curve starts again at that step: from the current Learning Rate down to its minimum at the last step, with no warmup. Example: 1000 steps from 4e-4 to 4e-5, then raise Total Steps to 2000, set the LR to 1e-4 and resume: the next 1000 steps go from 1e-4 to 1e-5. Off: the curve always covers the whole training, from step 0 to Total Steps, so resuming with more steps continues half-way along the longer curve. Resuming again with the same LR and Total Steps continues the same new curve. No effect with constant or on a new training.": "재개할 때 (예: Total Steps를 늘린 뒤) LR 곡선이 그 단계에서 다시 시작합니다: 현재 Learning Rate에서 마지막 단계의 최솟값까지, 워밍업 없이. 예: 4e-4에서 4e-5까지 1000단계, 그다음 Total Steps를 2000, LR을 1e-4로 하고 재개하면 다음 1000단계는 1e-4에서 1e-5로 갑니다. 끔: 곡선이 항상 학습 전체 (0단계부터 Total Steps)를 다루므로, 단계를 늘려 재개하면 더 긴 곡선의 중간부터 이어집니다. 같은 LR과 Total Steps로 다시 재개하면 같은 새 곡선이 이어집니다. constant나 새 학습에서는 효과가 없습니다.",
   "AMD GPU: encoding the images in a separate process.": "AMD GPU: 별도 프로세스에서 이미지를 인코딩합니다.",
-  "The image encoding process failed (exit code {code}).": "이미지 인코딩 프로세스가 실패했습니다 (종료 코드 {code})."
+  "The image encoding process failed (exit code {code}).": "이미지 인코딩 프로세스가 실패했습니다 (종료 코드 {code}).",
+  "Final XY grid": "최종 XY 그리드",
+  "When the training ends, the same image (same prompt and seed) is made with several checkpoints (rows) and LoRA strengths (columns), and joined into one image per prompt, shown above the previews and saved in the xy_grid folder of the output. It shows which step and strength to use without going to ComfyUI. The strength works as in ComfyUI. It adds time at the end: one preview per image. With Face likeness installed, each image shows its % and the console says which one is the most alike.": "학습이 끝나면 같은 이미지(같은 프롬프트와 시드)를 여러 체크포인트(행)와 LoRA 강도(열)로 생성해 프롬프트마다 한 장으로 합칩니다. 프리뷰 위에 표시되고 출력의 xy_grid 폴더에 저장됩니다. ComfyUI에 가지 않고도 어떤 스텝과 강도를 쓸지 알 수 있습니다. 강도는 ComfyUI와 같은 방식으로 적용됩니다. 끝에 시간이 추가됩니다: 이미지 한 장당 프리뷰 한 번. Face likeness가 설치되어 있으면 각 이미지에 %가 표시되고 가장 닮은 이미지를 콘솔이 알려 줍니다.",
+  "Checkpoints:": "체크포인트:",
+  "Rows: checkpoints spread over the training (with 4 and 800 steps: 200, 400, 600 and the final one). They are saved while training, so turn it on before the training ends.": "행: 학습 전체에 고르게 나눈 체크포인트(4개, 800스텝이면 200, 400, 600과 최종). 학습 중에 저장되므로 학습이 끝나기 전에 켜세요.",
+  "Strengths:": "강도:",
+  "Columns: LoRA strengths, separated by commas (0 to 3). 0 shows the model without the LoRA.": "열: 쉼표로 구분한 LoRA 강도(0~3). 0은 LoRA 없는 모델을 보여 줍니다.",
+  "{n} images per prompt at the end of the training (Custom Prompts, or the first caption).": "학습이 끝날 때 프롬프트마다 {n}장(Custom Prompts, 없으면 첫 캡션).",
+  "XY grid: snapshot of step {n} saved.": "XY 그리드: 스텝 {n}의 스냅샷을 저장했습니다.",
+  "XY grid: {r} checkpoints × {c} strengths × {p} prompts = {n} images.": "XY 그리드: 체크포인트 {r} × 강도 {c} × 프롬프트 {p} = {n}장.",
+  "Checkpoints: {steps} | Strengths: {s} | Seed: {seed}": "체크포인트: {steps} | 강도: {s} | 시드: {seed}",
+  "XY grid saved to: {path}": "XY 그리드 저장 위치: {path}",
+  "Face likeness of each image ({n} dataset images as reference)...": "각 이미지의 얼굴 유사도(데이터셋 이미지 {n}장을 기준으로)...",
+  "Face likeness not available: {error}": "얼굴 유사도를 사용할 수 없음: {error}",
+  "Prompt {p}: best likeness {v}% at step {step}, ×{s}": "프롬프트 {p}: 최고 유사도 {v}% (스텝 {step}, ×{s})"
 }

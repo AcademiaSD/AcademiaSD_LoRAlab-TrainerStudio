@@ -37,6 +37,7 @@ from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_
 import lora_options
 import training_metrics
 import preview_prompts
+import xy_grid
 
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
 STEP_WORD = t("Step")
@@ -524,17 +525,25 @@ def apply_turbo_lora(model):
 
 
 def run_preview(model, scheduler, embed, neg, size, step, index=0, prompt=""):
+    actual_seed = random.randint(1, 2147483647) if SEED <= 0 else SEED
+    print("  ↳ " + t("Preview seed used: {seed}", seed=actual_seed))
+    img = render_image(model, scheduler, embed, neg, size, actual_seed)
+    # El prompt va dentro del PNG: la galería lo enseña al abrir la preview.
+    out = os.path.join(OUTPUT_DIR, preview_prompts.preview_name(step, index))
+    preview_prompts.save_png(img, out, prompt)
+    print("  ↳ " + t("Preview saved to: {path}", path=out))
+
+
+def render_image(model, scheduler, embed, neg, size, seed):
+    """Una imagen (HxWx3 uint8) con el modelo tal como está: la usan las previews y la rejilla XY."""
     H, W = size
     was_training = model.training
     model.eval()
 
-    actual_seed = random.randint(1, 2147483647) if SEED <= 0 else SEED
-    print("  ↳ " + t("Preview seed used: {seed}", seed=actual_seed))
-
     hooks = apply_turbo_lora(model) if USE_TURBO else []
     try:
         with torch.no_grad():
-            g = torch.Generator(device="cuda").manual_seed(actual_seed)
+            g = torch.Generator(device="cuda").manual_seed(seed)
             latents = denoise(model, scheduler, embed, neg, H, W, g)
             # Los pesos del Turbo LoRA en la GPU ya no hacen falta: se liberan antes del VAE.
             for h in hooks:
@@ -554,17 +563,27 @@ def run_preview(model, scheduler, embed, neg, size, step, index=0, prompt=""):
                 img = vae.decode(lat, return_dict=False)[0]
             img = ((img.float() / 2 + 0.5).clamp(0, 1)[0].cpu().permute(1, 2, 0).numpy() * 255).astype("uint8")
             vae.to("cpu")
-
-        # El prompt va dentro del PNG: la galería lo enseña al abrir la preview.
-        out = os.path.join(OUTPUT_DIR, preview_prompts.preview_name(step, index))
-        preview_prompts.save_png(img, out, prompt)
-        print("  ↳ " + t("Preview saved to: {path}", path=out))
+        return img
     finally:
         for h in hooks:
             h.remove()
         if was_training:
             model.train()
         free_vram()
+
+
+def preview_size(ref):
+    """(H, W) del latente de la preview: el de la muestra, o el de Preview Size / Aspect Ratio."""
+    H, W = ref.shape[2], ref.shape[3]
+    if PREVIEW_WIDTH > 0 and PREVIEW_HEIGHT > 0:
+        # Lados explícitos en píxeles: latente 8x y parches 2x2 (16 px).
+        H = max(2, round(PREVIEW_HEIGHT / 8 / 2) * 2)
+        W = max(2, round(PREVIEW_WIDTH / 8 / 2) * 2)
+    elif PREVIEW_SIZE > 0:
+        # Latente 8x y parches 2x2: lados múltiplos de 2 en el latente (16 px).
+        s = PREVIEW_SIZE / 8 / math.sqrt(H * W)
+        H, W = max(2, round(H * s / 2) * 2), max(2, round(W * s / 2) * 2)
+    return H, W
 
 
 def check_custom_prompt(custom):
@@ -810,6 +829,10 @@ def train_zimage():
 
     last_step_executed = start_step
 
+    # Rejilla XY final: instantáneas del LoRA en los pasos de sus filas (xy_grid.py).
+    grid = xy_grid.XYGrid(OUTPUT_DIR, CONFIG_PATH, cfg)
+    grid.begin(start_step)
+
     def save_checkpoint_now(current_s):
         if current_s <= 0:
             return
@@ -947,6 +970,7 @@ def train_zimage():
             )
             print(f"\r{progress_line}", end="", flush=True)
             metrics.log(step, step_loss, lr_at(step), grad_norm, t_step, TOTAL_STEPS)
+            grid.maybe_snapshot(model, step, TOTAL_STEPS)
 
             if SAVE_EVERY > 0 and step % SAVE_EVERY == 0:
                 print()
@@ -966,19 +990,9 @@ def train_zimage():
                     samples = [(p_name, cache_data[p_name]["emb"], p_name,
                                 preview_prompts.dataset_caption(cfg, p_name, TRIGGER_WORD))]
                 for index, (label, emb, ref_name, prompt) in enumerate(samples):
-                    ref = cache_data[ref_name]["lat"]
                     mode = "custom" if slots else PREVIEW_CAPTION_MODE
                     print(f"\n  [Preview] {t('Mode')}: {mode} | {t('Sample')}: {label}")
-                    H, W = ref.shape[2], ref.shape[3]
-                    if PREVIEW_WIDTH > 0 and PREVIEW_HEIGHT > 0:
-                        # Lados explícitos en píxeles: latente 8x y parches 2x2 (16 px).
-                        H = max(2, round(PREVIEW_HEIGHT / 8 / 2) * 2)
-                        W = max(2, round(PREVIEW_WIDTH / 8 / 2) * 2)
-                    elif PREVIEW_SIZE > 0:
-                        # Latente 8x y parches 2x2: lados múltiplos de 2 en el latente (16 px).
-                        s = PREVIEW_SIZE / 8 / math.sqrt(H * W)
-                        H, W = max(2, round(H * s / 2) * 2), max(2, round(W * s / 2) * 2)
-                    run_preview(model, scheduler, emb, neg, (H, W), step, index, prompt)
+                    run_preview(model, scheduler, emb, neg, preview_size(cache_data[ref_name]["lat"]), step, index, prompt)
 
     except (KeyboardInterrupt, SystemExit):
         save_checkpoint_now(last_step_executed)
@@ -986,8 +1000,22 @@ def train_zimage():
 
     print("\n\n" + t("Training completed!"))
     final = os.path.join(OUTPUT_DIR, "ZImage_FINAL_LoRA.safetensors")
-    _export_lora(model, final, min(last_step_executed, TOTAL_STEPS))
+    final_step = min(last_step_executed, TOTAL_STEPS)
+    _export_lora(model, final, final_step)
     print("✓ " + t("Final LoRA saved to: {path}", path=final))
+
+    # Rejilla XY: los Custom Prompts listos o, sin ellos, el caption de la primera imagen del dataset.
+    ready = [slot for slot, _ in preview_prompts.prompts(PREVIEW_PROMPTS) if slot in custom.items]
+    if ready:
+        grid_prompts = [(preview_prompts.custom_text(CACHE_DIR, s), custom.items[s],
+                         preview_size(cache_data[all_preview_names[0]]["lat"])) for s in ready]
+    else:
+        first = all_preview_names[0]
+        grid_prompts = [(preview_prompts.dataset_caption(cfg, first, TRIGGER_WORD), cache_data[first]["emb"],
+                         preview_size(cache_data[first]["lat"]))]
+    grid_seed = random.randint(1, 2147483647) if SEED <= 0 else SEED
+    grid.run(model, final_step, grid_prompts,
+             lambda emb, size, seed: render_image(model, scheduler, emb, neg, size, seed), grid_seed)
 
 
 if __name__ == "__main__":

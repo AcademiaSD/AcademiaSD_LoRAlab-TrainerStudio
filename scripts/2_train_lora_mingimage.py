@@ -38,6 +38,7 @@ import settings_limits
 import lora_options
 import training_metrics
 import preview_prompts
+import xy_grid
 import block_swap
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 
@@ -750,6 +751,10 @@ def train_mingimage():
 
     last_step_executed = start_step
 
+    # Rejilla XY final: instantáneas del LoRA en los pasos de sus filas (xy_grid.py).
+    grid = xy_grid.XYGrid(OUTPUT_DIR, CONFIG_PATH, cfg)
+    grid.begin(start_step)
+
     def save_checkpoint_now(current_s):
         if current_s <= 0:
             return
@@ -868,6 +873,36 @@ def train_mingimage():
 
     reload_live_settings()
     metrics = training_metrics.MetricsLog(OUTPUT_DIR, start_step)
+
+    def make_preview(step, preview_index, preview_slot):
+        # Una preview (la de un Custom Prompt o, con slot None, la de Caption Mode). La usan las
+        # previews del entrenamiento y la rejilla XY final.
+        if preview_slot is None:
+            p_name = get_preview_sample(step)
+            preview_text = preview_prompts.dataset_caption(cfg, p_name, TRIGGER_WORD)
+        else:
+            cache_data["_custom"] = custom.items[preview_slot]
+            p_name = "_custom"
+            preview_text = preview_prompts.custom_text(CACHE_DIR, preview_slot)
+        PREVIEW_NOW.update(index=preview_index, prompt=preview_text)
+        sample = cache_data[p_name]
+        # En edición la salida hereda el tamaño del antes (como en el pipeline oficial): el prompt
+        # manual usa su propio antes o, si no lo hay, el del primer par.
+        ctrl = sample.get("ctrl", cache_data[all_preview_names[0]].get("ctrl")) if EDIT_LORA else None
+        # El prompt manual sin imagen usa el tamaño de la primera del dataset.
+        ref = ctrl if ctrl is not None else cache_data[p_name if p_name != "_custom" else all_preview_names[0]]["lat"]
+        print(f"\n  [Preview] {t('Mode')}: {PREVIEW_CAPTION_MODE} | {t('Sample')}: {p_name}")
+        H, W = ref.shape[2], ref.shape[3]
+        if PREVIEW_WIDTH > 0 and PREVIEW_HEIGHT > 0 and ctrl is None:
+            # Lados explícitos en píxeles: latente 8x y parches 2x2 (16 px).
+            H = max(2, round(PREVIEW_HEIGHT / 8 / 2) * 2)
+            W = max(2, round(PREVIEW_WIDTH / 8 / 2) * 2)
+        elif PREVIEW_SIZE > 0 and ctrl is None:
+            # Latente 8x y parches 2x2: lados múltiplos de 2 en el latente (16 px).
+            s = PREVIEW_SIZE / 8 / math.sqrt(H * W)
+            H, W = max(2, round(H * s / 2) * 2), max(2, round(W * s / 2) * 2)
+        run_preview(model, scheduler, sample["emb"], sample["emb2"], (H, W), step, ctrl)
+
     step = start_step
     try:
         # while y no range(): TOTAL_STEPS puede cambiar en caliente, en ambos sentidos.
@@ -942,6 +977,7 @@ def train_mingimage():
             )
             print(f"\r{progress_line}", end="", flush=True)
             metrics.log(step, step_loss, lr_at(step), grad_norm, t_step, TOTAL_STEPS)
+            grid.maybe_snapshot(model, step, TOTAL_STEPS)
 
             if SAVE_EVERY > 0 and step % SAVE_EVERY == 0:
                 print()
@@ -954,31 +990,7 @@ def train_mingimage():
                 # Una preview por prompt propio (o una con uno al azar); sin prompts, la de Caption Mode.
                 slots = custom.round(PREVIEW_PROMPTS)
                 for preview_index, preview_slot in enumerate(slots or [None]):
-                    if preview_slot is None:
-                        p_name = get_preview_sample(step)
-                        preview_text = preview_prompts.dataset_caption(cfg, p_name, TRIGGER_WORD)
-                    else:
-                        cache_data["_custom"] = custom.items[preview_slot]
-                        p_name = "_custom"
-                        preview_text = preview_prompts.custom_text(CACHE_DIR, preview_slot)
-                    PREVIEW_NOW.update(index=preview_index, prompt=preview_text)
-                    sample = cache_data[p_name]
-                    # En edición la salida hereda el tamaño del antes (como en el pipeline oficial): el prompt
-                    # manual usa su propio antes o, si no lo hay, el del primer par.
-                    ctrl = sample.get("ctrl", cache_data[all_preview_names[0]].get("ctrl")) if EDIT_LORA else None
-                    # El prompt manual sin imagen usa el tamaño de la primera del dataset.
-                    ref = ctrl if ctrl is not None else cache_data[p_name if p_name != "_custom" else all_preview_names[0]]["lat"]
-                    print(f"\n  [Preview] {t('Mode')}: {PREVIEW_CAPTION_MODE} | {t('Sample')}: {p_name}")
-                    H, W = ref.shape[2], ref.shape[3]
-                    if PREVIEW_WIDTH > 0 and PREVIEW_HEIGHT > 0 and ctrl is None:
-                        # Lados explícitos en píxeles: latente 8x y parches 2x2 (16 px).
-                        H = max(2, round(PREVIEW_HEIGHT / 8 / 2) * 2)
-                        W = max(2, round(PREVIEW_WIDTH / 8 / 2) * 2)
-                    elif PREVIEW_SIZE > 0 and ctrl is None:
-                        # Latente 8x y parches 2x2: lados múltiplos de 2 en el latente (16 px).
-                        s = PREVIEW_SIZE / 8 / math.sqrt(H * W)
-                        H, W = max(2, round(H * s / 2) * 2), max(2, round(W * s / 2) * 2)
-                    run_preview(model, scheduler, sample["emb"], sample["emb2"], (H, W), step, ctrl)
+                    make_preview(step, preview_index, preview_slot)
 
     except (KeyboardInterrupt, SystemExit):
         save_checkpoint_now(last_step_executed)
@@ -989,6 +1001,20 @@ def train_mingimage():
     final = os.path.join(OUTPUT_DIR, "MingImage_FINAL_LoRA.safetensors")
     _export_lora(model, final, min(last_step_executed, TOTAL_STEPS))
     print("✓ " + t("Final LoRA saved to: {path}", path=final))
+
+    # Rejilla XY final: la misma preview que durante el entrenamiento (make_preview), con los Custom
+    # Prompts listos o, sin ellos, la primera muestra del dataset.
+    globals()["PREVIEW_CAPTION_MODE"] = "first"
+    ready = [slot for slot, _ in preview_prompts.prompts(PREVIEW_PROMPTS) if slot in custom.items]
+    if ready:
+        xy_items = [(preview_prompts.custom_text(CACHE_DIR, s), s) for s in ready]
+    else:
+        p0 = get_preview_sample(0)
+        xy_items = [(preview_prompts.custom_text(CACHE_DIR, 0) if p0 == "_custom"
+                     else preview_prompts.dataset_caption(cfg, p0, TRIGGER_WORD), None)]
+    grid.run(model, min(last_step_executed, TOTAL_STEPS), [(text, slot, None) for text, slot in xy_items],
+             xy_grid.preview_renderer(lambda slot, _size: make_preview(0, 0, slot), globals()),
+             random.randint(1, 2147483647) if SEED <= 0 else SEED)
 
 
 if __name__ == "__main__":

@@ -16,6 +16,7 @@ from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_
 import lora_options
 import training_metrics
 import preview_prompts
+import xy_grid
 import settings_limits
 
 # La barra de progreso comparte los caracteres visuales del entrenador Klein. Fuerza UTF-8
@@ -243,6 +244,8 @@ def main():
     model.train()
     running_loss=t_step_avg=grad_norm=0.0; start_step=step; last_step=step; live_mtime=None
     metrics=training_metrics.MetricsLog(OUT,start_step)
+    # Rejilla XY final: instantáneas del LoRA en los pasos de sus filas (xy_grid.py).
+    grid=xy_grid.XYGrid(OUT,CONFIG,cfg); grid.begin(start_step)
     while step<STEPS:
         # Read GUI-saved settings at each step. Structural options stay fixed until resume.
         try:
@@ -281,6 +284,7 @@ def main():
         eta=max(0,STEPS-step)*t_step_avg; eta_s=f"{int(eta//3600):02d}:{int(eta%3600//60):02d}:{int(eta%60):02d}"
         print(f"\rStep {step:4d}/{STEPS} [{bar}] {pct*100:5.1f}% | Loss {running_loss/max(1,step-start_step):.4f} | gnorm {grad_norm:.3f} | lr {lr_at(step):.2e} | {t_step_avg:.2f}s/it | ETA {eta_s}",end="",flush=True)
         metrics.log(step,step_loss,lr_at(step),grad_norm,elapsed,STEPS)
+        grid.maybe_snapshot(model,step,STEPS)
         if SAVE_EVERY>0 and step%SAVE_EVERY==0: save()
         if PREVIEW_EVERY>0 and step%PREVIEW_EVERY==0:
             # Custom Prompts: una preview por prompt propio ya codificado (o una con uno al azar); sin
@@ -301,5 +305,17 @@ def main():
             for index,(e,text) in enumerate(rounds):
                 preview(model,scheduler,e,(h,w),step,index,text)
     save(); export(model,os.path.join(OUT,"Ernie_FINAL_LoRA.safetensors"),step); print("Training completed.",flush=True)
+    # Rejilla XY final: Custom Prompts listos o, sin ellos, la primera imagen; tamaño de las previews.
+    ready=[s for s,_ in preview_prompts.prompts(PREVIEW_PROMPTS) if s in custom.items]
+    items=[(preview_prompts.custom_text(CACHE,s),custom.items[s]) for s in ready] or \
+          [(preview_prompts.dataset_caption(cfg,ordered[0],TRIGGER),cache[ordered[0]][1])]
+    h,w=cache[ordered[0]][0].shape[-2:]
+    if PREVIEW_WIDTH>0 and PREVIEW_HEIGHT>0:
+        h=max(2,round(PREVIEW_HEIGHT/16/2)*2); w=max(2,round(PREVIEW_WIDTH/16/2)*2)
+    elif PREVIEW_SIZE>0:
+        scale=PREVIEW_SIZE/16/math.sqrt(h*w); h=max(2,round(h*scale/2)*2); w=max(2,round(w*scale/2)*2)
+    grid.run(model,min(step,STEPS),[(text,e,(h,w)) for text,e in items],
+             xy_grid.preview_renderer(lambda e,hw: preview(model,scheduler,e,hw,0),globals()),
+             SEED if SEED>0 else random.randint(1,2147483647))
 
 if __name__=="__main__": main()

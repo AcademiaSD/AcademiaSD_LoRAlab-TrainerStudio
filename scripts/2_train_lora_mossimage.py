@@ -47,6 +47,7 @@ from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_
 import lora_options
 import training_metrics
 import preview_prompts
+import xy_grid
 from moss_image_model import MOSSImageTransformer
 from moss_edit_lora import EDIT_BASES, base_file, base_layers
 
@@ -942,6 +943,10 @@ def train_mossimage():
 
     last_step_executed = start_step
 
+    # Rejilla XY final: instantáneas del LoRA en los pasos de sus filas (xy_grid.py).
+    grid = xy_grid.XYGrid(OUTPUT_DIR, CONFIG_PATH, cfg)
+    grid.begin(start_step)
+
     def save_checkpoint_now(current_s):
         if current_s <= 0:
             return
@@ -1046,6 +1051,41 @@ def train_mossimage():
 
     reload_live_settings()
     metrics = training_metrics.MetricsLog(OUTPUT_DIR, start_step)
+
+    def make_preview(step, preview_index, preview_slot):
+        # Una preview (la de un Custom Prompt o, con slot None, la de Caption Mode). La usan las
+        # previews del entrenamiento y la rejilla XY final.
+        if preview_slot is None:
+            p_name = get_preview_sample(step)
+            preview_text = preview_prompts.dataset_caption(cfg, p_name, TRIGGER_WORD)
+        else:
+            cache_data["_custom"] = custom.items[preview_slot]
+            p_name = "_custom"
+            preview_text = preview_prompts.custom_text(CACHE_DIR, preview_slot)
+        PREVIEW_NOW.update(index=preview_index, prompt=preview_text)
+        sample = cache_data[p_name]
+        # Tamaño de la preview: el de la imagen; el prompt manual usa el de la primera del dataset.
+        # En edición con el prompt manual, la proporción de la primera referencia (como en
+        # ComfyUI, donde la salida sigue a la imagen que se edita) con el área de entrenamiento.
+        first = cache_data[all_preview_names[0]]["lat"]
+        ref = sample.get("lat", first)
+        print(f"\n  [Preview] {t('Mode')}: {PREVIEW_CAPTION_MODE} | {t('Sample')}: {p_name}")
+        H, W = ref.shape[2], ref.shape[3]
+        refs = sample.get("ctrls") if EDIT_MODE else None
+        if refs and "lat" not in sample:
+            h, w = refs[0].shape[2], refs[0].shape[3]
+            s = math.sqrt(first.shape[2] * first.shape[3] / (h * w))
+            H, W = max(1, round(h * s)), max(1, round(w * s))
+        if PREVIEW_WIDTH > 0 and PREVIEW_HEIGHT > 0 and not EDIT_MODE:
+            # Lados explícitos en píxeles: cada token es un parche de 16x16 px.
+            H = max(1, round(PREVIEW_HEIGHT / 16))
+            W = max(1, round(PREVIEW_WIDTH / 16))
+        elif PREVIEW_SIZE > 0:
+            # Cada token es un parche de 16x16 px.
+            s = PREVIEW_SIZE / 16 / math.sqrt(H * W)
+            H, W = max(1, round(H * s)), max(1, round(W * s))
+        run_preview(model, scheduler, sample["emb"], sample.get("uncond", neg), (H, W), step, refs)
+
     step = start_step
     try:
         # while y no range(): TOTAL_STEPS puede cambiar en caliente, en ambos sentidos.
@@ -1120,6 +1160,7 @@ def train_mossimage():
             )
             print(f"\r{progress_line}", end="", flush=True)
             metrics.log(step, step_loss, lr_at(step), grad_norm, t_step, TOTAL_STEPS)
+            grid.maybe_snapshot(model, step, TOTAL_STEPS)
 
             if SAVE_EVERY > 0 and step % SAVE_EVERY == 0:
                 print()
@@ -1132,36 +1173,7 @@ def train_mossimage():
                 # Una preview por prompt propio (o una con uno al azar); sin prompts, la de Caption Mode.
                 slots = custom.round(PREVIEW_PROMPTS)
                 for preview_index, preview_slot in enumerate(slots or [None]):
-                    if preview_slot is None:
-                        p_name = get_preview_sample(step)
-                        preview_text = preview_prompts.dataset_caption(cfg, p_name, TRIGGER_WORD)
-                    else:
-                        cache_data["_custom"] = custom.items[preview_slot]
-                        p_name = "_custom"
-                        preview_text = preview_prompts.custom_text(CACHE_DIR, preview_slot)
-                    PREVIEW_NOW.update(index=preview_index, prompt=preview_text)
-                    sample = cache_data[p_name]
-                    # Tamaño de la preview: el de la imagen; el prompt manual usa el de la primera del dataset.
-                    # En edición con el prompt manual, la proporción de la primera referencia (como en
-                    # ComfyUI, donde la salida sigue a la imagen que se edita) con el área de entrenamiento.
-                    first = cache_data[all_preview_names[0]]["lat"]
-                    ref = sample.get("lat", first)
-                    print(f"\n  [Preview] {t('Mode')}: {PREVIEW_CAPTION_MODE} | {t('Sample')}: {p_name}")
-                    H, W = ref.shape[2], ref.shape[3]
-                    refs = sample.get("ctrls") if EDIT_MODE else None
-                    if refs and "lat" not in sample:
-                        h, w = refs[0].shape[2], refs[0].shape[3]
-                        s = math.sqrt(first.shape[2] * first.shape[3] / (h * w))
-                        H, W = max(1, round(h * s)), max(1, round(w * s))
-                    if PREVIEW_WIDTH > 0 and PREVIEW_HEIGHT > 0 and not EDIT_MODE:
-                        # Lados explícitos en píxeles: cada token es un parche de 16x16 px.
-                        H = max(1, round(PREVIEW_HEIGHT / 16))
-                        W = max(1, round(PREVIEW_WIDTH / 16))
-                    elif PREVIEW_SIZE > 0:
-                        # Cada token es un parche de 16x16 px.
-                        s = PREVIEW_SIZE / 16 / math.sqrt(H * W)
-                        H, W = max(1, round(H * s)), max(1, round(W * s))
-                    run_preview(model, scheduler, sample["emb"], sample.get("uncond", neg), (H, W), step, refs)
+                    make_preview(step, preview_index, preview_slot)
 
     except (KeyboardInterrupt, SystemExit):
         save_checkpoint_now(last_step_executed)
@@ -1171,6 +1183,20 @@ def train_mossimage():
     final = os.path.join(OUTPUT_DIR, "MossImage_FINAL_LoRA.safetensors")
     _export_lora(model, final, min(last_step_executed, TOTAL_STEPS))
     print("✓ " + t("Final LoRA saved to: {path}", path=final))
+
+    # Rejilla XY final: la misma preview que durante el entrenamiento (make_preview), con los Custom
+    # Prompts listos o, sin ellos, la primera muestra del dataset.
+    globals()["PREVIEW_CAPTION_MODE"] = "first"
+    ready = [slot for slot, _ in preview_prompts.prompts(PREVIEW_PROMPTS) if slot in custom.items]
+    if ready:
+        xy_items = [(preview_prompts.custom_text(CACHE_DIR, s), s) for s in ready]
+    else:
+        p0 = get_preview_sample(0)
+        xy_items = [(preview_prompts.custom_text(CACHE_DIR, 0) if p0 == "_custom"
+                     else preview_prompts.dataset_caption(cfg, p0, TRIGGER_WORD), None)]
+    grid.run(model, min(last_step_executed, TOTAL_STEPS), [(text, slot, None) for text, slot in xy_items],
+             xy_grid.preview_renderer(lambda slot, _size: make_preview(0, 0, slot), globals()),
+             random.randint(1, 2147483647) if SEED <= 0 else SEED)
 
 
 if __name__ == "__main__":
