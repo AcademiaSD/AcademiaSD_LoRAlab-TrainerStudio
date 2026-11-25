@@ -88,6 +88,7 @@ OUTPUT_NAME_ALIASES = {
 
 OUTPUT_NAME_PREFIXES = (
     "anima_lora_output",
+    "anima29b_lora_output",
     "boogu_lora_output",
     "ernie_lora_output",
     "fibo2_lora_output",

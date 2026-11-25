@@ -3,8 +3,9 @@
 2_train_lora_anima.py — Entrenamiento LoRA para Anima (Transformer BF16 o NF4)
 LoRA training for Anima (BF16 or NF4 Transformer)
 
-Se entrena sobre Anima-Base, como recomienda su autor. El transformer (Cosmos-Predict2, 2B) se
-carga en BF16, o en NF4 para GPUs de 4 GB: se cuantiza al cargar, solo atención y MLP.
+Se entrena sobre Anima-Base, como recomienda su autor, o sobre Anima-2.9B (40 bloques en vez de 28)
+en el trainer Anima 2.9B, que usa este mismo script (anima_models.py). El transformer (Cosmos-Predict2)
+se carga en BF16, o en NF4 para GPUs de 4 GB: se cuantiza al cargar, solo atención y MLP.
 
 Lee configuración desde train_settings_anima.json si existe.
 Reads configuration from train_settings_anima.json if present.
@@ -35,6 +36,7 @@ from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_
 import lora_options
 import training_metrics
 import preview_prompts
+from anima_models import VARIANT
 
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
 STEP_WORD = t("Step")
@@ -45,12 +47,12 @@ try:
 except Exception:
     pass
 
-HF_REPO_ID = "circlestone-labs/Anima-Base-v1.0-Diffusers"
+HF_REPO_ID = VARIANT["repo"]
 
 DEFAULTS = {
-    "model_id": "Models/Anima-Base",
-    "cache_dir": "./Cache_Data/cached_data_anima",
-    "output_dir": "./Outputs/anima_lora_output",
+    "model_id": VARIANT["model_dir"],
+    "cache_dir": f"./Cache_Data/{VARIANT['cache_prefix']}",
+    "output_dir": f"./Outputs/{VARIANT['output_prefix']}",
     "precision": "bf16",
     "total_steps": 1500,
     "batch_size": 1,
@@ -88,8 +90,9 @@ DEFAULTS = {
     "project_name": "",
     "trigger_word": "",
 }
+DEFAULTS.update(VARIANT["defaults"]["train"])
 
-CONFIG_PATH = os.environ.get("LORALAB_TRAIN_CONFIG") or "settings/train_settings_anima.json"
+CONFIG_PATH = os.environ.get("LORALAB_TRAIN_CONFIG") or f"settings/{VARIANT['train_settings']}"
 
 if os.path.exists(CONFIG_PATH):
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
@@ -159,9 +162,10 @@ PREVIEW_NOW = {"index": 0, "prompt": ""}          # preview en curso: nº dentro
 TRIGGER_WORD      = cfg.get("trigger_word", "")
 PROJECT_NAME      = cfg.get("project_name", "").strip()
 
-CACHE_DIR = str(resolve_cache_dir(f"./cached_data_anima_{PROJECT_NAME}" if PROJECT_NAME else cfg.get("cache_dir"), DEFAULTS["cache_dir"]))
-OUTPUT_DIR = str(resolve_output_dir(f"./anima_lora_output_{PROJECT_NAME}" if PROJECT_NAME else cfg.get("output_dir"), DEFAULTS["output_dir"]))
+CACHE_DIR = str(resolve_cache_dir(f"./{VARIANT['cache_prefix']}_{PROJECT_NAME}" if PROJECT_NAME else cfg.get("cache_dir"), DEFAULTS["cache_dir"]))
+OUTPUT_DIR = str(resolve_output_dir(f"./{VARIANT['output_prefix']}_{PROJECT_NAME}" if PROJECT_NAME else cfg.get("output_dir"), DEFAULTS["output_dir"]))
 
+print(f"  {t('Base Model'):<22}: {VARIANT['label']}")
 print(f"  {t('Model ID'):<22}: {MODEL_ID}")
 print(f"  {t('Precision'):<22}: {PRECISION.upper()}")
 print(f"  {t('Project Name'):<22}: {PROJECT_NAME if PROJECT_NAME else t('(Default)')}")
@@ -325,9 +329,9 @@ def build_lora_metadata(step):
     """
     meta = {
         "format": "pt",
-        "trained_with": "AcademiaSD LoRAlab Anima",
-        "ss_sd_model_name": "Anima-Base-v1.0",
-        "ss_base_model_version": "Anima",
+        "trained_with": f"AcademiaSD LoRAlab {VARIANT['name']}",
+        "ss_sd_model_name": VARIANT["label"],
+        "ss_base_model_version": VARIANT["name"],
         "ss_network_module": "lycoris.kohya" if USE_LOKR else "peft.LoraModel",
         "ss_network_dim": LORA_RANK,
         "ss_network_alpha": export_alpha(),
@@ -366,7 +370,7 @@ def build_lora_metadata(step):
         meta["ss_tag_frequency"] = json.dumps({"dataset": {trigger: 1}})
     if PROJECT_NAME:
         meta["project_name"] = PROJECT_NAME
-    meta["ss_output_name"] = PROJECT_NAME or trigger or "anima_lora"
+    meta["ss_output_name"] = PROJECT_NAME or trigger or VARIANT["lora_name"]
 
     # La resolución la fija el pre-caché del proyecto.
     pc_json = os.path.join(CACHE_DIR, f"pre_cache_settings_{PROJECT_NAME}.json")
@@ -595,7 +599,7 @@ def is_target(name, module):
         return False
     if LORA_TARGETS == "all":
         return True
-    # "blocks": atención (propia y cruzada con el texto) + MLP de los 28 bloques.
+    # "blocks": atención (propia y cruzada con el texto) + MLP de los bloques (28 en Base, 40 en 2.9B).
     return name.startswith("transformer_blocks.") and ".norm" not in name
 
 
@@ -611,7 +615,7 @@ def train_anima():
 
     ensure_model_downloaded(local_path=MODEL_ID, repo_id=HF_REPO_ID)
 
-    print(t("Loading {name}...", name=f"Anima Transformer ({PRECISION.upper()})"))
+    print(t("Loading {name}...", name=f"{VARIANT['name']} Transformer ({PRECISION.upper()})"))
     t0 = time.time()
     transformer = load_transformer()
     transformer.to("cuda")
@@ -763,7 +767,7 @@ def train_anima():
         torch.save(optimizer.state_dict(), OPT_FILE)
         with open(STEP_FILE, "w", encoding="utf-8") as f:
             f.write(str(current_s))
-        ckpt = os.path.join(OUTPUT_DIR, f"Anima_LoRA_step_{current_s}.safetensors")
+        ckpt = os.path.join(OUTPUT_DIR, f"{VARIANT['file_prefix']}_LoRA_step_{current_s}.safetensors")
         _export_lora(model, ckpt, current_s)
         print("✓ " + t("Checkpoint saved at step {n}: {path}", n=current_s, path=ckpt))
 
@@ -925,7 +929,7 @@ def train_anima():
         return
 
     print("\n\n" + t("Training completed!"))
-    final = os.path.join(OUTPUT_DIR, "Anima_FINAL_LoRA.safetensors")
+    final = os.path.join(OUTPUT_DIR, f"{VARIANT['file_prefix']}_FINAL_LoRA.safetensors")
     _export_lora(model, final, min(last_step_executed, TOTAL_STEPS))
     print("✓ " + t("Final LoRA saved to: {path}", path=final))
 

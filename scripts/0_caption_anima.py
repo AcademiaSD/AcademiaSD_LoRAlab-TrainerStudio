@@ -28,6 +28,7 @@ from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
 from i18n import t
 from text_io import read_text_file
 from project_layout import resolve_model_dir
+from anima_models import VARIANT   # Anima o Anima 2.9B: cada trainer con sus settings
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -61,8 +62,8 @@ DEFAULTS = {
 
 IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp")
 
-PRECACHE_CONFIG = "settings/pre_cache_settings_anima.json"
-CONFIG_PATH = "settings/caption_settings_anima.json"
+PRECACHE_CONFIG = f"settings/{VARIANT['precache_settings']}"
+CONFIG_PATH = f"settings/{VARIANT['caption_settings']}"
 HF_REPO_ID = "AcademiaSD/Qwen-Image-2.1-NF4-for-LoRA-Training"
 
 

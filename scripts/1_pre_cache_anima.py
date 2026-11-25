@@ -27,6 +27,7 @@ import cache_names
 from i18n import t
 import settings_limits
 import preview_prompts
+from anima_models import VARIANT
 from text_io import read_text_file
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 
@@ -36,16 +37,17 @@ try:
 except Exception:
     pass
 
-HF_REPO_ID = "circlestone-labs/Anima-Base-v1.0-Diffusers"
+# Anima-Base o Anima-2.9B según el trainer que lanza el script (anima_models.py).
+HF_REPO_ID = VARIANT["repo"]
 
 # Negativo recomendado por el autor de Anima; es el de las previews con CFG.
 NEGATIVE_PROMPT = "worst quality, low quality, score_1, score_2, score_3, artist name, blurry, jpeg artifacts, chromatic aberration"
 
 # ── DEFAULTS / VALORES POR DEFECTO ──────────────────────────────────────────
 DEFAULTS = {
-    "model_id": "Models/Anima-Base",
+    "model_id": VARIANT["model_dir"],
     "dataset_path": "./dataset",
-    "cache_dir": "./Cache_Data/cached_data_anima",
+    "cache_dir": f"./Cache_Data/{VARIANT['cache_prefix']}",
     "target_area": 768 * 768,
     "max_side": 1536,
     "multiple": 32,
@@ -53,9 +55,10 @@ DEFAULTS = {
     "trigger_word": "",
     "preview_custom_prompt": "",
 }
+DEFAULTS.update(VARIANT["defaults"]["pre_cache"])
 
 # ── CARGAR CONFIGURACIÓN / LOAD CONFIG ──────────────────────────────────────
-CONFIG_PATH = os.environ.get("LORALAB_PRECACHE_CONFIG") or "settings/pre_cache_settings_anima.json"
+CONFIG_PATH = os.environ.get("LORALAB_PRECACHE_CONFIG") or f"settings/{VARIANT['precache_settings']}"
 
 if os.path.exists(CONFIG_PATH):
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
@@ -76,13 +79,14 @@ PROJECT_NAME = cfg.get("project_name", "").strip()
 PREVIEW_CUSTOM_PROMPT = cfg.get("preview_custom_prompt", "").strip()
 
 # Formato automático de carpeta de caché según nombre del proyecto
-CACHE_DIR = str(resolve_cache_dir(f"./cached_data_anima_{PROJECT_NAME}" if PROJECT_NAME else cfg.get("cache_dir"), DEFAULTS["cache_dir"]))
+CACHE_DIR = str(resolve_cache_dir(f"./{VARIANT['cache_prefix']}_{PROJECT_NAME}" if PROJECT_NAME else cfg.get("cache_dir"), DEFAULTS["cache_dir"]))
 
 # VAE 8x + parches 2x2 en el transformer: lados múltiplos de 16 px como mínimo.
 if MULTIPLE not in (16, 32, 64):
     print("⚠ " + t("Invalid Multiple {n}. Using {d}.", n=MULTIPLE, d=32))
     MULTIPLE = 32
 
+print(f"  {t('Base Model'):<22}: {VARIANT['label']}")
 print(f"  {t('Model ID'):<22}: {MODEL_ID}")
 print(f"  {t('Project Name'):<22}: {PROJECT_NAME if PROJECT_NAME else t('(Default)')}")
 print(f"  {t('Trigger Word'):<22}: {TRIGGER_WORD}")
@@ -164,7 +168,7 @@ def ensure_model_downloaded(local_path, repo_id):
         return local_path
 
     print("⚠ " + t("Local model not found at: {path}", path=local_path))
-    print("  " + t("Downloading from Hugging Face: {repo}", repo=repo_id) + " (~5.6 GB)")
+    print("  " + t("Downloading from Hugging Face: {repo}", repo=repo_id) + f" (~{VARIANT['size_gb']} GB)")
 
     enable_hf_file_progress()
 

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-server.py — Backend web para AcademiaSD Anima Trainer
-Web backend for AcademiaSD Anima Trainer
+server.py — Backend web para AcademiaSD Anima Trainer (y Anima 2.9B, con server_anima29b.py)
+Web backend for AcademiaSD Anima Trainer (and Anima 2.9B, through server_anima29b.py)
 """
 
 import json
@@ -30,6 +30,7 @@ import training_metrics
 import preview_prompts
 import face_match
 import dataset_forge
+from anima_models import VARIANT
 import gpu_stats
 from pathlib import Path
 from i18n import t
@@ -88,16 +89,18 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 BASE_DIR = SCRIPTS_DIR.parent
 SETTINGS_DIR = BASE_DIR / "settings"
 SETTINGS_DIR.mkdir(exist_ok=True)
-ASSETS_DIR = BASE_DIR / "assets" / "anima"
+# Anima y Anima 2.9B son el mismo servidor: server_anima29b.py solo cambia la variante (anima_models.py).
+VID = VARIANT["id"]
+ASSETS_DIR = BASE_DIR / "assets" / VID          # assets/anima o assets/anima29b
 
 UI_FILE = BASE_DIR / "GUI" / "trainer_ui_anima.html"
 LOGO_FILE = ASSETS_DIR / "logo.png" if (ASSETS_DIR / "logo.png").exists() else BASE_DIR / "logo.png"
 
-PRECACHE_CONFIG = Path(os.environ.get("LORALAB_PRECACHE_CONFIG") or SETTINGS_DIR / "pre_cache_settings_anima.json")
-TRAIN_CONFIG = Path(os.environ.get("LORALAB_TRAIN_CONFIG") or SETTINGS_DIR / "train_settings_anima.json")
+PRECACHE_CONFIG = Path(os.environ.get("LORALAB_PRECACHE_CONFIG") or SETTINGS_DIR / VARIANT["precache_settings"])
+TRAIN_CONFIG = Path(os.environ.get("LORALAB_TRAIN_CONFIG") or SETTINGS_DIR / VARIANT["train_settings"])
 HF_TOKEN_CONFIG = SETTINGS_DIR / "HF_token.json"
 EXPORT_CONFIG = SETTINGS_DIR / "export_settings.json"  # compartido / shared by every trainer
-CAPTION_CONFIG = SETTINGS_DIR / "caption_settings_anima.json"
+CAPTION_CONFIG = SETTINGS_DIR / VARIANT["caption_settings"]
 
 DATASET_EXTS = (".png", ".jpg", ".jpeg", ".webp")
 
@@ -105,11 +108,14 @@ CAPTION_SCRIPT = SCRIPTS_DIR / "0_caption_anima.py"
 PRECACHE_SCRIPT = SCRIPTS_DIR / "1_pre_cache_anima.py"
 TRAIN_SCRIPT = SCRIPTS_DIR / "2_train_lora_anima.py"
 
+CACHE_PREFIX = VARIANT["cache_prefix"]     # cached_data_anima / cached_data_anima29b
+OUTPUT_PREFIX = VARIANT["output_prefix"]   # anima_lora_output / anima29b_lora_output
+
 app = Flask(__name__)
 
 project_layout.ensure_layout_and_log(BASE_DIR)
 
-runtime = TrainerStream(BASE_DIR, SETTINGS_DIR, "anima")
+runtime = TrainerStream(BASE_DIR, SETTINGS_DIR, VID)
 
 
 # =============================================================================
@@ -164,8 +170,8 @@ def get_train_output_dir():
     cfg = read_json_file(TRAIN_CONFIG, {})
     proj = cfg.get("project_name", "").strip()
     if proj:
-        return resolve_config_path(f"anima_lora_output_{proj}", "anima_lora_output")
-    return resolve_config_path(cfg.get("output_dir"), "anima_lora_output")
+        return resolve_config_path(f"{OUTPUT_PREFIX}_{proj}", OUTPUT_PREFIX)
+    return resolve_config_path(cfg.get("output_dir"), OUTPUT_PREFIX)
 
 
 def get_dataset_dir():
@@ -177,8 +183,8 @@ def get_precache_dir():
     cfg = read_json_file(PRECACHE_CONFIG, {})
     proj = cfg.get("project_name", "").strip()
     if proj:
-        return resolve_config_path(f"cached_data_anima_{proj}", "cached_data_anima")
-    return resolve_config_path(cfg.get("cache_dir"), "cached_data_anima")
+        return resolve_config_path(f"{CACHE_PREFIX}_{proj}", CACHE_PREFIX)
+    return resolve_config_path(cfg.get("cache_dir"), CACHE_PREFIX)
 
 
 def get_script_for_name(script_name):
@@ -378,7 +384,7 @@ def export_lora():
             return jsonify({"status": "error", "error": t("Target folder does not exist: {path}", path=target_dir)}), 400
 
         if not custom_name:
-            custom_name = "anima_lora.safetensors"
+            custom_name = f"{VARIANT['lora_name']}.safetensors"
         if not custom_name.lower().endswith(".safetensors"):
             custom_name += ".safetensors"
 
@@ -386,7 +392,7 @@ def export_lora():
         if not output_dir.exists():
             return jsonify({"status": "error", "error": t("Output folder does not exist: {path}", path=output_dir)}), 404
 
-        final_file = output_dir / "Anima_FINAL_LoRA.safetensors"
+        final_file = output_dir / f"{VARIANT['file_prefix']}_FINAL_LoRA.safetensors"
         source_file = None
 
         if final_file.exists():
@@ -423,11 +429,33 @@ def export_lora():
 # UI, ASSETS Y LOGO (FAVICON)
 # =============================================================================
 
+# La GUI es la misma para las dos variantes; Anima 2.9B cambia aquí sus nombres y las cifras del
+# modelo antes de servirla, así i18n.js ya traduce los textos finales.
+UI_29B = (
+    ("AcademiaSD Anima LoRAlab", "AcademiaSD Anima 2.9B LoRAlab"),
+    ("cached_data_anima", "cached_data_anima29b"),
+    ("anima_lora_output", "anima29b_lora_output"),
+    ("anima_lora.safetensors", "anima29b_lora.safetensors"),
+    ("`anima_lora_${proj}", "`anima29b_lora_${proj}"),
+    ("of the 28 blocks:", "of the 40 blocks:"),
+    ("BF16: full precision, best quality (~3.6 GB for the transformer). NF4: attention and MLP in 4 bits (~1.2 GB) for GPUs with 4-6 GB of VRAM;",
+     "BF16: full precision, best quality (~5.2 GB for the transformer). NF4: attention and MLP in 4 bits (~1.7 GB) for GPUs with 6 GB of VRAM;"),
+    ("NF4 (low VRAM, 4-6 GB)", "NF4 (low VRAM, 6 GB)"),
+)
+
+
 @app.route("/")
 def index():
     if not UI_FILE.exists():
         return t("File not found: {path}", path=UI_FILE), 404
-    return send_from_directory(str(UI_FILE.parent), UI_FILE.name)
+    if VID == "anima":
+        return send_from_directory(str(UI_FILE.parent), UI_FILE.name)
+    html = UI_FILE.read_text(encoding="utf-8")
+    for old, new in UI_29B:
+        if old not in html:
+            print(f"[!] trainer_ui_anima.html: '{old[:40]}' not found")
+        html = html.replace(old, new)
+    return Response(html, mimetype="text/html", headers={"Cache-Control": "no-store"})
 
 
 @app.route("/assets/<path:filename>")
@@ -454,8 +482,9 @@ def serve_logo():
 @app.route("/api/settings", methods=["GET"])
 def get_settings():
     return jsonify({
-        "pre_cache": read_json_file(PRECACHE_CONFIG, {}),
-        "train": read_json_file(TRAIN_CONFIG, {}),
+        # Lo que el json no tiene sale de los valores por defecto de la variante (Anima 2.9B).
+        "pre_cache": {**VARIANT["defaults"]["pre_cache"], **read_json_file(PRECACHE_CONFIG, {})},
+        "train": {**VARIANT["defaults"]["train"], **read_json_file(TRAIN_CONFIG, {})},
         "export": read_json_file(EXPORT_CONFIG, {}),
         "base_dir": str(BASE_DIR)
     })
@@ -469,8 +498,8 @@ def save_precache():
             return jsonify({"status": "error", "error": t("JSON object required.")}), 400
         
         proj = data.get("project_name", "").strip()
-        cache_dir_name = f"cached_data_anima_{proj}" if proj else "cached_data_anima"
-        output_dir_name = f"anima_lora_output_{proj}" if proj else "anima_lora_output"
+        cache_dir_name = f"{CACHE_PREFIX}_{proj}" if proj else CACHE_PREFIX
+        output_dir_name = f"{OUTPUT_PREFIX}_{proj}" if proj else OUTPUT_PREFIX
 
         data["cache_dir"] = f"./Cache_Data/{cache_dir_name}"
 
@@ -520,8 +549,8 @@ def save_train():
             return jsonify({"status": "error", "error": t("JSON object required.")}), 400
         
         proj = data.get("project_name", "").strip()
-        cache_dir_name = f"cached_data_anima_{proj}" if proj else "cached_data_anima"
-        output_dir_name = f"anima_lora_output_{proj}" if proj else "anima_lora_output"
+        cache_dir_name = f"{CACHE_PREFIX}_{proj}" if proj else CACHE_PREFIX
+        output_dir_name = f"{OUTPUT_PREFIX}_{proj}" if proj else OUTPUT_PREFIX
 
         data["cache_dir"] = f"./Cache_Data/{cache_dir_name}"
         data["output_dir"] = f"./Outputs/{output_dir_name}"
@@ -902,7 +931,7 @@ def open_browser():
 i18n.register(app)
 file_transfer.register(app, get_dataset_dir, get_train_output_dir, DATASET_EXTS)
 runtime.register(app)
-queue_link.register(app, "anima", runtime, TRAIN_CONFIG, PRECACHE_CONFIG)
+queue_link.register(app, VID, runtime, TRAIN_CONFIG, PRECACHE_CONFIG)
 training_metrics.register(app, get_train_output_dir)
 face_match.register(app, get_dataset_dir, get_train_output_dir)
 dataset_forge.register(app, get_dataset_dir)
@@ -910,7 +939,7 @@ dataset_forge.register(app, get_dataset_dir)
 
 if __name__ == "__main__":
     print("\n" + "=" * 70)
-    print("  ACADEMIASD — ANIMA LORA TRAINER WEB SERVER")
+    print(f"  ACADEMIASD — {VARIANT['name'].upper()} LORA TRAINER WEB SERVER")
     print("=" * 70)
     print(f"  {t('Base folder'):<20}: {BASE_DIR}")
     print(f"  {t('Python interpreter'):<20}: {sys.executable}")

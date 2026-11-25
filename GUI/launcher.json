@@ -96,6 +96,13 @@
       "run": "Run_LoRAlab-Anima.bat"
     },
     {
+      "id": "anima29b",
+      "name": "Anima 2.9B",
+      "description": "Anime and illustration LoRAs · 40-block preview",
+      "image": "assets/anima29b/portada.jpg",
+      "run": "Run_LoRAlab-Anima29B.bat"
+    },
+    {
       "id": "yue2",
       "name": "YuE2-3B",
       "description": "Music LoRAs (voice AR and phrasing NAR) · Experimental beta",
