@@ -8,6 +8,10 @@
 
 What was added, newest first. Each entry links to its commit.
 
+**2026-11-26**
+
+- <img src="https://img.shields.io/badge/MAJOR%20UPDATE-7c3aed?style=for-the-badge" alt="MAJOR UPDATE" height="22"> **Final XY grid in every image trainer** — when the training ends, the same image (same prompt and seed) is made with several checkpoints (rows) and LoRA strengths (columns), with the face likeness % on each image. It shows which step and strength to use without going to ComfyUI. Turn on **Final XY grid** in 2b. Training Previews ([details](#-final-xy-grid)) [`fe4871f`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/fe4871f)
+
 **2026-11-25**
 
 - <img src="https://img.shields.io/badge/NEW%20TRAINER-ff2d55?style=for-the-badge" alt="NEW TRAINER" height="22"> **Anima 2.9B: anime and illustration LoRAs on the 40-block Anima** — Anima-Base with 12 more blocks (preview v1), trained in NF4 in under 6 GB of VRAM. It has its own card, settings, cache and outputs, and shares the code of the Anima trainer ([details](#anima-29b--anime-and-illustration-loras-on-the-40-block-anima)) [`fedc57b`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/fedc57b)
@@ -571,6 +575,21 @@ For character LoRAs: each preview gets a badge with how much its face looks like
 - It runs on the CPU of the machine with the trainer, so it uses no VRAM and works the same on Windows, Linux, macOS and RunPod, from any browser or phone.
 - **Reference:** the largest face in each dataset image, averaged. **Likeness:** ArcFace cosine similarity of the preview's closest face to that reference, ×100. Real photos of the same person usually score above 50%; a different one, under 20-30%. Generated faces score lower: in the previews of a LoRA, 45% or more is a strong likeness. Green from 45%, amber from 30%, red below; *no face* when none is detected. Video previews are scored on their first frame.
 - **Show %** hides or shows the badges in the gallery and the chart. Video previews (Wan 2.2, LTX-2.3) are not scored; YuE2 (audio) does not have it.
+
+## 🧮 Final XY grid
+
+When the training ends, the trainer makes the same image (same prompt and seed) with several checkpoints and LoRA strengths, and joins them into one image per prompt: **checkpoints in rows, strengths in columns**. One look shows when the LoRA learned the character or style, when it starts to overcook, and which strength to use in ComfyUI.
+
+- **Turn it on** in **2b. Training Previews**, under Preview Size: **Final XY grid**, with **Checkpoints** (rows, 4 by default) and **Strengths** (columns, `0.75, 1.0, 1.25` by default, from 0 to 3; 0 is the model without the LoRA). Off by default, because it adds time at the end: one preview per image.
+- **Checkpoints** are spread over the training: with 4 and 800 steps, steps 200, 400, 600 and the final one. The trainer keeps a small copy of the LoRA at those steps while it trains (in `xy_grid/snapshots`, about the size of the LoRA), even when they are not multiples of Save Every, so **turn it on before the training ends**. A new training in the same project deletes the copies of the previous one; resuming keeps them.
+- **Prompts:** one grid per Custom Prompt or, without them, one with the caption of the first dataset image. Each image uses the same size, steps, CFG and seed as the previews (with Seed = 0, one random seed for the whole grid).
+- **Strength works as in ComfyUI:** the weight becomes W + strength × ΔW, also with DoRA and LoKr.
+- **Face likeness:** with [Face likeness](#-face-likeness-in-the-previews) installed, each image shows its % in the corner, with the colours of the gallery, and the console says which step and strength are the most alike for each prompt.
+- The grids show above the previews (click one to open it full size) and are saved as `xy_grid_step_<N>_<prompt>.png` in the `xy_grid` folder of the output, with the prompt inside the PNG. If the grid fails (for example, out of VRAM), the console says so and the LoRA is already saved.
+- **Trainers:** Z-Image, Anima, Anima 2.9B, FLUX.1 Dev, FLUX.2 Klein 9B, FLUX.3 Image Klein, Qwen-Image 2.1, Qwen-Image 2512 / Edit 2511, Krea 2, Fibo 2.0, Ideogram 4, Ming-Image, MOSS-Image, ERNIE-Image, Boogu, SDXL and MiniMax-H3 Image. Not in the video and audio trainers (LTX 2.3, LTX 2.5, MiniMax-H3, Wan 2.2, YuE2).
+- **Time:** checkpoints × strengths × prompts previews. With the defaults, 12 per prompt: about 1-2 minutes with a turbo LoRA (Z-Image, ~6 s per image at 4 steps), several minutes with 30-step previews.
+
+---
 
 ## 🧬 Dataset Forge
 
