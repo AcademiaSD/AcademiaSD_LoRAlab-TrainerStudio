@@ -51,6 +51,44 @@
         };
     })();
 
+    // Paneles de resultados encima de la galería (mapa de calor, rejilla XY): en una misma fila cuando hay
+    // sitio, y cada uno plegable con su ▼ (se recuerda). Lo comparten xy_grid.js y output_preservation.js.
+    window.LoRAlabPanels = window.LoRAlabPanels || {
+        row(gallery) {
+            let row = document.getElementById('result_panels');
+            if (row) return row;
+            const style = document.createElement('style');
+            style.textContent = `
+            #result_panels { display: flex; flex-wrap: wrap; gap: 8px 22px; align-items: flex-start; }
+            #result_panels > * { min-width: 0; }
+            #preservation_panel { flex: 0 1 470px; }
+            #xy_panel { flex: 1 1 380px; }
+            #result_panels .panel-title { cursor: pointer; justify-content: flex-start; gap: 8px; }
+            .rp-caret { display: inline-block; font-size: .8em; transition: transform .15s; }
+            .rp-min .rp-caret { transform: rotate(-90deg); }
+            .rp-min { flex: 0 0 auto !important; }
+            .rp-min > :not(.panel-title) { display: none !important; }`;
+            document.head.appendChild(style);
+            row = document.createElement('div');
+            row.id = 'result_panels';
+            gallery.before(row);
+            return row;
+        },
+        collapsible(panel, key) {
+            const title = panel.querySelector('.panel-title');
+            const caret = document.createElement('span');
+            caret.className = 'rp-caret';
+            caret.textContent = '▼';
+            title.prepend(caret);
+            const k = 'loralab_panel_' + key;
+            try { if (localStorage.getItem(k) === '0') panel.classList.add('rp-min'); } catch (e) {}
+            title.addEventListener('click', () => {
+                panel.classList.toggle('rp-min');
+                try { localStorage.setItem(k, panel.classList.contains('rp-min') ? '0' : '1'); } catch (e) {}
+            });
+        },
+    };
+
     const IDS = { on: 'train_output_preservation', word: 'train_preservation_class',
                   weight: 'train_preservation_strength', every: 'train_preservation_every',
                   map: 'train_preservation_map' };
@@ -132,22 +170,25 @@
         const style = document.createElement('style');
         style.textContent = `
         .pres-panel { margin: 0 0 14px; }
-        .pres-panel .pres-main { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
-        .pres-panel .pres-main img { max-height: 420px; max-width: 100%; border-radius: 10px; border: 1px solid var(--panel-border, #334155); }
-        .pres-panel .pres-thumbs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+        .pres-panel .pres-main { display: flex; gap: 14px; align-items: flex-start; }
+        .pres-panel .pres-main > a { flex: 0 0 auto; }
+        .pres-panel .pres-main img { max-height: 340px; max-width: 240px; display: block; border-radius: 10px; border: 1px solid var(--panel-border, #334155); }
+        .pres-panel .pres-side { flex: 1 1 auto; min-width: 0; }
+        .pres-panel .pres-thumbs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
         .pres-panel .pres-thumbs img { height: 70px; border-radius: 6px; cursor: pointer; opacity: .65; border: 1px solid transparent; }
         .pres-panel .pres-thumbs img.on, .pres-panel .pres-thumbs img:hover { opacity: 1; border-color: var(--accent, #38bdf8); }
-        .pres-panel .pres-note { font-size: 0.78rem; color: var(--text-muted, #94a3b8); max-width: 260px; line-height: 1.4; }`;
+        .pres-panel .pres-note { font-size: 0.78rem; color: var(--text-muted, #94a3b8); line-height: 1.4; }`;
         document.head.appendChild(style);
         const panel = document.createElement('div');
         panel.className = 'pres-panel';
         panel.id = 'preservation_panel';
         panel.style.display = 'none';
-        panel.innerHTML = `<div class="panel-title" style="cursor:default;">Preservation heatmap</div>
+        panel.innerHTML = `<div class="panel-title">Preservation heatmap</div>
             <div class="pres-main"><a href="#"><img alt=""></a>
-            <div class="pres-note">Where the LoRA changes the base model when the prompt has the class word instead of the trigger. Bright: it changes a lot; dark: it keeps the base model.</div></div>
-            <div class="pres-thumbs"></div>`;
-        (($('xy_panel') && $('xy_panel').parentElement === gallery.parentElement) ? $('xy_panel') : gallery).before(panel);
+            <div class="pres-side"><div class="pres-note">Where the LoRA changes the base model when the prompt has the class word instead of the trigger. Bright: it changes a lot; dark: it keeps the base model.</div>
+            <div class="pres-thumbs"></div></div></div>`;
+        window.LoRAlabPanels.row(gallery).prepend(panel);
+        window.LoRAlabPanels.collapsible(panel, 'heatmap');
         if (typeof I18N !== 'undefined') I18N.apply(panel);
         panel.querySelector('.pres-main a').addEventListener('click', (e) => {
             e.preventDefault();

@@ -53,6 +53,44 @@
         };
     })();
 
+    // Paneles de resultados encima de la galería (mapa de calor, rejilla XY): en una misma fila cuando hay
+    // sitio, y cada uno plegable con su ▼ (se recuerda). Lo comparten xy_grid.js y output_preservation.js.
+    window.LoRAlabPanels = window.LoRAlabPanels || {
+        row(gallery) {
+            let row = document.getElementById('result_panels');
+            if (row) return row;
+            const style = document.createElement('style');
+            style.textContent = `
+            #result_panels { display: flex; flex-wrap: wrap; gap: 8px 22px; align-items: flex-start; }
+            #result_panels > * { min-width: 0; }
+            #preservation_panel { flex: 0 1 470px; }
+            #xy_panel { flex: 1 1 380px; }
+            #result_panels .panel-title { cursor: pointer; justify-content: flex-start; gap: 8px; }
+            .rp-caret { display: inline-block; font-size: .8em; transition: transform .15s; }
+            .rp-min .rp-caret { transform: rotate(-90deg); }
+            .rp-min { flex: 0 0 auto !important; }
+            .rp-min > :not(.panel-title) { display: none !important; }`;
+            document.head.appendChild(style);
+            row = document.createElement('div');
+            row.id = 'result_panels';
+            gallery.before(row);
+            return row;
+        },
+        collapsible(panel, key) {
+            const title = panel.querySelector('.panel-title');
+            const caret = document.createElement('span');
+            caret.className = 'rp-caret';
+            caret.textContent = '▼';
+            title.prepend(caret);
+            const k = 'loralab_panel_' + key;
+            try { if (localStorage.getItem(k) === '0') panel.classList.add('rp-min'); } catch (e) {}
+            title.addEventListener('click', () => {
+                panel.classList.toggle('rp-min');
+                try { localStorage.setItem(k, panel.classList.contains('rp-min') ? '0' : '1'); } catch (e) {}
+            });
+        },
+    };
+
     const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
     const CSS = `
@@ -62,7 +100,7 @@
     .xy-panel a.xy-item:hover { border-color: var(--accent, #38bdf8); }
     .xy-panel img { display: block; width: 100%; height: 300px; object-fit: contain; }
     .xy-panel .xy-cap { padding: 6px 10px; font-size: 0.75rem; color: var(--text-muted, #94a3b8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .xy-best { margin: 0 0 12px; padding: 10px 12px; background: #0b1222; border: 1px solid var(--panel-border, #334155); border-radius: 8px; font-size: 0.82rem; color: #cbd5e1; }
+    .xy-best { overflow-x: auto; margin: 0 0 12px; padding: 10px 12px; background: #0b1222; border: 1px solid var(--panel-border, #334155); border-radius: 8px; font-size: 0.82rem; color: #cbd5e1; }
     .xy-best-head { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; margin-bottom: 8px; }
     .xy-best-head b { color: #fbbf24; font-size: 0.95rem; }
     .xy-best-head .xy-file { color: var(--text-muted, #94a3b8); flex: 1 1 200px; }
@@ -162,9 +200,10 @@
         panel.className = 'xy-panel no-i18n';
         panel.id = 'xy_panel';
         panel.style.display = 'none';
-        panel.innerHTML = `<div class="panel-title" style="cursor:default;">${esc(tr('Final XY grid'))}</div>
+        panel.innerHTML = `<div class="panel-title">${esc(tr('Final XY grid'))}</div>
             <div class="xy-best" id="xy_best" style="display:none;"></div><div class="xy-list"></div>`;
-        gallery.before(panel);
+        window.LoRAlabPanels.row(gallery).append(panel);
+        window.LoRAlabPanels.collapsible(panel, 'xy');
         refresh();
         setInterval(refresh, 15000);
     }
