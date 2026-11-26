@@ -1617,5 +1617,6 @@
   "Checkpoints: {steps}": "체크포인트: {steps}",
   "Scoring the images...": "이미지 채점 중...",
   "Best checkpoint: step {n}. Copied as {file}": "최적의 체크포인트: 스텝 {n}. {file}(으)로 복사됨",
-  "Best checkpoint: step {n} (its LoRA file was not found to copy it).": "최적의 체크포인트: 스텝 {n}(복사할 LoRA 파일을 찾을 수 없음)."
+  "Best checkpoint: step {n} (its LoRA file was not found to copy it).": "최적의 체크포인트: 스텝 {n}(복사할 LoRA 파일을 찾을 수 없음).",
+  "[GPU] Token embedding table kept in RAM during the load (-{:.2f} GB of VRAM).": "[GPU] 로드 중 토큰 임베딩 테이블을 RAM에 유지 (VRAM -{:.2f} GB)."
 }

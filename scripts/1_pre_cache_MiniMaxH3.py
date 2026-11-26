@@ -43,6 +43,7 @@ import subprocess
 import sys
 import time
 import traceback
+import weakref
 
 # Fragmentation guard: the encoder is moved as ~470 loose NF4 tensors, and without this the
 # allocator keeps a few hundred MB reserved-but-unusable on a 16 GB card. Must be set before the
@@ -1380,6 +1381,10 @@ def detach_embed_tokens(module):
     owner, embed = _find_embed_tokens(module)
     if owner is None:
         return None, None
+    # A table still on META stays attached, so audit_meta_tensors in force_cuda_or_die reports it.
+    # Una tabla que sigue en META se queda en el arbol, para que audit_meta_tensors la detecte.
+    if getattr(embed, "weight", None) is None or embed.weight.is_meta:
+        return None, None
     owner.embed_tokens = nn.Identity()
     return owner, embed
 
@@ -1406,15 +1411,20 @@ def park_embed_tokens(embed, host):
     if parked:
         return embed
 
+    # Weak reference to the host: the hooks must not keep the language stack alive.
+    # Referencia debil al padre: los hooks no deben mantener vivo el stack de lenguaje.
+    host_ref = weakref.ref(host)
+
     def _ids_to_cpu(mod, args):
         if mod.weight.device.type != "cpu":
             return None
         return tuple(a.to("cpu") if torch.is_tensor(a) else a for a in args)
 
     def _out_to_device(mod, args, out):
-        if mod.weight.device.type != "cpu":
+        owner = host_ref()
+        if mod.weight.device.type != "cpu" or owner is None:
             return None
-        for param in host.parameters():
+        for param in owner.parameters():
             if param is not mod.weight:
                 return out.to(param.device)
         return out
@@ -1423,6 +1433,21 @@ def park_embed_tokens(embed, host):
     embed.register_forward_hook(_out_to_device)
     embed._h3_parked = True
     return embed
+
+
+def move_keeping_embed_in_ram(module, device):
+    """module.to(device) with the token embedding table left in RAM (detached for the move, parked
+    after it). The edit path uses it to bring the language stack back to the GPU.
+    module.to(device) dejando la tabla de embeddings en RAM; el path de edit lo usa para devolver
+    el stack de lenguaje a la GPU sin subir los 1,45 GB de la tabla."""
+    owner, embed = detach_embed_tokens(module)
+    try:
+        module.to(device)
+    finally:
+        if embed is not None:
+            owner.embed_tokens = embed
+            park_embed_tokens(embed, owner)
+        owner = embed = None
 
 
 # ============================================================================
@@ -2939,15 +2964,13 @@ def edit_vision_features(text_encoder, processor, jobs, device="cuda"):
     finally:
         inner.visual.to("cpu")
         gc_cuda()
-        inner.language_model.to(device)
         # The token embedding table (152K x 5120, ~1.5 GB) only looks ids up: it stays in RAM, and
         # its output goes to the GPU. On a 16 GB card that is the margin that keeps the 1,600-token
-        # edit presentations from spilling into shared memory (31-46 s a pair instead of ~1 s).
-        # La tabla de embeddings solo busca ids: se queda en RAM y su salida va a la GPU.
-        embed = inner.language_model.embed_tokens
-        embed.to("cpu")
-        embed.register_forward_pre_hook(lambda mod, args: tuple(a.to("cpu") if torch.is_tensor(a) else a for a in args))
-        embed.register_forward_hook(lambda mod, args, out: out.to(device))
+        # edit presentations from spilling into shared memory (31-46 s a pair instead of ~1 s). It is
+        # left out of the move, so it never visits the GPU on the way back.
+        # La tabla de embeddings solo busca ids: se queda en RAM y su salida va a la GPU. Queda fuera
+        # del movimiento, asi que no pasa por la GPU al volver.
+        move_keeping_embed_in_ram(inner.language_model, device)
         gc_cuda()
     log_dev(L("    Vision phase {:.1f}s; vision tower parked in RAM, language layers back on the GPU ({:.2f} GB).",
               "    Fase de vision {:.1f}s; torre de vision en RAM, capas de lenguaje de vuelta en la GPU ({:.2f} GB).")
@@ -3635,7 +3658,7 @@ def preprocess_minimaxh3():
                 for _b, _ in _jobs:
                     if os.path.exists(_edit_vision_path(_b)):
                         os.remove(_edit_vision_path(_b))
-                text_encoder.model.to("cuda")
+                move_keeping_embed_in_ram(text_encoder.model, "cuda")
                 gc_cuda()
         del _jobs
 

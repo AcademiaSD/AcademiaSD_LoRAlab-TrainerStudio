@@ -1788,5 +1788,6 @@
   "Checkpoints: {steps}": "Checkpoints: {steps}",
   "Scoring the images...": "Puntuando las imágenes...",
   "Best checkpoint: step {n}. Copied as {file}": "Mejor checkpoint: paso {n}. Copiado como {file}",
-  "Best checkpoint: step {n} (its LoRA file was not found to copy it).": "Mejor checkpoint: paso {n} (no se ha encontrado su fichero LoRA para copiarlo)."
+  "Best checkpoint: step {n} (its LoRA file was not found to copy it).": "Mejor checkpoint: paso {n} (no se ha encontrado su fichero LoRA para copiarlo).",
+  "[GPU] Token embedding table kept in RAM during the load (-{:.2f} GB of VRAM).": "[GPU] Tabla de embeddings en RAM durante la carga (-{:.2f} GB de VRAM)."
 }

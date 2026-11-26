@@ -1617,5 +1617,6 @@
   "Checkpoints: {steps}": "チェックポイント：{steps}",
   "Scoring the images...": "画像を採点中...",
   "Best checkpoint: step {n}. Copied as {file}": "最良のチェックポイント：ステップ {n}。{file} としてコピーしました",
-  "Best checkpoint: step {n} (its LoRA file was not found to copy it).": "最良のチェックポイント：ステップ {n}（コピーする LoRA ファイルが見つかりません）。"
+  "Best checkpoint: step {n} (its LoRA file was not found to copy it).": "最良のチェックポイント：ステップ {n}（コピーする LoRA ファイルが見つかりません）。",
+  "[GPU] Token embedding table kept in RAM during the load (-{:.2f} GB of VRAM).": "[GPU] 読み込み中はトークン埋め込みテーブルを RAM に保持 (VRAM -{:.2f} GB)。"
 }
