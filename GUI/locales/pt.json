@@ -1644,5 +1644,8 @@
   "preservation heatmap (hover to see it)": "mapa de calor da preservação (passe o rato para ver)",
   "The queue started the {kind} in this trainer.": "A fila iniciou {kind} neste treinador.",
   "Pre-cache done: the training starts in a few seconds...": "Pré-cache concluída: o treino começa dentro de segundos...",
-  "The training did not start here: check the queue.": "O treino não começou aqui: verifique a fila."
+  "The training did not start here: check the queue.": "O treino não começou aqui: verifique a fila.",
+  "General": "Geral",
+  "Character": "Personagem",
+  "General: a long description (appearance, hair, clothing, pose, background, lighting), for styles and objects. Character: short captions without the fixed traits of the person (face, hair, eyes, skin, age), only what changes between photos, so the trigger learns the identity; best for people, and with Output preservation.": "Geral: uma descrição longa (aparência, cabelo, roupa, pose, fundo, luz), para estilos e objetos. Personagem: captions curtas sem os traços fixos da pessoa (cara, cabelo, olhos, pele, idade), só o que muda entre fotos, para que o trigger aprenda a identidade; o melhor para pessoas, e com a preservação da saída."
 }

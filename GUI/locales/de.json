@@ -1644,5 +1644,8 @@
   "preservation heatmap (hover to see it)": "Heatmap des Ausgabeschutzes (Maus darüber zum Ansehen)",
   "The queue started the {kind} in this trainer.": "Die Warteschlange hat {kind} in diesem Trainer gestartet.",
   "Pre-cache done: the training starts in a few seconds...": "Pre-Cache fertig: das Training startet in wenigen Sekunden...",
-  "The training did not start here: check the queue.": "Das Training ist hier nicht gestartet: prüfe die Warteschlange."
+  "The training did not start here: check the queue.": "Das Training ist hier nicht gestartet: prüfe die Warteschlange.",
+  "General": "Allgemein",
+  "Character": "Person",
+  "General: a long description (appearance, hair, clothing, pose, background, lighting), for styles and objects. Character: short captions without the fixed traits of the person (face, hair, eyes, skin, age), only what changes between photos, so the trigger learns the identity; best for people, and with Output preservation.": "Allgemein: eine lange Beschreibung (Aussehen, Haare, Kleidung, Pose, Hintergrund, Licht), für Stile und Objekte. Person: kurze Captions ohne die festen Merkmale der Person (Gesicht, Haare, Augen, Haut, Alter), nur was sich zwischen den Fotos ändert, damit der Trigger die Identität lernt; am besten für Personen und mit dem Ausgabeschutz."
 }
