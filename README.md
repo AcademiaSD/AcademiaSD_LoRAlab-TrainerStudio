@@ -10,6 +10,7 @@ What was added, newest first. Each entry links to its commit.
 
 **2026-11-26**
 
+- <img src="https://img.shields.io/badge/MAJOR%20UPDATE-7c3aed?style=for-the-badge" alt="MAJOR UPDATE" height="22"> **Best checkpoint, chosen automatically** — when the training ends, the trainer tests several saved checkpoints with the same prompts and seeds, scores the likeness to the dataset (face likeness for characters, SigLIP for styles and objects), the prompt adherence and the variety between seeds, and copies the recommended one as `<Model>_BEST_LoRA.safetensors`. A table with the scores and a **Send best to Models** button show above the previews. Turn on **Find the best checkpoint** in 2b. Training Previews ([details](#-best-checkpoint)) [`90ee419`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/90ee419)
 - <img src="https://img.shields.io/badge/MAJOR%20UPDATE-7c3aed?style=for-the-badge" alt="MAJOR UPDATE" height="22"> **Final XY grid in every image trainer** — when the training ends, the same image (same prompt and seed) is made with several checkpoints (rows) and LoRA strengths (columns), with the face likeness % on each image. It shows which step and strength to use without going to ComfyUI. Turn on **Final XY grid** in 2b. Training Previews ([details](#-final-xy-grid)) [`fe4871f`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/fe4871f)
 
 **2026-11-25**
@@ -588,6 +589,22 @@ When the training ends, the trainer makes the same image (same prompt and seed) 
 - The grids show above the previews (click one to open it full size) and are saved as `xy_grid_step_<N>_<prompt>.png` in the `xy_grid` folder of the output, with the prompt inside the PNG. If the grid fails (for example, out of VRAM), the console says so and the LoRA is already saved.
 - **Trainers:** Z-Image, Anima, Anima 2.9B, FLUX.1 Dev, FLUX.2 Klein 9B, FLUX.3 Image Klein, Qwen-Image 2.1, Qwen-Image 2512 / Edit 2511, Krea 2, Fibo 2.0, Ideogram 4, Ming-Image, MOSS-Image, ERNIE-Image, Boogu, SDXL and MiniMax-H3 Image. Not in the video and audio trainers (LTX 2.3, LTX 2.5, MiniMax-H3, Wan 2.2, YuE2).
 - **Time:** checkpoints × strengths × prompts previews. With the defaults, 12 per prompt: about 1-2 minutes with a turbo LoRA (Z-Image, ~6 s per image at 4 steps), several minutes with 30-step previews.
+
+## 🏆 Best checkpoint
+
+When the training ends, the trainer tests several of the saved checkpoints and recommends one, so you don't have to compare them by eye.
+
+- **Turn it on** in **2b. Training Previews**, under the Final XY grid: **Find the best checkpoint**, with **Checkpoints to test** (8 by default, from 2 to 16). It needs **Save Every**, because it chooses among the saved checkpoints: they are spread over the training (the closest saved step to Total·k/N), and the final LoRA is always tested. Off by default.
+- **Test images:** 4 per checkpoint, with fixed seeds: 2 prompts × 2 seeds (the first two Custom Prompts), or 1 prompt × 4 seeds with a single Custom Prompt or, without them, the caption of the first dataset image. The same 4 are also made without the LoRA, as the reference.
+- **Score:** three measures for each checkpoint.
+  - **Likeness:** for characters, the [face likeness](#-face-likeness-in-the-previews) % to the dataset; for styles and objects, the SigLIP similarity to the dataset images. It chooses on its own: character mode when Face likeness is installed and at least half of the dataset has a face.
+  - **Prompt adherence:** how well the images still follow the prompt (SigLIP), compared to the model without the LoRA. A LoRA that ignores the prompt loses points.
+  - **Seed similarity:** if different seeds give almost the same image, the LoRA is overcooking. It loses points when this goes up.
+- **Recommended:** the earliest checkpoint whose score is very close to the best one. Once the likeness stops going up, the earlier checkpoint is the least overcooked. It is copied as `<Model>_BEST_LoRA.safetensors` next to the other LoRAs (a new training replaces it).
+- **Results:** a table above the previews with each checkpoint's scores, the recommended one highlighted, and **Send best to Models** to copy it to the export folder. A sheet with all the test images (`xy_grid_best_step_<N>.png`) shows with the grids, and the scores are saved in `xy_grid/best_checkpoint.json`. The console prints the same table.
+- **Judge:** [SigLIP](https://huggingface.co/google/siglip-base-patch16-224) (Apache 2.0, ~0.8 GB), downloaded the first time to `Models/SigLIP-base-patch16-224`. It runs on the GPU when there are more than 2 GB free, otherwise on the CPU.
+- The score is a guide, not a verdict: look at the sheet before you choose. If the search fails, the console says so and the LoRA is already saved.
+- **Trainers:** the same as the Final XY grid. **Time:** 4 previews per checkpoint plus 4 without the LoRA; with 8 checkpoints, 36 previews: about 4 minutes with a turbo LoRA, longer with 30-step previews.
 
 ---
 
