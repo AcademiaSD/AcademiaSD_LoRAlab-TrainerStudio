@@ -1641,5 +1641,6 @@
   "Preservation heatmap": "출력 보존 히트맵",
   "Every 100 steps, saves a heatmap over a dataset image: where the LoRA changes the base model's output when the prompt has the class word instead of the trigger. Usually the face and the hair; if the clothes, the background or the style light up too, the LoRA is learning things from the dataset it should not. Shown above the previews.": "100스텝마다 데이터셋 이미지 위에 히트맵을 저장합니다: 프롬프트에 트리거 대신 클래스 단어가 있을 때 LoRA가 기본 모델의 출력을 어디서 바꾸는지. 보통 얼굴과 머리카락; 옷, 배경, 스타일도 밝아지면 LoRA가 데이터셋에서 배우면 안 되는 것을 배우고 있습니다. 프리뷰 위에 표시됩니다.",
   "Where the LoRA changes the base model when the prompt has the class word instead of the trigger. Bright: it changes a lot; dark: it keeps the base model.": "프롬프트에 트리거 대신 클래스 단어가 있을 때 LoRA가 기본 모델을 어디서 바꾸는지. 밝음: 많이 바뀜, 어두움: 기본 모델 유지.",
-  "preservation heatmap (hover to see it)": "출력 보존 히트맵 (마우스를 올려 보기)"
+  "preservation heatmap (hover to see it)": "출력 보존 히트맵 (마우스를 올려 보기)",
+  "The queue started the {kind} in this trainer.": "대기열이 이 트레이너에서 {kind}을(를) 시작했습니다."
 }
