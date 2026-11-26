@@ -257,6 +257,10 @@ def register(app, trainer_id, runtime, train_config, precache_config):
     def optimizer_js():
         return send_from_directory(str(GUI_DIR), "optimizer.js")
 
+    @app.route("/settings_assistant.js")
+    def settings_assistant_js():
+        return send_from_directory(str(GUI_DIR), "settings_assistant.js")
+
     @app.route("/caption_presets.js")
     def caption_presets_js():
         return send_from_directory(str(GUI_DIR), "caption_presets.js")
