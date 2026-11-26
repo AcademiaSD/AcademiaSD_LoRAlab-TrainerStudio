@@ -10,6 +10,7 @@ What was added, newest first. Each entry links to its commit.
 
 **2026-11-26**
 
+- **Settings assistant** — 🪄 Suggest settings in the Training Settings of the image trainers proposes steps, learning rate, rank, warmup, save and preview interval, masked loss and caption type for a character, a style or an object, from the number of images and the model's own defaults ([details](#-settings-assistant)) [`93b5b4f`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/93b5b4f)
 - <img src="https://img.shields.io/badge/MAJOR%20UPDATE-7c3aed?style=for-the-badge" alt="MAJOR UPDATE" height="22"> **Dataset analyzer in every trainer** — 🔍 Analyze in the Dataset Manager checks the dataset before training: duplicate, blurry or small images, faces that are missing or look like another person, missing captions or without the trigger, and fixed traits of the person repeated in every caption. The suggested fixes come ticked and **Apply changes** does them (images move to `_removed`, not deleted). 📋 opens the last report again ([details](#-dataset-analyzer)) [`dd36be0`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/dd36be0) [`7c0bb68`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/7c0bb68) [`d282fba`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/d282fba)
 - <img src="https://img.shields.io/badge/MAJOR%20UPDATE-7c3aed?style=for-the-badge" alt="MAJOR UPDATE" height="22"> **Masked loss in every image trainer** — BiRefNet (MIT, ~0.2 GB) cuts out the subject of every image before training and the loss weighs the subject 1 and the background 0.1 (configurable), so the LoRA learns the person or object and not the backgrounds of the dataset. A sheet with the masks shows above the previews. Turn on **Masked loss (subject)** under the LR Scheduler ([details](#-masked-loss)) [`403da7e`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/403da7e) [`3dce7aa`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/3dce7aa)
 - The option checkboxes under the LR Scheduler sit in two columns [`a9684eb`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/a9684eb)
@@ -327,6 +328,8 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 **Parecido facial:** encima de las previews, **👤 Parecido facial → Activar...** pone en cada preview (y sobre su círculo en la gráfica del entrenamiento) el % de parecido de su cara con la del dataset. En las previews de un LoRA, un 45% o más es mucho parecido (verde) y un 30-45%, parecido parcial (naranja); las fotos reales de la misma persona suelen dar más. También en las previews de vídeo, con su primer fotograma. No se descarga por defecto: los modelos de InsightFace son solo para investigación no comercial, y antes de descargarlos hay que aceptar en una ventana que se usan bajo tu responsabilidad y sin fines comerciales. Funciona en la CPU, también en RunPod. Detalles en la sección *Face likeness in the previews*.
 
 **Prompts propios en las previews:** en **2b. Training Previews**, **Custom Prompts (0-4)** pone hasta 4 prompts tuyos: cada ronda de previews hace una imagen por prompt, o una sola con uno al azar (**One random prompt per preview**). Con 0 se usan las captions del dataset (Caption Mode). Los codifica el Pre-Cache; si los cambias durante el entrenamiento y pulsas **Save JSON**, se codifican en la CPU y el trainer pasa a usarlos (en LTX y MiniMax-H3 solo los codifica el Pre-Cache). En los entrenadores de edición con varias imágenes de referencia, **One image per prompt** hace que cada prompt edite su propia imagen. Al abrir una preview se ve el prompt con el que se hizo. Detalles en la sección *Custom prompts in the previews*.
+
+**Asistente de ajustes:** **🪄 Suggest settings**, arriba en *2. Training Settings* de los trainers de imagen, propone los ajustes según lo que entrenes (personaje, estilo u objeto) y el número de imágenes, partiendo de los valores por defecto de ese modelo: pasos, learning rate, rank y alpha, scheduler, warmup, cada cuánto guardar y hacer previews, la máscara del sujeto, la protección de salida y el tipo de caption. Enseña el valor actual y el propuesto, y aplica los que marques. Detalles en la sección *Settings assistant*.
 
 **Analizador del dataset:** **🔍 Analyze**, en la barra del Dataset Manager, revisa el dataset antes de entrenar: imágenes duplicadas, borrosas o pequeñas, caras que faltan o que se parecen poco al resto, captions que faltan, sin trigger o casi iguales, y frases que se repiten en casi todos (si son rasgos fijos de la persona, recomienda los captions *Character*). Lo sugerido viene marcado y **Apply changes** lo aplica tras confirmar: las imágenes que quitas pasan a la subcarpeta `_removed` (no se borran), añade el trigger y quita los rasgos repetidos de los captions. **📋** vuelve a abrir el último informe. Detalles en la sección *Dataset analyzer*.
 
@@ -670,6 +673,24 @@ The LoRA learns the subject, not the backgrounds of the dataset. Before the trai
 The option checkboxes under the LR Scheduler (New LR curve on resume, Output preservation, Masked loss) sit in two columns, with the fields of each option below them.
 
 ---
+
+## 🪄 Settings assistant
+
+**🪄 Suggest settings**, at the top of **2. Training Settings** in the image trainers, proposes the settings for what you are training. Choose what the LoRA learns (**Character**, **Style** or **Object**), check the number of images (it comes from the Dataset Manager) and, for a character, whether the person is a *woman*, a *man* or a *person*.
+
+A table shows each setting now and suggested, with why; the ones that already match are greyed out. **Apply the ticked ones** changes only the ticked settings; they are saved when you start the training.
+
+The suggestions start from **this trainer's own defaults**, so the learning rate of Z-Image (4e-4) is not the one of Anima (2e-5) or SDXL (1e-4). With gradient accumulation 4 (other values scale the steps):
+
+| | Character | Style | Object |
+| :--- | :--- | :--- | :--- |
+| Total steps | 70 per image (600–2500) | 40 per image (1000–4000) | 60 per image (600–2000) |
+| Learning rate | the model's default | 0.75 × the model's default | the model's default |
+| Rank / alpha | the model's default | double (16–32) | the model's default |
+| Masked loss | on | off | on |
+| Caption type | Character | General | General |
+
+Warmup is about 5% of the steps, and Save Every and Preview Every give about 10 checkpoints. For a character it also proposes Output preservation with the class word, unticked (it is about 2.2x slower). With Prodigy and fewer than 1000 steps it proposes AdamW, because Prodigy needs more steps to find the learning rate. Trainers: Z-Image, Anima, Anima 2.9B, FLUX.1 Dev, FLUX.2 Klein 9B, FLUX.3 Image Klein, Qwen-Image 2.1, Qwen-Image 2512, Krea 2, Fibo 2.0, Ideogram 4, Ming-Image, MOSS-Image, ERNIE-Image and SDXL.
 
 ## 🔍 Dataset analyzer
 
