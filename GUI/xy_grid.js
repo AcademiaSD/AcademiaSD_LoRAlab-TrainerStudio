@@ -10,6 +10,49 @@
     const $ = (id) => document.getElementById(id);
     const IDS = { on: 'train_xy_grid', rows: 'train_xy_checkpoints', cols: 'train_xy_strengths',
                   best: 'train_best_checkpoint', bestN: 'train_best_checkpoints' };
+    // Visor de imágenes dentro de la página (rejillas, hoja del mejor checkpoint, mapas de calor): una
+    // pestaña nueva da problemas detrás de proxies como RunPod. Pantalla completa ajustada a la ventana;
+    // clic en la imagen: tamaño real (con scroll); clic fuera, × o Esc: cerrar. Lo comparten xy_grid.js y
+    // output_preservation.js (el primero que carga lo crea).
+    window.LoRAlabViewer = window.LoRAlabViewer || (function () {
+        let box = null;
+        function close() { if (box) box.style.display = 'none'; }
+        function build() {
+            const style = document.createElement('style');
+            style.textContent = `
+            .lv-box { position: fixed; inset: 0; background: rgba(2,6,23,.9); z-index: 3000; display: none;
+                      flex-direction: column; align-items: center; justify-content: center; padding: 18px; }
+            .lv-scroll { flex: 1 1 auto; width: 100%; overflow: auto; display: flex; min-height: 0; }
+            .lv-scroll img { margin: auto; max-width: 100%; max-height: 100%; object-fit: contain; cursor: zoom-in;
+                             border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,.6); }
+            .lv-box.lv-full .lv-scroll img { max-width: none; max-height: none; cursor: zoom-out; }
+            .lv-cap { flex: 0 0 auto; margin-top: 10px; color: #cbd5e1; font-size: .85rem; max-width: 90%;
+                      text-align: center; overflow-wrap: anywhere; }
+            .lv-x { position: absolute; top: 10px; right: 16px; width: 38px; height: 38px; border-radius: 50%;
+                    border: 1px solid #334155; background: #0f172a; color: #e2e8f0; font-size: 22px; cursor: pointer; }`;
+            document.head.appendChild(style);
+            box = document.createElement('div');
+            box.className = 'lv-box no-i18n';
+            box.innerHTML = `<button type="button" class="lv-x" aria-label="Close">×</button>
+                <div class="lv-scroll"><img alt=""></div><div class="lv-cap"></div>`;
+            document.body.appendChild(box);
+            box.addEventListener('click', (e) => {
+                if (e.target.tagName === 'IMG') box.classList.toggle('lv-full');
+                else close();
+            });
+            document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+        }
+        return {
+            open(src, caption) {
+                if (!box) build();
+                box.classList.remove('lv-full');
+                box.querySelector('img').src = src;
+                box.querySelector('.lv-cap').textContent = caption || '';
+                box.style.display = 'flex';
+            },
+        };
+    })();
+
     const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
     const CSS = `
@@ -193,9 +236,12 @@
             const a = document.createElement('a');
             a.className = 'xy-item';
             a.href = url;
-            a.target = '_blank';
-            a.rel = 'noopener';
             a.title = g.prompt || g.name;
+            // Se abre en el visor de la página, no en una pestaña nueva.
+            a.addEventListener('click', (e) => {
+                e.preventDefault();
+                window.LoRAlabViewer.open(url, `${g.name}${g.prompt ? ' — ' + g.prompt : ''}`);
+            });
             a.innerHTML = `<img loading="lazy" alt=""><div class="xy-cap"></div>`;
             a.querySelector('img').src = url;
             a.querySelector('.xy-cap').textContent = `${g.name}${g.prompt ? ' — ' + g.prompt : ''}`;
