@@ -39,6 +39,7 @@ import training_metrics
 import preview_prompts
 import xy_grid
 import output_preservation
+import subject_masks
 import block_swap
 
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
@@ -658,6 +659,8 @@ def train_flux1():
 
     ensure_model_downloaded(local_path=MODEL_ID, repo_id=HF_REPO_ID)
 
+    # Masked loss: máscara del sujeto de cada imagen (BiRefNet), también antes de cargar el modelo.
+    subject = subject_masks.Subject(cfg, CACHE_DIR, OUTPUT_DIR)
     # Output preservation: los prompts de clase se codifican antes de cargar el transformer (VRAM libre).
     pres = output_preservation.Preservation(cfg, CACHE_DIR, OUTPUT_DIR, TRIGGER_WORD, os.path.join(os.path.dirname(os.path.abspath(__file__)), "1_pre_cache_flux1.py"))
 
@@ -959,7 +962,7 @@ def train_flux1():
                 try:
                     with (block_swap.SaveOnCpu() if offload else block_swap._null()):
                         pred = predict(model, noisy, sigma, embeds, H, W, TRAIN_GUIDANCE)
-                    loss = F.mse_loss(pred.float(), target) / GRAD_ACCUM_STEPS
+                    loss = subject_masks.loss(pred.float(), target, subject.weight(names, grid=(H // 2, W // 2))) / GRAD_ACCUM_STEPS
                     scaler.scale(loss).backward()
                     break
                 except torch.OutOfMemoryError:

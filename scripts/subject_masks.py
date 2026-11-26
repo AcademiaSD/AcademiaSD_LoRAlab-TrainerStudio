@@ -130,7 +130,10 @@ def prepare(cfg, cache_dir, output_dir, log=print, samples=None, latent_hw=None,
         src = _find_image(folder, s)
         if src is None:
             continue
-        h, w = latent_hw(s)
+        try:
+            h, w = latent_hw(s)
+        except Exception:
+            continue                  # su latente no se puede leer: esa muestra va sin máscara
         key = [os.path.basename(src), int(os.path.getmtime(src)), h, w]
         info[s] = (src, h, w, key)
         if index.get(s) != key or not os.path.isfile(os.path.join(cache_dir, s + SUFFIX)):
@@ -225,3 +228,49 @@ def register(app, get_output_dir):
         if not p.is_file():
             abort(404)
         return send_from_directory(str(p.parent), p.name, max_age=0)
+
+
+# ── Lo que usa cada trainer ──
+class Subject:
+    """
+    Uso en un trainer:
+
+        subject = subject_masks.Subject(cfg, CACHE_DIR, OUTPUT_DIR)      # antes de cargar el modelo
+        ...
+        loss = subject_masks.loss(pred.float(), target, subject.weight(names, grid)) / GRAD_ACCUM_STEPS
+
+    weight() da None si no se usa (y loss() es entonces la MSE de siempre). Con la predicción como latente
+    [B, C, H, W], grid=None; empaquetada en tokens [B, L, C], grid=(alto, ancho) de la rejilla de tokens (la
+    máscara se reduce por áreas a esa rejilla y se aplana por filas, como los tokens).
+    latent_hw(muestra) -> (H, W) del latente guardado, si no son sus dos últimas dimensiones.
+    """
+
+    def __init__(self, cfg, cache_dir, output_dir, log=print, latent_hw=None, samples=None):
+        self.on, self.bg = settings(cfg)
+        self.masks = prepare(cfg, cache_dir, output_dir, log=log, samples=samples, latent_hw=latent_hw) if self.on else None
+        self.active = bool(self.masks)
+
+    def weight(self, names, grid=None, device="cuda"):
+        if not self.active or any(n not in self.masks for n in names):
+            return None
+        import torch
+        import torch.nn.functional as F
+        m = torch.stack([self.masks[n] for n in names]).to(device, non_blocking=True)   # [B, 1, H, W]
+        if grid is not None:
+            m = F.interpolate(m, size=tuple(int(v) for v in grid), mode="area").flatten(2).transpose(1, 2)
+        return weights(m, self.bg)
+
+
+def loss(pred, target, weight=None, per_sample=False):
+    """MSE con los pesos de la máscara (o la de siempre sin ellos). per_sample: una por muestra del lote."""
+    import torch.nn.functional as F
+    if weight is None:
+        if per_sample:
+            return F.mse_loss(pred, target, reduction="none").mean(dim=tuple(range(1, pred.dim())))
+        return F.mse_loss(pred, target)
+    se = (pred - target) ** 2
+    w = weight.to(se.dtype).expand_as(se)
+    if per_sample:
+        dims = tuple(range(1, se.dim()))
+        return (se * w).sum(dims) / w.sum(dims).clamp_min(1e-8)
+    return (se * w).sum() / w.sum().clamp_min(1e-8)

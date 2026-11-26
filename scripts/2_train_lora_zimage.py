@@ -694,8 +694,7 @@ def train_zimage():
     pres = output_preservation.Preservation(
         cfg, CACHE_DIR, OUTPUT_DIR, TRIGGER_WORD, os.path.join(os.path.dirname(os.path.abspath(__file__)), "1_pre_cache_zimage.py"))
     # Masked loss: máscara del sujeto de cada imagen (BiRefNet), también antes de cargar el transformer.
-    MASKED, MASK_BG = subject_masks.settings(cfg)
-    subject = subject_masks.prepare(cfg, CACHE_DIR, OUTPUT_DIR)
+    subject = subject_masks.Subject(cfg, CACHE_DIR, OUTPUT_DIR)
 
     print(t("Loading {name}...", name="Z-Image Transformer (NF4)"))
     t0 = time.time()
@@ -896,9 +895,6 @@ def train_zimage():
         buckets[tuple(cache_data[nombre]["lat"].shape[2:])].append(nombre)
         if pres.active:
             cache_data[nombre]["dop"] = load_tensor(f"{CACHE_DIR}/{pres.name(nombre)}_embed.pt")
-        if subject and nombre in subject:
-            m = subject[nombre]
-            cache_data[nombre]["mask"] = m.pin_memory() if pin else m
     pres.begin(start_step)
 
     # Custom Prompts: los embeddings se releen cuando el servidor los recodifica en CPU.
@@ -958,13 +954,8 @@ def train_zimage():
 
             pred = predict(model, noisy, sigma, embeds)
 
-            if subject and all("mask" in cache_data[n] for n in names):
-                # Masked loss: el sujeto pesa 1 y el fondo MASK_BG (media normalizada por los pesos).
-                weight = subject_masks.weights(torch.stack([cache_data[n]["mask"] for n in names]).to(
-                    "cuda", non_blocking=True), MASK_BG)
-                loss = subject_masks.masked_mse(pred.float(), target, weight) / GRAD_ACCUM_STEPS
-            else:
-                loss = F.mse_loss(pred.float(), target) / GRAD_ACCUM_STEPS
+            # Masked loss: el sujeto pesa 1 y el fondo su peso (sin máscara, la MSE de siempre).
+            loss = subject_masks.loss(pred.float(), target, subject.weight(names)) / GRAD_ACCUM_STEPS
             scaler.scale(loss).backward()
             step_loss = loss.item() * GRAD_ACCUM_STEPS
             running_loss += step_loss

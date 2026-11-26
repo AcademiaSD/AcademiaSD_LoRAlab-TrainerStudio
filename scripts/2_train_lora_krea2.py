@@ -36,6 +36,7 @@ import training_metrics
 import preview_prompts
 import xy_grid
 import output_preservation
+import subject_masks
 import block_swap
 
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
@@ -1211,6 +1212,8 @@ def train_krea2():
 
     card_gb, usable_gb = block_swap.apply_vram_profile(SWAP_CFG.vram_profile, log=print, t=t)
 
+    # Masked loss: máscara del sujeto de cada imagen (BiRefNet), también antes de cargar el modelo.
+    subject = subject_masks.Subject(cfg, CACHE_DIR, OUTPUT_DIR)
     # Output preservation: los prompts de clase se codifican antes de cargar el transformer (VRAM libre).
     pres = output_preservation.Preservation(cfg, CACHE_DIR, OUTPUT_DIR, TRIGGER_WORD, os.path.join(os.path.dirname(os.path.abspath(__file__)), "1_pre_cache_krea2.py"))
 
@@ -1573,7 +1576,7 @@ def train_krea2():
                             encoder_attention_mask=masks,
                             return_dict=False,
                         )[0]
-                    loss = F.mse_loss(pred.float(), target.float()) / GRAD_ACCUM_STEPS
+                    loss = subject_masks.loss(pred.float(), target.float(), subject.weight(names, grid=(size[0] // 2, size[1] // 2))) / GRAD_ACCUM_STEPS
                     scaler.scale(loss).backward()
                     break
                 except torch.OutOfMemoryError:

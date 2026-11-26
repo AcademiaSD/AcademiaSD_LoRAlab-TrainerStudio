@@ -40,6 +40,7 @@ import training_metrics
 import preview_prompts
 import xy_grid
 import output_preservation
+import subject_masks
 import block_swap
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 
@@ -595,6 +596,8 @@ def train_mingimage():
 
     ensure_model_downloaded(local_path=MODEL_ID, repo_id=HF_REPO_ID)
 
+    # Masked loss: máscara del sujeto de cada imagen (BiRefNet), también antes de cargar el modelo.
+    subject = subject_masks.Subject(cfg, CACHE_DIR, OUTPUT_DIR)
     # Output preservation: los prompts de clase se codifican antes de cargar el DiT (VRAM libre). En LoRAs de
     # edición no se usa (cada muestra tiene su _ctrl.pt).
     pres = output_preservation.Preservation(
@@ -955,7 +958,7 @@ def train_mingimage():
                 try:
                     with (block_swap.SaveOnCpu() if offload else block_swap._null()):
                         pred = predict(model, noisy, sigma, embeds, embeds2, ctrl)
-                    loss = F.mse_loss(pred.float(), target) / GRAD_ACCUM_STEPS
+                    loss = subject_masks.loss(pred.float(), target, subject.weight(names)) / GRAD_ACCUM_STEPS
                     scaler.scale(loss).backward()
                     break
                 except torch.OutOfMemoryError:

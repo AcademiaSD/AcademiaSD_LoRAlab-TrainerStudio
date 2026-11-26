@@ -37,6 +37,7 @@ import training_metrics
 import preview_prompts
 import xy_grid
 import output_preservation
+import subject_masks
 
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
 STEP_WORD = t("Step")
@@ -729,6 +730,8 @@ def train_qwen_image21():
 
     ensure_model_downloaded(local_path=MODEL_ID, repo_id=HF_REPO_ID)
 
+    # Masked loss: máscara del sujeto de cada imagen (BiRefNet), también antes de cargar el modelo.
+    subject = subject_masks.Subject(cfg, CACHE_DIR, OUTPUT_DIR)
     # Output preservation: los prompts de clase se codifican antes de cargar el transformer (VRAM libre). En
     # LoRAs de edición no se usa.
     pres = output_preservation.Preservation(
@@ -1078,7 +1081,7 @@ def train_qwen_image21():
                 return_dict=False,
             )[0][:, -H * W:]
 
-            loss = F.mse_loss(pred.float(), target.float()) / GRAD_ACCUM_STEPS
+            loss = subject_masks.loss(pred.float(), target.float(), subject.weight(names, grid=(H, W))) / GRAD_ACCUM_STEPS
             scaler.scale(loss).backward()
             step_loss = loss.item() * GRAD_ACCUM_STEPS
             running_loss += step_loss

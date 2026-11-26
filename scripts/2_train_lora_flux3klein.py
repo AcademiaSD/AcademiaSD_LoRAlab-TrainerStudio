@@ -41,6 +41,7 @@ import training_metrics
 import preview_prompts
 import xy_grid
 import output_preservation
+import subject_masks
 
 # FLUX.3 hace las normas q/k en FP32 a propósito (como BFL): torch avisa de que no usa el kernel fusionado.
 warnings.filterwarnings("ignore", message="Mismatch dtype between input and weight")
@@ -667,6 +668,8 @@ def train_flux3klein():
 
     ensure_model_downloaded(local_path=MODEL_ID, repo_id=HF_REPO_ID)
 
+    # Masked loss: máscara del sujeto de cada imagen (BiRefNet), también antes de cargar el modelo.
+    subject = subject_masks.Subject(cfg, CACHE_DIR, OUTPUT_DIR)
     # Output preservation: los prompts de clase se codifican antes de cargar el transformer (VRAM libre). En
     # LoRAs de edición no se usa.
     pres = output_preservation.Preservation(cfg, CACHE_DIR, OUTPUT_DIR, TRIGGER_WORD, os.path.join(os.path.dirname(os.path.abspath(__file__)), "1_pre_cache_flux3klein.py"),
@@ -1002,7 +1005,7 @@ def train_flux3klein():
                 batch["ctrl"] = torch.cat([cache_data[n]["ctrl"] for n in names])
             pred = model(**model_inputs(batch, noisy, H, W, "cuda"), timestep=sigma.to(COMPUTE_DTYPE), return_dict=False)[0]
 
-            loss = F.mse_loss(pred.float(), target.float()) / GRAD_ACCUM_STEPS
+            loss = subject_masks.loss(pred.float(), target.float(), subject.weight(names, grid=(H, W))) / GRAD_ACCUM_STEPS
             scaler.scale(loss).backward()
             step_loss = loss.item() * GRAD_ACCUM_STEPS
             running_loss += step_loss

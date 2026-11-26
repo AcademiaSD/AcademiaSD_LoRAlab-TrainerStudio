@@ -38,6 +38,7 @@ import training_metrics
 import preview_prompts
 import xy_grid
 import output_preservation
+import subject_masks
 
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
 STEP_WORD = t("Step")
@@ -512,6 +513,9 @@ def train_sdxl():
         print("[!] " + t("Checkpoint not found: {path}. Run Pre-Cache.", path=MODEL['checkpoint']))
         sys.exit(2)
 
+    # Masked loss: máscara del sujeto de cada imagen (BiRefNet), también antes de cargar el modelo.
+    subject = subject_masks.Subject(cfg, CACHE_DIR, OUTPUT_DIR, latent_hw=lambda n: tuple(
+        torch.load(f"{CACHE_DIR}/{n}_latent.pt", weights_only=True)["lat"].shape[-2:]))
     # Output preservation: los prompts de clase se codifican antes de cargar la UNet (VRAM libre).
     pres = output_preservation.Preservation(cfg, CACHE_DIR, OUTPUT_DIR, TRIGGER_WORD, os.path.join(os.path.dirname(os.path.abspath(__file__)), "1_pre_cache_sdxl.py"))
 
@@ -776,7 +780,7 @@ def train_sdxl():
             pred = model(noisy, ts, encoder_hidden_states=emb,
                          added_cond_kwargs={"text_embeds": pooled, "time_ids": ids}, return_dict=False)[0]
 
-            loss = F.mse_loss(pred.float(), noise, reduction="none").mean(dim=(1, 2, 3))
+            loss = subject_masks.loss(pred.float(), noise, subject.weight(names), per_sample=True)
             if MIN_SNR_GAMMA > 0:
                 # Min-SNR: los pasos casi sin ruido dejan de dominar el aprendizaje.
                 snr = alphas_cumprod[ts] / (1 - alphas_cumprod[ts])

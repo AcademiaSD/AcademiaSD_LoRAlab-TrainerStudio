@@ -18,6 +18,7 @@ import training_metrics
 import preview_prompts
 import xy_grid
 import output_preservation
+import subject_masks
 import settings_limits
 
 # La barra de progreso comparte los caracteres visuales del entrenador Klein. Fuerza UTF-8
@@ -154,6 +155,8 @@ def main():
     global RANK, ALPHA, USE_RSLORA, USE_LORAPLUS, LORAPLUS_RATIO, USE_LOKR, LOKR_FACTOR, USE_DORA
     if not torch.cuda.is_available(): raise RuntimeError("CUDA is required for ERNIE training")
     if not os.path.isfile(os.path.join(CACHE,"_neg_embed.pt")): raise RuntimeError("Run ERNIE Pre-Cache first")
+    # Masked loss: máscara del sujeto de cada imagen (BiRefNet), también antes de cargar el modelo.
+    subject = subject_masks.Subject(cfg, CACHE, OUT)
     # Output preservation: los prompts de clase se codifican antes de cargar el modelo (VRAM libre).
     pres=output_preservation.Preservation(cfg,CACHE,OUT,TRIGGER,os.path.join(os.path.dirname(os.path.abspath(__file__)), "1_pre_cache_ernie.py"))
     model=lora_options.to_compute_dtype(load_nf4(MODEL),COMPUTE_DTYPE).to("cuda"); model.enable_gradient_checkpointing()
@@ -269,7 +272,7 @@ def main():
         text,lens=pad_text(embeds,"cuda"); b=z.shape[0]; sigma=sample_sigma(b); noise=torch.randn_like(z); se=sigma.view(b,1,1,1)
         noisy=((1-se)*z+se*noise).to(COMPUTE_DTYPE); target=noise-z; timestep=(sigma*1000).to(COMPUTE_DTYPE)
         pred=model(hidden_states=noisy,timestep=timestep,text_bth=text,text_lens=lens,return_dict=False)[0]
-        loss=F.mse_loss(pred.float(),target.float())/ACCUM; scaler.scale(loss).backward()
+        loss=subject_masks.loss(pred.float(),target.float(),subject.weight(names))/ACCUM; scaler.scale(loss).backward()
         step_loss=loss.item()*ACCUM; running_loss+=step_loss
         step+=1; last_step=step
         # Output preservation: mismo latente con ruido y el prompt de clase; la salida con LoRA debe seguir siendo

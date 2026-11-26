@@ -49,6 +49,7 @@ import training_metrics
 import preview_prompts
 import xy_grid
 import output_preservation
+import subject_masks
 from moss_image_model import MOSSImageTransformer
 from moss_edit_lora import EDIT_BASES, base_file, base_layers
 
@@ -809,6 +810,8 @@ def train_mossimage():
 
     ensure_model_downloaded(local_path=MODEL_ID, repo_id=HF_REPO_ID)
 
+    # Masked loss: máscara del sujeto de cada imagen (BiRefNet), también antes de cargar el modelo.
+    subject = subject_masks.Subject(cfg, CACHE_DIR, OUTPUT_DIR)
     # Output preservation: los prompts de clase se codifican antes de cargar el transformer (VRAM libre). En
     # LoRAs de edición no se usa.
     pres = output_preservation.Preservation(cfg, CACHE_DIR, OUTPUT_DIR, TRIGGER_WORD, os.path.join(os.path.dirname(os.path.abspath(__file__)), "1_pre_cache_mossimage.py"),
@@ -1137,7 +1140,7 @@ def train_mossimage():
                           if EDIT_MODE else None)
             pred = model(noisy, sigma * 1000, text, mask, references=references)
 
-            loss = F.mse_loss(pred.float(), target) / GRAD_ACCUM_STEPS
+            loss = subject_masks.loss(pred.float(), target, subject.weight(names)) / GRAD_ACCUM_STEPS
             scaler.scale(loss).backward()
             step_loss = loss.item() * GRAD_ACCUM_STEPS
             running_loss += step_loss

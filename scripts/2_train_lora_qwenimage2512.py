@@ -35,6 +35,7 @@ import training_metrics
 import preview_prompts
 import xy_grid
 import output_preservation
+import subject_masks
 import qwen_image2512_model as qm
 
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
@@ -617,6 +618,8 @@ def train_qwenimage2512():
 
     ensure_model_downloaded()
 
+    # Masked loss: máscara del sujeto de cada imagen (BiRefNet), también antes de cargar el modelo.
+    subject = subject_masks.Subject(cfg, CACHE_DIR, OUTPUT_DIR)
     # Output preservation: los prompts de clase se codifican antes de cargar el transformer (VRAM libre). En
     # LoRAs de edición (Qwen-Image-Edit-2511) no se usa.
     pres = output_preservation.Preservation(cfg, CACHE_DIR, OUTPUT_DIR, TRIGGER_WORD, os.path.join(os.path.dirname(os.path.abspath(__file__)), "1_pre_cache_qwenimage2512.py"),
@@ -949,7 +952,7 @@ def train_qwenimage2512():
                 return_dict=False,
             )[0][:, :latent_packed.shape[1]]
 
-            loss = F.mse_loss(pred.float(), target.float()) / GRAD_ACCUM_STEPS
+            loss = subject_masks.loss(pred.float(), target.float(), subject.weight(names, grid=(H // 2, W // 2))) / GRAD_ACCUM_STEPS
             loss.backward()
             step_loss = loss.item() * GRAD_ACCUM_STEPS
             running_loss += step_loss

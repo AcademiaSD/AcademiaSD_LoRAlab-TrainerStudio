@@ -38,6 +38,7 @@ import training_metrics
 import preview_prompts
 import xy_grid
 import output_preservation
+import subject_masks
 import block_swap
 
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
@@ -622,6 +623,8 @@ def train_ideogram4():
 
     ensure_model_downloaded(local_path=MODEL_ID, repo_id=HF_REPO_ID)
 
+    # Masked loss: máscara del sujeto de cada imagen (BiRefNet), también antes de cargar el modelo.
+    subject = subject_masks.Subject(cfg, CACHE_DIR, OUTPUT_DIR, latent_hw=lambda n: tuple(torch.load(f"{CACHE_DIR}/{n}_latent.pt", weights_only=True).shape[:2]))
     # Output preservation: los prompts de clase se codifican antes de cargar el transformer (VRAM libre).
     pres = output_preservation.Preservation(cfg, CACHE_DIR, OUTPUT_DIR, TRIGGER_WORD, os.path.join(os.path.dirname(os.path.abspath(__file__)), "1_pre_cache_ideogram4.py"))
 
@@ -936,7 +939,7 @@ def train_ideogram4():
                             indicator=indicator,
                             return_dict=False,
                         )[0][:, n_text:]
-                    loss = F.mse_loss(pred.float(), target.float()) / GRAD_ACCUM_STEPS
+                    loss = subject_masks.loss(pred.float(), target.float(), subject.weight(names, grid=(gh, gw))) / GRAD_ACCUM_STEPS
                     scaler.scale(loss).backward()
                     break
                 except torch.OutOfMemoryError:
