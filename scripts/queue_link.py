@@ -252,6 +252,24 @@ def register(app, trainer_id, runtime, train_config, precache_config):
     def optimizer_js():
         return send_from_directory(str(GUI_DIR), "optimizer.js")
 
+    @app.route("/api/queue-handover", methods=["POST"])
+    def queue_handover():
+        """La cola arranca aquí el entrenamiento que esperaba a la pre-caché lanzada desde esta página, con
+        la copia de ajustes del trabajo, para que se vea en esta misma ventana (ver JobQueue._handover)."""
+        data = request.get_json(force=True) or {}
+        if request.remote_addr not in ("127.0.0.1", "::1"):
+            return jsonify({"status": "error", "error": "local only"}), 403
+        if JOB_ID or EDIT_JOB or data.get("script") not in KINDS or runtime.status().get("running"):
+            return jsonify({"status": "error", "error": t("The GPU is busy with another job.")}), 409
+        settings = data.get("settings") or {}
+        for key, path in (("train", train_config), ("pre_cache", precache_config)):
+            if isinstance(settings.get(key), dict) and settings[key]:
+                Path(path).parent.mkdir(parents=True, exist_ok=True)
+                tmp = Path(str(path) + ".tmp")
+                tmp.write_text(json.dumps(settings[key], indent=2, ensure_ascii=False), encoding="utf-8")
+                os.replace(tmp, path)
+        return original_run()
+
     @app.route("/api/queue-gate", methods=["POST"])
     def queue_gate():
         script = (request.get_json(force=True) or {}).get("script")

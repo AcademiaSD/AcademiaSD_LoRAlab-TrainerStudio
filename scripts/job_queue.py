@@ -579,8 +579,38 @@ class JobQueue:
                     j["note"] = ""
                 nxt = j
                 break
-        if nxt is not None:
+        if nxt is not None and not self._handover(nxt):
             self._launch(nxt)
+
+    def _handover(self, job):
+        """
+        Un entrenamiento que esperaba a la pre-caché lanzada desde la página de su entrenador (Start sin
+        caché): si esa página sigue abierta y libre, se arranca ahí, en lugar de en un servidor nuevo en otro
+        puerto. Así se ve en la misma ventana (consola, progreso, previews), y detrás de un proxy como RunPod,
+        donde solo están publicados los puertos del lanzador y del entrenador, no se pierde de vista.
+        Se lleva la copia de sus ajustes. Devuelve True si lo ha arrancado ahí.
+        """
+        with self._lock:
+            dep = self._job(job.get("after")) if job.get("after") else None
+            if dep is None or not dep.get("external") or not dep.get("port") or dep["trainer"] != job["trainer"]                     or any(j is not job and j.get("port") == dep["port"] and j["state"] == "running" for j in self.data["jobs"]):
+                return False
+            port = dep["port"]
+            names = _settings_names(job["trainer"])
+            settings = {key: _read_json(JOBS_DIR / job["id"] / name) for key, name in names.items()}
+        code, st = _http(port, "/api/status")
+        if st is None or st.get("running"):
+            return False
+        code, res = _http(port, "/api/queue-handover", {"script": job["kind"], "job_id": job["id"],
+                                                        "settings": settings}, timeout=15)
+        if code != 200:
+            return False
+        with self._lock:
+            # Como un trabajo lanzado desde su entrenador (external), con su copia de ajustes: si se pausa o
+            # falla, vuelve a la cola como uno más (ver _finish).
+            job.update(state="running", external=True, port=port, pid=None, started=time.time(), finished=None,
+                       code=None, note="", phase="page", lost=0, requested=None)
+            self._save()
+        return True
 
     def _free_port(self, exclude=()):
         """Primer puerto libre desde trainer_port + 1, sin los de otros trabajos ni los de exclude."""
