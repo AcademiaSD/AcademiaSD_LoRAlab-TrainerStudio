@@ -1626,5 +1626,16 @@
   "Less VRAM than AdamW. Use a similar Learning Rate.": "Menos VRAM que o AdamW. Use um Learning Rate parecido.",
   "Finds the learning rate on its own.": "Encontra sozinho o learning rate.",
   "Less VRAM.": "Menos VRAM.",
-  "Less VRAM than AdamW.": "Menos VRAM que o AdamW."
+  "Less VRAM than AdamW.": "Menos VRAM que o AdamW.",
+  "Output preservation": "Preservação da saída",
+  "Keeps what the model already knows. Every step, the caption is also used with the trigger replaced by a class word (for example 'woman'), and the LoRA is penalised if it changes the model's output for it. The LoRA learns the trigger, but 'woman' stays the base model's woman: it does not leak into other people, it overcooks less and it mixes better with other LoRAs. Like the Differential Output Preservation of ai-toolkit. It makes the training slower.": "Protege o que o modelo já sabe. Em cada passo, a caption também é usada com o trigger trocado por uma palavra de classe (por exemplo 'woman'), e penaliza-se o LoRA se mudar a saída do modelo para ela. O LoRA aprende o trigger, mas 'woman' continua a ser a mulher do modelo base: não contamina outras pessoas, queima menos e combina melhor com outros LoRAs. Como a Differential Output Preservation do ai-toolkit. Torna o treino mais lento.",
+  "Class word:": "Palavra de classe:",
+  "The generic word for what the trigger is: woman, man, person, dog, car, style... It replaces the trigger in the captions.": "A palavra genérica do que é o trigger: woman, man, person, dog, car, style... Substitui o trigger nas captions.",
+  "Strength:": "Força:",
+  "How strongly the base model's output is kept. 1.0 by default; higher keeps more and learns the trigger a bit slower.": "Quanto se mantém a saída do modelo base. 1.0 por defeito; mais alto mantém mais e aprende o trigger um pouco mais devagar.",
+  "Every N steps:": "A cada N passos:",
+  "Every how many steps it is applied. 1 is every step (about 2x slower); 2, every other step (about 1.5x).": "A cada quantos passos se aplica. 1 é em cada passo (cerca de 2x mais lento); 2, um passo sim e outro não (cerca de 1,5x).",
+  "Write the class word (woman, man, dog, style...): without it, it is not used.": "Escreva a palavra de classe (woman, man, dog, style...): sem ela não é usada.",
+  "About {x}x slower: one more pass without the LoRA and one with it every {n} step(s). The class prompts are encoded before the training starts.": "Cerca de {x}x mais lento: uma passagem extra sem o LoRA e outra com ele a cada {n} passo(s). Os prompts de classe são codificados antes de começar o treino.",
+  "Step {n}: preservation loss {loss:.5f} (average of the last {k})": "Passo {n}: loss de preservação {loss:.5f} (média dos últimos {k})"
 }

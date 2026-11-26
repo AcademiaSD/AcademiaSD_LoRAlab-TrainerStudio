@@ -326,8 +326,11 @@ def encode_preview_prompts(cache_dir, device, items):
 
 
 if __name__ == "__main__":
+    import output_preservation
     prompts_only = preview_prompts.parse_prompts_only(sys.argv)
-    if prompts_only:
+    if output_preservation.run_encoder_job(sys.argv, load_text_pipe, encode_text):
+        pass
+    elif prompts_only:
         # --prompts-only <carpeta de caché> <cuda|cpu> <json [[slot, prompt con el trigger ya puesto], ...]>
         encode_preview_prompts(*prompts_only)
     else:

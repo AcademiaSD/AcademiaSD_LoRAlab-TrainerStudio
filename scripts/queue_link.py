@@ -252,6 +252,10 @@ def register(app, trainer_id, runtime, train_config, precache_config):
     def optimizer_js():
         return send_from_directory(str(GUI_DIR), "optimizer.js")
 
+    @app.route("/output_preservation.js")
+    def output_preservation_js():
+        return send_from_directory(str(GUI_DIR), "output_preservation.js")
+
     @app.route("/api/queue-gate", methods=["POST"])
     def queue_gate():
         script = (request.get_json(force=True) or {}).get("script")

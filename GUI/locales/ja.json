@@ -1626,5 +1626,16 @@
   "Less VRAM than AdamW. Use a similar Learning Rate.": "AdamW より VRAM が少ない。同程度の Learning Rate を使ってください。",
   "Finds the learning rate on its own.": "学習率を自動で求めます。",
   "Less VRAM.": "VRAM が少なくて済みます。",
-  "Less VRAM than AdamW.": "AdamW より VRAM が少ない。"
+  "Less VRAM than AdamW.": "AdamW より VRAM が少ない。",
+  "Output preservation": "出力保護",
+  "Keeps what the model already knows. Every step, the caption is also used with the trigger replaced by a class word (for example 'woman'), and the LoRA is penalised if it changes the model's output for it. The LoRA learns the trigger, but 'woman' stays the base model's woman: it does not leak into other people, it overcooks less and it mixes better with other LoRAs. Like the Differential Output Preservation of ai-toolkit. It makes the training slower.": "モデルが既に知っていることを守ります。各ステップで、トリガーをクラス語 (例: 'woman') に置き換えたキャプションも使い、LoRA がそれに対するモデルの出力を変えるとペナルティを与えます。LoRA はトリガーを学びますが、'woman' はベースモデルの女性のままです: 他の人物に影響せず、焼き付きにくく、他の LoRA とも組み合わせやすくなります。ai-toolkit の Differential Output Preservation と同様。学習は遅くなります。",
+  "Class word:": "クラス語:",
+  "The generic word for what the trigger is: woman, man, person, dog, car, style... It replaces the trigger in the captions.": "トリガーが何かを表す一般的な語: woman, man, person, dog, car, style... キャプション内のトリガーを置き換えます。",
+  "Strength:": "強さ:",
+  "How strongly the base model's output is kept. 1.0 by default; higher keeps more and learns the trigger a bit slower.": "ベースモデルの出力をどれだけ保つか。既定は 1.0。高いほど多く保ち、トリガーの学習はやや遅くなります。",
+  "Every N steps:": "N ステップごと:",
+  "Every how many steps it is applied. 1 is every step (about 2x slower); 2, every other step (about 1.5x).": "何ステップごとに適用するか。1 は毎ステップ (約 2 倍遅い)、2 は 1 ステップおき (約 1.5 倍)。",
+  "Write the class word (woman, man, dog, style...): without it, it is not used.": "クラス語 (woman, man, dog, style...) を入力してください: ないと使われません。",
+  "About {x}x slower: one more pass without the LoRA and one with it every {n} step(s). The class prompts are encoded before the training starts.": "約 {x} 倍遅くなります: {n} ステップごとに LoRA なしのパスと LoRA ありのパスが 1 回ずつ増えます。クラスのプロンプトは学習開始前にエンコードされます。",
+  "Step {n}: preservation loss {loss:.5f} (average of the last {k})": "ステップ {n}: 保護 loss {loss:.5f} (直近 {k} 回の平均)"
 }

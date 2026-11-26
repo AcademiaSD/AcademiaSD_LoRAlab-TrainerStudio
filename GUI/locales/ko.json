@@ -1626,5 +1626,16 @@
   "Less VRAM than AdamW. Use a similar Learning Rate.": "AdamW보다 VRAM이 적습니다. 비슷한 Learning Rate를 사용하세요.",
   "Finds the learning rate on its own.": "학습률을 스스로 찾습니다.",
   "Less VRAM.": "VRAM이 적게 듭니다.",
-  "Less VRAM than AdamW.": "AdamW보다 VRAM이 적습니다."
+  "Less VRAM than AdamW.": "AdamW보다 VRAM이 적습니다.",
+  "Output preservation": "출력 보존",
+  "Keeps what the model already knows. Every step, the caption is also used with the trigger replaced by a class word (for example 'woman'), and the LoRA is penalised if it changes the model's output for it. The LoRA learns the trigger, but 'woman' stays the base model's woman: it does not leak into other people, it overcooks less and it mixes better with other LoRAs. Like the Differential Output Preservation of ai-toolkit. It makes the training slower.": "모델이 이미 아는 것을 지킵니다. 매 스텝마다 트리거를 클래스 단어(예: 'woman')로 바꾼 캡션도 사용하고, LoRA가 그에 대한 모델 출력을 바꾸면 패널티를 줍니다. LoRA는 트리거를 배우지만 'woman'은 기본 모델의 여성으로 남습니다: 다른 사람에게 번지지 않고, 덜 과적합되며, 다른 LoRA와도 더 잘 섞입니다. ai-toolkit의 Differential Output Preservation과 같습니다. 학습이 느려집니다.",
+  "Class word:": "클래스 단어:",
+  "The generic word for what the trigger is: woman, man, person, dog, car, style... It replaces the trigger in the captions.": "트리거가 무엇인지 나타내는 일반 단어: woman, man, person, dog, car, style... 캡션의 트리거를 대체합니다.",
+  "Strength:": "강도:",
+  "How strongly the base model's output is kept. 1.0 by default; higher keeps more and learns the trigger a bit slower.": "기본 모델의 출력을 얼마나 유지할지. 기본 1.0; 높을수록 더 유지하고 트리거는 조금 더 천천히 배웁니다.",
+  "Every N steps:": "N 스텝마다:",
+  "Every how many steps it is applied. 1 is every step (about 2x slower); 2, every other step (about 1.5x).": "몇 스텝마다 적용할지. 1은 매 스텝(약 2배 느림), 2는 한 스텝 건너(약 1.5배).",
+  "Write the class word (woman, man, dog, style...): without it, it is not used.": "클래스 단어(woman, man, dog, style...)를 입력하세요: 없으면 사용되지 않습니다.",
+  "About {x}x slower: one more pass without the LoRA and one with it every {n} step(s). The class prompts are encoded before the training starts.": "약 {x}배 느려집니다: {n} 스텝마다 LoRA 없는 패스와 LoRA 있는 패스가 하나씩 추가됩니다. 클래스 프롬프트는 학습 시작 전에 인코딩됩니다.",
+  "Step {n}: preservation loss {loss:.5f} (average of the last {k})": "스텝 {n}: 보존 loss {loss:.5f} (최근 {k}회 평균)"
 }
