@@ -1685,5 +1685,21 @@
   "More than one face: the LoRA can mix the people.": "Più di un volto: il LoRA può mescolare le persone.",
   "Look much less like the rest: maybe another person, or an unusual angle.": "Somigliano molto meno al resto: forse un'altra persona, o un'angolazione insolita.",
   "Last analysis of this dataset ({when}): open it again without analyzing.": "Ultima analisi di questo dataset ({when}): riaprila senza rianalizzare.",
-  "Analyzed {when}": "Analizzato: {when}"
+  "Analyzed {when}": "Analizzato: {when}",
+  "Apply changes": "Applica modifiche",
+  "{n} images out of the dataset": "{n} immagini fuori dal dataset",
+  "add the trigger": "aggiungere il trigger",
+  "remove {n} phrases from the captions": "togliere {n} frasi dalle caption",
+  "Nothing selected": "Niente selezionato",
+  "{n} images (and their captions) move to the _removed subfolder of the dataset: they leave the training, and you can bring them back.": "{n} immagini (e le loro caption) vanno nella sottocartella _removed del dataset: escono dall'addestramento e puoi riportarle.",
+  "«{trigger}» is added at the start of {n} captions.": "«{trigger}» viene aggiunto all'inizio di {n} caption.",
+  "Removed from every caption: {phrases}.": "Tolto da tutte le caption: {phrases}.",
+  "Apply these changes to the dataset?": "Applicare queste modifiche al dataset?",
+  "Done: {a} images out, trigger added to {b} captions, phrases removed from {c} captions.": "Fatto: {a} immagini fuori, trigger aggiunto a {b} caption, frasi tolte da {c} caption.",
+  "Character captions selected: press Redo Captions (with Overwrite) to write them again.": "Caption Character selezionate: premi Redo Captions (con Overwrite) per riscriverle.",
+  "Take this image out of the dataset": "Togliere questa immagine dal dataset",
+  "Add «{trigger}» at the start of these captions": "Aggiungere «{trigger}» all'inizio di queste caption",
+  "Remove «{phrase}» from every caption": "Togliere «{phrase}» da tutte le caption",
+  "Use Character captions": "Usa caption Character",
+  "Create the missing captions": "Crea le caption mancanti"
 }

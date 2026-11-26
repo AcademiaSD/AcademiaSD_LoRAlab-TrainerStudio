@@ -1685,5 +1685,21 @@
   "More than one face: the LoRA can mix the people.": "複数の顔: LoRA が人物を混ぜることがあります。",
   "Look much less like the rest: maybe another person, or an unusual angle.": "他の画像とあまり似ていません: 別人か、珍しい角度かもしれません。",
   "Last analysis of this dataset ({when}): open it again without analyzing.": "このデータセットの最後の分析 ({when}): 再分析せずにもう一度開きます。",
-  "Analyzed {when}": "分析日時: {when}"
+  "Analyzed {when}": "分析日時: {when}",
+  "Apply changes": "変更を適用",
+  "{n} images out of the dataset": "{n} 枚をデータセットから外す",
+  "add the trigger": "トリガーを追加",
+  "remove {n} phrases from the captions": "キャプションから {n} 個のフレーズを削除",
+  "Nothing selected": "何も選択されていません",
+  "{n} images (and their captions) move to the _removed subfolder of the dataset: they leave the training, and you can bring them back.": "{n} 枚の画像 (とキャプション) をデータセットのサブフォルダー _removed に移動します: 学習から外れ、元に戻せます。",
+  "«{trigger}» is added at the start of {n} captions.": "{n} 件のキャプションの先頭に «{trigger}» を追加します。",
+  "Removed from every caption: {phrases}.": "すべてのキャプションから削除: {phrases}。",
+  "Apply these changes to the dataset?": "これらの変更をデータセットに適用しますか?",
+  "Done: {a} images out, trigger added to {b} captions, phrases removed from {c} captions.": "完了: {a} 枚を除外、{b} 件のキャプションにトリガーを追加、{c} 件のキャプションからフレーズを削除。",
+  "Character captions selected: press Redo Captions (with Overwrite) to write them again.": "Character キャプションを選択しました: Redo Captions (Overwrite オン) で書き直してください。",
+  "Take this image out of the dataset": "この画像をデータセットから外す",
+  "Add «{trigger}» at the start of these captions": "これらのキャプションの先頭に «{trigger}» を追加",
+  "Remove «{phrase}» from every caption": "すべてのキャプションから «{phrase}» を削除",
+  "Use Character captions": "Character キャプションを使う",
+  "Create the missing captions": "足りないキャプションを作成"
 }

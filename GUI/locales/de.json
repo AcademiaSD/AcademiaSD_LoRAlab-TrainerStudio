@@ -1685,5 +1685,21 @@
   "More than one face: the LoRA can mix the people.": "Mehr als ein Gesicht: das LoRA kann die Personen vermischen.",
   "Look much less like the rest: maybe another person, or an unusual angle.": "Ähneln dem Rest deutlich weniger: vielleicht eine andere Person oder ein ungewöhnlicher Winkel.",
   "Last analysis of this dataset ({when}): open it again without analyzing.": "Letzte Analyse dieses Datensatzes ({when}): erneut öffnen, ohne neu zu analysieren.",
-  "Analyzed {when}": "Analysiert: {when}"
+  "Analyzed {when}": "Analysiert: {when}",
+  "Apply changes": "Änderungen anwenden",
+  "{n} images out of the dataset": "{n} Bilder aus dem Datensatz",
+  "add the trigger": "Trigger hinzufügen",
+  "remove {n} phrases from the captions": "{n} Phrasen aus den Captions entfernen",
+  "Nothing selected": "Nichts ausgewählt",
+  "{n} images (and their captions) move to the _removed subfolder of the dataset: they leave the training, and you can bring them back.": "{n} Bilder (und ihre Captions) kommen in den Unterordner _removed des Datensatzes: sie verlassen das Training und du kannst sie zurückholen.",
+  "«{trigger}» is added at the start of {n} captions.": "«{trigger}» wird am Anfang von {n} Captions hinzugefügt.",
+  "Removed from every caption: {phrases}.": "Wird aus allen Captions entfernt: {phrases}.",
+  "Apply these changes to the dataset?": "Diese Änderungen auf den Datensatz anwenden?",
+  "Done: {a} images out, trigger added to {b} captions, phrases removed from {c} captions.": "Fertig: {a} Bilder entfernt, Trigger in {b} Captions hinzugefügt, Phrasen aus {c} Captions entfernt.",
+  "Character captions selected: press Redo Captions (with Overwrite) to write them again.": "Character-Captions gewählt: Redo Captions (mit Overwrite) drücken, um sie neu zu schreiben.",
+  "Take this image out of the dataset": "Dieses Bild aus dem Datensatz nehmen",
+  "Add «{trigger}» at the start of these captions": "«{trigger}» am Anfang dieser Captions hinzufügen",
+  "Remove «{phrase}» from every caption": "«{phrase}» aus allen Captions entfernen",
+  "Use Character captions": "Character-Captions verwenden",
+  "Create the missing captions": "Fehlende Captions erstellen"
 }

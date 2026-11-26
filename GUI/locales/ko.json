@@ -1685,5 +1685,21 @@
   "More than one face: the LoRA can mix the people.": "얼굴이 둘 이상: LoRA가 사람을 섞을 수 있습니다.",
   "Look much less like the rest: maybe another person, or an unusual angle.": "나머지와 훨씬 덜 닮았습니다: 다른 사람이거나 특이한 각도일 수 있습니다.",
   "Last analysis of this dataset ({when}): open it again without analyzing.": "이 데이터셋의 마지막 분석({when}): 다시 분석하지 않고 다시 엽니다.",
-  "Analyzed {when}": "분석: {when}"
+  "Analyzed {when}": "분석: {when}",
+  "Apply changes": "변경 적용",
+  "{n} images out of the dataset": "이미지 {n}장 데이터셋에서 제외",
+  "add the trigger": "트리거 추가",
+  "remove {n} phrases from the captions": "캡션에서 문구 {n}개 제거",
+  "Nothing selected": "선택된 항목 없음",
+  "{n} images (and their captions) move to the _removed subfolder of the dataset: they leave the training, and you can bring them back.": "이미지 {n}장(과 캡션)이 데이터셋의 _removed 하위 폴더로 이동합니다: 학습에서 빠지며 되돌릴 수 있습니다.",
+  "«{trigger}» is added at the start of {n} captions.": "캡션 {n}개 앞에 «{trigger}»를 추가합니다.",
+  "Removed from every caption: {phrases}.": "모든 캡션에서 제거: {phrases}.",
+  "Apply these changes to the dataset?": "이 변경을 데이터셋에 적용할까요?",
+  "Done: {a} images out, trigger added to {b} captions, phrases removed from {c} captions.": "완료: 이미지 {a}장 제외, 캡션 {b}개에 트리거 추가, 캡션 {c}개에서 문구 제거.",
+  "Character captions selected: press Redo Captions (with Overwrite) to write them again.": "Character 캡션을 선택했습니다: Redo Captions(Overwrite 켬)를 눌러 다시 쓰세요.",
+  "Take this image out of the dataset": "이 이미지를 데이터셋에서 빼기",
+  "Add «{trigger}» at the start of these captions": "이 캡션들 앞에 «{trigger}» 추가",
+  "Remove «{phrase}» from every caption": "모든 캡션에서 «{phrase}» 제거",
+  "Use Character captions": "Character 캡션 사용",
+  "Create the missing captions": "빠진 캡션 만들기"
 }

@@ -179,7 +179,7 @@ def _repeated(caps, trigger, issue, character=False):
     for r in caps:
         w = [x for x in _words(r["caption"]) if x not in trig]
         grams = set()
-        for k in (2, 3, 4):
+        for k in range(2, 9):
             for i in range(len(w) - k + 1):
                 g = w[i:i + k]
                 if g[0] in STOP or g[-1] in STOP or sum(x not in STOP for x in g) < 2:
@@ -197,14 +197,28 @@ def _repeated(caps, trigger, issue, character=False):
     shown = sorted(shown, key=lambda gc: -gc[1])[:8]
     if shown and len(caps) >= 4:
         fmt = lambda items: ", ".join("«{}» ({:.0f}%)".format(g, 100 * c / len(caps)) for g, c in items)
-        traits = [gc for gc in shown if TRAITS.search(gc[0])] if character else []
+        traits = [gc for gc in shown if TRAITS.search(_removable(gc[0]) or "-")] if character else []
         rest = [gc for gc in shown if gc not in traits]
         if traits:
+            # Lo que se propone quitar es el rasgo, no «a young woman with» delante: se queda la palabra de clase.
+            removable = [(_removable(g), c) for g, c in traits if _removable(g)]
             issue("warn", "repeated", t("Repeated in almost every caption: {phrases}. If these are fixed traits of the person (hair, eyes, skin, age...), the model ties them to the words and not to the trigger, and the LoRA looks less like the person with other prompts. Use the Character caption type.", phrases=fmt(traits)),
-                  [r["file"] for r in caps], phrases=traits)
+                  [r["file"] for r in caps], phrases=traits, removable=removable)
         if rest:
             issue("info", "repeated", t("Repeated in almost every caption: {phrases}. What repeats in the captions is tied to those words: if it is the style or subject the trigger should learn, leave it out of the captions.", phrases=fmt(rest)),
-                  [r["file"] for r in caps], phrases=rest)
+                  [r["file"] for r in caps], phrases=rest,
+                  removable=[(g, c) for g, c in rest if not CLASS_PREFIX.fullmatch(g)])
+
+
+# «a young woman with» delante de los rasgos: es la persona (la palabra de clase), no un rasgo que quitar.
+CLASS_PREFIX = re.compile(r"^(?:(?:a|an|the)\s+)?(?:(?:young|old|adult|beautiful|pretty)\s+)?"
+                          r"(?:woman|man|girl|boy|person|lady|guy)(?:\s+(?:with|has|having|and))?(?:\s+|$)")
+
+
+def _removable(phrase):
+    """La parte de la frase que se puede quitar de los captions (sin la palabra de clase delante), o ''."""
+    rest = CLASS_PREFIX.sub("", phrase).strip()
+    return rest if len(rest.split()) >= 2 else ""
 
 
 def _faces(folder, items, issue):
@@ -237,12 +251,94 @@ def _faces(folder, items, issue):
             "scores": {f: round(s * 100) for f, s in sims.items()}}
 
 
+REMOVED_DIR = "_removed"
+
+
+def _unique(path):
+    if not path.exists():
+        return path
+    i = 2
+    while True:
+        cand = path.with_name("{}_{}{}".format(path.stem, i, path.suffix))
+        if not cand.exists():
+            return cand
+        i += 1
+
+
+def _clean_caption(text):
+    """Tras quitar frases: sin espacios antes de comas o puntos ni comas dobles."""
+    text = re.sub(r"\s+([,.;:])", lambda m: m.group(1), text)
+    text = re.sub(r"([,;:])\s*(?=[,.;:])", "", text)
+    return re.sub(r"\s{2,}", " ", text).strip().strip(",;").strip()
+
+
+def apply_fixes(folder, remove=(), add_trigger=None, remove_phrases=()):
+    """
+    Cambios del informe: remove = imágenes que salen del dataset (con su .txt) a la subcarpeta _removed (no se
+    borran: se pueden devolver); add_trigger = {"trigger", "files"}: el trigger al principio de esos captions;
+    remove_phrases = frases que se quitan de todos los captions. Devuelve el resumen.
+    """
+    folder = Path(folder)
+    out = {"removed": [], "trigger": 0, "phrases": 0, "errors": []}
+    for f in remove or ():
+        src = (folder / f).resolve()
+        if src.parent != folder.resolve() or not src.is_file() or src.suffix.lower() not in IMAGE_EXTS:
+            out["errors"].append(f)
+            continue
+        dest_dir = folder / REMOVED_DIR
+        dest_dir.mkdir(exist_ok=True)
+        dest = _unique(dest_dir / src.name)
+        os.replace(src, dest)
+        txt = src.with_suffix(".txt")
+        if txt.is_file():
+            os.replace(txt, dest.with_suffix(".txt"))
+        out["removed"].append(f)
+    from text_io import read_text_file
+    if add_trigger and (add_trigger.get("trigger") or "").strip():
+        trig = add_trigger["trigger"].strip()
+        for f in add_trigger.get("files") or ():
+            txt = (folder / f).with_suffix(".txt")
+            if txt.parent.resolve() != folder.resolve() or not txt.is_file():
+                continue
+            cap = read_text_file(str(txt)).strip()
+            if trig.lower() not in cap.lower():
+                txt.write_text("{}, {}".format(trig, cap) if cap else trig, encoding="utf-8")
+                out["trigger"] += 1
+    phrases = [p for p in (remove_phrases or ()) if p and p.strip()]
+    if phrases:
+        # La palabra que la une a lo anterior (with, and, her...) se va con ella: "a woman with long hair, smiling"
+        # -> "a woman, smiling".
+        lead = r"(?:\b(?:with|and|has|having|featuring|her|his|their)\s+)?"
+        pats = [re.compile(lead + r"\b" + r"\s+".join(map(re.escape, p.split())) + r"\b", re.I) for p in phrases]
+        for txt in sorted(folder.glob("*.txt")):
+            cap = read_text_file(str(txt))
+            new = cap
+            for pat in pats:
+                new = pat.sub("", new)
+            if new != cap:
+                new = _clean_caption(new)
+                if cap[:1].isupper() and new[:1].islower():
+                    new = new[0].upper() + new[1:]      # empezaba en mayúscula: sigue así
+                txt.write_text(new, encoding="utf-8")
+                out["phrases"] += 1
+    return out
+
+
 def register(app, get_dataset_dir):
     from flask import jsonify, request, send_from_directory
 
     @app.route("/dataset_analyzer.js")
     def dataset_analyzer_js():
         return send_from_directory(str(GUI_DIR), "dataset_analyzer.js")
+
+    @app.route("/api/dataset-fix", methods=["POST"])
+    def dataset_fix():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(apply_fixes(get_dataset_dir(), data.get("remove") or [], data.get("add_trigger"),
+                                       data.get("remove_phrases") or []))
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
 
     @app.route("/api/dataset-analyze", methods=["POST"])
     def dataset_analyze():
