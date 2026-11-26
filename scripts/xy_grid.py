@@ -29,7 +29,8 @@ import torch
 
 from i18n import t
 
-DEFAULTS = {"xy_grid": False, "xy_checkpoints": 4, "xy_strengths": "0.75, 1.0, 1.25"}
+DEFAULTS = {"xy_grid": False, "xy_checkpoints": 4, "xy_strengths": "0.75, 1.0, 1.25",
+            "best_checkpoint": False, "best_checkpoints": 8}
 DIR_NAME = "xy_grid"
 SNAP_DIR = "snapshots"
 
@@ -50,6 +51,20 @@ def settings(cfg):
         if 0.0 <= value <= 3.0 and value not in strengths:
             strengths.append(value)
     return enabled, rows, (strengths[:8] or [1.0])
+
+
+def best_settings(cfg):
+    """(activa, nº de checkpoints a probar, Save Every) para el mejor checkpoint (best_checkpoint.py)."""
+    enabled = bool(cfg.get("best_checkpoint", DEFAULTS["best_checkpoint"]))
+    try:
+        count = max(2, min(16, int(cfg.get("best_checkpoints", DEFAULTS["best_checkpoints"]))))
+    except (TypeError, ValueError):
+        count = DEFAULTS["best_checkpoints"]
+    try:
+        save_every = max(0, int(cfg.get("save_every") or 0))
+    except (TypeError, ValueError):
+        save_every = 0
+    return enabled, count, save_every
 
 
 def _read_cfg(path):
@@ -152,6 +167,24 @@ def preview_renderer(call, module_globals, seed_key="SEED"):
     return render
 
 
+def _quiet(render):
+    """La consola solo enseña el progreso de la rejilla: lo que imprime cada imagen se calla (y se
+    enseña si falla)."""
+    import contextlib
+    import io
+    import sys
+
+    def run(item, size, seed):
+        out = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(out):
+                return render(item, size, seed)
+        except BaseException:
+            sys.stdout.write(out.getvalue())
+            raise
+    return run
+
+
 # ── La rejilla ──────────────────────────────────────────────────────────────────────────────────
 
 class XYGrid:
@@ -160,7 +193,9 @@ class XYGrid:
         self.snap_dir = os.path.join(self.dir, SNAP_DIR)
         self.config_path = config_path
         self.enabled, self.rows, self.strengths = settings(cfg)
+        self.best, self.best_n, self.save_every = best_settings(cfg)
         self.dataset = cfg.get("dataset_path")
+        self.output_dir = output_dir
         self.log = log
         self._mtime = None
 
@@ -174,6 +209,7 @@ class XYGrid:
             self._mtime = mtime
             fresh = _read_cfg(self.config_path)
             self.enabled, self.rows, self.strengths = settings(fresh)
+            self.best, self.best_n, self.save_every = best_settings(fresh)
             self.dataset = fresh.get("dataset_path", self.dataset)
 
     def begin(self, start_step):
@@ -185,10 +221,27 @@ class XYGrid:
         """Pasos de las filas anteriores a la última: Total·k/N, k = 1..N-1."""
         return sorted({max(1, round(total_steps * k / self.rows)) for k in range(1, self.rows)})
 
+    def best_targets(self, total_steps):
+        """
+        Checkpoints que prueba el mejor checkpoint, antes del final: Total·k/N llevados al Save Every
+        más cercano, para que cada uno tenga su LoRA guardado (el elegido se copia como _BEST).
+        """
+        if not self.save_every:
+            return []
+        steps = set()
+        for k in range(1, self.best_n):
+            step = round(total_steps * k / self.best_n / self.save_every) * self.save_every
+            if 0 < step < total_steps:
+                steps.add(step)
+        return sorted(steps)
+
     def maybe_snapshot(self, model, step, total_steps):
-        """Llamar en cada paso, después del optimizador. Solo guarda en los pasos de la rejilla."""
+        """Llamar en cada paso, después del optimizador. Solo guarda en los pasos de la rejilla y del
+        mejor checkpoint."""
         self._refresh()
-        if not self.enabled or step not in self.targets(total_steps):
+        wanted = ((self.enabled and step in self.targets(total_steps))
+                  or (self.best and step in self.best_targets(total_steps)))
+        if not wanted:
             return
         from safetensors.torch import save_file
         os.makedirs(self.snap_dir, exist_ok=True)
@@ -197,6 +250,18 @@ class XYGrid:
         save_file(tensors, tmp)
         os.replace(tmp, os.path.join(self.snap_dir, f"step_{step}.safetensors"))
         self.log("  ↳ " + t("XY grid: snapshot of step {n} saved.", n=step))
+
+    def snapshot_rows(self, final_step, targets):
+        """[(paso, ruta o None = estado final)]: la instantánea más cercana a cada objetivo, sin repetir."""
+        found = self._snapshots(final_step)
+        rows = []
+        for target in targets:
+            if not found:
+                break
+            best = min(found, key=lambda s: abs(s - target))
+            rows.append((best, found.pop(best)))
+        rows.sort()
+        return rows + [(final_step, None)]
 
     def _snapshots(self, final_step):
         found = {}
@@ -212,16 +277,7 @@ class XYGrid:
         return found
 
     def _rows(self, final_step):
-        """[(paso, ruta o None = estado final)]: la instantánea más cercana a cada objetivo, sin repetir."""
-        found = self._snapshots(final_step)
-        rows = []
-        for target in self.targets(final_step):
-            if not found:
-                break
-            best = min(found, key=lambda s: abs(s - target))
-            rows.append((best, found.pop(best)))
-        rows.sort()
-        return rows + [(final_step, None)]
+        return self.snapshot_rows(final_step, self.targets(final_step))
 
     def run(self, model, final_step, prompts, render, seed):
         """
@@ -230,15 +286,26 @@ class XYGrid:
         exportado: si la rejilla falla (falta de VRAM...), se avisa y el entrenamiento acaba bien.
         """
         self._refresh()
-        if not self.enabled or not prompts:
+        if not prompts:
             return []
-        try:
-            return self._run(model, final_step, prompts, render, seed)
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            self.log("[XY] " + t("The XY grid failed: {error}. The LoRA is saved.", error=e))
-            return []
+        render = _quiet(render)
+        saved = []
+        if self.enabled:
+            try:
+                saved = self._run(model, final_step, prompts, render, seed)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                self.log("[XY] " + t("The XY grid failed: {error}. The LoRA is saved.", error=e))
+        if self.best:
+            try:
+                import best_checkpoint
+                best_checkpoint.evaluate(self, model, final_step, prompts, render, seed)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                self.log("[BEST] " + t("The best checkpoint search failed: {error}. The LoRA is saved.", error=e))
+        return saved
 
     def _run(self, model, final_step, prompts, render, seed):
         rows = self._rows(final_step)
@@ -362,7 +429,7 @@ def _badge(draw, x, y, value, font, pad):
     draw.text((x + pad - box[0], y + pad - box[1]), text, fill=(255, 255, 255), font=font)
 
 
-def compose(cells, steps, strengths, prompt, seed, path, scores=None):
+def compose(cells, steps, strengths, prompt, seed, path, scores=None, col_labels=None, row_labels=None):
     """
     cells[fila][columna] = HxWx3 uint8. Filas = pasos, columnas = fuerzas; prompt y semilla arriba.
     scores[fila][columna] = % de parecido (o None): una etiqueta en la esquina de cada imagen.
@@ -382,10 +449,12 @@ def compose(cells, steps, strengths, prompt, seed, path, scores=None):
     draw.text((gap, int(fs * 1.6)), f"seed {seed}", fill=(148, 163, 184), font=small)
     for c, s in enumerate(strengths):
         x = left + c * (w + gap) + w // 2
-        draw.text((x, top - int(fs * 0.4)), f"LoRA ×{s:g}", fill=(226, 232, 240), font=font, anchor="ms")
+        label = col_labels[c] if col_labels else f"LoRA ×{s:g}"
+        draw.text((x, top - int(fs * 0.4)), label, fill=(226, 232, 240), font=font, anchor="ms")
     for r, step in enumerate(steps):
         y = top + r * (h + gap) + h // 2
-        draw.text((left // 2, y), f"{t('Step')}\n{step}", fill=(226, 232, 240), font=font, anchor="mm", align="center")
+        label = row_labels[r] if row_labels else f"{t('Step')}\n{step}"
+        draw.text((left // 2, y), label, fill=(226, 232, 240), font=font, anchor="mm", align="center")
         for c in range(len(strengths)):
             x0, y0 = left + c * (w + gap), top + r * (h + gap)
             sheet.paste(Image.fromarray(cells[r][c]), (x0, y0))
@@ -420,6 +489,42 @@ def register(app, get_output_dir):
                                   "prompt": preview_prompts.png_prompt(str(f))})
         items.sort(key=lambda i: i["version"], reverse=True)
         return jsonify({"grids": items[:12]})
+
+    @app.route("/api/xy-best")
+    def xy_best():
+        # Resultado del mejor checkpoint (best_checkpoint.py), o {} si no lo hay.
+        path = Path(get_output_dir()) / DIR_NAME / "best_checkpoint.json"
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return jsonify({})
+        data["exists"] = bool(data.get("file")) and (Path(get_output_dir()) / data["file"]).is_file()
+        return jsonify(data)
+
+    @app.route("/api/xy-best/export", methods=["POST"])
+    def xy_best_export():
+        # «Send to Models» del mejor checkpoint: lo copia a la carpeta de LoRAs con el nombre elegido.
+        from flask import request
+        import file_transfer
+        data = request.get_json(force=True) or {}
+        target_dir = str(data.get("target_dir", "")).strip()
+        name = str(data.get("final_name", "")).strip()
+        try:
+            best = json.loads((Path(get_output_dir()) / DIR_NAME / "best_checkpoint.json").read_text(encoding="utf-8"))
+            source = Path(get_output_dir()) / best["file"]
+        except (OSError, ValueError, KeyError, TypeError):
+            return jsonify({"status": "error", "error": t("There is no best checkpoint yet.")}), 404
+        if not source.is_file():
+            return jsonify({"status": "error", "error": t("File not found: {path}", path=source)}), 404
+        if not target_dir or not Path(target_dir).is_dir():
+            return jsonify({"status": "error", "error": t("Please select a target folder.")}), 400
+        name = name or source.name
+        if not name.lower().endswith(".safetensors"):
+            name += ".safetensors"
+        name = file_transfer.with_lora_options_suffix(name, source)
+        dest = Path(target_dir) / name
+        shutil.copyfile(source, dest)
+        return jsonify({"status": "ok", "dest": str(dest), "filename": name, "step": best.get("best")})
 
     @app.route("/api/xy-grid/<path:name>")
     def xy_grid_file(name):
