@@ -71,7 +71,8 @@
             document.head.appendChild(style);
             row = document.createElement('div');
             row.id = 'result_panels';
-            gallery.before(row);
+            // Encima de la barra de Face likeness, que va pegada a las previews.
+            (document.getElementById('face-match-bar') || gallery).before(row);
             return row;
         },
         collapsible(panel, key) {
