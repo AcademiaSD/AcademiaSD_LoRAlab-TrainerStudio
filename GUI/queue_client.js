@@ -371,11 +371,13 @@
                 const note = tr('Training is queued: it starts when the pre-cache finishes.');
                 toast(note, 'success', 8000);
                 if (typeof appendTerminal === 'function') appendTerminal(`\n[SYSTEM] ${note}`, false, 'term-success');
+                return;
             }
-            return;
+            // No se pudo encolar: como sin lanzador, esta página espera a la pre-caché y lanza el entrenamiento.
+        } else {
+            // Sin lanzador no hay cola: esta página espera a que acabe la pre-caché y lanza el entrenamiento.
+            await original('precache');
         }
-        // Sin lanzador no hay cola: esta página espera a que acabe la pre-caché y lanza el entrenamiento.
-        await original('precache');
         const note = tr('Training will start when the pre-cache finishes. Keep this page open.');
         toast(note, 'info', 8000);
         if (typeof appendTerminal === 'function') appendTerminal(`\n[SYSTEM] ${note}`, false, 'term-success');

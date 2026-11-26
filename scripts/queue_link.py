@@ -181,6 +181,17 @@ def register(app, trainer_id, runtime, train_config, precache_config):
         running = (st or {}).get("running")
         return running if running and running.get("port") != my_port else None
 
+    def register_here(script):
+        """La cola sigue lo que se ha lanzado en esta página (trabajo «externo»). Devuelve el trabajo o None."""
+        train, pre = _read(train_config), _read(precache_config)
+        code, res = _launcher("/api/queue/register", {
+            "trainer": trainer_id, "kind": script, "port": my_port,
+            "project": (train.get("project_name") or pre.get("project_name") or "").strip(),
+            "total": int(train.get("total_steps") or 0) if script == "train" else 0,
+            # Copia de los ajustes: pausado desde la cola, se queda en ella y se puede continuar.
+            "settings": {"train": train, "pre_cache": pre}}, timeout=10)
+        return (res or {}).get("job") if code == 200 else None
+
     def own_job(st):
         jid = JOB_ID or EDIT_JOB
         if not jid or not st:
@@ -220,13 +231,7 @@ def register(app, trainer_id, runtime, train_config, precache_config):
         resp = original_run()
         status = resp[1] if isinstance(resp, tuple) else getattr(resp, "status_code", 200)
         if st is not None and status == 200:
-            train, pre = _read(train_config), _read(precache_config)
-            _launcher("/api/queue/register", {
-                "trainer": trainer_id, "kind": script, "port": my_port,
-                "project": (train.get("project_name") or pre.get("project_name") or "").strip(),
-                "total": int(train.get("total_steps") or 0) if script == "train" else 0,
-                # Copia de los ajustes: pausado desde la cola, se queda en ella y se puede continuar.
-                "settings": {"train": train, "pre_cache": pre}})
+            register_here(script)
         return resp
 
     app.view_functions[endpoint] = gated_run
@@ -307,7 +312,12 @@ def register(app, trainer_id, runtime, train_config, precache_config):
         after = req.get("after") or None
         if after == "self_precache":
             # El entrenamiento espera a la pre-caché que este entrenador acaba de lanzar (Start sin caché).
-            running = (queue_state() or {}).get("running") or {}
+            st = queue_state() or {}
+            running = st.get("running") or {}
+            if (running.get("port") != my_port or running.get("kind") != "precache") and not running:
+                own = runtime.status()
+                if own.get("running") and own.get("script") == "precache":
+                    running = register_here("precache") or {}
             if running.get("port") != my_port or running.get("kind") != "precache":
                 return jsonify({"status": "error", "error": t("The pre-cache is not running in the queue.")}), 409
             after = running.get("id")
