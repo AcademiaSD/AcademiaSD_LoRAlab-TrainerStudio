@@ -1627,5 +1627,7 @@
   "Finds the learning rate on its own.": "Encontra sozinho o learning rate.",
   "Less VRAM.": "Menos VRAM.",
   "Less VRAM than AdamW.": "Menos VRAM que o AdamW.",
-  "The queue started the {kind} in this trainer.": "A fila iniciou {kind} neste treinador."
+  "The queue started the {kind} in this trainer.": "A fila iniciou {kind} neste treinador.",
+  "Pre-cache done: the training starts in a few seconds...": "Pré-cache concluída: o treino começa dentro de segundos...",
+  "The training did not start here: check the queue.": "O treino não começou aqui: verifique a fila."
 }

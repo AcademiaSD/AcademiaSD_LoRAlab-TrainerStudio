@@ -1627,5 +1627,7 @@
   "Finds the learning rate on its own.": "学習率を自動で求めます。",
   "Less VRAM.": "VRAM が少なくて済みます。",
   "Less VRAM than AdamW.": "AdamW より VRAM が少ない。",
-  "The queue started the {kind} in this trainer.": "キューがこのトレーナーで {kind} を開始しました。"
+  "The queue started the {kind} in this trainer.": "キューがこのトレーナーで {kind} を開始しました。",
+  "Pre-cache done: the training starts in a few seconds...": "プリキャッシュ完了: 数秒で学習が始まります...",
+  "The training did not start here: check the queue.": "学習はここで開始されませんでした: キューを確認してください。"
 }

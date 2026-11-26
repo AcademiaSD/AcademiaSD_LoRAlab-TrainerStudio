@@ -1627,5 +1627,7 @@
   "Finds the learning rate on its own.": "Trova da solo il learning rate.",
   "Less VRAM.": "Meno VRAM.",
   "Less VRAM than AdamW.": "Meno VRAM di AdamW.",
-  "The queue started the {kind} in this trainer.": "La coda ha avviato {kind} in questo trainer."
+  "The queue started the {kind} in this trainer.": "La coda ha avviato {kind} in questo trainer.",
+  "Pre-cache done: the training starts in a few seconds...": "Pre-cache completata: l'addestramento inizia tra pochi secondi...",
+  "The training did not start here: check the queue.": "L'addestramento non è partito qui: controlla la coda."
 }

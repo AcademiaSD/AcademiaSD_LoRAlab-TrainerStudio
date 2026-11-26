@@ -1627,5 +1627,7 @@
   "Finds the learning rate on its own.": "학습률을 스스로 찾습니다.",
   "Less VRAM.": "VRAM이 적게 듭니다.",
   "Less VRAM than AdamW.": "AdamW보다 VRAM이 적습니다.",
-  "The queue started the {kind} in this trainer.": "대기열이 이 트레이너에서 {kind}을(를) 시작했습니다."
+  "The queue started the {kind} in this trainer.": "대기열이 이 트레이너에서 {kind}을(를) 시작했습니다.",
+  "Pre-cache done: the training starts in a few seconds...": "사전 캐시 완료: 몇 초 후 학습이 시작됩니다...",
+  "The training did not start here: check the queue.": "학습이 여기서 시작되지 않았습니다: 대기열을 확인하세요."
 }
