@@ -1642,5 +1642,7 @@
   "Every 100 steps, saves a heatmap over a dataset image: where the LoRA changes the base model's output when the prompt has the class word instead of the trigger. Usually the face and the hair; if the clothes, the background or the style light up too, the LoRA is learning things from the dataset it should not. Shown above the previews.": "100 ステップごとにデータセット画像の上にヒートマップを保存します: プロンプトがトリガーの代わりにクラス語を含むとき、LoRA がベースモデルの出力をどこで変えるか。通常は顔と髪。服、背景、スタイルも明るくなる場合、LoRA はデータセットから学ぶべきでないものを学んでいます。プレビューの上に表示されます。",
   "Where the LoRA changes the base model when the prompt has the class word instead of the trigger. Bright: it changes a lot; dark: it keeps the base model.": "プロンプトがトリガーの代わりにクラス語を含むとき、LoRA がベースモデルをどこで変えるか。明るい: 大きく変わる、暗い: ベースモデルを保つ。",
   "preservation heatmap (hover to see it)": "出力保護のヒートマップ (ホバーで表示)",
-  "The queue started the {kind} in this trainer.": "キューがこのトレーナーで {kind} を開始しました。"
+  "The queue started the {kind} in this trainer.": "キューがこのトレーナーで {kind} を開始しました。",
+  "Pre-cache done: the training starts in a few seconds...": "プリキャッシュ完了: 数秒で学習が始まります...",
+  "The training did not start here: check the queue.": "学習はここで開始されませんでした: キューを確認してください。"
 }

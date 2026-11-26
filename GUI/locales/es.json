@@ -1813,5 +1813,7 @@
   "Every 100 steps, saves a heatmap over a dataset image: where the LoRA changes the base model's output when the prompt has the class word instead of the trigger. Usually the face and the hair; if the clothes, the background or the style light up too, the LoRA is learning things from the dataset it should not. Shown above the previews.": "Cada 100 pasos guarda un mapa de calor sobre una imagen del dataset: dónde cambia el LoRA la salida del modelo base cuando el prompt lleva la palabra de clase en vez del trigger. Lo normal es la cara y el pelo; si también se encienden la ropa, el fondo o el estilo, el LoRA está aprendiendo cosas del dataset que no debería. Se muestra encima de las previews.",
   "Where the LoRA changes the base model when the prompt has the class word instead of the trigger. Bright: it changes a lot; dark: it keeps the base model.": "Dónde cambia el LoRA al modelo base cuando el prompt lleva la palabra de clase en vez del trigger. Claro: cambia mucho; oscuro: mantiene el modelo base.",
   "preservation heatmap (hover to see it)": "mapa de calor de la protección (pasa el ratón para verlo)",
-  "The queue started the {kind} in this trainer.": "La cola ha arrancado {kind} en este entrenador."
+  "The queue started the {kind} in this trainer.": "La cola ha arrancado {kind} en este entrenador.",
+  "Pre-cache done: the training starts in a few seconds...": "Pre-caché terminada: el entrenamiento empieza en unos segundos...",
+  "The training did not start here: check the queue.": "El entrenamiento no ha empezado aquí: revisa la cola."
 }

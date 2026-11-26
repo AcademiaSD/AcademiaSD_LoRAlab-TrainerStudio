@@ -368,6 +368,7 @@
             await original('precache');
             const job = await addToQueue('train', 'self_precache', true);
             if (job) {
+                handover = { since: 0 };
                 const note = tr('Training is queued: it starts when the pre-cache finishes.');
                 toast(note, 'success', 8000);
                 if (typeof appendTerminal === 'function') appendTerminal(`\n[SYSTEM] ${note}`, false, 'term-success');
@@ -432,6 +433,65 @@
         setInterval(refresh, 5000);
         document.addEventListener('visibilitychange', refresh);
         setInterval(followServer, 3000);
+        wrapConsoleDone();
+    }
+
+    // Entrenamiento en cola detrás de la pre-caché de esta página: al acabar la pre-caché la cola se lo pasa
+    // a esta misma página en unos segundos. Mientras tanto la consola lo dice y Start sigue desactivado, para
+    // que no parezca que hay que pulsarlo.
+    let handover = null;          // {since}: esperando a que la cola arranque el entrenamiento aquí
+    function wrapConsoleDone() {
+        const original = window.consoleDone;
+        if (typeof original !== 'function' || original.__queue) return;
+        const wrapped = function (msg, ...rest) {
+            const out = original(msg, ...rest);
+            if (handover && msg && msg.script === 'precache') {
+                if (msg.code === 0 && !userStopped()) {
+                    handover = { since: Date.now() };
+                    if (typeof appendTerminal === 'function') {
+                        appendTerminal(`
+[SYSTEM] ${tr('Pre-cache done: the training starts in a few seconds...')}`, false, 'term-success');
+                    }
+                    setRunningState(true);
+                    pollHandover();
+                } else {
+                    handover = null;
+                }
+            }
+            return out;
+        };
+        wrapped.__queue = true;
+        window.consoleDone = wrapped;
+    }
+
+    function userStopped() {
+        try { return !!userRequestedStop; } catch (e) { return false; }
+    }
+
+    async function pollHandover() {
+        while (handover) {
+            await new Promise(r => setTimeout(r, 1000));
+            if (!handover) return;
+            let st = null;
+            try { st = await (await fetch('/api/status', { cache: 'no-store' })).json(); } catch (e) { continue; }
+            if (st.running) {
+                handover = null;
+                try { userRequestedStop = false; lastExecutedStep = 0; totalTargetSteps = 0; } catch (e) {}
+                attachConsole();
+                return;
+            }
+            if (Date.now() - handover.since > 90000) {
+                // La cola no lo ha arrancado aquí (lo abrió en otro servidor, o está pausada): se deja de esperar.
+                handover = null;
+                if (typeof appendTerminal === 'function') {
+                    appendTerminal(`
+[SYSTEM] ${tr('The training did not start here: check the queue.')}`, false, 'term-warning');
+                }
+                setRunningState(false);
+                refresh();
+                return;
+            }
+        }
     }
 
     // La cola puede arrancar un trabajo en el servidor de esta página (el entrenamiento que esperaba a la
