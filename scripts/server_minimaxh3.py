@@ -2258,6 +2258,8 @@ face_match.register(app, get_dataset_dir, get_train_output_dir)
 if IMAGE_MODE:
     xy_grid.register(app, get_train_output_dir)   # rejilla XY final: solo MiniMax-H3 Image
 dataset_forge.register(app, get_dataset_dir)
+import dataset_analyzer
+dataset_analyzer.register(app, get_dataset_dir)
 
 
 def main():
