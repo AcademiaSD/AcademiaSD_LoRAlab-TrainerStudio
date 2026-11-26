@@ -90,6 +90,28 @@
         },
     };
 
+    // Casillas de opciones (New LR curve on resume, Output preservation, Masked loss...) en una rejilla de dos
+    // columnas debajo del LR Scheduler; los campos de cada opción van debajo de la rejilla. Lo comparten
+    // output_preservation.js y masked_loss.js (el primero que carga lo crea).
+    window.LoRAlabChecks = window.LoRAlabChecks || {
+        last() {
+            const rows = [...document.querySelectorAll('.form-row.checks-row')];
+            if (rows.length) return rows[rows.length - 1];
+            const lr = document.getElementById('train_lr_new_curve')?.closest('.form-row');
+            if (lr) { lr.classList.add('checks-row'); return lr; }
+            return null;
+        },
+        place(group, fallback) {
+            const last = this.last();
+            if (last && last.children.length < 2) { last.appendChild(group); return last; }
+            const row = document.createElement('div');
+            row.className = 'form-row checks-row';
+            row.appendChild(group);
+            (last || fallback).after(row);
+            return row;
+        },
+    };
+
     const IDS = { on: 'train_output_preservation', word: 'train_preservation_class',
                   weight: 'train_preservation_strength', every: 'train_preservation_every',
                   map: 'train_preservation_map' };
@@ -116,17 +138,17 @@
     function build() {
         const sched = $('train_lr_scheduler');
         if (!sched || $(IDS.on)) return;
-        const anchor = $('train_lr_new_curve')?.closest('.form-row') || sched.closest('.form-row') || sched.parentElement;
-        const box = document.createElement('div');
-        box.innerHTML = `
-            <div class="form-row">
-                <div class="form-group" title="Keeps what the model already knows. Every step, the caption is also used with the trigger replaced by a class word (for example 'woman'), and the LoRA is penalised if it changes the model's output for it. The LoRA learns the trigger, but 'woman' stays the base model's woman: it does not leak into other people, it overcooks less and it mixes better with other LoRAs. Like the Differential Output Preservation of ai-toolkit. It makes the training slower.">
+        const fallback = sched.closest('.form-row') || sched.parentElement;
+        const holder = document.createElement('div');
+        holder.innerHTML = `<div class="form-group" title="Keeps what the model already knows. Every step, the caption is also used with the trigger replaced by a class word (for example 'woman'), and the LoRA is penalised if it changes the model's output for it. The LoRA learns the trigger, but 'woman' stays the base model's woman: it does not leak into other people, it overcooks less and it mixes better with other LoRAs. Like the Differential Output Preservation of ai-toolkit. It makes the training slower.">
                     <label style="display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer;" for="${IDS.on}">
                         <input type="checkbox" id="${IDS.on}" style="width: 18px; height: 18px; cursor: pointer;">
                         Output preservation
                     </label>
-                </div>
-            </div>
+                </div>`;
+        const checks = window.LoRAlabChecks.place(holder.firstElementChild, fallback);
+        const box = document.createElement('div');
+        box.innerHTML = `
             <div class="form-row" id="preservation_fields" style="display: none;">
                 <div class="form-group" title="The generic word for what the trigger is: woman, man, person, dog, car, style... It replaces the trigger in the captions.">
                     <label for="${IDS.word}">Class word:</label>
@@ -148,7 +170,8 @@
                 </div>
             </div>
             <div id="preservation_hint" style="font-size: 0.78rem; color: var(--text-muted, #94a3b8); line-height: 1.35; margin: -4px 0 10px;"></div>`;
-        anchor.after(...box.children);
+        // Los campos, debajo de la rejilla de casillas.
+        (window.LoRAlabChecks.last() || checks).after(...box.children);
         Object.values(IDS).forEach(id => $(id).addEventListener('input', update));
         $(IDS.on).addEventListener('change', update);
         if (typeof I18N !== 'undefined') ['preservation_fields', IDS.on].forEach(id => I18N.apply($(id).closest('.form-row')));

@@ -8,6 +8,28 @@
 (function () {
     const tr = (k, v) => (typeof t === 'function' ? t(k, v) : k.replace(/\{(\w+)\}/g, (m, n) => (v && n in v ? v[n] : m)));
     const $ = (id) => document.getElementById(id);
+    // Casillas de opciones (New LR curve on resume, Output preservation, Masked loss...) en una rejilla de dos
+    // columnas debajo del LR Scheduler; los campos de cada opción van debajo de la rejilla. Lo comparten
+    // output_preservation.js y masked_loss.js (el primero que carga lo crea).
+    window.LoRAlabChecks = window.LoRAlabChecks || {
+        last() {
+            const rows = [...document.querySelectorAll('.form-row.checks-row')];
+            if (rows.length) return rows[rows.length - 1];
+            const lr = document.getElementById('train_lr_new_curve')?.closest('.form-row');
+            if (lr) { lr.classList.add('checks-row'); return lr; }
+            return null;
+        },
+        place(group, fallback) {
+            const last = this.last();
+            if (last && last.children.length < 2) { last.appendChild(group); return last; }
+            const row = document.createElement('div');
+            row.className = 'form-row checks-row';
+            row.appendChild(group);
+            (last || fallback).after(row);
+            return row;
+        },
+    };
+
     const IDS = { on: 'train_masked_loss', bg: 'train_mask_background' };
 
     function update() {
@@ -21,17 +43,18 @@
     function build() {
         const sched = $('train_lr_scheduler');
         if (!sched || $(IDS.on)) return;
-        const anchor = $('preservation_hint') || $('train_lr_new_curve')?.closest('.form-row') || sched.closest('.form-row');
-        const box = document.createElement('div');
-        box.innerHTML = `
-            <div class="form-row">
-                <div class="form-group" title="The LoRA learns the subject, not the backgrounds of the dataset. Before the training starts, BiRefNet (MIT, about 0.2 GB, downloaded the first time) cuts out the subject of every image (person, object...), and the loss weighs 1 on the subject and the Background weight elsewhere. Useful with small datasets or with backgrounds that repeat. The masks are made once (only the images that change are made again) and a sheet with all of them shows above the previews.">
+        const holder = document.createElement('div');
+        holder.innerHTML = `<div class="form-group" title="The LoRA learns the subject, not the backgrounds of the dataset. Before the training starts, BiRefNet (MIT, about 0.2 GB, downloaded the first time) cuts out the subject of every image (person, object...), and the loss weighs 1 on the subject and the Background weight elsewhere. Useful with small datasets or with backgrounds that repeat. The masks are made once (only the images that change are made again) and a sheet with all of them shows above the previews.">
                     <label style="display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer;" for="${IDS.on}">
                         <input type="checkbox" id="${IDS.on}" style="width: 18px; height: 18px; cursor: pointer;">
                         Masked loss (subject)
                     </label>
-                </div>
-            </div>
+                </div>`;
+        const checks = window.LoRAlabChecks.place(holder.firstElementChild, sched.closest('.form-row') || sched.parentElement);
+        // Sus campos, debajo de los de la protección de salida (o de la rejilla de casillas).
+        const anchor = $('preservation_hint') || window.LoRAlabChecks.last() || checks;
+        const box = document.createElement('div');
+        box.innerHTML = `
             <div class="form-row" id="masked_loss_fields" style="display: none;">
                 <div class="form-group" title="How much the background still teaches, from 0 to 1. 0.1 by default: the subject leads. 0 can leave halos or odd backgrounds; higher learns more of the setting (light, mood).">
                     <label for="${IDS.bg}">Background weight:</label>
