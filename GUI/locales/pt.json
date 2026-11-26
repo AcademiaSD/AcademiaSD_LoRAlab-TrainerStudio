@@ -1683,5 +1683,7 @@
   "Almost the same caption for different images: describe what changes in each one.": "Quase a mesma caption para imagens diferentes: descreva o que muda em cada uma.",
   "No face found, in a character dataset: fine for body shots, but check them.": "Sem cara, num dataset de personagem: está bem em planos de corpo, mas verifique-as.",
   "More than one face: the LoRA can mix the people.": "Mais de uma cara: o LoRA pode misturar as pessoas.",
-  "Look much less like the rest: maybe another person, or an unusual angle.": "Parecem-se muito menos com o resto: talvez outra pessoa, ou um ângulo pouco habitual."
+  "Look much less like the rest: maybe another person, or an unusual angle.": "Parecem-se muito menos com o resto: talvez outra pessoa, ou um ângulo pouco habitual.",
+  "Last analysis of this dataset ({when}): open it again without analyzing.": "Última análise deste dataset ({when}): abra-a de novo sem voltar a analisar.",
+  "Analyzed {when}": "Analisado: {when}"
 }

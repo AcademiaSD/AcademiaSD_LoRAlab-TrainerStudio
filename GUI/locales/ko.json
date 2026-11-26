@@ -1683,5 +1683,7 @@
   "Almost the same caption for different images: describe what changes in each one.": "다른 이미지에 거의 같은 캡션: 각각 바뀌는 점을 쓰세요.",
   "No face found, in a character dataset: fine for body shots, but check them.": "캐릭터 데이터셋에서 얼굴이 없습니다: 몸 위주 사진이면 괜찮지만 확인하세요.",
   "More than one face: the LoRA can mix the people.": "얼굴이 둘 이상: LoRA가 사람을 섞을 수 있습니다.",
-  "Look much less like the rest: maybe another person, or an unusual angle.": "나머지와 훨씬 덜 닮았습니다: 다른 사람이거나 특이한 각도일 수 있습니다."
+  "Look much less like the rest: maybe another person, or an unusual angle.": "나머지와 훨씬 덜 닮았습니다: 다른 사람이거나 특이한 각도일 수 있습니다.",
+  "Last analysis of this dataset ({when}): open it again without analyzing.": "이 데이터셋의 마지막 분석({when}): 다시 분석하지 않고 다시 엽니다.",
+  "Analyzed {when}": "분석: {when}"
 }

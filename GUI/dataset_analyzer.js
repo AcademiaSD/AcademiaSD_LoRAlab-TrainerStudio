@@ -8,7 +8,33 @@
     const tr = (k, v) => (typeof t === 'function' ? t(k, v) : k.replace(/\{(\w+)\}/g, (m, n) => (v && n in v ? v[n] : m)));
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-    let box = null, last = null;
+    let box = null, last = null, fromReport = false;
+
+    // El último informe de cada carpeta de dataset se guarda en el navegador: 📋 lo vuelve a abrir sin repetir el
+    // análisis, también tras recargar la página.
+    const storeKey = () => 'loralab_dataset_analysis:' + (($('dataset_path')?.value || '').trim() || '-');
+    function saveLast(data) {
+        try {
+            const copy = Object.assign({}, data);
+            delete copy.captions_text;           // los captions se leen al día del Dataset Manager
+            localStorage.setItem(storeKey(), JSON.stringify(Object.assign(copy, { when: Date.now() })));
+        } catch (e) {}
+    }
+    function loadLast() {
+        try { return JSON.parse(localStorage.getItem(storeKey()) || 'null'); } catch (e) { return null; }
+    }
+    function updateReopen() {
+        const b = $('btn-ds-analysis-last');
+        if (!b) return;
+        const d = loadLast();
+        b.style.display = d && !d.error ? '' : 'none';
+        if (d && !d.error) {
+            const warns = (d.issues || []).filter(i => i.level === 'warn').length;
+            b.textContent = '📋' + (warns ? ' ' + warns : '');
+            b.title = tr('Last analysis of this dataset ({when}): open it again without analyzing.',
+                         { when: new Date(d.when).toLocaleString() });
+        }
+    }
 
     const CSS = `
     .da-box { position: fixed; inset: 0; background: rgba(2,6,23,.82); z-index: 2500; display: none; align-items: center; justify-content: center; padding: 20px; }
@@ -33,7 +59,8 @@
     .da-thumb:hover img { border-color: #38bdf8; }
     .da-thumb span { position: absolute; left: 2px; bottom: 2px; font-size: .62rem; background: rgba(0,0,0,.7); color: #fff; padding: 0 4px; border-radius: 3px; }
     .da-more { font-size: .75rem; color: #94a3b8; align-self: center; }
-    .da-wait { color: #94a3b8; font-size: .9rem; padding: 20px 4px; }`;
+    .da-wait { color: #94a3b8; font-size: .9rem; padding: 20px 4px; }
+    .da-when { font-size: .75rem; color: #94a3b8; margin-bottom: 8px; }`;
 
     function build() {
         const bar = document.querySelector('.ds-toolbar');
@@ -51,6 +78,26 @@
         btn.addEventListener('click', run);
         const forge = $('btn-ds-forge');
         if (forge) forge.after(btn); else bar.insertBefore(btn, bar.firstChild);
+        const again = document.createElement('button');
+        again.type = 'button';
+        again.id = 'btn-ds-analysis-last';
+        again.className = 'btn btn-secondary btn-sm';
+        again.style.display = 'none';
+        again.addEventListener('click', () => { const d = loadLast(); if (d) show(d); });
+        btn.after(again);
+        $('dataset_path')?.addEventListener('change', () => setTimeout(updateReopen, 0));
+        updateReopen();
+
+        // Al cerrar el editor de captions abierto desde el informe, se vuelve al informe.
+        const modal = $('modal');
+        if (modal) {
+            new MutationObserver(() => {
+                if (fromReport && !modal.classList.contains('active')) {
+                    fromReport = false;
+                    if (last && !last.error) show(last);
+                }
+            }).observe(modal, { attributes: true, attributeFilter: ['class'] });
+        }
 
         box = document.createElement('div');
         box.className = 'da-box no-i18n';
@@ -68,11 +115,33 @@
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && box.style.display === 'flex') box.style.display = 'none'; });
     }
 
-    function openImage(file) {
+    async function currentCaption(file) {
+        // El caption de ahora (puede haber cambiado desde el análisis): de la lista del Dataset Manager o del servidor.
+        const find = (list) => (list || []).find(i => i.file === file);
+        let item = null;
+        try { item = find(allDatasetImages); } catch (e) {}
+        if (!item) {
+            try { item = find((await (await fetch('/api/dataset-info?_=' + Date.now())).json()).images); } catch (e) {}
+        }
+        return item ? (item.caption || '') : ((last && last.captions_text && last.captions_text[file]) || '');
+    }
+
+    async function openImage(file) {
         if (typeof openModal !== 'function') return;
         box.style.display = 'none';
-        const caption = (last && last.captions_text && last.captions_text[file]) || '';
+        const caption = await currentCaption(file);
         openModal('/api/dataset-image/' + encodeURIComponent(file) + '?v=' + Date.now(), file, caption);
+        fromReport = true;
+    }
+
+    function show(data) {
+        last = data;
+        box.style.display = 'flex';
+        const body = box.querySelector('.da-body');
+        if (data.error) { body.innerHTML = `<div class="da-issue warn"><div class="da-msg">${esc(data.error)}</div></div>`; return; }
+        const when = data.when ? `<div class="da-when">${esc(tr('Analyzed {when}', { when: new Date(data.when).toLocaleString() }))}</div>` : '';
+        body.innerHTML = when + summary(data) + (data.issues.length ? data.issues.map(issueHtml).join('')
+            : `<div class="da-ok">✓ ${esc(tr('Nothing to fix: the dataset looks ready to train.'))}</div>`);
     }
 
     async function run() {
@@ -88,10 +157,12 @@
         } catch (e) {
             data = { error: String(e) };
         }
-        last = data;
-        if (data.error) { body.innerHTML = `<div class="da-issue warn"><div class="da-msg">${esc(data.error)}</div></div>`; return; }
-        body.innerHTML = summary(data) + (data.issues.length ? data.issues.map(issueHtml).join('')
-            : `<div class="da-ok">✓ ${esc(tr('Nothing to fix: the dataset looks ready to train.'))}</div>`);
+        if (!data.error) {
+            data.when = Date.now();
+            saveLast(data);
+            updateReopen();
+        }
+        show(data);
     }
 
     function summary(d) {
