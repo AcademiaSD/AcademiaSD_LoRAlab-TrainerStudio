@@ -1632,7 +1632,7 @@
   "Class word:": "Parola di classe:",
   "The generic word for what the trigger is: woman, man, person, dog, car, style... It replaces the trigger in the captions.": "La parola generica di ciò che è il trigger: woman, man, person, dog, car, style... Sostituisce il trigger nelle caption.",
   "Strength:": "Forza:",
-  "How strongly the base model's output is kept. 1.0 by default; higher keeps more and learns the trigger a bit slower.": "Quanto si mantiene l'output del modello base. 1.0 di default; più alto mantiene di più e impara il trigger un po' più lentamente.",
+  "How strongly the base model's output is kept. 0.5 by default; higher keeps more and learns the trigger slower.": "Quanto si mantiene l'output del modello base. 0.5 di default; più alto mantiene di più e impara il trigger più lentamente.",
   "Every N steps:": "Ogni N step:",
   "Every how many steps it is applied. 1 is every step (about 2x slower); 2, every other step (about 1.5x).": "Ogni quanti step si applica. 1 è a ogni step (circa 2x più lento); 2, uno sì e uno no (circa 1,5x).",
   "Write the class word (woman, man, dog, style...): without it, it is not used.": "Scrivi la parola di classe (woman, man, dog, style...): senza di essa non viene usata.",

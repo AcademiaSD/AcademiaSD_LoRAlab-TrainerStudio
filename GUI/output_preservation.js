@@ -132,9 +132,9 @@
                     <label for="${IDS.word}">Class word:</label>
                     <input type="text" id="${IDS.word}" class="no-i18n" placeholder="woman">
                 </div>
-                <div class="form-group" title="How strongly the base model's output is kept. 1.0 by default; higher keeps more and learns the trigger a bit slower.">
+                <div class="form-group" title="How strongly the base model's output is kept. 0.5 by default; higher keeps more and learns the trigger slower.">
                     <label for="${IDS.weight}">Strength:</label>
-                    <input type="number" id="${IDS.weight}" value="1.0" min="0" max="10" step="0.1">
+                    <input type="number" id="${IDS.weight}" value="0.5" min="0" max="10" step="0.1">
                 </div>
                 <div class="form-group" title="Every how many steps it is applied. 1 is every step (about 2x slower); 2, every other step (about 1.5x).">
                     <label for="${IDS.every}">Every N steps:</label>
@@ -240,7 +240,7 @@
             values: () => ($(IDS.on) ? {
                 output_preservation: $(IDS.on).checked,
                 preservation_class: $(IDS.word).value.trim(),
-                preservation_strength: parseFloat($(IDS.weight).value) || 1.0,
+                preservation_strength: parseFloat($(IDS.weight).value) || 0.5,
                 preservation_every: Math.max(1, parseInt($(IDS.every).value) || 1),
                 preservation_map: $(IDS.map).checked,
             } : {}),

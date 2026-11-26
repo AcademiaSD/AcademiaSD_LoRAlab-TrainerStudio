@@ -1632,7 +1632,7 @@
   "Class word:": "클래스 단어:",
   "The generic word for what the trigger is: woman, man, person, dog, car, style... It replaces the trigger in the captions.": "트리거가 무엇인지 나타내는 일반 단어: woman, man, person, dog, car, style... 캡션의 트리거를 대체합니다.",
   "Strength:": "강도:",
-  "How strongly the base model's output is kept. 1.0 by default; higher keeps more and learns the trigger a bit slower.": "기본 모델의 출력을 얼마나 유지할지. 기본 1.0; 높을수록 더 유지하고 트리거는 조금 더 천천히 배웁니다.",
+  "How strongly the base model's output is kept. 0.5 by default; higher keeps more and learns the trigger slower.": "기본 모델의 출력을 얼마나 유지할지. 기본 0.5; 높을수록 더 유지하고 트리거는 더 천천히 배웁니다.",
   "Every N steps:": "N 스텝마다:",
   "Every how many steps it is applied. 1 is every step (about 2x slower); 2, every other step (about 1.5x).": "몇 스텝마다 적용할지. 1은 매 스텝(약 2배 느림), 2는 한 스텝 건너(약 1.5배).",
   "Write the class word (woman, man, dog, style...): without it, it is not used.": "클래스 단어(woman, man, dog, style...)를 입력하세요: 없으면 사용되지 않습니다.",

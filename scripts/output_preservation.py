@@ -22,7 +22,7 @@ import sys
 from contextlib import contextmanager
 
 INDEX = "_dop_prompts.json"
-DEFAULTS = {"output_preservation": False, "preservation_class": "", "preservation_strength": 1.0,
+DEFAULTS = {"output_preservation": False, "preservation_class": "", "preservation_strength": 0.5,
             "preservation_every": 1}
 
 
@@ -31,9 +31,9 @@ def settings(cfg):
     word = str(cfg.get("preservation_class") or "").strip()
     on = bool(cfg.get("output_preservation")) and bool(word)
     try:
-        weight = max(0.0, min(10.0, float(cfg.get("preservation_strength", 1.0))))
+        weight = max(0.0, min(10.0, float(cfg.get("preservation_strength", 0.5))))
     except (TypeError, ValueError):
-        weight = 1.0
+        weight = 0.5
     try:
         every = max(1, min(100, int(cfg.get("preservation_every", 1))))
     except (TypeError, ValueError):
@@ -200,8 +200,11 @@ class HeatMaps:
         v = m / (np.percentile(m, 99) + 1e-12)
         v = np.clip(v, 0, 1) ** 0.8
         g = Image.fromarray((v * 255).astype(np.uint8)).resize((W, H), Image.BICUBIC)
-        g = g.filter(ImageFilter.GaussianBlur(radius=max(2, W // 80)))
-        v = np.asarray(g, dtype=np.float32) / 255
+        # Difuminado amplio y normalizado otra vez: cada zona caliente se ensancha sin perder intensidad, y el
+        # ruido suelto del fondo se reparte en vez de crecer.
+        g = g.filter(ImageFilter.GaussianBlur(radius=max(3, W // 40)))
+        v = np.asarray(g, dtype=np.float32)
+        v = np.clip(v / (v.max() + 1e-6), 0, 1) ** 0.75
         color = _inferno(v)
         # La foto, algo apagada y desaturada, para que el calor resalte; el color entra con el valor.
         base = np.asarray(img, dtype=np.float32) / 255
