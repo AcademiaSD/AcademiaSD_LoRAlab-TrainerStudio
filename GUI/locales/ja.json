@@ -1647,5 +1647,12 @@
   "The training did not start here: check the queue.": "学習はここで開始されませんでした: キューを確認してください。",
   "General": "一般",
   "Character": "キャラクター",
-  "General: a long description (appearance, hair, clothing, pose, background, lighting), for styles and objects. Character: short captions without the fixed traits of the person (face, hair, eyes, skin, age), only what changes between photos, so the trigger learns the identity; best for people, and with Output preservation.": "一般: 長い説明 (外見、髪、服、ポーズ、背景、照明)。スタイルや物体向け。キャラクター: 人物の固定的な特徴 (顔、髪、目、肌、年齢) を含まない短いキャプションで、写真ごとに変わる点だけを書くので、トリガーが人物を学びます。人物に最適で、出力保護とも相性が良い。"
+  "General: a long description (appearance, hair, clothing, pose, background, lighting), for styles and objects. Character: short captions without the fixed traits of the person (face, hair, eyes, skin, age), only what changes between photos, so the trigger learns the identity; best for people, and with Output preservation.": "一般: 長い説明 (外見、髪、服、ポーズ、背景、照明)。スタイルや物体向け。キャラクター: 人物の固定的な特徴 (顔、髪、目、肌、年齢) を含まない短いキャプションで、写真ごとに変わる点だけを書くので、トリガーが人物を学びます。人物に最適で、出力保護とも相性が良い。",
+  "Masked loss (subject)": "マスク付き loss (被写体)",
+  "The LoRA learns the subject, not the backgrounds of the dataset. Before the training starts, BiRefNet (MIT, about 0.2 GB, downloaded the first time) cuts out the subject of every image (person, object...), and the loss weighs 1 on the subject and the Background weight elsewhere. Useful with small datasets or with backgrounds that repeat. The masks are made once (only the images that change are made again) and a sheet with all of them shows above the previews.": "LoRA はデータセットの背景ではなく被写体を学びます。学習前に BiRefNet (MIT、約 0.2 GB、初回にダウンロード) が各画像の被写体 (人物、物体...) を切り抜き、loss は被写体を 1、それ以外を Background weight で重み付けします。小さなデータセットや背景が繰り返される場合に有効。マスクは一度だけ作られ (変更された画像のみ再作成)、全マスクのシートがプレビューの上に表示されます。",
+  "Background weight:": "背景の重み:",
+  "How much the background still teaches, from 0 to 1. 0.1 by default: the subject leads. 0 can leave halos or odd backgrounds; higher learns more of the setting (light, mood).": "背景がどれだけ学習に寄与するか (0〜1)。既定は 0.1 で被写体が主。0 ではハローや不自然な背景が残ることがあり、高いほど環境 (光、雰囲気) を学びます。",
+  "BiRefNet cuts out the subject before training.": "BiRefNet が学習前に被写体を切り抜きます。",
+  "Subject masks": "被写体マスク",
+  "Bright: the subject the LoRA learns. Dark blue: background (weighs the Background weight).": "明るい部分: LoRA が学ぶ被写体。濃い青: 背景 (Background weight の重み)。"
 }

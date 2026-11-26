@@ -1647,5 +1647,12 @@
   "The training did not start here: check the queue.": "학습이 여기서 시작되지 않았습니다: 대기열을 확인하세요.",
   "General": "일반",
   "Character": "캐릭터",
-  "General: a long description (appearance, hair, clothing, pose, background, lighting), for styles and objects. Character: short captions without the fixed traits of the person (face, hair, eyes, skin, age), only what changes between photos, so the trigger learns the identity; best for people, and with Output preservation.": "일반: 긴 설명(외모, 머리카락, 옷, 포즈, 배경, 조명), 스타일과 사물용. 캐릭터: 인물의 고정 특징(얼굴, 머리카락, 눈, 피부, 나이)을 빼고 사진마다 바뀌는 것만 쓰는 짧은 캡션으로, 트리거가 정체성을 배웁니다. 인물에 가장 좋고 출력 보존과도 잘 맞습니다."
+  "General: a long description (appearance, hair, clothing, pose, background, lighting), for styles and objects. Character: short captions without the fixed traits of the person (face, hair, eyes, skin, age), only what changes between photos, so the trigger learns the identity; best for people, and with Output preservation.": "일반: 긴 설명(외모, 머리카락, 옷, 포즈, 배경, 조명), 스타일과 사물용. 캐릭터: 인물의 고정 특징(얼굴, 머리카락, 눈, 피부, 나이)을 빼고 사진마다 바뀌는 것만 쓰는 짧은 캡션으로, 트리거가 정체성을 배웁니다. 인물에 가장 좋고 출력 보존과도 잘 맞습니다.",
+  "Masked loss (subject)": "마스크 loss (피사체)",
+  "The LoRA learns the subject, not the backgrounds of the dataset. Before the training starts, BiRefNet (MIT, about 0.2 GB, downloaded the first time) cuts out the subject of every image (person, object...), and the loss weighs 1 on the subject and the Background weight elsewhere. Useful with small datasets or with backgrounds that repeat. The masks are made once (only the images that change are made again) and a sheet with all of them shows above the previews.": "LoRA가 데이터셋의 배경이 아니라 피사체를 배웁니다. 학습 전에 BiRefNet(MIT, 약 0.2 GB, 처음에 다운로드)이 각 이미지의 피사체(인물, 사물...)를 잘라내고, loss는 피사체에 1, 나머지에 Background weight를 줍니다. 작은 데이터셋이나 배경이 반복될 때 유용합니다. 마스크는 한 번 만들고(바뀐 이미지만 다시), 전체 마스크 시트가 프리뷰 위에 표시됩니다.",
+  "Background weight:": "배경 가중치:",
+  "How much the background still teaches, from 0 to 1. 0.1 by default: the subject leads. 0 can leave halos or odd backgrounds; higher learns more of the setting (light, mood).": "배경이 얼마나 학습에 기여할지(0~1). 기본 0.1: 피사체가 주도. 0이면 후광이나 이상한 배경이 남을 수 있고, 높을수록 환경(빛, 분위기)을 더 배웁니다.",
+  "BiRefNet cuts out the subject before training.": "BiRefNet이 학습 전에 피사체를 잘라냅니다.",
+  "Subject masks": "피사체 마스크",
+  "Bright: the subject the LoRA learns. Dark blue: background (weighs the Background weight).": "밝은 부분: LoRA가 배우는 피사체. 진한 파랑: 배경(Background weight로 가중)."
 }

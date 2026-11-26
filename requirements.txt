@@ -23,6 +23,9 @@ huggingface_hub
 
 bitsandbytes
 prodigyopt
+# Masked loss: BiRefNet (código del repositorio de Hugging Face)
+timm
+kornia
 sentencepiece
 tiktoken
 protobuf

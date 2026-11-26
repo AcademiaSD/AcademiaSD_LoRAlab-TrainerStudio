@@ -261,6 +261,10 @@ def register(app, trainer_id, runtime, train_config, precache_config):
     def caption_presets_js():
         return send_from_directory(str(GUI_DIR), "caption_presets.js")
 
+    @app.route("/masked_loss.js")
+    def masked_loss_js():
+        return send_from_directory(str(GUI_DIR), "masked_loss.js")
+
     @app.route("/output_preservation.js")
     def output_preservation_js():
         return send_from_directory(str(GUI_DIR), "output_preservation.js")
