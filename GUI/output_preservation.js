@@ -18,7 +18,6 @@
         const on = $(IDS.on).checked;
         [IDS.word, IDS.weight, IDS.every, IDS.map].forEach(id => { $(id).disabled = !on; });
         $('preservation_fields').style.display = on ? '' : 'none';
-        $('preservation_map_row').style.display = on ? '' : 'none';
         showMaps();
         if (!on) { hint.textContent = ''; return; }
         if (!$(IDS.word).value.trim()) {
@@ -59,9 +58,7 @@
                     <label for="${IDS.every}">Every N steps:</label>
                     <input type="number" id="${IDS.every}" value="1" min="1" max="100">
                 </div>
-            </div>
-            <div class="form-row" id="preservation_map_row" style="display: none;">
-                <div class="form-group" title="Every 100 steps, saves a heatmap over a dataset image: where the LoRA changes the base model's output when the prompt has the class word instead of the trigger. Usually the face and the hair; if the clothes, the background or the style light up too, the LoRA is learning things from the dataset it should not. Shown above the previews.">
+                <div class="form-group" style="display: flex; flex-direction: column; justify-content: flex-end; padding-bottom: 10px;" title="Every 100 steps, saves a heatmap over a dataset image: where the LoRA changes the base model's output when the prompt has the class word instead of the trigger. Usually the face and the hair; if the clothes, the background or the style light up too, the LoRA is learning things from the dataset it should not. Shown above the previews.">
                     <label style="display: flex; align-items: center; gap: 8px; margin: 0; cursor: pointer;" for="${IDS.map}">
                         <input type="checkbox" id="${IDS.map}" style="width: 18px; height: 18px; cursor: pointer;">
                         Preservation heatmap
@@ -72,7 +69,7 @@
         anchor.after(...box.children);
         Object.values(IDS).forEach(id => $(id).addEventListener('input', update));
         $(IDS.on).addEventListener('change', update);
-        if (typeof I18N !== 'undefined') ['preservation_fields', IDS.on, IDS.map].forEach(id => I18N.apply($(id).closest('.form-row')));
+        if (typeof I18N !== 'undefined') ['preservation_fields', IDS.on].forEach(id => I18N.apply($(id).closest('.form-row')));
         if (typeof LIVE_APPLY !== 'undefined' && LIVE_APPLY.resume) {
             LIVE_APPLY.resume.output_preservation = IDS.on;
             LIVE_APPLY.resume.preservation_class = IDS.word;
