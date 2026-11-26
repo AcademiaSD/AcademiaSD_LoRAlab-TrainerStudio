@@ -10,6 +10,7 @@ What was added, newest first. Each entry links to its commit.
 
 **2026-11-26**
 
+- <img src="https://img.shields.io/badge/MAJOR%20UPDATE-7c3aed?style=for-the-badge" alt="MAJOR UPDATE" height="22"> **Optimizer selector, with Prodigy** — choose AdamW, AdamW 8-bit, Prodigy or Adafactor above the LR Scheduler. Prodigy finds the learning rate on its own, so you don't have to guess it (use it with 1000 steps or more); AdamW 8-bit and Adafactor use less VRAM. In every trainer except LTX 2.3/2.5, MiniMax-H3 video and Boogu ([details](#optimizer)) [`e9e14cc`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/e9e14cc)
 - <img src="https://img.shields.io/badge/MAJOR%20UPDATE-7c3aed?style=for-the-badge" alt="MAJOR UPDATE" height="22"> **Best checkpoint, chosen automatically** — when the training ends, the trainer tests several saved checkpoints with the same prompts and seeds, scores the likeness to the dataset (face likeness for characters, SigLIP for styles and objects), the prompt adherence and the variety between seeds, and copies the recommended one as `<Model>_BEST_LoRA.safetensors`. A table with the scores and a **Send best to Models** button show above the previews. Turn on **Find the best checkpoint** in 2b. Training Previews ([details](#-best-checkpoint)) [`90ee419`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/90ee419)
 - <img src="https://img.shields.io/badge/MAJOR%20UPDATE-7c3aed?style=for-the-badge" alt="MAJOR UPDATE" height="22"> **Final XY grid in every image trainer** — when the training ends, the same image (same prompt and seed) is made with several checkpoints (rows) and LoRA strengths (columns), with the face likeness % on each image. It shows which step and strength to use without going to ComfyUI. Turn on **Final XY grid** in 2b. Training Previews ([details](#-final-xy-grid)) [`fe4871f`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/fe4871f)
 
@@ -324,6 +325,8 @@ New trainers are added **here**. One `Update_LoRAlab-TrainerStudio.bat` brings t
 
 **Curva de LR nueva al reanudar:** la curva del LR cubre siempre todo el entrenamiento, del paso 0 a Total Steps. Si entrenas 1000 pasos con `cosine` de 4e-4 a 4e-5, subes Total Steps a 2000 y reanudas, el paso 1001 está a mitad de la curva de 2000 pasos y el LR vuelve a subir a ~2,3e-4. Con **New LR curve on resume** (debajo del LR Scheduler) la curva empieza de nuevo al reanudar: desde el LR que pongas hasta su mínimo en el último paso, sin warmup; por ejemplo, con LR 1e-4 los 1000 pasos siguientes van de 1e-4 a 1e-5. Detalles en la sección *LR scheduler*.
 
+**Optimizador:** encima del LR Scheduler, **Optimizer** elige el algoritmo que entrena el LoRA: `AdamW` (por defecto, como siempre), `AdamW 8-bit` (menos VRAM; es el de siempre en Krea 2), `Prodigy` (calcula solo el learning rate, así que el campo Learning Rate se oculta) o `Adafactor` (menos VRAM que AdamW). Prodigy tarda unos 200-300 pasos en encontrar el LR: úsalo con 1000 pasos o más; con `cosine` lo baja después hasta el final. Con Prodigy no se usa LoRA+. Detalles en la sección *Optimizer*.
+
 **LR Scheduler:** debajo del learning rate puedes elegir cómo cambia durante el entrenamiento: `cosine` (por defecto: sube durante el warmup y baja suavemente hasta el 10%), `constant` (el mismo LR de principio a fin, como el entrenador de Civitai), `constant_with_warmup`, `linear` o `cosine_with_restarts` (repite la curva tantas veces como indique *Ciclos*). Si no lo tocas, cada entrenador funciona igual que antes. Detalles en la sección *LR scheduler*.
 
 **Idiomas:** la interfaz y los mensajes de consola están en inglés, español, alemán, francés, portugués, italiano, japonés y coreano. Elige el idioma en el selector **🌍 Language** de la parte inferior del lanzador y pulsa **💾 Save settings**; por defecto está en inglés. Los prompts de los captions siguen siempre en inglés, que es lo que entienden los modelos. Detalles en la sección *Languages*.
@@ -497,6 +500,22 @@ Under **LoRA Rank / Alpha**, the trainers have extra checkboxes. They change **h
 | **rsLoRA + LoRA+** | both | The two together: stable high ranks that also learn faster. They do not conflict: one changes the scaling, the other the optimizer | Rank 32, the alpha rsLoRA sets, and an LR about 2× lower than usual, because both make the training stronger | `_rs_plus` |
 | **DoRA** | DoRA | Likeness that a plain LoRA does not reach at the same rank, when slower steps are acceptable. Can be combined with rsLoRA and LoRA+ | The trainer's defaults: same rank, alpha and LR as LoRA | `_dora` |
 | **LoKr** | LoKr (+ Factor) | Characters and objects with small datasets, or when file size matters | Rank 8, alpha 8, factor 16, same LR as LoRA; factor 8 or a higher LR if it learns too little | `_lokr` |
+
+### Optimizer
+
+An **Optimizer** selector, above the LR Scheduler, chooses the algorithm that updates the LoRA weights. The default keeps each trainer's previous one: AdamW everywhere, AdamW 8-bit on Krea 2.
+
+| Optimizer | What it does | Learning Rate |
+| :--- | :--- | :--- |
+| **AdamW** | The usual one, with its state in FP32 | The one you set |
+| **AdamW 8-bit** | AdamW with its state in 8 bits (bitsandbytes): less VRAM, almost the same result | The one you set |
+| **Prodigy** | Finds the learning rate on its own ([Prodigy](https://github.com/konstmish/prodigy), Mishchenko and Defazio, MIT) | Not used: the field is hidden |
+| **Adafactor** | Less VRAM than AdamW (factored second moment, from transformers) | Similar to AdamW |
+
+- **Prodigy** starts at a very low LR and raises it as it sees the training progress. With the noise of diffusion training it needs about **200-300 steps** to find it, so use it with **1000 steps or more**; in short trainings it does not get there. The LR Scheduler still shapes it: with `cosine` (warmup 50), once found it eases it down to the end. Tested on Z-Image with a character, 1300 steps: it found ~7.6e-4 at step 300, the curve brought it down to ~1e-4, the face likeness passed 50% before step 800 and the LoRA works perfectly in ComfyUI. The console and the loss chart show the LR it finds. **LoRA+** is not used with Prodigy (it needs the same LR for every weight; the console says so). It needs the `prodigyopt` package, which the updater installs.
+- **Resuming with another optimizer** starts a new optimizer state (the console says so); the LoRA and the step are kept.
+- The chosen optimizer is saved with the settings and in the LoRA metadata of ERNIE-Image (`ss_optimizer`).
+- **Trainers:** every one except LTX 2.3, LTX 2.5, MiniMax-H3 (video) and Boogu, which keep their own optimizer.
 
 ### LR scheduler
 
