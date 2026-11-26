@@ -22,6 +22,7 @@ safetensors
 huggingface_hub
 
 bitsandbytes
+prodigyopt
 sentencepiece
 tiktoken
 protobuf

@@ -1618,5 +1618,13 @@
   "Scoring the images...": "이미지 채점 중...",
   "Best checkpoint: step {n}. Copied as {file}": "최적의 체크포인트: 스텝 {n}. {file}(으)로 복사됨",
   "Best checkpoint: step {n} (its LoRA file was not found to copy it).": "최적의 체크포인트: 스텝 {n}(복사할 LoRA 파일을 찾을 수 없음).",
-  "[GPU] Token embedding table kept in RAM during the load (-{:.2f} GB of VRAM).": "[GPU] 로드 중 토큰 임베딩 테이블을 RAM에 유지 (VRAM -{:.2f} GB)."
+  "[GPU] Token embedding table kept in RAM during the load (-{:.2f} GB of VRAM).": "[GPU] 로드 중 토큰 임베딩 테이블을 RAM에 유지 (VRAM -{:.2f} GB).",
+  "Optimizer:": "옵티마이저:",
+  "The algorithm that updates the LoRA weights. AdamW: the usual one. AdamW 8-bit: its state in 8 bits, less VRAM. Prodigy: finds the learning rate on its own, so you don't have to guess it. Adafactor: less VRAM than AdamW. Changing it on Resume starts a new optimizer state (the LoRA and the step are kept).": "LoRA 가중치를 업데이트하는 알고리즘. AdamW: 기본. AdamW 8-bit: 상태를 8비트로 저장해 VRAM이 적게 듦. Prodigy: 학습률을 스스로 찾으므로 추측할 필요가 없음. Adafactor: AdamW보다 VRAM이 적음. 재개할 때 바꾸면 옵티마이저 상태가 새로 시작됩니다(LoRA와 스텝은 유지).",
+  "Prodigy finds the learning rate: the Learning Rate field is not used. It starts very low and needs about 200-300 steps to find it, so use it with 1000 steps or more. The LR Scheduler still shapes it: with cosine, once found, it eases it down to the end. The console and the chart show the LR it finds. LoRA+ is not used with it.": "Prodigy가 학습률을 찾습니다: Learning Rate 칸은 사용되지 않습니다. 아주 낮은 값에서 시작해 찾는 데 약 200-300스텝이 걸리므로 1000스텝 이상으로 사용하세요. LR Scheduler는 계속 그 모양을 정합니다: cosine이면 찾은 뒤 끝까지 천천히 낮춥니다. 콘솔과 그래프에 찾은 LR이 표시됩니다. Prodigy에서는 LoRA+가 사용되지 않습니다.",
+  "Optimizer state in 8 bits: less VRAM, almost the same result.": "옵티마이저 상태를 8비트로: VRAM이 적고 결과는 거의 같음.",
+  "Less VRAM than AdamW. Use a similar Learning Rate.": "AdamW보다 VRAM이 적습니다. 비슷한 Learning Rate를 사용하세요.",
+  "Finds the learning rate on its own.": "학습률을 스스로 찾습니다.",
+  "Less VRAM.": "VRAM이 적게 듭니다.",
+  "Less VRAM than AdamW.": "AdamW보다 VRAM이 적습니다."
 }

@@ -39,6 +39,88 @@ def loraplus_groups(named_params, ratio):
     return [g for g in ({"params": a, "lr_mult": 1.0}, {"params": b, "lr_mult": ratio}) if g["params"]]
 
 
+# ── Optimizador ──
+# adamw: el de siempre (torch.optim.AdamW, estado FP32). adamw8bit: bitsandbytes, estado en 8 bits (menos
+# VRAM). prodigy: calcula solo el LR (Mishchenko y Defazio, 2023; paquete prodigyopt): el Learning Rate de la
+# GUI no se usa y el LR base es 1.0, al que el LR scheduler sigue aplicando su curva. adafactor: el de
+# transformers con LR fijo (sin relative_step), segundo momento factorizado (menos VRAM que AdamW).
+OPTIMIZERS = {"adamw": "AdamW", "adamw8bit": "AdamW 8-bit", "prodigy": "Prodigy", "adafactor": "Adafactor"}
+
+
+def optimizer_kind(value, default="adamw"):
+    value = str(value or default).strip().lower()
+    return value if value in OPTIMIZERS else default
+
+
+def optimizer_lr(kind, lr):
+    """LR base del bucle: con Prodigy es 1.0 (Prodigy multiplica por su estimación d)."""
+    return 1.0 if kind == "prodigy" else lr
+
+
+def make_optimizer(params, lr, weight_decay, kind="adamw", warmup=0, default="adamw", log=print):
+    """Crea el optimizador elegido. params: lista de parámetros o de grupos (LoRA+ con lr_mult).
+    Al reanudar con otro optimizador, el estado guardado no vale: se avisa y se empieza con estado
+    nuevo (los pesos y el paso sí se restauran). default: el optimizador que usaba el trainer antes de
+    existir esta opción, para reconocer los optimizer.pt antiguos."""
+    kind = optimizer_kind(kind, default)
+    if kind == "adamw8bit":
+        import bitsandbytes as bnb
+        opt = bnb.optim.AdamW8bit(params, lr=lr, weight_decay=weight_decay)
+    elif kind == "prodigy":
+        try:
+            from prodigyopt import Prodigy
+        except ImportError:
+            raise RuntimeError("Prodigy is not installed: run Update_LoRAlab-TrainerStudio "
+                               "(or pip install prodigyopt in the trainer's Python)") from None
+        # Prodigy no admite un LR distinto por grupo (lo comprueba en cada paso): LoRA+ no se usa.
+        groups = [g for g in params if isinstance(g, dict)] if isinstance(params, (list, tuple)) else []
+        if groups and len({g.get("lr_mult", 1.0) for g in groups}) > 1:
+            log("[!] LoRA+ is not used with Prodigy (it needs the same LR for every weight).")
+            params = [{"params": [p for g in groups for p in g["params"]], "lr_mult": 1.0}]
+        # Prodigy empieza con un LR de 1e-6 y lo sube a medida que ve progreso: con el ruido de la difusión
+        # tarda unos 200-300 pasos (medido en Z-Image: 1e-6 hasta el paso 100, ~8e-4 en el 300). En
+        # entrenamientos cortos no llega; en uno de 1300 pasos con cosine lo encuentra y la curva lo baja
+        # después, con buen resultado.
+        # Los ajustes habituales para LoRA: weight decay desacoplado como AdamW, corrección de sesgo y,
+        # con warmup, safeguard_warmup para que d no se dispare mientras el LR es casi 0.
+        opt = Prodigy(params, lr=1.0, weight_decay=weight_decay, decouple=True, betas=(0.9, 0.99),
+                      use_bias_correction=True, safeguard_warmup=warmup > 0, d_coef=1.0)
+    elif kind == "adafactor":
+        from transformers.optimization import Adafactor
+        opt = Adafactor(params, lr=lr, weight_decay=weight_decay, scale_parameter=False,
+                        relative_step=False, warmup_init=False)
+    else:
+        opt = torch.optim.AdamW(params, lr=lr, weight_decay=weight_decay)
+    for g in opt.param_groups:
+        g["optimizer_kind"] = kind
+    load = opt.load_state_dict
+
+    def load_state_dict(state):
+        groups = state.get("param_groups") or [{}]
+        saved = groups[0].get("optimizer_kind", default)
+        if saved != kind:
+            log("[!] The saved optimizer state is from {} and this training uses {}: it starts with a new "
+                "state (the LoRA and the step are kept).".format(OPTIMIZERS.get(saved, saved), OPTIMIZERS[kind]))
+            return None
+        return load(state)
+    opt.load_state_dict = load_state_dict
+    log("[OPT] Optimizer: {}{}".format(OPTIMIZERS[kind],
+                                       " (it finds the learning rate; base LR 1.0)" if kind == "prodigy" else ""))
+    return opt
+
+
+def shown_lr(optimizer, lr):
+    """LR para la consola y la gráfica: con Prodigy, el LR real (d · LR base del scheduler)."""
+    g = optimizer.param_groups[0]
+    if g.get("optimizer_kind") == "prodigy" and "d" in g:
+        return float(g["d"]) * lr
+    return lr
+
+
+def optimizer_label(kind):
+    return OPTIMIZERS.get(kind, "AdamW")
+
+
 def lr_factor(scheduler, step, total, warmup, min_ratio, cycles):
     """Multiplicador del LR en el paso step. constant no tiene warmup ni bajada; el resto sube lineal
     durante warmup y luego baja hasta min_ratio (constant_with_warmup se queda arriba).

@@ -160,6 +160,9 @@ COMPUTE_DTYPE, ADAPTER_DTYPE = lora_options.precision_dtypes(PRECISION)
 if USE_LOKR:
     USE_RSLORA = USE_LORAPLUS = USE_DORA = False
 WEIGHT_DECAY      = cfg.get("weight_decay",      DEFAULTS["weight_decay"])
+# Optimizador (AdamW, AdamW 8-bit, Prodigy, Adafactor). Con Prodigy el LR base es 1.0.
+OPTIMIZER         = lora_options.optimizer_kind(cfg.get("optimizer"), "adamw")
+LR                = lora_options.optimizer_lr(OPTIMIZER, LR)
 MAX_GRAD_NORM     = cfg.get("max_grad_norm",     DEFAULTS["max_grad_norm"])
 SAVE_EVERY        = cfg.get("save_every",        DEFAULTS["save_every"])
 SEED              = cfg.get("seed",              DEFAULTS["seed"])
@@ -696,7 +699,7 @@ def reload_live_settings():
 
     TOTAL_STEPS           = fresh("total_steps",           int,   TOTAL_STEPS)
     SAVE_EVERY            = fresh("save_every",            int,   SAVE_EVERY)
-    LR                    = fresh("lr",                    float, LR)
+    LR                    = fresh("lr",                    lambda v: lora_options.optimizer_lr(OPTIMIZER, float(v)), LR)
     MAX_GRAD_NORM         = fresh("max_grad_norm",         float, MAX_GRAD_NORM)
     PREVIEW_EVERY         = fresh("preview_every",         int,   PREVIEW_EVERY)
     PREVIEW_STEPS         = fresh("preview_steps",         int,   PREVIEW_STEPS)
@@ -877,9 +880,9 @@ def train_wan22():
     trainable = [p for _, p in named]
     # LoRA+: lora_B en su propio grupo, con el LR multiplicado (lr_mult se aplica en cada paso).
     if USE_LORAPLUS:
-        optimizer = torch.optim.AdamW(lora_options.loraplus_groups(named, LORAPLUS_RATIO), lr=LR, weight_decay=WEIGHT_DECAY)
+        optimizer = lora_options.make_optimizer(lora_options.loraplus_groups(named, LORAPLUS_RATIO), lr=LR, weight_decay=WEIGHT_DECAY, kind=OPTIMIZER, warmup=WARMUP_STEPS, default="adamw")
     else:
-        optimizer = torch.optim.AdamW(trainable, lr=LR, weight_decay=WEIGHT_DECAY)
+        optimizer = lora_options.make_optimizer(trainable, lr=LR, weight_decay=WEIGHT_DECAY, kind=OPTIMIZER, warmup=WARMUP_STEPS, default="adamw")
     scaler = lora_options.grad_scaler(PRECISION)   # FP16: loss escalada; BF16: no hace nada
 
     # New LR curve on resume (issue 88): al reanudar, la curva puede empezar de nuevo en ese paso.
@@ -1125,10 +1128,10 @@ def train_wan22():
             progress_line = (
                 f"{STEP_WORD} {step:4d}/{TOTAL_STEPS} [{barra}] {pct*100:5.1f}% | {current} | "
                 f"Loss {avg_loss:.4f} | gnorm {grad_norm:.3f} | "
-                f"lr {lr_at(step):.2e} | {t_step_avg:.2f}s/it | ETA {eta}"
+                f"lr {lora_options.shown_lr(optimizer, lr_at(step)):.2e} | {t_step_avg:.2f}s/it | ETA {eta}"
             )
             print(f"\r{progress_line}", end="", flush=True)
-            metrics.log(step, step_loss, lr_at(step), grad_norm, t_step, TOTAL_STEPS)
+            metrics.log(step, step_loss, lora_options.shown_lr(optimizer, lr_at(step)), grad_norm, t_step, TOTAL_STEPS)
 
             if SAVE_EVERY > 0 and step % SAVE_EVERY == 0:
                 print()

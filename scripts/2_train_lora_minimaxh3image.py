@@ -175,6 +175,9 @@ OUTPUT_DIR = str(resolve_output_dir(cfg("output_dir"), DEFAULTS["output_dir"]))
 TOTAL_STEPS = int(cfg("total_steps"))
 GRAD_ACCUM = max(1, int(cfg("grad_accum_steps")))
 LR = float(cfg("lr"))
+# Optimizador (AdamW, AdamW 8-bit, Prodigy, Adafactor). Con Prodigy el LR base es 1.0.
+OPTIMIZER = lora_options.optimizer_kind(CFG.get("optimizer"))
+LR = lora_options.optimizer_lr(OPTIMIZER, LR)
 RANK = int(cfg("lora_rank"))
 ALPHA = float(cfg("lora_alpha"))
 USE_RSLORA = cfg_bool("use_rslora")
@@ -253,7 +256,7 @@ def reload_live_settings():
     for key in changed:
         CFG[key] = fresh[key]
     if changed:
-        TOTAL_STEPS, LR = int(cfg("total_steps")), float(cfg("lr"))
+        TOTAL_STEPS, LR = int(cfg("total_steps")), lora_options.optimizer_lr(OPTIMIZER, float(cfg("lr")))
         SAVE_EVERY, PREVIEW_EVERY = int(cfg("save_every")), int(cfg("preview_every") or 0)
         log("[LIVE] " + ", ".join("{}={}".format(k, CFG[k]) for k in changed))
 
@@ -978,7 +981,8 @@ def main():
         groups = lora_options.loraplus_groups(named, float(cfg("loraplus_ratio")))
     else:
         groups = [{"params": params, "lr_mult": 1.0}]
-    optimizer = torch.optim.AdamW(groups, lr=LR, weight_decay=float(cfg("weight_decay")), betas=(0.9, 0.999))
+    optimizer = lora_options.make_optimizer(groups, lr=LR, weight_decay=float(cfg("weight_decay")), kind=OPTIMIZER,
+                                            warmup=int(cfg("warmup_steps")), log=log)
     start_step, elapsed_before = try_resume(model, optimizer)
     if start_step:
         log("[RESUME] " + t("Resuming from step {0}", start_step))
@@ -1040,9 +1044,9 @@ def main():
             pct = min(1.0, step / max(1, TOTAL_STEPS))
             bar = "\u2588" * int(pct * 20) + "\u2591" * (20 - int(pct * 20))
             progress("{} {:4d}/{} [{}] {:5.1f}% | Loss {:.4f} | gnorm {:.3f} | lr {:.2e} | {:.2f}s/it | ETA {:02d}:{:02d}:{:02d}".format(
-                STEP_WORD, step, TOTAL_STEPS, bar, pct * 100, running_loss / max(1, step - start_step), gnorm, LR * factor,
+                STEP_WORD, step, TOTAL_STEPS, bar, pct * 100, running_loss / max(1, step - start_step), gnorm, lora_options.shown_lr(optimizer, LR * factor),
                 avg_time, int(eta_s // 3600), int(eta_s % 3600 // 60), int(eta_s % 60)))
-            metrics.log(step, step_loss, LR * factor, gnorm, dt, TOTAL_STEPS)
+            metrics.log(step, step_loss, lora_options.shown_lr(optimizer, LR * factor), gnorm, dt, TOTAL_STEPS)
             grid.maybe_snapshot(model, step, TOTAL_STEPS)
             if DEBUG:
                 log("[DEBUG] step {} | sigma {:.4f} | loss {:.4f} | {:.2f}s | VRAM peak {:.2f} GB".format(

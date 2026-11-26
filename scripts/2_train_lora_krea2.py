@@ -154,6 +154,9 @@ ADAPTER_DTYPE     = torch.float32 if PRECISION == "fp16" else torch.bfloat16   #
 if USE_LOKR:
     USE_RSLORA = USE_LORAPLUS = USE_DORA = False
 WEIGHT_DECAY      = cfg.get("weight_decay",      DEFAULTS["weight_decay"])
+# Optimizador (AdamW, AdamW 8-bit, Prodigy, Adafactor). Con Prodigy el LR base es 1.0.
+OPTIMIZER         = lora_options.optimizer_kind(cfg.get("optimizer"), "adamw8bit")
+LR                = lora_options.optimizer_lr(OPTIMIZER, LR)
 MAX_GRAD_NORM     = cfg.get("max_grad_norm",     DEFAULTS["max_grad_norm"])
 SAVE_EVERY        = cfg.get("save_every",        DEFAULTS["save_every"])
 SEED              = cfg.get("seed",              DEFAULTS["seed"])
@@ -1142,7 +1145,7 @@ def reload_live_settings():
 
     TOTAL_STEPS            = fresh("total_steps",            int,   TOTAL_STEPS)
     SAVE_EVERY             = fresh("save_every",             int,   SAVE_EVERY)
-    LR                     = fresh("lr",                     float, LR)
+    LR                     = fresh("lr",                     lambda v: lora_options.optimizer_lr(OPTIMIZER, float(v)), LR)
     MAX_GRAD_NORM          = fresh("max_grad_norm",          float, MAX_GRAD_NORM)
     PREVIEW_EVERY          = fresh("preview_every",          int,   PREVIEW_EVERY)
     PREVIEW_STEPS          = fresh("preview_steps",          int,   PREVIEW_STEPS)
@@ -1329,11 +1332,11 @@ def train_krea2():
     if USE_LORAPLUS:
         lora_b = [p for n, p in model.named_parameters() if p.requires_grad and "lora_B" in n]
         lora_a = [p for n, p in model.named_parameters() if p.requires_grad and "lora_B" not in n]
-        optimizer = bnb.optim.AdamW8bit([{"params": lora_a, "lr_mult": 1.0},
+        optimizer = lora_options.make_optimizer([{"params": lora_a, "lr_mult": 1.0},
                                        {"params": lora_b, "lr_mult": LORAPLUS_RATIO}],
-                                      lr=LR, weight_decay=WEIGHT_DECAY)
+                                      lr=LR, weight_decay=WEIGHT_DECAY, kind=OPTIMIZER, warmup=WARMUP_STEPS, default="adamw8bit")
     else:
-        optimizer = bnb.optim.AdamW8bit(trainable, lr=LR, weight_decay=WEIGHT_DECAY)
+        optimizer = lora_options.make_optimizer(trainable, lr=LR, weight_decay=WEIGHT_DECAY, kind=OPTIMIZER, warmup=WARMUP_STEPS, default="adamw8bit")
     # FP16: escala la loss para que los gradientes pequeños no se queden en 0; si un paso desborda, se salta.
     scaler = torch.amp.GradScaler("cuda", init_scale=2.0 ** 12, enabled=PRECISION == "fp16")
 
@@ -1597,10 +1600,10 @@ def train_krea2():
             progress_line = (
                 f"{STEP_WORD} {step:4d}/{TOTAL_STEPS} [{barra}] {pct*100:5.1f}% | "
                 f"Loss {avg_loss:.4f} | gnorm {grad_norm:.3f} | "
-                f"lr {lr_at(step):.2e} | {t_step_avg:.2f}s/it | ETA {eta}"
+                f"lr {lora_options.shown_lr(optimizer, lr_at(step)):.2e} | {t_step_avg:.2f}s/it | ETA {eta}"
             )
             print(f"\r{progress_line}", end="", flush=True)
-            metrics.log(step, step_loss, lr_at(step), grad_norm, t_step, TOTAL_STEPS)
+            metrics.log(step, step_loss, lora_options.shown_lr(optimizer, lr_at(step)), grad_norm, t_step, TOTAL_STEPS)
             grid.maybe_snapshot(model, step, TOTAL_STEPS)
 
             if SAVE_EVERY > 0 and step % SAVE_EVERY == 0:

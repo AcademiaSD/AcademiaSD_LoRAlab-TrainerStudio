@@ -55,7 +55,7 @@ PRECISION_CFG     = str(cfg.get("precision", "auto") or "auto").lower()
 PRECISION         = lora_options.resolve_precision(PRECISION_CFG, FP16_OK)
 COMPUTE_DTYPE, ADAPTER_DTYPE = lora_options.precision_dtypes(PRECISION)
 LORA_TARGETS="all" if cfg.get("lora_targets","blocks")=="all" else "blocks"
-WEIGHT_DECAY=float(cfg.get("weight_decay",0)); MAX_GRAD_NORM=float(cfg.get("max_grad_norm",1.0)); PREVIEW_EVERY=int(cfg.get("preview_every",0) or 0)
+WEIGHT_DECAY=float(cfg.get("weight_decay",0)); OPTIMIZER=lora_options.optimizer_kind(cfg.get("optimizer")); LR=lora_options.optimizer_lr(OPTIMIZER,LR); MAX_GRAD_NORM=float(cfg.get("max_grad_norm",1.0)); PREVIEW_EVERY=int(cfg.get("preview_every",0) or 0)
 PREVIEW_STEPS=int(cfg.get("preview_steps",28)); PREVIEW_CFG=float(cfg.get("preview_cfg",4)); PREVIEW_SIZE=int(cfg.get("preview_size",0)); PREVIEW_WIDTH=int(cfg.get("preview_width",0)); PREVIEW_HEIGHT=int(cfg.get("preview_height",0))
 PREVIEW_MODE=cfg.get("preview_caption_mode","first")
 PREVIEW_PROMPTS=preview_prompts.settings(cfg)   # Custom Prompts (hasta 4), cambian en caliente
@@ -97,7 +97,7 @@ def export(model,path,step):
         if key.endswith(".lora_A.weight"): state[key[:-len(".lora_A.weight")]+".alpha"]=torch.tensor(float(lora_options.export_alpha(ALPHA,RANK,USE_RSLORA)),dtype=torch.float32)
     state.update(lora_options.dora_export(model,lambda name:"transformer."+name))   # DoRA: <capa>.dora_scale
     trigger=TRIGGER or ""
-    meta={"format":"pt","trained_with":"AcademiaSD LoRAlab ERNIE-Image","ss_sd_model_name":"baidu/ERNIE-Image","ss_base_model_version":"ERNIE-Image","ss_network_module":"peft.LoraModel","ss_lr_scheduler":LR_SCHEDULER,"ss_network_dim":str(RANK),"ss_network_alpha":str(lora_options.export_alpha(ALPHA,RANK,USE_RSLORA)),"ss_steps":str(step),"ss_max_train_steps":str(STEPS),"ss_learning_rate":str(LR),"ss_mixed_precision":PRECISION,"ss_optimizer":"AdamW","ss_weight_decay":str(WEIGHT_DECAY)}
+    meta={"format":"pt","trained_with":"AcademiaSD LoRAlab ERNIE-Image","ss_sd_model_name":"baidu/ERNIE-Image","ss_base_model_version":"ERNIE-Image","ss_network_module":"peft.LoraModel","ss_lr_scheduler":LR_SCHEDULER,"ss_network_dim":str(RANK),"ss_network_alpha":str(lora_options.export_alpha(ALPHA,RANK,USE_RSLORA)),"ss_steps":str(step),"ss_max_train_steps":str(STEPS),"ss_learning_rate":str(LR),"ss_mixed_precision":PRECISION,"ss_optimizer":lora_options.optimizer_label(OPTIMIZER),"ss_weight_decay":str(WEIGHT_DECAY)}
     if trigger: meta["trigger_word"]=trigger; meta["ss_tag_frequency"]=json.dumps({"dataset":{trigger:1}})
     if USE_DORA:
         meta["dora"]="true"; meta["ss_network_args"]=json.dumps({"rslora":USE_RSLORA,"dora_wd":True})
@@ -197,8 +197,8 @@ def main():
     trainable=[p for p in model.parameters() if p.requires_grad]
     if USE_LORAPLUS:
         a=[p for n,p in model.named_parameters() if p.requires_grad and "lora_B" not in n]; b=[p for n,p in model.named_parameters() if p.requires_grad and "lora_B" in n]
-        optimizer=torch.optim.AdamW([{"params":a,"lr_mult":1.0},{"params":b,"lr_mult":LORAPLUS_RATIO}],lr=LR,weight_decay=WEIGHT_DECAY)
-    else: optimizer=torch.optim.AdamW(trainable,lr=LR,weight_decay=WEIGHT_DECAY)
+        optimizer=lora_options.make_optimizer([{"params":a,"lr_mult":1.0},{"params":b,"lr_mult":LORAPLUS_RATIO}],lr=LR,weight_decay=WEIGHT_DECAY,kind=OPTIMIZER,warmup=WARMUP)
+    else: optimizer=lora_options.make_optimizer(trainable,lr=LR,weight_decay=WEIGHT_DECAY,kind=OPTIMIZER,warmup=WARMUP)
     scaler=lora_options.grad_scaler(PRECISION)   # FP16: loss escalada; BF16: no hace nada
     for p in trainable: p.data=p.data.float()
     # New LR curve on resume (issue 88): al reanudar, la curva puede empezar de nuevo en ese paso.
@@ -253,7 +253,7 @@ def main():
             if live_mtime is None: live_mtime=mt
             elif mt!=live_mtime:
                 fresh=json.load(open(CONFIG,encoding="utf-8")); live_mtime=mt; changed=[]
-                for key,var,cast in (("total_steps","STEPS",int),("save_every","SAVE_EVERY",int),("lr","LR",float),("max_grad_norm","MAX_GRAD_NORM",float),("preview_every","PREVIEW_EVERY",int),("preview_steps","PREVIEW_STEPS",int),("preview_cfg","PREVIEW_CFG",float),("preview_size","PREVIEW_SIZE",int),("preview_width","PREVIEW_WIDTH",int),("preview_height","PREVIEW_HEIGHT",int),("preview_caption_mode","PREVIEW_MODE",str),("preview_custom_prompt","CUSTOM",str),("seed","SEED",int)):
+                for key,var,cast in (("total_steps","STEPS",int),("save_every","SAVE_EVERY",int),("lr","LR",lambda v: lora_options.optimizer_lr(OPTIMIZER,float(v))),("max_grad_norm","MAX_GRAD_NORM",float),("preview_every","PREVIEW_EVERY",int),("preview_steps","PREVIEW_STEPS",int),("preview_cfg","PREVIEW_CFG",float),("preview_size","PREVIEW_SIZE",int),("preview_width","PREVIEW_WIDTH",int),("preview_height","PREVIEW_HEIGHT",int),("preview_caption_mode","PREVIEW_MODE",str),("preview_custom_prompt","CUSTOM",str),("seed","SEED",int)):
                     old=globals()[var]; new=cast(fresh.get(key,old)); globals()[var]=new
                     if old!=new: changed.append(f"{key}: {old} -> {new}")
                 preview_prompts.live_update(PREVIEW_PROMPTS,fresh,changed)
@@ -282,8 +282,8 @@ def main():
             full=min(20,max(1,int(math.ceil(pct*20))))
             bar=PROGRESS_FILLED*full+PROGRESS_EMPTY*(20-full)
         eta=max(0,STEPS-step)*t_step_avg; eta_s=f"{int(eta//3600):02d}:{int(eta%3600//60):02d}:{int(eta%60):02d}"
-        print(f"\rStep {step:4d}/{STEPS} [{bar}] {pct*100:5.1f}% | Loss {running_loss/max(1,step-start_step):.4f} | gnorm {grad_norm:.3f} | lr {lr_at(step):.2e} | {t_step_avg:.2f}s/it | ETA {eta_s}",end="",flush=True)
-        metrics.log(step,step_loss,lr_at(step),grad_norm,elapsed,STEPS)
+        print(f"\rStep {step:4d}/{STEPS} [{bar}] {pct*100:5.1f}% | Loss {running_loss/max(1,step-start_step):.4f} | gnorm {grad_norm:.3f} | lr {lora_options.shown_lr(optimizer,lr_at(step)):.2e} | {t_step_avg:.2f}s/it | ETA {eta_s}",end="",flush=True)
+        metrics.log(step,step_loss,lora_options.shown_lr(optimizer,lr_at(step)),grad_norm,elapsed,STEPS)
         grid.maybe_snapshot(model,step,STEPS)
         if SAVE_EVERY>0 and step%SAVE_EVERY==0: save()
         if PREVIEW_EVERY>0 and step%PREVIEW_EVERY==0:

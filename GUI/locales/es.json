@@ -1789,5 +1789,13 @@
   "Scoring the images...": "Puntuando las imágenes...",
   "Best checkpoint: step {n}. Copied as {file}": "Mejor checkpoint: paso {n}. Copiado como {file}",
   "Best checkpoint: step {n} (its LoRA file was not found to copy it).": "Mejor checkpoint: paso {n} (no se ha encontrado su fichero LoRA para copiarlo).",
-  "[GPU] Token embedding table kept in RAM during the load (-{:.2f} GB of VRAM).": "[GPU] Tabla de embeddings en RAM durante la carga (-{:.2f} GB de VRAM)."
+  "[GPU] Token embedding table kept in RAM during the load (-{:.2f} GB of VRAM).": "[GPU] Tabla de embeddings en RAM durante la carga (-{:.2f} GB de VRAM).",
+  "Optimizer:": "Optimizador:",
+  "The algorithm that updates the LoRA weights. AdamW: the usual one. AdamW 8-bit: its state in 8 bits, less VRAM. Prodigy: finds the learning rate on its own, so you don't have to guess it. Adafactor: less VRAM than AdamW. Changing it on Resume starts a new optimizer state (the LoRA and the step are kept).": "El algoritmo que actualiza los pesos del LoRA. AdamW: el de siempre. AdamW 8-bit: su estado en 8 bits, menos VRAM. Prodigy: calcula solo el learning rate, para no tener que adivinarlo. Adafactor: menos VRAM que AdamW. Cambiarlo al reanudar empieza un estado del optimizador nuevo (el LoRA y el paso se conservan).",
+  "Prodigy finds the learning rate: the Learning Rate field is not used. It starts very low and needs about 200-300 steps to find it, so use it with 1000 steps or more. The LR Scheduler still shapes it: with cosine, once found, it eases it down to the end. The console and the chart show the LR it finds. LoRA+ is not used with it.": "Prodigy calcula el learning rate: el campo Learning Rate no se usa. Empieza muy bajo y tarda unos 200-300 pasos en encontrarlo, así que úsalo con 1000 pasos o más. El LR Scheduler sigue dándole forma: con cosine, una vez encontrado, lo va bajando hasta el final. La consola y la gráfica muestran el LR que encuentra. LoRA+ no se usa con él.",
+  "Optimizer state in 8 bits: less VRAM, almost the same result.": "Estado del optimizador en 8 bits: menos VRAM, casi el mismo resultado.",
+  "Less VRAM than AdamW. Use a similar Learning Rate.": "Menos VRAM que AdamW. Usa un Learning Rate parecido.",
+  "Finds the learning rate on its own.": "Calcula solo el learning rate.",
+  "Less VRAM.": "Menos VRAM.",
+  "Less VRAM than AdamW.": "Menos VRAM que AdamW."
 }

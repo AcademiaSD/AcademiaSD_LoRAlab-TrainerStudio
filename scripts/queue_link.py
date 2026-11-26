@@ -248,6 +248,10 @@ def register(app, trainer_id, runtime, train_config, precache_config):
     def lr_curve_js():
         return send_from_directory(str(GUI_DIR), "lr_curve.js")
 
+    @app.route("/optimizer.js")
+    def optimizer_js():
+        return send_from_directory(str(GUI_DIR), "optimizer.js")
+
     @app.route("/api/queue-gate", methods=["POST"])
     def queue_gate():
         script = (request.get_json(force=True) or {}).get("script")

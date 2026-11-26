@@ -187,6 +187,9 @@ LORAPLUS_RATIO   = float(_g("loraplus_ratio"))
 USE_LOKR         = bool(_g("use_lokr"))
 LOKR_FACTOR      = max(1, int(_g("lokr_factor")))
 WEIGHT_DECAY     = float(_g("weight_decay"))
+# Optimizador (AdamW, AdamW 8-bit, Prodigy, Adafactor). Con Prodigy el LR base es 1.0.
+OPTIMIZER         = lora_options.optimizer_kind(cfg.get("optimizer"), "adamw")
+LR                = lora_options.optimizer_lr(OPTIMIZER, LR)
 MAX_GRAD_NORM    = float(_g("max_grad_norm"))
 SAVE_EVERY       = int(_g("save_every"))
 SEED             = int(_g("seed"))
@@ -976,7 +979,7 @@ def reload_live_settings():
 
     TOTAL_STEPS = max(1, fresh("total_steps", int, TOTAL_STEPS))
     SAVE_EVERY = max(0, fresh("save_every", int, SAVE_EVERY))
-    LR = max(0.0, fresh("lr", float, LR))
+    LR = max(0.0, fresh("lr", lambda v: lora_options.optimizer_lr(OPTIMIZER, float(v)), LR))
     MAX_GRAD_NORM = max(0.0, fresh("max_grad_norm", float, MAX_GRAD_NORM))
     PREVIEW_EVERY = max(0, fresh("preview_every", int, PREVIEW_EVERY))
     PREVIEW_ODE = max(1, fresh("preview_ode_steps", int, PREVIEW_ODE))
@@ -1075,11 +1078,11 @@ def train_stage(stage, base):
 
     trainable = [p for p in model.parameters() if p.requires_grad]
     if USE_LORAPLUS:
-        optimizer = torch.optim.AdamW(
+        optimizer = lora_options.make_optimizer(
             lora_options.loraplus_groups(model.named_parameters(), LORAPLUS_RATIO),
-            lr=LR, weight_decay=WEIGHT_DECAY)
+            lr=LR, weight_decay=WEIGHT_DECAY, kind=OPTIMIZER, warmup=WARMUP_STEPS, default="adamw")
     else:
-        optimizer = torch.optim.AdamW(trainable, lr=LR, weight_decay=WEIGHT_DECAY)
+        optimizer = lora_options.make_optimizer(trainable, lr=LR, weight_decay=WEIGHT_DECAY, kind=OPTIMIZER, warmup=WARMUP_STEPS, default="adamw")
     scaler = lora_options.grad_scaler(COMPUTE_PRECISION)   # FP16: loss escalada; BF16: no hace nada
 
     # New LR curve on resume (issue 88): al reanudar, la curva puede empezar de nuevo en ese paso.
@@ -1226,9 +1229,9 @@ def train_stage(stage, base):
             print("\r"
                   f"{STEP_WORD} {step:4d}/{TOTAL_STEPS} [{bar}] {pct * 100:5.1f}% | "
                   f"Loss {running_loss / seen:.4f} | gnorm {grad_norm:.3f} | "
-                  f"lr {lr_at(step):.2e} | {avg_step_time:.2f}s/it | ETA {eta}",
+                  f"lr {lora_options.shown_lr(optimizer, lr_at(step)):.2e} | {avg_step_time:.2f}s/it | ETA {eta}",
                   end="", flush=True)
-            metrics.log(step, step_loss, lr_at(step), grad_norm, elapsed, TOTAL_STEPS)
+            metrics.log(step, step_loss, lora_options.shown_lr(optimizer, lr_at(step)), grad_norm, elapsed, TOTAL_STEPS)
 
             if SAVE_EVERY > 0 and step % SAVE_EVERY == 0:
                 print()

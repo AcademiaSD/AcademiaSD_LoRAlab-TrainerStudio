@@ -1618,5 +1618,13 @@
   "Scoring the images...": "画像を採点中...",
   "Best checkpoint: step {n}. Copied as {file}": "最良のチェックポイント：ステップ {n}。{file} としてコピーしました",
   "Best checkpoint: step {n} (its LoRA file was not found to copy it).": "最良のチェックポイント：ステップ {n}（コピーする LoRA ファイルが見つかりません）。",
-  "[GPU] Token embedding table kept in RAM during the load (-{:.2f} GB of VRAM).": "[GPU] 読み込み中はトークン埋め込みテーブルを RAM に保持 (VRAM -{:.2f} GB)。"
+  "[GPU] Token embedding table kept in RAM during the load (-{:.2f} GB of VRAM).": "[GPU] 読み込み中はトークン埋め込みテーブルを RAM に保持 (VRAM -{:.2f} GB)。",
+  "Optimizer:": "オプティマイザー:",
+  "The algorithm that updates the LoRA weights. AdamW: the usual one. AdamW 8-bit: its state in 8 bits, less VRAM. Prodigy: finds the learning rate on its own, so you don't have to guess it. Adafactor: less VRAM than AdamW. Changing it on Resume starts a new optimizer state (the LoRA and the step are kept).": "LoRA の重みを更新するアルゴリズム。AdamW: 標準。AdamW 8-bit: 状態を 8 ビットで保持し、VRAM が少なくて済む。Prodigy: 学習率を自動で求めるので、推測する必要がない。Adafactor: AdamW より VRAM が少ない。再開時に変更すると、オプティマイザーの状態は新しく始まります (LoRA とステップは保持)。",
+  "Prodigy finds the learning rate: the Learning Rate field is not used. It starts very low and needs about 200-300 steps to find it, so use it with 1000 steps or more. The LR Scheduler still shapes it: with cosine, once found, it eases it down to the end. The console and the chart show the LR it finds. LoRA+ is not used with it.": "Prodigy が学習率を求めます: Learning Rate 欄は使われません。とても低い値から始まり、見つけるまでに約 200-300 ステップかかるので、1000 ステップ以上で使ってください。LR Scheduler は引き続きその形を決めます: cosine なら、見つけた後は最後まで徐々に下げます。コンソールとグラフには求めた LR が表示されます。Prodigy では LoRA+ は使われません。",
+  "Optimizer state in 8 bits: less VRAM, almost the same result.": "オプティマイザーの状態を 8 ビットで保持: VRAM が少なく、結果はほぼ同じ。",
+  "Less VRAM than AdamW. Use a similar Learning Rate.": "AdamW より VRAM が少ない。同程度の Learning Rate を使ってください。",
+  "Finds the learning rate on its own.": "学習率を自動で求めます。",
+  "Less VRAM.": "VRAM が少なくて済みます。",
+  "Less VRAM than AdamW.": "AdamW より VRAM が少ない。"
 }

@@ -466,6 +466,10 @@ def export_lora():
 def index():
     if not UI_FILE.exists():
         return t("File not found: {path}", path=UI_FILE), 404
+    if not IMAGE_MODE:
+        # El selector de optimizador es del trainer de imagen; el de vídeo tiene el suyo (optimizer_type).
+        html = UI_FILE.read_text(encoding="utf-8").replace('<script src="/optimizer.js"></script>', "")
+        return html, 200, {"Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache"}
     return send_from_directory(str(UI_FILE.parent), UI_FILE.name)
 
 
