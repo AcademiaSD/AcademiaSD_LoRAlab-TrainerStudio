@@ -1025,6 +1025,8 @@ queue_link.register(app, "mossimage", runtime, TRAIN_CONFIG, PRECACHE_CONFIG)
 training_metrics.register(app, get_train_output_dir)
 face_match.register(app, get_dataset_dir, get_train_output_dir)
 xy_grid.register(app, get_train_output_dir)
+import output_preservation
+output_preservation.register(app, get_train_output_dir)
 dataset_forge.register(app, get_dataset_dir)
 
 

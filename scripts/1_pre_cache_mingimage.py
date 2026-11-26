@@ -617,6 +617,12 @@ def encode_preview_prompts(cache_dir, device, items, images_arg=None):
 
 
 if __name__ == "__main__":
+    import output_preservation
+    # --dop-prompts: prompts de clase de la protección de salida (los codifica antes de entrenar).
+    if output_preservation.dop_job(sys.argv):
+        CACHE_DIR = output_preservation.dop_job(sys.argv)[0]
+    if output_preservation.run_encoder_job(sys.argv, lambda d: (load_text_encoder(d), load_bailingmm2_processor(os.path.join(MODEL_ID, "mllm"))), save=lambda h, n, p: [torch.save(x, os.path.join(CACHE_DIR, n + s)) for x, s in zip(encode_prompt(h[0], h[1], p), ("_embed.pt", "_embed2.pt"))]):
+        sys.exit(0)
     prompts_only = preview_prompts.parse_prompts_only(sys.argv)
     if prompts_only:
         # --prompts-only <carpeta de caché> <cuda|cpu> <json [[slot, prompt con el trigger ya puesto], ...]> [<json [imagen de antes]>]

@@ -37,6 +37,7 @@ import lora_options
 import training_metrics
 import preview_prompts
 import xy_grid
+import output_preservation
 
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
 STEP_WORD = t("Step")
@@ -511,6 +512,9 @@ def train_sdxl():
         print("[!] " + t("Checkpoint not found: {path}. Run Pre-Cache.", path=MODEL['checkpoint']))
         sys.exit(2)
 
+    # Output preservation: los prompts de clase se codifican antes de cargar la UNet (VRAM libre).
+    pres = output_preservation.Preservation(cfg, CACHE_DIR, OUTPUT_DIR, TRIGGER_WORD, os.path.join(os.path.dirname(os.path.abspath(__file__)), "1_pre_cache_sdxl.py"))
+
     print(t("Loading {name}...", name=f"SDXL UNet ({PRECISION.upper()}): {MODEL['name']}"))
     t0 = time.time()
     unet = load_unet()
@@ -685,6 +689,9 @@ def train_sdxl():
         lat = torch.load(f"{CACHE_DIR}/{f}", weights_only=True)
         cache_data[nombre] = {**load_embed(f"{CACHE_DIR}/{nombre}_embed.pt"), "lat": lat["lat"], "orig": lat["orig"], "crop": lat["crop"]}
         buckets[tuple(lat["lat"].shape[-2:])].append(nombre)
+        if pres.active:
+            cache_data[nombre]["dop"] = load_embed(f"{CACHE_DIR}/{pres.name(nombre)}_embed.pt")
+    pres.begin(start_step)
 
     neg = torch.load(f"{CACHE_DIR}/_neg_embed.pt", weights_only=True)
     pad_emb = torch.load(f"{CACHE_DIR}/_pad_embed.pt", weights_only=True)["emb"]
@@ -778,6 +785,16 @@ def train_sdxl():
             scaler.scale(loss).backward()
             step_loss = loss.item() * GRAD_ACCUM_STEPS
             running_loss += step_loss
+
+            # Output preservation: mismo latente con ruido y el prompt de clase; la salida con LoRA debe seguir
+            # siendo la del modelo sin LoRA. Backward aparte: el grafo de la loss normal ya se ha liberado.
+            if pres.due(step):
+                c_emb = pad_text([cache_data[n]["dop"]["emb"] for n in names], pad_emb).to("cuda", COMPUTE_DTYPE)
+                c_pooled = torch.stack([cache_data[n]["dop"]["pooled"] for n in names]).to("cuda", COMPUTE_DTYPE)
+                pres.step(model, lambda: model(noisy, ts, encoder_hidden_states=c_emb,
+                                               added_cond_kwargs={"text_embeds": c_pooled, "time_ids": ids},
+                                               return_dict=False)[0], names, scaler, GRAD_ACCUM_STEPS)
+            pres.report(step)
 
             if step % GRAD_ACCUM_STEPS == 0:
                 scaler.unscale_(optimizer)

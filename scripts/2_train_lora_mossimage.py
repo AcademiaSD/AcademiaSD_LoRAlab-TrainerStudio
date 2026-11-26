@@ -48,6 +48,7 @@ import lora_options
 import training_metrics
 import preview_prompts
 import xy_grid
+import output_preservation
 from moss_image_model import MOSSImageTransformer
 from moss_edit_lora import EDIT_BASES, base_file, base_layers
 
@@ -808,6 +809,11 @@ def train_mossimage():
 
     ensure_model_downloaded(local_path=MODEL_ID, repo_id=HF_REPO_ID)
 
+    # Output preservation: los prompts de clase se codifican antes de cargar el transformer (VRAM libre). En
+    # LoRAs de edición no se usa.
+    pres = output_preservation.Preservation(cfg, CACHE_DIR, OUTPUT_DIR, TRIGGER_WORD, os.path.join(os.path.dirname(os.path.abspath(__file__)), "1_pre_cache_mossimage.py"),
+                                            edit=EDIT_MODE)
+
     print(t("Loading {name}...", name=f"MOSS-Image {BASE_MODEL.upper()} Transformer (NF4)"))
     t0 = time.time()
     transformer = load_nf4_transformer(MODEL_ID)
@@ -1016,6 +1022,10 @@ def train_mossimage():
         nombre = f.replace("_latent.pt", "")
         cache_data[nombre] = load_sample(nombre)
         buckets[tuple(cache_data[nombre]["lat"].shape[2:])].append(nombre)
+        if pres.active:
+            d = torch.load(f"{CACHE_DIR}/{pres.name(nombre)}_embed.pt", weights_only=True).to(COMPUTE_DTYPE)
+            cache_data[nombre]["dop"] = d.pin_memory() if pin else d
+    pres.begin(start_step)
 
     def load_custom(slot):
         # Cada prompt tiene su embedding y máscaras (<prefix>_*.pt); las imágenes de referencia
@@ -1131,6 +1141,14 @@ def train_mossimage():
             scaler.scale(loss).backward()
             step_loss = loss.item() * GRAD_ACCUM_STEPS
             running_loss += step_loss
+
+            # Output preservation: mismo latente con ruido y el prompt de clase; la salida con LoRA debe seguir
+            # siendo la del modelo sin LoRA. Backward aparte: el grafo de la loss normal ya se ha liberado.
+            if pres.due(step):
+                c_text, c_mask = stack_embeds([cache_data[n]["dop"] for n in names], "cuda")
+                pres.step(model, lambda: model(noisy, sigma * 1000, c_text, c_mask, references=None),
+                          names, scaler, GRAD_ACCUM_STEPS)
+            pres.report(step)
 
             # La norma solo existe al aplicar el optimizador: entre medias se muestra la última.
             if step % GRAD_ACCUM_STEPS == 0:

@@ -40,6 +40,7 @@ import lora_options
 import training_metrics
 import preview_prompts
 import xy_grid
+import output_preservation
 import block_swap
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 import fibo2_caption
@@ -704,6 +705,13 @@ def train_fibo2():
 
     card_gb, usable_gb = block_swap.apply_vram_profile(SWAP_CFG.vram_profile, log=print, t=t)
 
+    # Output preservation: los prompts de clase se codifican antes de cargar el transformer (VRAM libre). El
+    # trigger va dentro del caption JSON, como en el pre-caché; en LoRAs de edición no se usa.
+    pres = output_preservation.Preservation(
+        cfg, CACHE_DIR, OUTPUT_DIR, TRIGGER_WORD, os.path.join(os.path.dirname(os.path.abspath(__file__)), "1_pre_cache_fibo2.py"),
+        edit=any(n.endswith("_ref.pt") and not cache_names.is_reserved(n) for n in os.listdir(CACHE_DIR)),
+        caption=lambda s: fibo2_caption.with_trigger(output_preservation.raw_caption(cfg, s), TRIGGER_WORD))
+
     print(t("Loading {name}...", name="Fibo 2.0 Transformer (NF4)"))
     t0 = time.time()
     # Los bloques quedan mapeados a sus ficheros: block_swap.setup sube después los que caben.
@@ -920,6 +928,10 @@ def train_fibo2():
         nombre = f.replace("_latent.pt", "")
         cache_data[nombre] = load_sample(nombre)
         buckets[tuple(cache_data[nombre]["lat"].shape[-2:])].append(nombre)
+        if pres.active:
+            d = load_sample(pres.name(nombre))
+            cache_data[nombre]["dop"], cache_data[nombre]["dop_msk"] = d["emb"], d.get("msk")
+    pres.begin(start_step)
 
     edit_mode = any("ref" in v for v in cache_data.values())
 
@@ -1097,6 +1109,21 @@ def train_fibo2():
                     offload = SWAP_CFG.activation_offload
             step_loss = loss.item() * GRAD_ACCUM_STEPS
             running_loss += step_loss
+
+            # Output preservation: mismo latente con ruido y el prompt de clase; la salida con LoRA debe seguir
+            # siendo la del modelo sin LoRA. Backward aparte: el grafo de la loss normal ya se ha liberado.
+            if pres.due(step):
+                c_emb, c_msk = collate_text([cache_data[n]["dop"] for n in names],
+                                            [cache_data[n].get("dop_msk") for n in names])
+                c_emb = c_emb.to("cuda", non_blocking=True)
+                c_msk = None if c_msk is None else c_msk.to("cuda", non_blocking=True)
+
+                def cls_pred():
+                    with (block_swap.SaveOnCpu() if offload else block_swap._null()):
+                        return model(hidden_states=noisy, encoder_hidden_states=c_emb, encoder_attention_mask=c_msk,
+                                     timestep=sigma, context_latents=None, return_dict=False)[0]
+                pres.step(model, cls_pred, names, scaler, GRAD_ACCUM_STEPS)
+            pres.report(step)
 
             # La norma solo existe al aplicar el optimizador: entre medias se muestra la última.
             if step % GRAD_ACCUM_STEPS == 0:

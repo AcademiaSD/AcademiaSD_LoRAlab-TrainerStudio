@@ -145,8 +145,6 @@ WEIGHT_DECAY      = cfg.get("weight_decay",      DEFAULTS["weight_decay"])
 # Optimizador (AdamW, AdamW 8-bit, Prodigy, Adafactor). Con Prodigy el LR base es 1.0.
 OPTIMIZER         = lora_options.optimizer_kind(cfg.get("optimizer"), "adamw")
 LR                = lora_options.optimizer_lr(OPTIMIZER, LR)
-# Output preservation: con el trigger cambiado por la palabra de clase, la salida no debe cambiar con el LoRA.
-PRES_ON, PRES_WORD, PRES_WEIGHT, PRES_EVERY = output_preservation.settings(cfg)
 MAX_GRAD_NORM     = cfg.get("max_grad_norm",     DEFAULTS["max_grad_norm"])
 SAVE_EVERY        = cfg.get("save_every",        DEFAULTS["save_every"])
 SEED              = cfg.get("seed",              DEFAULTS["seed"])
@@ -692,9 +690,8 @@ def train_zimage():
     ensure_model_downloaded(local_path=MODEL_ID, repo_id=HF_REPO_ID)
 
     # Output preservation: los prompts de clase se codifican antes de cargar el transformer (VRAM libre).
-    pres_prompts = output_preservation.prepare(
-        cfg, CACHE_DIR, sorted(f[:-len("_latent.pt")] for f in os.listdir(CACHE_DIR) if f.endswith("_latent.pt")),
-        TRIGGER_WORD, os.path.join(os.path.dirname(os.path.abspath(__file__)), "1_pre_cache_zimage.py"))
+    pres = output_preservation.Preservation(
+        cfg, CACHE_DIR, OUTPUT_DIR, TRIGGER_WORD, os.path.join(os.path.dirname(os.path.abspath(__file__)), "1_pre_cache_zimage.py"))
 
     print(t("Loading {name}...", name="Z-Image Transformer (NF4)"))
     t0 = time.time()
@@ -893,13 +890,9 @@ def train_zimage():
         nombre = f.replace("_latent.pt", "")
         cache_data[nombre] = {"lat": load_tensor(f"{CACHE_DIR}/{f}"), "emb": load_tensor(f"{CACHE_DIR}/{nombre}_embed.pt")}
         buckets[tuple(cache_data[nombre]["lat"].shape[2:])].append(nombre)
-        if pres_prompts:
-            cache_data[nombre]["dop"] = load_tensor(f"{CACHE_DIR}/{output_preservation.embed_name(nombre)}")
-    pres_sum, pres_n = 0.0, 0
-    # Mapa de calor de la protección: dónde cambia el LoRA al modelo sin el trigger (cada 100 pasos).
-    heat = output_preservation.HeatMaps(cfg, OUTPUT_DIR) if pres_prompts else None
-    if heat and start_step == 0:
-        output_preservation.clear_maps(OUTPUT_DIR)
+        if pres.active:
+            cache_data[nombre]["dop"] = load_tensor(f"{CACHE_DIR}/{pres.name(nombre)}_embed.pt")
+    pres.begin(start_step)
 
     # Custom Prompts: los embeddings se releen cuando el servidor los recodifica en CPU.
     custom = preview_prompts.Embeds(CACHE_DIR, lambda slot: load_tensor(custom.path(slot)))
@@ -965,21 +958,10 @@ def train_zimage():
 
             # Output preservation: mismo latente con ruido, prompt de clase; la salida con LoRA debe seguir
             # siendo la del modelo sin LoRA. Backward aparte: el grafo de la loss normal ya se ha liberado.
-            if pres_prompts and step % PRES_EVERY == 0:
+            if pres.due(step):
                 cls = [cache_data[n]["dop"].to("cuda", non_blocking=True) for n in names]
-                with torch.no_grad(), output_preservation.lora_off(model):
-                    prior = predict(model, noisy, sigma, cls).float()
-                kept = predict(model, noisy, sigma, cls).float()
-                pres = F.mse_loss(kept, prior)
-                scaler.scale(pres * PRES_WEIGHT / GRAD_ACCUM_STEPS).backward()
-                pres_sum, pres_n = pres_sum + pres.item(), pres_n + 1
-                heat.add(names, kept, prior)
-                del prior, pres, kept
-            if pres_n and step % 100 == 0:
-                print("\n[PRESERVATION] " + t("Step {n}: preservation loss {loss:.5f} (average of the last {k})",
-                                              n=step, loss=pres_sum / pres_n, k=pres_n))
-                pres_sum, pres_n = 0.0, 0
-                heat.save(step)
+                pres.step(model, lambda: predict(model, noisy, sigma, cls), names, scaler, GRAD_ACCUM_STEPS)
+            pres.report(step)
 
             # La norma solo existe al aplicar el optimizador: entre medias se muestra la última.
             if step % GRAD_ACCUM_STEPS == 0:

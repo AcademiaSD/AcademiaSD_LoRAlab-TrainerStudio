@@ -40,6 +40,7 @@ import lora_options
 import training_metrics
 import preview_prompts
 import xy_grid
+import output_preservation
 
 # FLUX.3 hace las normas q/k en FP32 a propósito (como BFL): torch avisa de que no usa el kernel fusionado.
 warnings.filterwarnings("ignore", message="Mismatch dtype between input and weight")
@@ -666,6 +667,11 @@ def train_flux3klein():
 
     ensure_model_downloaded(local_path=MODEL_ID, repo_id=HF_REPO_ID)
 
+    # Output preservation: los prompts de clase se codifican antes de cargar el transformer (VRAM libre). En
+    # LoRAs de edición no se usa.
+    pres = output_preservation.Preservation(cfg, CACHE_DIR, OUTPUT_DIR, TRIGGER_WORD, os.path.join(os.path.dirname(os.path.abspath(__file__)), "1_pre_cache_flux3klein.py"),
+                                            edit=any(n.endswith("_ctrl.pt") and not cache_names.is_reserved(n) for n in os.listdir(CACHE_DIR)))
+
     print(t("Loading {name}...", name="FLUX.3 Image Klein Transformer (NF4)"))
     t0 = time.time()
     transformer = load_nf4_transformer(MODEL_ID)
@@ -882,6 +888,10 @@ def train_flux3klein():
         nombre = f.replace("_latent.pt", "")
         cache_data[nombre] = load_sample(nombre)
         buckets[tuple(cache_data[nombre]["lat"].shape[2:])].append(nombre)
+        if pres.active:
+            d = torch.load(f"{CACHE_DIR}/{pres.name(nombre)}_embed.pt", weights_only=True).to(COMPUTE_DTYPE)
+            cache_data[nombre]["dop"] = d.pin_memory() if pin else d
+    pres.begin(start_step)
 
     edit_mode = any("ctrl" in v for v in cache_data.values())
 
@@ -996,6 +1006,15 @@ def train_flux3klein():
             scaler.scale(loss).backward()
             step_loss = loss.item() * GRAD_ACCUM_STEPS
             running_loss += step_loss
+
+            # Output preservation: mismo latente con ruido y el prompt de clase; la salida con LoRA debe seguir
+            # siendo la del modelo sin LoRA. Backward aparte: el grafo de la loss normal ya se ha liberado.
+            if pres.due(step):
+                c_batch = {"emb": stack_embeds([cache_data[n]["dop"] for n in names])}
+                pres.step(model, lambda: model(**model_inputs(c_batch, noisy, H, W, "cuda"), timestep=sigma.to(COMPUTE_DTYPE),
+                                               return_dict=False)[0],
+                          names, scaler, GRAD_ACCUM_STEPS, to_map=lambda x: unpack_latents(x, H, W))
+            pres.report(step)
 
             # La norma solo existe al aplicar el optimizador: entre medias se muestra la última.
             if step % GRAD_ACCUM_STEPS == 0:

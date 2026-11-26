@@ -50,23 +50,45 @@ def class_prompt(caption, trigger, word):
     return "{}, {}".format(word, caption).strip(", ")
 
 
+def dop_name(sample):
+    """Nombre de muestra con que se guarda el prompt de clase: sus ficheros son los de una muestra más
+    (<muestra>_dop_embed.pt y, según el modelo, máscara, pooled...), en el formato de ese trainer."""
+    return "{}_dop".format(sample)
+
+
+def raw_caption(cfg, sample):
+    """El .txt de la muestra tal cual (sin trigger), o cadena vacía."""
+    path = os.path.join(cfg.get("dataset_path") or "./dataset", "{}.txt".format(sample))
+    try:
+        from text_io import read_text_file
+        return read_text_file(path).strip()
+    except Exception:
+        return ""
+
+
 def embed_name(sample):
-    return "{}_dop_embed.pt".format(sample)
+    return "{}_embed.pt".format(dop_name(sample))
 
 
-def prepare(cfg, cache_dir, samples, trigger, precache_script, log=print, device="cuda"):
+def prepare(cfg, cache_dir, samples, trigger, precache_script, log=print, device="cuda", edit=False, caption=None):
     """
     Deja en la caché el embedding del prompt de clase de cada muestra. Solo codifica los que faltan o
     cuyo texto ha cambiado (otra palabra, otro caption). Devuelve {muestra: prompt} o None si no hay que usarla
-    o no se pudo preparar (el entrenamiento sigue sin ella).
+    o no se pudo preparar (el entrenamiento sigue sin ella). edit=True (LoRA de edición): no se usa.
+    caption(muestra): el caption con el trigger tal como lo codifica el pre-caché de ese trainer (Fibo lo mete
+    dentro del JSON); por defecto, el del .txt con el trigger delante.
     """
     on, word, _, _ = settings(cfg)
     if not on:
         if cfg.get("output_preservation"):
             log("[!] Output preservation is on but the class word is empty: it is not used.")
         return None
+    if edit:
+        log("[!] Output preservation is for text-to-image LoRAs: it is not used with an edit LoRA.")
+        return None
     import preview_prompts
-    prompts = {s: class_prompt(preview_prompts.dataset_caption(cfg, s, trigger), trigger, word) for s in samples}
+    prompts = {s: class_prompt(caption(s) if caption else preview_prompts.dataset_caption(cfg, s, trigger), trigger, word)
+               for s in samples}
     index_path = os.path.join(cache_dir, INDEX)
     try:
         with open(index_path, encoding="utf-8") as f:
@@ -113,23 +135,36 @@ def lora_off(model):
             yield
 
 
-def run_encoder_job(argv, load_text_pipe, encode_text):
+def dop_job(argv):
+    """argv de --dop-prompts <carpeta de caché> <cuda|cpu> <json> -> (carpeta, device, [(muestra, prompt)]) o None."""
+    if len(argv) != 5 or argv[1] != "--dop-prompts":
+        return None
+    with open(argv[4], encoding="utf-8") as f:
+        return argv[2], argv[3], [(str(s), str(p)) for s, p in json.load(f)]
+
+
+def run_encoder_job(argv, load_text_pipe, encode_text=None, save=None):
     """
     Para el script de pre-caché: --dop-prompts <carpeta de caché> <cuda|cpu> <json [[muestra, prompt], ...]>.
+    Cada prompt de clase se guarda como la muestra <muestra>_dop, con la misma función que guarda el caption
+    de una muestra: save(handle, nombre, prompt), con handle = load_text_pipe(device). Si solo se da
+    encode_text(handle, prompt, device), se guarda su tensor como <nombre>_embed.pt.
     Devuelve True si era este modo (y ya ha terminado).
     """
-    if len(argv) != 5 or argv[1] != "--dop-prompts":
+    job = dop_job(argv)
+    if job is None:
         return False
     import torch
-    cache_dir, device, job = argv[2], argv[3], argv[4]
-    with open(job, encoding="utf-8") as f:
-        items = json.load(f)
-    pipe = load_text_pipe(device)
+    cache_dir, device, items = job
+    handle = load_text_pipe(device)
     for sample, prompt in items:
-        embed = encode_text(pipe, prompt, device)
-        tmp = os.path.join(cache_dir, embed_name(sample) + ".tmp")
-        torch.save(embed, tmp)
-        os.replace(tmp, os.path.join(cache_dir, embed_name(sample)))
+        name = dop_name(sample)
+        if save is not None:
+            save(handle, name, prompt)
+        else:
+            path = os.path.join(cache_dir, "{}_embed.pt".format(name))
+            torch.save(encode_text(handle, prompt, device), path + ".tmp")
+            os.replace(path + ".tmp", path)
     print("[PRESERVATION] {} class prompts encoded.".format(len(items)), flush=True)
     return True
 
@@ -272,3 +307,101 @@ def register(app, get_output_dir):
         if not (name.startswith("map_step_") and name.endswith(".png")) or not (folder / name).is_file():
             abort(404)
         return send_from_directory(str(folder), name, max_age=0)
+
+
+# ── Lo que usa cada trainer ──
+class Preservation:
+    """
+    Todo lo común de la protección en un trainer. Uso:
+
+        pres = output_preservation.Preservation(cfg, CACHE_DIR, OUTPUT_DIR, TRIGGER_WORD, PRECACHE_SCRIPT)
+            # antes de cargar el modelo: codifica los prompts de clase con la GPU libre
+        pres.begin(start_step)              # tras reanudar (un entrenamiento nuevo borra los mapas viejos)
+        cache_data[n]["dop"] = ...          # el condicionamiento de dop_name(n), cargado como el de n
+        ...
+        if pres.due(step):                  # después del backward de la loss normal
+            cls = ...                       # el condicionamiento del lote, como el normal pero con "dop"
+            pres.step(model, lambda: forward(cls), names, scaler, GRAD_ACCUM_STEPS)
+        pres.report(step)
+
+    forward() hace la misma pasada que la loss normal (mismo latente con ruido y sigma) y devuelve la
+    predicción. to_map(t) pasa esa predicción a [B, C, H, W] para el mapa de calor (por defecto, tal cual si
+    ya tiene 4 dimensiones; con 5, la media del eje de tiempo).
+    """
+
+    def __init__(self, cfg, cache_dir, output_dir, trigger, precache_script, log=print, edit=False,
+                 samples=None, to_map=None, device="cuda", caption=None):
+        self.log, self.output_dir, self.to_map = log, output_dir, to_map
+        self.on, self.word, self.weight, self.every = settings(cfg)
+        if samples is None:
+            import cache_names
+            try:
+                samples = sorted(f[:-len("_latent.pt")] for f in os.listdir(cache_dir)
+                                 if f.endswith("_latent.pt") and not cache_names.is_reserved(f))
+            except OSError:
+                samples = []
+        self.prompts = prepare(cfg, cache_dir, samples, trigger, precache_script, log=log, device=device, edit=edit,
+                               caption=caption)
+        self.active = bool(self.prompts)
+        self.heat = HeatMaps(cfg, output_dir, log) if self.active else None
+        self.sum, self.n = 0.0, 0
+
+    def begin(self, start_step):
+        if self.heat and self.heat.on and int(start_step) == 0:
+            clear_maps(self.output_dir)
+
+    @staticmethod
+    def name(sample):
+        return dop_name(sample)
+
+    def due(self, step):
+        return self.active and step % self.every == 0
+
+    def step(self, model, forward, names, scaler=None, accum=1, to_map=None):
+        """Pasada sin LoRA (referencia) y con LoRA, con el prompt de clase; backward de su loss.
+        to_map: como el del constructor, para este paso (p. ej. desempaquetar tokens con el tamaño del lote).
+        Sin VRAM para la pasada extra, ese paso se salta (el paso normal ya está hecho) y se avisa."""
+        import torch
+        import torch.nn.functional as F
+        prior = kept = loss = scaled = None
+        try:
+            with torch.no_grad(), lora_off(model):
+                prior = forward().float()
+            kept = forward().float()
+            loss = F.mse_loss(kept, prior)
+            scaled = loss * self.weight / max(1, accum)
+            (scaler.scale(scaled) if scaler is not None else scaled).backward()
+        except torch.OutOfMemoryError:
+            prior = kept = loss = scaled = None
+            torch.cuda.empty_cache()
+            self.oom = getattr(self, "oom", 0) + 1
+            if self.oom in (1, 10, 100):
+                self.log("\n[!] Output preservation: out of VRAM in its extra pass, skipped this step ({} so far). "
+                         "Use Every N steps 2 or more, or more block swap.".format(self.oom))
+            return
+        self.sum, self.n = self.sum + loss.item(), self.n + 1
+        mapper = to_map or self.to_map
+        if self.heat and self.heat.on:
+            try:
+                a, b = (mapper(kept), mapper(prior)) if mapper else (kept, prior)
+                if a.dim() == 5:
+                    a, b = a.mean(2), b.mean(2)
+                if a.dim() == 4:
+                    self.heat.add(names, a, b)
+            except Exception:
+                pass
+        del prior, kept, loss, scaled
+
+    def report(self, step):
+        every = int(os.environ.get("LORALAB_PRESERVATION_REPORT", "100") or 100)
+        if self.n and step % max(1, every) == 0:
+            try:
+                from i18n import t
+                text = t("Step {n}: preservation loss {loss:.5f} (average of the last {k})",
+                         n=step, loss=self.sum / self.n, k=self.n)
+            except Exception:
+                text = "Step {}: preservation loss {:.5f}".format(step, self.sum / self.n)
+            print("\n[PRESERVATION] " + text, flush=True)
+            self.sum, self.n = 0.0, 0
+            if self.heat:
+                self.heat.save(step)

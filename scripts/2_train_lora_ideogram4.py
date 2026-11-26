@@ -37,6 +37,7 @@ import lora_options
 import training_metrics
 import preview_prompts
 import xy_grid
+import output_preservation
 import block_swap
 
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
@@ -621,6 +622,9 @@ def train_ideogram4():
 
     ensure_model_downloaded(local_path=MODEL_ID, repo_id=HF_REPO_ID)
 
+    # Output preservation: los prompts de clase se codifican antes de cargar el transformer (VRAM libre).
+    pres = output_preservation.Preservation(cfg, CACHE_DIR, OUTPUT_DIR, TRIGGER_WORD, os.path.join(os.path.dirname(os.path.abspath(__file__)), "1_pre_cache_ideogram4.py"))
+
     card_gb, usable_gb = block_swap.apply_vram_profile(SWAP_CFG.vram_profile, log=print, t=t)
 
     print(t("Loading {name}...", name="Ideogram 4 Transformer (NF4)"))
@@ -823,6 +827,9 @@ def train_ideogram4():
         cache_data[nombre] = {"lat": load_tensor(f"{CACHE_DIR}/{nombre}_latent.pt"),
                               "emb": load_tensor(f"{CACHE_DIR}/{nombre}_embed.pt")}
         buckets[tuple(cache_data[nombre]["lat"].shape[:2])].append(nombre)
+        if pres.active:
+            cache_data[nombre]["dop"] = load_tensor(f"{CACHE_DIR}/{pres.name(nombre)}_embed.pt")
+    pres.begin(start_step)
 
     # Custom Prompts: los embeddings se releen cuando el servidor los recodifica en CPU.
     custom = preview_prompts.Embeds(CACHE_DIR, lambda slot: {"emb": load_tensor(custom.path(slot))})
@@ -939,6 +946,21 @@ def train_ideogram4():
                     offload = SWAP_CFG.activation_offload
             step_loss = loss.item() * GRAD_ACCUM_STEPS
             running_loss += step_loss
+
+            # Output preservation: mismo latente con ruido y el prompt de clase; la salida con LoRA debe seguir
+            # siendo la del modelo sin LoRA. Backward aparte: el grafo de la loss normal ya se ha liberado.
+            if pres.due(step):
+                c_llm, c_pos, c_seg, c_ind, c_n = model_inputs([cache_data[n]["dop"] for n in names], gh, gw, "cuda")
+                c_hidden = torch.cat([noisy.new_zeros(len(names), c_n, 128), noisy], dim=1).to(COMPUTE_DTYPE)
+
+                def cls_pred():
+                    with (block_swap.SaveOnCpu() if offload else block_swap._null()):
+                        return model(hidden_states=c_hidden, timestep=(1.0 - sigma).to(COMPUTE_DTYPE),
+                                     encoder_hidden_states=c_llm, position_ids=c_pos, segment_ids=c_seg,
+                                     indicator=c_ind, return_dict=False)[0][:, c_n:]
+                pres.step(model, cls_pred, names, scaler, GRAD_ACCUM_STEPS,
+                          to_map=lambda x: x.reshape(x.shape[0], gh, gw, -1).permute(0, 3, 1, 2))
+            pres.report(step)
 
             # La norma solo existe al aplicar el optimizador: entre medias se muestra la última.
             if step % GRAD_ACCUM_STEPS == 0:

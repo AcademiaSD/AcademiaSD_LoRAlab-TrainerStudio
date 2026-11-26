@@ -518,6 +518,12 @@ def encode_preview_prompts(cache_dir, device, items, images_arg=None):
 
 
 if __name__ == "__main__":
+    import output_preservation
+    # --dop-prompts: prompts de clase de la protección de salida (los codifica antes de entrenar).
+    if output_preservation.dop_job(sys.argv):
+        CACHE_DIR = output_preservation.dop_job(sys.argv)[0]
+    if output_preservation.run_encoder_job(sys.argv, load_text_encoder, save=lambda h, n, p: encode_and_save(h[0], h[1], p, n)):
+        sys.exit(0)
     prompts_only = preview_prompts.parse_prompts_only(sys.argv)
     if prompts_only:
         # --prompts-only <carpeta de caché> <cuda|cpu> <json [[slot, prompt con el trigger ya puesto], ...]> [<json rutas>]

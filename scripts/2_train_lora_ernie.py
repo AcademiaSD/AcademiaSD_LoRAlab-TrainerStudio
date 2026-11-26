@@ -17,6 +17,7 @@ import lora_options
 import training_metrics
 import preview_prompts
 import xy_grid
+import output_preservation
 import settings_limits
 
 # La barra de progreso comparte los caracteres visuales del entrenador Klein. Fuerza UTF-8
@@ -153,6 +154,8 @@ def main():
     global RANK, ALPHA, USE_RSLORA, USE_LORAPLUS, LORAPLUS_RATIO, USE_LOKR, LOKR_FACTOR, USE_DORA
     if not torch.cuda.is_available(): raise RuntimeError("CUDA is required for ERNIE training")
     if not os.path.isfile(os.path.join(CACHE,"_neg_embed.pt")): raise RuntimeError("Run ERNIE Pre-Cache first")
+    # Output preservation: los prompts de clase se codifican antes de cargar el modelo (VRAM libre).
+    pres=output_preservation.Preservation(cfg,CACHE,OUT,TRIGGER,os.path.join(os.path.dirname(os.path.abspath(__file__)), "1_pre_cache_ernie.py"))
     model=lora_options.to_compute_dtype(load_nf4(MODEL),COMPUTE_DTYPE).to("cuda"); model.enable_gradient_checkpointing()
     targets=[n for n,m in model.named_modules() if isinstance(m,(torch.nn.Linear,Linear4bit)) and (LORA_TARGETS=="all" or n.startswith("layers."))]
     if not targets: raise RuntimeError("No ERNIE transformer layer targets found for LoRA")
@@ -205,11 +208,12 @@ def main():
     LR_CURVE=lora_options.LrCurve(OUT,cfg.get("lr_new_curve",False))
     def lr_at(s): return LR*LR_CURVE.factor(LR_SCHEDULER,s,STEPS,WARMUP,MIN_LR_RATIO,LR_CYCLES,LR)
     scheduler=FlowMatchEulerDiscreteScheduler.from_pretrained(MODEL,subfolder="scheduler")
-    cache={}; buckets=defaultdict(list)
+    cache={}; buckets=defaultdict(list); dop={}
     for f in os.listdir(CACHE):
         if not f.endswith("_latent.pt"): continue
         name=f[:-10]; lat=torch.load(os.path.join(CACHE,f),weights_only=True).to(COMPUTE_DTYPE).pin_memory(); emb=torch.load(os.path.join(CACHE,name+"_embed.pt"),weights_only=True).to(COMPUTE_DTYPE).pin_memory()
         cache[name]=(lat,emb); buckets[tuple(lat.shape[-2:])].append(name)
+        if pres.active: dop[name]=torch.load(os.path.join(CACHE,pres.name(name)+"_embed.pt"),weights_only=True).to(COMPUTE_DTYPE).pin_memory()
     if not cache: raise RuntimeError("No pre-cached ERNIE image latents found")
     step=0
     lora_path=os.path.join(RESUME,lora_options.LOKR_WEIGHTS if USE_LOKR else "adapter_model.safetensors")
@@ -243,6 +247,7 @@ def main():
     print(f"ERNIE text-to-image training: {len(ordered)} images, {len(buckets)} buckets, {STEPS} steps, LR scheduler {lora_options.lr_scheduler_label(LR_SCHEDULER,WARMUP,LR_CYCLES)}",flush=True)
     model.train()
     running_loss=t_step_avg=grad_norm=0.0; start_step=step; last_step=step; live_mtime=None
+    pres.begin(start_step)
     metrics=training_metrics.MetricsLog(OUT,start_step)
     # Rejilla XY final: instantáneas del LoRA en los pasos de sus filas (xy_grid.py).
     grid=xy_grid.XYGrid(OUT,CONFIG,cfg); grid.begin(start_step)
@@ -267,6 +272,12 @@ def main():
         loss=F.mse_loss(pred.float(),target.float())/ACCUM; scaler.scale(loss).backward()
         step_loss=loss.item()*ACCUM; running_loss+=step_loss
         step+=1; last_step=step
+        # Output preservation: mismo latente con ruido y el prompt de clase; la salida con LoRA debe seguir siendo
+        # la del modelo sin LoRA (antes del paso del optimizador, para que su gradiente entre en él).
+        if pres.due(step):
+            c_text,c_lens=pad_text([dop[n] for n in names],"cuda")
+            pres.step(model,lambda: model(hidden_states=noisy,timestep=timestep,text_bth=c_text,text_lens=c_lens,return_dict=False)[0],names,scaler,ACCUM)
+        pres.report(step)
         if step%ACCUM==0 or step==STEPS:
             scaler.unscale_(optimizer); grad_norm=torch.nn.utils.clip_grad_norm_(trainable,MAX_GRAD_NORM).item()
             for g in optimizer.param_groups: g["lr"]=lr_at(step)*g.get("lr_mult",1.0)

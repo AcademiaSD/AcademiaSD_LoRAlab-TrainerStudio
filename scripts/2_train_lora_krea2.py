@@ -35,6 +35,7 @@ import lora_options
 import training_metrics
 import preview_prompts
 import xy_grid
+import output_preservation
 import block_swap
 
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
@@ -1210,6 +1211,9 @@ def train_krea2():
 
     card_gb, usable_gb = block_swap.apply_vram_profile(SWAP_CFG.vram_profile, log=print, t=t)
 
+    # Output preservation: los prompts de clase se codifican antes de cargar el transformer (VRAM libre).
+    pres = output_preservation.Preservation(cfg, CACHE_DIR, OUTPUT_DIR, TRIGGER_WORD, os.path.join(os.path.dirname(os.path.abspath(__file__)), "1_pre_cache_krea2.py"))
+
     print(t("Loading {name}...", name="Krea-2 Transformer (NF4)"))
     t0 = time.time()
     transformer = load_transformer_swap(MODEL_ID)
@@ -1410,6 +1414,7 @@ def train_krea2():
 
     pin = torch.cuda.is_available()
     cache_data, buckets = {}, defaultdict(list)
+    dop_data = {}   # prompts de clase de la protección de salida: (embeds, máscara) por muestra
 
     for f in os.listdir(CACHE_DIR):
         if not f.endswith("_latent.pt"):
@@ -1423,6 +1428,11 @@ def train_krea2():
             lat, emb, msk = lat.pin_memory(), emb.pin_memory(), msk.pin_memory()
         cache_data[nombre] = (lat, emb, msk)
         buckets[(lat.shape[2], lat.shape[3])].append(nombre)
+        if pres.active:
+            d_emb = torch.load(f"{CACHE_DIR}/{pres.name(nombre)}_embed.pt", weights_only=True).to(COMPUTE_DTYPE)
+            d_msk = torch.load(f"{CACHE_DIR}/{pres.name(nombre)}_mask.pt", weights_only=True).bool()
+            dop_data[nombre] = (d_emb.pin_memory(), d_msk.pin_memory()) if pin else (d_emb, d_msk)
+    pres.begin(start_step)
 
     def load_custom_sample(name):
         # El prompt propio no tiene imagen: la preview toma el tamaño de la primera muestra.
@@ -1574,6 +1584,21 @@ def train_krea2():
                     offload = SWAP_CFG.activation_offload
             step_loss = loss.item() * GRAD_ACCUM_STEPS
             running_loss += step_loss
+
+            # Output preservation: mismo latente con ruido y el prompt de clase; la salida con LoRA debe seguir
+            # siendo la del modelo sin LoRA. Backward aparte: el grafo de la loss normal ya se ha liberado.
+            if pres.due(step):
+                c_emb = torch.cat([dop_data[n][0] for n in names]).to("cuda", non_blocking=True)
+                c_msk = torch.cat([dop_data[n][1] for n in names]).to("cuda", non_blocking=True)
+                c_pos = get_pos_ids(c_emb.shape[1], size[0], size[1])
+
+                def cls_pred():
+                    with (block_swap.SaveOnCpu() if offload else block_swap._null()):
+                        return model(hidden_states=noisy, encoder_hidden_states=c_emb, timestep=sigma,
+                                     position_ids=c_pos, encoder_attention_mask=c_msk, return_dict=False)[0]
+                pres.step(model, cls_pred, names, scaler, GRAD_ACCUM_STEPS,
+                          to_map=lambda x: unpack_latents(x, size[0] - size[0] % 2, size[1] - size[1] % 2))
+            pres.report(step)
 
             # La norma solo existe al aplicar el optimizador: entre medias se muestra la última.
             if step % GRAD_ACCUM_STEPS == 0:

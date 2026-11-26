@@ -37,6 +37,7 @@ import block_swap
 import training_metrics
 import preview_prompts
 import xy_grid
+import output_preservation
 
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
 STEP_WORD = t("Step")
@@ -861,6 +862,11 @@ def train_klein9b():
 
     card_gb, usable_gb = block_swap.apply_vram_profile(VRAM_PROFILE, log=print, t=t)
 
+    # Output preservation: los prompts de clase se codifican antes de cargar el transformer (VRAM libre). En
+    # LoRAs de edición no se usa.
+    pres = output_preservation.Preservation(cfg, CACHE_DIR, OUTPUT_DIR, TRIGGER_WORD, os.path.join(os.path.dirname(os.path.abspath(__file__)), "1_pre_cache_klein9b.py"),
+                                            edit=any(n.endswith("_ctrl.pt") and not cache_names.is_reserved(n) for n in os.listdir(CACHE_DIR)))
+
     print(t("Loading {name}...", name="FLUX.2 Klein 9B Transformer (NF4)"))
     t0 = time.time()
     # Los bloques quedan mapeados a sus ficheros: setup_block_swap sube después los que caben.
@@ -1079,6 +1085,10 @@ def train_klein9b():
         nombre = f.replace("_latent.pt", "")
         cache_data[nombre] = load_sample(nombre)
         buckets[tuple(cache_data[nombre]["lat"].shape[2:])].append(nombre)
+        if pres.active:
+            d = torch.load(f"{CACHE_DIR}/{pres.name(nombre)}_embed.pt", weights_only=True).to(COMPUTE_DTYPE)
+            cache_data[nombre]["dop"] = d.pin_memory() if pin else d
+    pres.begin(start_step)
 
     edit_mode = any("ctrl" in v for v in cache_data.values())
 
@@ -1230,6 +1240,19 @@ def train_klein9b():
                                       "step is repeated.", s=step, k=parked, r=swap.resident, n=swap.n))
             step_loss = loss.item() * GRAD_ACCUM_STEPS
             running_loss += step_loss
+
+            # Output preservation: mismo latente con ruido y el prompt de clase; la salida con LoRA debe seguir
+            # siendo la del modelo sin LoRA. Backward aparte: el grafo de la loss normal ya se ha liberado.
+            if pres.due(step):
+                c_emb = torch.cat([cache_data[n]["dop"] for n in names]).to("cuda", non_blocking=True)
+                c_hidden, c_img_ids, c_txt_ids = model_inputs({"emb": c_emb}, noisy, H, W, "cuda")
+
+                def cls_pred():
+                    with (block_swap.SaveOnCpu() if offload else block_swap._null()):
+                        return model(hidden_states=c_hidden, encoder_hidden_states=c_emb, timestep=sigma.to(COMPUTE_DTYPE),
+                                     img_ids=c_img_ids, txt_ids=c_txt_ids, return_dict=False)[0][:, :H * W]
+                pres.step(model, cls_pred, names, scaler, GRAD_ACCUM_STEPS, to_map=lambda x: unpack_latents(x, H, W))
+            pres.report(step)
 
             # La norma solo existe al aplicar el optimizador: entre medias se muestra la última.
             if step % GRAD_ACCUM_STEPS == 0:

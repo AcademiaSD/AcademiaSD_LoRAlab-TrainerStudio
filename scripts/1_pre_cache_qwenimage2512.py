@@ -616,7 +616,19 @@ def encode_preview_prompts(cache_dir, device, items, images_arg=None):
     print("[Custom Prompt] " + t("Ready."), flush=True)
 
 
+
+def save_dop_prompt(te, name, prompt):
+    """Para --dop-prompts (protección de salida): el prompt de clase como una muestra de texto a imagen."""
+    with torch.inference_mode():
+        encode_and_save(te, prompt, name)
+
 if __name__ == "__main__":
+    import output_preservation
+    # --dop-prompts: prompts de clase de la protección de salida (los codifica antes de entrenar).
+    if output_preservation.dop_job(sys.argv):
+        CACHE_DIR = output_preservation.dop_job(sys.argv)[0]
+    if output_preservation.run_encoder_job(sys.argv, lambda d: TextEncoder(TEXT_ENCODER_DIR, TEXT_ENCODER_MODES[TEXT_ENCODER][1], d, False), save=save_dop_prompt):
+        sys.exit(0)
     prompts_only = preview_prompts.parse_prompts_only(sys.argv)
     if prompts_only:
         # --prompts-only <carpeta de caché> <cuda|cpu> <json [[slot, prompt con el trigger ya puesto], ...]> [<json rutas>]

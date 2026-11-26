@@ -39,6 +39,7 @@ import lora_options
 import training_metrics
 import preview_prompts
 import xy_grid
+import output_preservation
 import block_swap
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
 
@@ -594,6 +595,12 @@ def train_mingimage():
 
     ensure_model_downloaded(local_path=MODEL_ID, repo_id=HF_REPO_ID)
 
+    # Output preservation: los prompts de clase se codifican antes de cargar el DiT (VRAM libre). En LoRAs de
+    # edición no se usa (cada muestra tiene su _ctrl.pt).
+    pres = output_preservation.Preservation(
+        cfg, CACHE_DIR, OUTPUT_DIR, TRIGGER_WORD, os.path.join(os.path.dirname(os.path.abspath(__file__)), "1_pre_cache_mingimage.py"),
+        edit=any(n.endswith("_ctrl.pt") and not cache_names.is_reserved(n) for n in os.listdir(CACHE_DIR)))
+
     card_gb, usable_gb = block_swap.apply_vram_profile(SWAP_CFG.vram_profile, log=print, t=t)
 
     print(t("Loading {name}...", name="Ming-Image DiT (NF4)"))
@@ -814,6 +821,10 @@ def train_mingimage():
         if os.path.exists(f"{CACHE_DIR}/{nombre}_ctrl.pt"):
             cache_data[nombre]["ctrl"] = load_tensor(f"{CACHE_DIR}/{nombre}_ctrl.pt")
         buckets[tuple(cache_data[nombre]["lat"].shape[2:])].append(nombre)
+        if pres.active:
+            cache_data[nombre]["dop"] = load_tensor(f"{CACHE_DIR}/{pres.name(nombre)}_embed.pt")
+            cache_data[nombre]["dop2"] = load_tensor(f"{CACHE_DIR}/{pres.name(nombre)}_embed2.pt")
+    pres.begin(start_step)
 
     EDIT_LORA = any("ctrl" in d for d in cache_data.values())
     if EDIT_LORA and not all("ctrl" in d for d in cache_data.values()):
@@ -954,6 +965,18 @@ def train_mingimage():
                     offload = SWAP_CFG.activation_offload
             step_loss = loss.item() * GRAD_ACCUM_STEPS
             running_loss += step_loss
+
+            # Output preservation: mismo latente con ruido y el prompt de clase; la salida con LoRA debe seguir
+            # siendo la del modelo sin LoRA. Backward aparte: el grafo de la loss normal ya se ha liberado.
+            if pres.due(step):
+                cls = [cache_data[n]["dop"].to("cuda", non_blocking=True) for n in names]
+                cls2 = [cache_data[n]["dop2"].to("cuda", non_blocking=True) for n in names]
+
+                def cls_pred():
+                    with (block_swap.SaveOnCpu() if offload else block_swap._null()):
+                        return predict(model, noisy, sigma, cls, cls2, ctrl)
+                pres.step(model, cls_pred, names, scaler, GRAD_ACCUM_STEPS)
+            pres.report(step)
 
             # La norma solo existe al aplicar el optimizador: entre medias se muestra la última.
             if step % GRAD_ACCUM_STEPS == 0:

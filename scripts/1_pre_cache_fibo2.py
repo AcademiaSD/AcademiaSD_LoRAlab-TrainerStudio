@@ -745,7 +745,26 @@ def proc_or_default():
     return BriaFibo2ImageProcessor(vae_scale_factor=16)
 
 
+
+def load_dop_encoder(device):
+    """Para --dop-prompts (protección de salida): el pipeline de texto y las fuentes, como en el pre-caché."""
+    pipe = DiffusionPipeline.from_pretrained(MODEL_ID, transformer=None, vae=None, text_encoder=load_text_encoder(),
+                                             dtype=torch.bfloat16)
+    pipe.tokenizer_max_length = MAX_SEQUENCE_LENGTH
+    return pipe, load_fonts()
+
+
+def save_dop_prompt(handle, name, prompt):
+    with torch.inference_mode():
+        save_prompt(name, *encode_prompt(handle[0], prompt, "cuda", None, handle[1]))
+
 if __name__ == "__main__":
+    import output_preservation
+    # --dop-prompts: prompts de clase de la protección de salida (los codifica antes de entrenar).
+    if output_preservation.dop_job(sys.argv):
+        CACHE_DIR = output_preservation.dop_job(sys.argv)[0]
+    if output_preservation.run_encoder_job(sys.argv, load_dop_encoder, save=save_dop_prompt):
+        sys.exit(0)
     prompts_only = preview_prompts.parse_prompts_only(sys.argv)
     if prompts_only:
         # --prompts-only <carpeta de caché> <cuda|cpu> <json [[slot, prompt con el trigger ya puesto], ...]> [<json [imagen de antes]>]

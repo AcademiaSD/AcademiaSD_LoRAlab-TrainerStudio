@@ -171,7 +171,13 @@ def encode_preview_prompts(cache,device,items,images=None):
         preview_prompts.write_atomic(cache,preview_prompts.slot_name("_custom_embed.pt",slot),lambda f,v=emb: torch.save(v,f))
     print("[Custom Prompt] Ready.",flush=True)
 
-if __name__=="__main__":
+if __name__ == "__main__":
+    import output_preservation
+    # --dop-prompts: prompts de clase de la protección de salida (los codifica antes de entrenar).
+    if output_preservation.dop_job(sys.argv):
+        CACHE = output_preservation.dop_job(sys.argv)[0]
+    if output_preservation.run_encoder_job(sys.argv, lambda d: (Mistral3Model.from_pretrained(os.path.join(MODEL_ID,"text_encoder"),torch_dtype=torch.bfloat16,device_map=d).eval(), AutoTokenizer.from_pretrained(os.path.join(MODEL_ID,"tokenizer"))), save=lambda h,n,p: torch.save(encode_text(h[0],h[1],p,"cuda"),os.path.join(CACHE,n+"_embed.pt"))):
+        sys.exit(0)
     prompts_only=preview_prompts.parse_prompts_only(sys.argv)
     if prompts_only: encode_preview_prompts(*prompts_only)
     else: main()

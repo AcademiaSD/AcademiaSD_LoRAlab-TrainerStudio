@@ -37,6 +37,7 @@ import lora_options
 import training_metrics
 import preview_prompts
 import xy_grid
+import output_preservation
 from anima_models import VARIANT
 
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
@@ -619,6 +620,9 @@ def train_anima():
 
     ensure_model_downloaded(local_path=MODEL_ID, repo_id=HF_REPO_ID)
 
+    # Output preservation: los prompts de clase se codifican antes de cargar el transformer (VRAM libre).
+    pres = output_preservation.Preservation(cfg, CACHE_DIR, OUTPUT_DIR, TRIGGER_WORD, os.path.join(os.path.dirname(os.path.abspath(__file__)), "1_pre_cache_anima.py"))
+
     print(t("Loading {name}...", name=f"{VARIANT['name']} Transformer ({PRECISION.upper()})"))
     t0 = time.time()
     transformer = load_transformer()
@@ -809,6 +813,9 @@ def train_anima():
         nombre = f.replace("_latent.pt", "")
         cache_data[nombre] = {"lat": load_tensor(f"{CACHE_DIR}/{f}"), "emb": load_tensor(f"{CACHE_DIR}/{nombre}_embed.pt")}
         buckets[tuple(cache_data[nombre]["lat"].shape[2:])].append(nombre)
+        if pres.active:
+            cache_data[nombre]["dop"] = load_tensor(f"{CACHE_DIR}/{pres.name(nombre)}_embed.pt")
+    pres.begin(start_step)
 
     # Custom Prompts: los embeddings se releen cuando el servidor los recodifica en CPU.
     custom = preview_prompts.Embeds(CACHE_DIR, lambda slot: {"emb": load_tensor(custom.path(slot))})
@@ -872,6 +879,13 @@ def train_anima():
             scaler.scale(loss).backward()
             step_loss = loss.item() * GRAD_ACCUM_STEPS
             running_loss += step_loss
+
+            # Output preservation: mismo latente con ruido y el prompt de clase; la salida con LoRA debe seguir
+            # siendo la del modelo sin LoRA. Backward aparte: el grafo de la loss normal ya se ha liberado.
+            if pres.due(step):
+                cls = torch.cat([cache_data[n]["dop"] for n in names]).to("cuda", non_blocking=True)
+                pres.step(model, lambda: predict(model, noisy, sigma, cls), names, scaler, GRAD_ACCUM_STEPS)
+            pres.report(step)
 
             # La norma solo existe al aplicar el optimizador: entre medias se muestra la última.
             if step % GRAD_ACCUM_STEPS == 0:
