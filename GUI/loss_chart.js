@@ -145,6 +145,7 @@
                     <span class="lc-3d-only"><i style="background:linear-gradient(90deg,#22d3ee,#6366f1,#f472b6)"></i>${tr('height and colour: loss (low to high)')}</span>
                     <span class="lc-3d-only">${tr('front edge: loss at each step · back edge: smoothed loss')}</span>
                     <span><i style="background:${COLORS.preview};width:8px;height:8px;border-radius:50%"></i>${tr('preview (hover to see it)')}</span>
+                    <span class="lc-heat-legend" style="display:none"><i style="background:linear-gradient(135deg,#781c6d,#ed6925,#fbb61a);width:9px;height:9px;border-radius:2px"></i>${tr('preservation heatmap (hover to see it)')}</span>
                     <span><i style="background:${COLORS.ckpt};width:8px;height:8px;transform:rotate(45deg)"></i>${tr('saved LoRA (click to download or test it)')}</span>
                     <span><i style="background:#fbbf24;width:8px;height:8px;transform:rotate(45deg)"></i>${tr('final LoRA')}</span>
                     <span><i style="background:${COLORS.best};width:8px;height:8px;border-radius:50%"></i>${tr('lowest smoothed loss')}</span>
@@ -174,7 +175,7 @@
             this.opts = Object.assign({ smooth: 0.9, raw: true, lr: true, clip: true, log: false, mode: '2d' }, store('opts') || {});
             this.cam = Object.assign({}, CAM_DEFAULT);
             this.surf = null;          // superficie 3D calculada; se rehace al llegar datos o cambiar opciones
-            this.points = []; this.previews = []; this.checkpoints = []; this.final = null; this.run = null;
+            this.points = []; this.previews = []; this.checkpoints = []; this.final = null; this.run = null; this.heatmaps = [];
             this.view = null;          // [x0, x1] con zoom; null = todo
             this.hover = null;         // posición del ratón sobre el canvas
             this.timer = null; this.idle = 0; this.busy = false;
@@ -241,9 +242,12 @@
                     this.run = data.run;
                     const grew = data.points.length > 0;
                     if (grew) this.points.push(...data.points);
-                    const markersChanged = JSON.stringify([data.previews, data.checkpoints, data.final])
-                        !== JSON.stringify([this.previews, this.checkpoints, this.final]);
+                    const markersChanged = JSON.stringify([data.previews, data.checkpoints, data.final, data.heatmaps])
+                        !== JSON.stringify([this.previews, this.checkpoints, this.final, this.heatmaps]);
                     this.previews = data.previews; this.checkpoints = data.checkpoints; this.final = data.final || null;
+                    this.heatmaps = data.heatmaps || [];
+                    const legend = this.wrap && this.wrap.querySelector('.lc-heat-legend');
+                    if (legend) legend.style.display = this.heatmaps.length ? '' : 'none';
                     this.idle = grew ? 0 : this.idle + 1;
                     if (grew || markersChanged || !this.points.length) { this.recompute(); this.draw(); }
                 } catch (e) {
@@ -471,6 +475,15 @@
                 drawFaceMatch(ctx, file, x, lora ? y - 34 : y - 14, L.pad.t);
             }
             wantFaceMatch(this.previews);
+            // Mapas de calor de la protección de salida: debajo de la curva, para no tapar los previews.
+            for (const [step, file] of this.heatmaps) {
+                if (step < D.x0 || step > D.x1) continue;
+                const p = nearest(this.points, step);
+                if (!p) continue;
+                const x = S.sx(step), y = Math.min(L.pad.t + L.ph - 6, Math.max(L.pad.t, S.sy(p.sm)) + 16);
+                drawHeatMark(ctx, x, y);
+                this.hits.push({ kind: 'heat', step, file, x, y });
+            }
 
             // Punto vivo al final de la curva (la animación es CSS)
             const lastP = this.points[this.points.length - 1];
@@ -649,6 +662,12 @@
                 drawFaceMatch(ctx, file, label[0], label[1] - 13, 0);
             }
             wantFaceMatch(this.previews);
+            for (const [step, file] of this.heatmaps) {
+                if (step < s0 || step > s1) continue;
+                const w = back[colOf(step)], foot = P(xOf(step), w[1], Z);
+                drawHeatMark(ctx, foot[0], foot[1] + 12);
+                this.hits.push({ kind: 'heat', step, file, x: foot[0], y: foot[1] + 12 });
+            }
             if (this.best) {
                 const w = back[colOf(this.best.s)], p = P(xOf(this.best.s), w[1], Z);
                 ctx.fillStyle = COLORS.best; ctx.shadowColor = COLORS.best; ctx.shadowBlur = 10;
@@ -700,6 +719,10 @@
                 html = `<div class="lc-tip-h">${tr('Preview')} · ${tr('Step')} ${hit.step}</div>` +
                     (isImg ? `<img src="${url}" alt="">` : `<div>${escapeHtml(hit.file)}</div>`) +
                     `<div class="lc-hint">${tr('Click to open it')}</div>`;
+            } else if (hit && hit.kind === 'heat') {
+                html = `<div class="lc-tip-h">${tr('Preservation heatmap')} · ${tr('Step')} ${hit.step}</div>` +
+                    `<img src="/api/preservation-map/${encodeURIComponent(hit.file)}" alt="">` +
+                    `<div class="lc-hint">${tr('Click to open it')}</div>`;
             } else if (hit && hit.kind === 'lora') {
                 const p = nearest(this.points, hit.step);
                 html = `<div class="lc-tip-h">${hit.final ? tr('Final LoRA') : 'LoRA'} · ${tr('Step')} ${hit.step}</div>` +
@@ -723,7 +746,7 @@
             if (left + tw > L.W - 4) left = h.x - tw - 16;
             if (top + th > L.H - 4) top = Math.max(4, L.H - th - 4);
             this.tip.style.left = left + 'px'; this.tip.style.top = top + 'px';
-            this.canvas.style.cursor = hit && (hit.kind === 'preview' || hit.kind === 'lora') ? 'pointer'
+            this.canvas.style.cursor = hit && (hit.kind === 'preview' || hit.kind === 'lora' || hit.kind === 'heat') ? 'pointer'
                 : this.drag ? 'grabbing' : this.is3d() ? '' : 'crosshair';
         }
 
@@ -792,9 +815,15 @@
         }
 
         click(p) {
-            const hit = (this.hits || []).find(m => (m.kind === 'preview' || m.kind === 'lora') && Math.hypot(m.x - p.x, m.y - p.y) < 9);
+            const hit = (this.hits || []).find(m => (m.kind === 'preview' || m.kind === 'lora' || m.kind === 'heat') && Math.hypot(m.x - p.x, m.y - p.y) < 9);
             if (!hit) return;
             if (hit.kind === 'lora') return this.openLora(hit);
+            if (hit.kind === 'heat') {
+                this.lightbox.innerHTML = `<img src="/api/preservation-map/${encodeURIComponent(hit.file)}" alt="">` +
+                    `<div class="lc-cap">${tr('Preservation heatmap')} · ${tr('Step')} ${hit.step}</div>`;
+                this.lightbox.style.display = 'flex';
+                return;
+            }
             const url = '/api/preview/' + encodeURIComponent(hit.file);
             const media = /\.(png|jpe?g|webp)$/i.test(hit.file) ? `<img src="${url}" alt="">`
                 : /\.(wav|mp3)$/i.test(hit.file) ? `<audio controls autoplay src="${url}"></audio>`
@@ -894,6 +923,19 @@
         ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 8;
         ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); ctx.fill();
         ctx.shadowBlur = 0; ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)'; ctx.lineWidth = 1; ctx.stroke();
+    }
+
+    // Marcador del mapa de calor: cuadradito redondeado con el degradado del mapa (inferno).
+    function drawHeatMark(ctx, x, y) {
+        const r = 5.5, g = ctx.createLinearGradient(x - r, y - r, x + r, y + r);
+        g.addColorStop(0, '#781c6d'); g.addColorStop(0.55, '#ed6925'); g.addColorStop(1, '#fbb61a');
+        ctx.save();
+        ctx.fillStyle = g; ctx.strokeStyle = 'rgba(15, 23, 42, 0.9)'; ctx.lineWidth = 1.5;
+        ctx.shadowColor = 'rgba(237, 105, 37, 0.55)'; ctx.shadowBlur = 6;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x - r, y - r, 2 * r, 2 * r, 2.5); else ctx.rect(x - r, y - r, 2 * r, 2 * r);
+        ctx.fill(); ctx.shadowBlur = 0; ctx.stroke();
+        ctx.restore();
     }
 
     function heightColor(h, shade) {

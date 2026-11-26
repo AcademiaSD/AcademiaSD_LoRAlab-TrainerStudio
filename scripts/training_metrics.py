@@ -139,6 +139,27 @@ def _markers(output_dir, since_time, stage=""):
     return previews, [checkpoints[s] for s in sorted(checkpoints)], final
 
 
+def _heatmaps(output_dir, since_time):
+    """Mapas de calor de la protección de salida [paso, archivo] (output_preservation.py), de esta curva."""
+    out = []
+    try:
+        entries = list(os.scandir(os.path.join(str(output_dir), "preservation_maps")))
+    except OSError:
+        return out
+    for e in entries:
+        m = re.match(r"map_step_(\d+)\.png$", e.name)
+        if not m or not e.is_file():
+            continue
+        try:
+            if since_time and e.stat().st_mtime < since_time - 5:
+                continue
+        except OSError:
+            continue
+        out.append([int(m.group(1)), e.name])
+    out.sort()
+    return out
+
+
 def register(app, get_output_dir):
     import shutil
     from flask import jsonify, request, send_from_directory
@@ -165,6 +186,7 @@ def register(app, get_output_dir):
             "previews": previews,
             "checkpoints": checkpoints,
             "final": final,
+            "heatmaps": _heatmaps(output_dir, first_time) if points else [],
         })
 
     @app.route("/api/send-lora", methods=["POST"])

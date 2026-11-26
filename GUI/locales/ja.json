@@ -1640,5 +1640,6 @@
   "Step {n}: preservation loss {loss:.5f} (average of the last {k})": "ステップ {n}: 保護 loss {loss:.5f} (直近 {k} 回の平均)",
   "Preservation heatmap": "出力保護のヒートマップ",
   "Every 100 steps, saves a heatmap over a dataset image: where the LoRA changes the base model's output when the prompt has the class word instead of the trigger. Usually the face and the hair; if the clothes, the background or the style light up too, the LoRA is learning things from the dataset it should not. Shown above the previews.": "100 ステップごとにデータセット画像の上にヒートマップを保存します: プロンプトがトリガーの代わりにクラス語を含むとき、LoRA がベースモデルの出力をどこで変えるか。通常は顔と髪。服、背景、スタイルも明るくなる場合、LoRA はデータセットから学ぶべきでないものを学んでいます。プレビューの上に表示されます。",
-  "Where the LoRA changes the base model when the prompt has the class word instead of the trigger. Bright: it changes a lot; dark: it keeps the base model.": "プロンプトがトリガーの代わりにクラス語を含むとき、LoRA がベースモデルをどこで変えるか。明るい: 大きく変わる、暗い: ベースモデルを保つ。"
+  "Where the LoRA changes the base model when the prompt has the class word instead of the trigger. Bright: it changes a lot; dark: it keeps the base model.": "プロンプトがトリガーの代わりにクラス語を含むとき、LoRA がベースモデルをどこで変えるか。明るい: 大きく変わる、暗い: ベースモデルを保つ。",
+  "preservation heatmap (hover to see it)": "出力保護のヒートマップ (ホバーで表示)"
 }
