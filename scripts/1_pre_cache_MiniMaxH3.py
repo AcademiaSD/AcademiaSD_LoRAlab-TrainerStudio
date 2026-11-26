@@ -44,6 +44,13 @@ import sys
 import time
 import traceback
 
+# Fragmentation guard: the encoder is moved as ~470 loose NF4 tensors, and without this the
+# allocator keeps a few hundred MB reserved-but-unusable on a 16 GB card. Must be set before the
+# first CUDA allocation. The trainers already run with the same setting.
+# Guarda contra la fragmentacion: el encoder se mueve como ~470 tensores NF4 sueltos y sin esto el
+# allocator deja cientos de MB reservados e inutilizables en una placa de 16 GB.
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -1353,6 +1360,69 @@ def force_cuda_or_die(module, name, strict_meta=True):
     log_dev(L("[GPU] {} is 100% on CUDA. VRAM: {:.2f} GB",
               "[GPU] {} esta 100% en CUDA. VRAM: {:.2f} GB").format(name, vram_gb()))
     return True
+
+
+def _find_embed_tokens(module):
+    """Locate the token embedding table. Qwen3VL keeps it under model.language_model.
+    Localiza la tabla de embeddings; Qwen3VL la guarda en model.language_model."""
+    for owner in (getattr(module, "model", None), module):
+        if owner is None:
+            continue
+        for holder in (getattr(owner, "language_model", None), owner):
+            if holder is not None and isinstance(getattr(holder, "embed_tokens", None), nn.Module):
+                return holder, holder.embed_tokens
+    return None, None
+
+
+def detach_embed_tokens(module):
+    """Take the embedding table out of the module tree so .to("cuda") cannot drag it to the GPU.
+    Saca la tabla de embeddings del arbol para que .to("cuda") no la suba a la GPU."""
+    owner, embed = _find_embed_tokens(module)
+    if owner is None:
+        return None, None
+    owner.embed_tokens = nn.Identity()
+    return owner, embed
+
+
+def park_embed_tokens(embed, host):
+    """Keep the table in RAM: it only looks ids up, so its bf16 copy never needs to sit on the GPU
+    while the 50 NF4 layers load. Ids go to the CPU for the lookup and the result returns to the
+    device the rest of the stack is on. The hooks are conditional and follow the host module, so a
+    later .to(device) of the parent (the edit path parks and restores the language stack) cannot
+    desync them.
+    Mantiene la tabla en RAM: solo busca ids, asi que su copia bf16 no necesita ocupar la GPU
+    mientras cargan las 50 capas NF4. Los ids van a la CPU y el resultado vuelve al device donde
+    esta el resto del stack. Los hooks son condicionales y siguen al modulo padre: un .to(device)
+    posterior (el path de edit aparca y restaura el stack) no los desincroniza."""
+    if embed is None:
+        return embed
+    parked = getattr(embed, "_h3_parked", False)
+    if embed.weight.device.type != "cpu":
+        # The parent was moved back to the compute device after parking (the edit path restores
+        # the language stack): bring the table back to RAM before anything else.
+        # El padre volvio al device de calculo despues de aparcar (el path de edit restaura el
+        # stack): la tabla vuelve a RAM antes que nada.
+        embed.to("cpu")
+    if parked:
+        return embed
+
+    def _ids_to_cpu(mod, args):
+        if mod.weight.device.type != "cpu":
+            return None
+        return tuple(a.to("cpu") if torch.is_tensor(a) else a for a in args)
+
+    def _out_to_device(mod, args, out):
+        if mod.weight.device.type != "cpu":
+            return None
+        for param in host.parameters():
+            if param is not mod.weight:
+                return out.to(param.device)
+        return out
+
+    embed.register_forward_pre_hook(_ids_to_cpu)
+    embed.register_forward_hook(_out_to_device)
+    embed._h3_parked = True
+    return embed
 
 
 # ============================================================================
@@ -3469,7 +3539,29 @@ def preprocess_minimaxh3():
     # Verificar los dos grupos de tensores que mataban el encoder en silencio al ir a cero.
     verify_language_weights(text_encoder)
 
-    force_cuda_or_die(text_encoder, "text_encoder", strict_meta=True)
+    # The token embedding table (152K x 5120, ~1.45 GB bf16) only looks ids up. On a 16 GB card
+    # keeping it on the GPU is exactly the margin the 50-layer NF4 load lacks, so it is detached
+    # for the move and parked in RAM afterwards (same trick as edit_vision_features).
+    # La tabla de embeddings (152K x 5120, ~1,45 GB en bf16) solo busca ids. En una placa de 16 GB
+    # tenerla en la GPU es justo el margen que le falta a la carga de las 50 capas NF4: se separa
+    # para el movimiento y queda aparcada en RAM (mismo truco que edit_vision_features).
+    embed_owner, embed = detach_embed_tokens(text_encoder)
+    if embed is not None:
+        log_dev(L("[GPU] Token embedding table kept in RAM during the load (-{:.2f} GB of VRAM).",
+                  "[GPU] Tabla de embeddings en RAM durante la carga (-{:.2f} GB de VRAM).")
+                .format(embed.weight.numel() * embed.weight.element_size() / 1e9))
+    gc_cuda()
+    try:
+        force_cuda_or_die(text_encoder, "text_encoder", strict_meta=True)
+    finally:
+        if embed is not None:
+            embed_owner.embed_tokens = embed
+            park_embed_tokens(embed, embed_owner)
+        # Drop the locals: the hooks close over the language stack, so a live reference here would
+        # keep the whole 12 GB encoder resident after "Releasing text_encoder".
+        # Soltar los locales: los hooks cierran sobre el stack, y una referencia viva aca dejaria
+        # los 12 GB del encoder residentes despues de "Liberando text_encoder".
+        embed = embed_owner = None
 
     try:
         from bitsandbytes.nn import Linear4bit
