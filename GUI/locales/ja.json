@@ -1637,5 +1637,8 @@
   "Every how many steps it is applied. 1 is every step (about 2x slower); 2, every other step (about 1.5x).": "何ステップごとに適用するか。1 は毎ステップ (約 2 倍遅い)、2 は 1 ステップおき (約 1.5 倍)。",
   "Write the class word (woman, man, dog, style...): without it, it is not used.": "クラス語 (woman, man, dog, style...) を入力してください: ないと使われません。",
   "About {x}x slower: one more pass without the LoRA and one with it every {n} step(s). The class prompts are encoded before the training starts.": "約 {x} 倍遅くなります: {n} ステップごとに LoRA なしのパスと LoRA ありのパスが 1 回ずつ増えます。クラスのプロンプトは学習開始前にエンコードされます。",
-  "Step {n}: preservation loss {loss:.5f} (average of the last {k})": "ステップ {n}: 保護 loss {loss:.5f} (直近 {k} 回の平均)"
+  "Step {n}: preservation loss {loss:.5f} (average of the last {k})": "ステップ {n}: 保護 loss {loss:.5f} (直近 {k} 回の平均)",
+  "Preservation heatmap": "出力保護のヒートマップ",
+  "Every 100 steps, saves a heatmap over a dataset image: where the LoRA changes the base model's output when the prompt has the class word instead of the trigger. Usually the face and the hair; if the clothes, the background or the style light up too, the LoRA is learning things from the dataset it should not. Shown above the previews.": "100 ステップごとにデータセット画像の上にヒートマップを保存します: プロンプトがトリガーの代わりにクラス語を含むとき、LoRA がベースモデルの出力をどこで変えるか。通常は顔と髪。服、背景、スタイルも明るくなる場合、LoRA はデータセットから学ぶべきでないものを学んでいます。プレビューの上に表示されます。",
+  "Where the LoRA changes the base model when the prompt has the class word instead of the trigger. Bright: it changes a lot; dark: it keeps the base model.": "プロンプトがトリガーの代わりにクラス語を含むとき、LoRA がベースモデルをどこで変えるか。明るい: 大きく変わる、暗い: ベースモデルを保つ。"
 }

@@ -896,6 +896,10 @@ def train_zimage():
         if pres_prompts:
             cache_data[nombre]["dop"] = load_tensor(f"{CACHE_DIR}/{output_preservation.embed_name(nombre)}")
     pres_sum, pres_n = 0.0, 0
+    # Mapa de calor de la protección: dónde cambia el LoRA al modelo sin el trigger (cada 100 pasos).
+    heat = output_preservation.HeatMaps(cfg, OUTPUT_DIR) if pres_prompts else None
+    if heat and start_step == 0:
+        output_preservation.clear_maps(OUTPUT_DIR)
 
     # Custom Prompts: los embeddings se releen cuando el servidor los recodifica en CPU.
     custom = preview_prompts.Embeds(CACHE_DIR, lambda slot: load_tensor(custom.path(slot)))
@@ -965,14 +969,17 @@ def train_zimage():
                 cls = [cache_data[n]["dop"].to("cuda", non_blocking=True) for n in names]
                 with torch.no_grad(), output_preservation.lora_off(model):
                     prior = predict(model, noisy, sigma, cls).float()
-                pres = F.mse_loss(predict(model, noisy, sigma, cls).float(), prior)
+                kept = predict(model, noisy, sigma, cls).float()
+                pres = F.mse_loss(kept, prior)
                 scaler.scale(pres * PRES_WEIGHT / GRAD_ACCUM_STEPS).backward()
                 pres_sum, pres_n = pres_sum + pres.item(), pres_n + 1
-                del prior, pres
+                heat.add(names, kept, prior)
+                del prior, pres, kept
             if pres_n and step % 100 == 0:
                 print("\n[PRESERVATION] " + t("Step {n}: preservation loss {loss:.5f} (average of the last {k})",
                                               n=step, loss=pres_sum / pres_n, k=pres_n))
                 pres_sum, pres_n = 0.0, 0
+                heat.save(step)
 
             # La norma solo existe al aplicar el optimizador: entre medias se muestra la última.
             if step % GRAD_ACCUM_STEPS == 0:

@@ -1637,5 +1637,8 @@
   "Every how many steps it is applied. 1 is every step (about 2x slower); 2, every other step (about 1.5x).": "몇 스텝마다 적용할지. 1은 매 스텝(약 2배 느림), 2는 한 스텝 건너(약 1.5배).",
   "Write the class word (woman, man, dog, style...): without it, it is not used.": "클래스 단어(woman, man, dog, style...)를 입력하세요: 없으면 사용되지 않습니다.",
   "About {x}x slower: one more pass without the LoRA and one with it every {n} step(s). The class prompts are encoded before the training starts.": "약 {x}배 느려집니다: {n} 스텝마다 LoRA 없는 패스와 LoRA 있는 패스가 하나씩 추가됩니다. 클래스 프롬프트는 학습 시작 전에 인코딩됩니다.",
-  "Step {n}: preservation loss {loss:.5f} (average of the last {k})": "스텝 {n}: 보존 loss {loss:.5f} (최근 {k}회 평균)"
+  "Step {n}: preservation loss {loss:.5f} (average of the last {k})": "스텝 {n}: 보존 loss {loss:.5f} (최근 {k}회 평균)",
+  "Preservation heatmap": "출력 보존 히트맵",
+  "Every 100 steps, saves a heatmap over a dataset image: where the LoRA changes the base model's output when the prompt has the class word instead of the trigger. Usually the face and the hair; if the clothes, the background or the style light up too, the LoRA is learning things from the dataset it should not. Shown above the previews.": "100스텝마다 데이터셋 이미지 위에 히트맵을 저장합니다: 프롬프트에 트리거 대신 클래스 단어가 있을 때 LoRA가 기본 모델의 출력을 어디서 바꾸는지. 보통 얼굴과 머리카락; 옷, 배경, 스타일도 밝아지면 LoRA가 데이터셋에서 배우면 안 되는 것을 배우고 있습니다. 프리뷰 위에 표시됩니다.",
+  "Where the LoRA changes the base model when the prompt has the class word instead of the trigger. Bright: it changes a lot; dark: it keeps the base model.": "프롬프트에 트리거 대신 클래스 단어가 있을 때 LoRA가 기본 모델을 어디서 바꾸는지. 밝음: 많이 바뀜, 어두움: 기본 모델 유지."
 }
