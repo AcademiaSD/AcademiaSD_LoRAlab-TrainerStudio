@@ -1797,5 +1797,6 @@
   "Less VRAM than AdamW. Use a similar Learning Rate.": "Menos VRAM que AdamW. Usa un Learning Rate parecido.",
   "Finds the learning rate on its own.": "Calcula solo el learning rate.",
   "Less VRAM.": "Menos VRAM.",
-  "Less VRAM than AdamW.": "Menos VRAM que AdamW."
+  "Less VRAM than AdamW.": "Menos VRAM que AdamW.",
+  "The queue started the {kind} in this trainer.": "La cola ha arrancado {kind} en este entrenador."
 }

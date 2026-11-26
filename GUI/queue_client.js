@@ -429,6 +429,31 @@
         refresh();
         setInterval(refresh, 5000);
         document.addEventListener('visibilitychange', refresh);
+        setInterval(followServer, 3000);
+    }
+
+    // La cola puede arrancar un trabajo en el servidor de esta página (el entrenamiento que esperaba a la
+    // pre-caché lanzada desde aquí): si el servidor ejecuta algo y la página no lo sigue, se engancha la
+    // consola y el progreso, como al recargar la página con un entrenamiento en marcha.
+    let following = false;
+    async function followServer() {
+        if (following || document.hidden) return;
+        if (typeof isRunning === 'undefined' || isRunning || typeof attachConsole !== 'function'
+            || typeof setRunningState !== 'function') return;
+        following = true;
+        try {
+            const st = await (await fetch('/api/status', { cache: 'no-store' })).json();
+            if (!st.running || isRunning) return;
+            try { userRequestedStop = false; lastExecutedStep = 0; totalTargetSteps = 0; } catch (e) {}
+            if (typeof appendTerminal === 'function') {
+                appendTerminal(`\n[SYSTEM] ${tr('The queue started the {kind} in this trainer.', { kind: (KIND[st.script] || (() => st.script || ''))() })}`);
+            }
+            setRunningState(true);
+            attachConsole();
+        } catch (e) {
+        } finally {
+            following = false;
+        }
     }
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

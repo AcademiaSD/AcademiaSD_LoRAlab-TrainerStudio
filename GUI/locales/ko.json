@@ -1626,5 +1626,6 @@
   "Less VRAM than AdamW. Use a similar Learning Rate.": "AdamW보다 VRAM이 적습니다. 비슷한 Learning Rate를 사용하세요.",
   "Finds the learning rate on its own.": "학습률을 스스로 찾습니다.",
   "Less VRAM.": "VRAM이 적게 듭니다.",
-  "Less VRAM than AdamW.": "AdamW보다 VRAM이 적습니다."
+  "Less VRAM than AdamW.": "AdamW보다 VRAM이 적습니다.",
+  "The queue started the {kind} in this trainer.": "대기열이 이 트레이너에서 {kind}을(를) 시작했습니다."
 }
