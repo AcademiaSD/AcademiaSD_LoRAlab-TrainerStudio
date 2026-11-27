@@ -8,6 +8,10 @@
 
 What was added, newest first. Each entry links to its commit.
 
+**2026-11-27**
+
+- **Krea 2: FP32 LoRA, balanced buckets and Timestep Sampling** — the LoRA now trains in FP32 while the model computes in BF16/FP16 (in BF16 many small updates of the LoRA were rounded away), with about 0.4 GB more VRAM and 5% slower steps; the file is still exported in BF16. Every image is used once per epoch instead of picking a resolution bucket at random each step. A new **Timestep Sampling** selector (`krea2_shift` by default, as before, plus `logit_normal`, `sigmoid` and `style`) can change while training. By [@Synergyart](https://github.com/Synergyart) ([details](#krea-2--image-loras-for-krea-2-raw-and-turbo)) [`6664668`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/6664668) [`2d5fccd`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/2d5fccd) ([#93](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/pull/93))
+
 **2026-11-26**
 
 - **Settings assistant** — 🪄 Suggest settings in the Training Settings of the image trainers proposes steps, learning rate, rank, warmup, save and preview interval, masked loss and caption type for a character, a style or an object, from the number of images and the model's own defaults ([details](#-settings-assistant)) [`93b5b4f`](https://github.com/AcademiaSD/AcademiaSD_LoRAlab-TrainerStudio/commit/93b5b4f)
@@ -846,7 +850,9 @@ Copying the blocks from RAM costs little on a x16 slot (2.2 against 1.8 s/step a
 - **Free CUDA cache after each update** (off by default, can change while training): hands the VRAM that PyTorch keeps reserved but unused back to the driver after every optimizer update. Turn it on if a training on Windows suddenly gets several times slower and Task Manager shows the trainer using shared GPU memory: the driver is spilling VRAM into RAM. A smaller VRAM Profile is the other fix, and you can also stop the spill in the NVIDIA Control Panel (**CUDA - Sysmem Fallback Policy → Prefer No Sysmem Fallback**): then a run that does not fit stops with an out-of-memory error instead of slowing down.
 - **Captioner:** Qwen3-VL-4B, Krea 2's own text encoder (NF4, ~3.5 GB VRAM, no extra download).
 - **Previews** with the Krea 2 Turbo LoRA (8 steps). A new custom preview prompt is encoded on the CPU without stopping the training.
-- 8-bit AdamW, reentrant gradient checkpointing, Krea 2's own noise-shift schedule.
+- 8-bit AdamW, reentrant gradient checkpointing. The LoRA trains in FP32 and the model computes in BF16/FP16 (autocast); the file is exported in BF16.
+- **Timestep Sampling** (can change while training): `krea2_shift` (default) is Krea 2's own noise-shift schedule, uniform and shifted by resolution toward high noise; `logit_normal` is the same shift on a logit-normal; `sigmoid` is a logit-normal without the shift, centered on mid noise; `style` leans toward low and mid noise, for fine texture and brushwork. In a 600-step character test, `krea2_shift` and `sigmoid` gave similar previews.
+- Each epoch uses every image once, in shuffled batches of the same resolution bucket, so a bucket with one image is not seen as often as one with many.
 - The exported LoRA works with Krea 2 Raw and Krea 2 Turbo and carries its alpha, so ComfyUI applies it at the same strength as the previews.
 
 | Starting point | |
