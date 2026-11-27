@@ -51,6 +51,7 @@ SKIP_QUANT = (
     "time_embed",
     "time_mod_proj",
     "txt_in",
+    "text_fusion.projector",
     "final_layer",
 )
 

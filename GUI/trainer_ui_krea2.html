@@ -562,6 +562,15 @@
                                 <option value="fp16">FP16</option>
                             </select>
                         </div>
+                        <div class="form-group" title="How training timesteps are sampled. sigmoid: unshifted logit-normal centered around mid noise (recommended default). style: sigmoid biased toward low/mid noise for fine texture and brushwork. krea2_shift: resolution-shifted uniform favoring high noise. logit_normal: resolution-shifted logit-normal. Applies on the next step, also while training.">
+                            <label>Timestep Sampling:</label>
+                            <select id="train_timestep_sampling" class="no-i18n">
+                                <option value="sigmoid" selected>sigmoid</option>
+                                <option value="style">style</option>
+                                <option value="krea2_shift">krea2_shift</option>
+                                <option value="logit_normal">logit_normal</option>
+                            </select>
+                        </div>
                     </div>
 
                     <div class="form-row">
@@ -1045,6 +1054,7 @@
                     if (t.use_dora !== undefined) document.getElementById('train_use_dora').checked = t.use_dora;
                     if (t.dora_normfix !== undefined) document.getElementById('train_dora_normfix').checked = t.dora_normfix;
                     if (t.precision) document.getElementById('train_precision').value = t.precision;
+                    if (t.timestep_sampling) document.getElementById('train_timestep_sampling').value = t.timestep_sampling;
                     if (t.vram_profile) document.getElementById('train_vram_profile').value = t.vram_profile;
                     if (t.resident_blocks !== undefined) document.getElementById('train_resident_blocks').value = t.resident_blocks;
                     if (t.park_mode) document.getElementById('train_park_mode').value = t.park_mode;
@@ -1122,6 +1132,7 @@
                     if (data.use_dora !== undefined) document.getElementById('train_use_dora').checked = data.use_dora;
                     if (data.dora_normfix !== undefined) document.getElementById('train_dora_normfix').checked = data.dora_normfix;
                     if (data.precision) document.getElementById('train_precision').value = data.precision;
+                    if (data.timestep_sampling) document.getElementById('train_timestep_sampling').value = data.timestep_sampling;
                     if (data.vram_profile) document.getElementById('train_vram_profile').value = data.vram_profile;
                     if (data.resident_blocks !== undefined) document.getElementById('train_resident_blocks').value = data.resident_blocks;
                     if (data.park_mode) document.getElementById('train_park_mode').value = data.park_mode;
@@ -1287,7 +1298,8 @@
                     preview_cfg: 'train_preview_cfg',
                     preview_aspect_ratio: 'train_preview_aspect', preview_size: 'train_preview_size',
                     use_turbo: 'train_use_turbo',
-                    turbo_lora_strength: 'train_turbo_strength', free_cuda_cache: 'train_free_cuda_cache' },
+                    turbo_lora_strength: 'train_turbo_strength', free_cuda_cache: 'train_free_cuda_cache',
+                    timestep_sampling: 'train_timestep_sampling' },
             resume: { trigger_word: 'trigger_word', lr_scheduler: 'train_lr_scheduler',
                       warmup_steps: 'train_warmup_steps', lr_cycles: 'train_lr_cycles', batch_size: 'train_batch_size',
                       grad_accum_steps: 'train_grad_accum', precision: 'train_precision',
@@ -1318,6 +1330,7 @@
                 use_dora: document.getElementById('train_use_dora').checked,
                 dora_normfix: document.getElementById('train_dora_normfix').checked,
                 precision: document.getElementById('train_precision').value,
+                timestep_sampling: document.getElementById('train_timestep_sampling').value,
                 vram_profile: document.getElementById('train_vram_profile').value,
                 resident_blocks: parseInt(document.getElementById('train_resident_blocks').value),
                 park_mode: document.getElementById('train_park_mode').value,

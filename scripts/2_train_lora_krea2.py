@@ -76,7 +76,7 @@ DEFAULTS = {
     "max_grad_norm": 1.0,
     "save_every": 25,
     "seed": 42,
-    "timestep_sampling": "krea2_shift",
+    "timestep_sampling": "sigmoid",
     "preview_every": 0,
     "preview_steps": 8,
     "preview_cfg": 0.0,
@@ -152,7 +152,7 @@ def _gpu_has_bf16():
 
 PRECISION         = PRECISION_CFG if PRECISION_CFG in ("bf16", "fp16") else ("bf16" if _gpu_has_bf16() else "fp16")
 COMPUTE_DTYPE     = torch.float16 if PRECISION == "fp16" else torch.bfloat16
-ADAPTER_DTYPE     = torch.float32 if PRECISION == "fp16" else torch.bfloat16   # GradScaler no desescala FP16
+ADAPTER_DTYPE     = torch.float32
 if USE_LOKR:
     USE_RSLORA = USE_LORAPLUS = USE_DORA = False
 WEIGHT_DECAY      = cfg.get("weight_decay",      DEFAULTS["weight_decay"])
@@ -206,6 +206,7 @@ SWAP_CFG = block_swap.settings(cfg)
 print(f"  {'VRAM Profile':<22}: {block_swap.describe(SWAP_CFG)}")
 print(f"  {'Free CUDA cache':<22}: {'on' if FREE_CUDA_CACHE else 'off'}")
 print(f"  {'Batch / Grad Accum':<22}: {BATCH_SIZE}/{GRAD_ACCUM_STEPS}")
+print(f"  {'Timestep Sampling':<22}: {TIMESTEP_SAMPLING}")
 print(f"  {t('Preview'):<22}: {t('Mode')}={PREVIEW_CAPTION_MODE} | Prompt='{PREVIEW_CUSTOM_PROMPT}'")
 print(f"  {t('Preview Every'):<22}: {PREVIEW_EVERY} | {t('Preview Steps')} {PREVIEW_STEPS} | CFG {PREVIEW_CFG}")
 print(f"  {t('Seed'):<22}: {SEED} ({t('random') if SEED <= 0 else t('fixed')})")
@@ -336,13 +337,22 @@ def calculate_shift(image_seq_len, base_seq_len=256, max_seq_len=6400,
 
 
 def sample_sigma(batch_size, image_seq_len, device, shift_cfg):
-    if TIMESTEP_SAMPLING == "logit_normal":
-        u = torch.sigmoid(torch.randn(batch_size, device=device))
+    mode = str(TIMESTEP_SAMPLING or "sigmoid").strip().lower()
+    if mode == "sigmoid":
+        sigma = torch.sigmoid(torch.randn(batch_size, device=device))
+    elif mode == "style":
+        u = torch.rand(batch_size, device=device).clamp(1e-5, 1.0 - 1e-5)
+        q = (u ** 3).clamp(1e-5, 1.0 - 1e-5)
+        z = math.sqrt(2.0) * torch.erfinv(2.0 * q - 1.0)
+        sigma = torch.sigmoid(z)
     else:
-        u = torch.rand(batch_size, device=device)
-    mu = calculate_shift(image_seq_len, *shift_cfg)
-    e_mu = math.exp(mu)
-    sigma = e_mu / (e_mu + (1.0 / u.clamp(1e-6, 1 - 1e-6) - 1.0))
+        if mode == "logit_normal":
+            u = torch.sigmoid(torch.randn(batch_size, device=device))
+        else:
+            u = torch.rand(batch_size, device=device)
+        mu = calculate_shift(image_seq_len, *shift_cfg)
+        e_mu = math.exp(mu)
+        sigma = e_mu / (e_mu + (1.0 / u.clamp(1e-6, 1 - 1e-6) - 1.0))
     return sigma.clamp(1e-4, 1.0 - 1e-4)
 
 
@@ -1048,15 +1058,16 @@ def run_preview(model, scheduler, embed, mask, neg, size, step, shift_cfg):
         scheduler.set_begin_index(0)
 
         with torch.no_grad():
-            for ts in scheduler.timesteps:
-                tt = (ts / scheduler.config.num_train_timesteps).expand(1).to(COMPUTE_DTYPE)
-                pred = model(hidden_states=latents, encoder_hidden_states=embed, timestep=tt,
-                             position_ids=pos_ids, encoder_attention_mask=mask, return_dict=False)[0]
-                if neg is not None and PREVIEW_CFG > 1.0:
-                    pred_u = model(hidden_states=latents, encoder_hidden_states=neg[0], timestep=tt,
-                                   position_ids=pos_ids, encoder_attention_mask=neg[1], return_dict=False)[0]
-                    pred = pred + PREVIEW_CFG * (pred - pred_u)
-                latents = scheduler.step(pred, ts, latents, return_dict=False)[0]
+            with torch.amp.autocast("cuda", dtype=COMPUTE_DTYPE):
+                for ts in scheduler.timesteps:
+                    tt = (ts / scheduler.config.num_train_timesteps).expand(1).to(COMPUTE_DTYPE)
+                    pred = model(hidden_states=latents, encoder_hidden_states=embed, timestep=tt,
+                                 position_ids=pos_ids, encoder_attention_mask=mask, return_dict=False)[0]
+                    if neg is not None and PREVIEW_CFG > 1.0:
+                        pred_u = model(hidden_states=latents, encoder_hidden_states=neg[0], timestep=tt,
+                                       position_ids=pos_ids, encoder_attention_mask=neg[1], return_dict=False)[0]
+                        pred = pred + PREVIEW_CFG * (pred - pred_u)
+                    latents = scheduler.step(pred, ts, latents, return_dict=False)[0]
 
             vae = VaeHolder.get().to(device)
             lat = unpack_latents(latents, H // 8, W // 8).to(vae.dtype).unsqueeze(2)
@@ -1112,7 +1123,7 @@ def reload_live_settings():
     paso siguiente. El coste por paso es un getmtime. Rank, alpha, batch, resolución y
     carpetas se fijan al arrancar y siguen necesitando Stop -> Resume.
     """
-    global _live_mtime, TOTAL_STEPS, SAVE_EVERY, LR, MAX_GRAD_NORM
+    global _live_mtime, TOTAL_STEPS, SAVE_EVERY, LR, MAX_GRAD_NORM, TIMESTEP_SAMPLING
     global PREVIEW_EVERY, PREVIEW_STEPS, PREVIEW_CFG, PREVIEW_SIZE, PREVIEW_WIDTH, PREVIEW_HEIGHT, PREVIEW_CAPTION_MODE, PREVIEW_CUSTOM_PROMPT
     global USE_TURBO, TURBO_LORA_STRENGTH, USE_FILTER_BYPASS, FILTER_BYPASS_STRENGTH, SEED, FREE_CUDA_CACHE
 
@@ -1163,6 +1174,7 @@ def reload_live_settings():
     FILTER_BYPASS_STRENGTH = fresh("filter_bypass_strength", float, FILTER_BYPASS_STRENGTH)
     SEED                   = fresh("seed",                   int,   SEED)  # solo previews
     FREE_CUDA_CACHE        = fresh("free_cuda_cache",        bool,  FREE_CUDA_CACHE)
+    TIMESTEP_SAMPLING      = fresh("timestep_sampling",      lambda v: str(v).strip().lower(), TIMESTEP_SAMPLING)
     preview_prompts.live_update(PREVIEW_PROMPTS, raw, changes)
     return changes
 
@@ -1526,6 +1538,18 @@ def train_krea2():
                     max(16, round(size[1] * s / 16) * 16))
         run_preview(model, scheduler, emb0, msk0, neg, size, step, shift_cfg)
 
+    def build_epoch_batches():
+        batches = []
+        for b_size, items in buckets.items():
+            shuffled = list(items)
+            random.shuffle(shuffled)
+            for i in range(0, len(shuffled), BATCH_SIZE):
+                batches.append((b_size, shuffled[i:i + BATCH_SIZE]))
+        random.shuffle(batches)
+        return batches
+
+    epoch_batches = []
+
     step = start_step
     try:
         # while y no range(): TOTAL_STEPS puede cambiar en caliente, en ambos sentidos.
@@ -1546,8 +1570,9 @@ def train_krea2():
 
             t0 = time.time()
 
-            size = random.choice(list(buckets))
-            names = [random.choice(buckets[size]) for _ in range(BATCH_SIZE)]
+            if not epoch_batches:
+                epoch_batches = build_epoch_batches()
+            size, names = epoch_batches.pop()
             latents = torch.cat([cache_data[n][0] for n in names]).to("cuda", non_blocking=True)
             embeds  = torch.cat([cache_data[n][1] for n in names]).to("cuda", non_blocking=True)
             masks   = torch.cat([cache_data[n][2] for n in names]).to("cuda", non_blocking=True)
@@ -1567,7 +1592,7 @@ def train_krea2():
 
             while True:
                 try:
-                    with (block_swap.SaveOnCpu() if offload else block_swap._null()):
+                    with (block_swap.SaveOnCpu() if offload else block_swap._null()), torch.amp.autocast("cuda", dtype=COMPUTE_DTYPE):
                         pred = model(
                             hidden_states=noisy,
                             encoder_hidden_states=embeds,
@@ -1596,7 +1621,7 @@ def train_krea2():
                 c_pos = get_pos_ids(c_emb.shape[1], size[0], size[1])
 
                 def cls_pred():
-                    with (block_swap.SaveOnCpu() if offload else block_swap._null()):
+                    with (block_swap.SaveOnCpu() if offload else block_swap._null()), torch.amp.autocast("cuda", dtype=COMPUTE_DTYPE):
                         return model(hidden_states=noisy, encoder_hidden_states=c_emb, timestep=sigma,
                                      position_ids=c_pos, encoder_attention_mask=c_msk, return_dict=False)[0]
                 pres.step(model, cls_pred, names, scaler, GRAD_ACCUM_STEPS,
