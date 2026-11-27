@@ -562,13 +562,13 @@
                                 <option value="fp16">FP16</option>
                             </select>
                         </div>
-                        <div class="form-group" title="How training timesteps are sampled. sigmoid: unshifted logit-normal centered around mid noise (recommended default). style: sigmoid biased toward low/mid noise for fine texture and brushwork. krea2_shift: resolution-shifted uniform favoring high noise. logit_normal: resolution-shifted logit-normal. Applies on the next step, also while training.">
+                        <div class="form-group" title="How training timesteps are sampled. krea2_shift: uniform, shifted by resolution toward high noise (default). logit_normal: logit-normal, shifted by resolution. sigmoid: logit-normal without the shift, centered on mid noise. style: sigmoid biased toward low and mid noise, for fine texture and brushwork. Applies on the next step, also while training.">
                             <label>Timestep Sampling:</label>
                             <select id="train_timestep_sampling" class="no-i18n">
-                                <option value="sigmoid" selected>sigmoid</option>
-                                <option value="style">style</option>
-                                <option value="krea2_shift">krea2_shift</option>
+                                <option value="krea2_shift" selected>krea2_shift</option>
                                 <option value="logit_normal">logit_normal</option>
+                                <option value="sigmoid">sigmoid</option>
+                                <option value="style">style</option>
                             </select>
                         </div>
                     </div>

@@ -1738,5 +1738,7 @@
   "Caption type": "Type de caption",
   "Short captions without the fixed traits: the trigger learns the identity. Then Redo Captions with Overwrite": "Captions courtes sans les traits fixes : le trigger apprend l'identité. Puis Redo Captions avec Overwrite",
   "Long descriptions for styles and objects": "Descriptions longues pour styles et objets",
-  "{n} settings applied. They are saved when you start the training.": "{n} réglages appliqués. Ils sont enregistrés au démarrage de l'entraînement."
+  "{n} settings applied. They are saved when you start the training.": "{n} réglages appliqués. Ils sont enregistrés au démarrage de l'entraînement.",
+  "Timestep Sampling": "Échantillonnage des timesteps",
+  "How training timesteps are sampled. krea2_shift: uniform, shifted by resolution toward high noise (default). logit_normal: logit-normal, shifted by resolution. sigmoid: logit-normal without the shift, centered on mid noise. style: sigmoid biased toward low and mid noise, for fine texture and brushwork. Applies on the next step, also while training.": "Comment les timesteps d'entraînement sont choisis. krea2_shift : uniforme, décalé selon la résolution vers le bruit élevé (par défaut). logit_normal : logit-normale, décalée selon la résolution. sigmoid : logit-normale sans décalage, centrée sur le bruit moyen. style : sigmoid orienté vers le bruit faible et moyen, pour la texture fine et les coups de pinceau. S'applique au pas suivant, même pendant l'entraînement."
 }

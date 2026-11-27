@@ -76,7 +76,7 @@ DEFAULTS = {
     "max_grad_norm": 1.0,
     "save_every": 25,
     "seed": 42,
-    "timestep_sampling": "sigmoid",
+    "timestep_sampling": "krea2_shift",
     "preview_every": 0,
     "preview_steps": 8,
     "preview_cfg": 0.0,
@@ -138,8 +138,12 @@ USE_DORA          = bool(cfg.get("use_dora",     DEFAULTS["use_dora"]))
 DORA_NORMFIX      = bool(cfg.get("dora_normfix", DEFAULTS["dora_normfix"]))
 # Precisión de cálculo. BF16 en Ampere (RTX 30) o posterior. Las GPUs sin BF16 por hardware (RTX 20 /
 # Quadro RTX / Turing, GTX 16) lo emulan y cada paso va varias veces más lento: ahí FP16, con la loss
-# escalada (GradScaler) y el LoRA en FP32. Krea 2 cabe en FP16 (activaciones ~22000 < 65504) y su error
-# frente a FP32 es como el de BF16. "auto" elige según la GPU.
+# escalada (GradScaler). Krea 2 cabe en FP16 (activaciones ~22000 < 65504) y su error frente a FP32 es
+# como el de BF16. "auto" elige según la GPU.
+# El LoRA entrenable va siempre en FP32 y el modelo calcula en BF16/FP16 con autocast (PR 93): en BF16 las
+# actualizaciones pequeñas del LoRA se redondeaban a cero. Se exporta en BF16, como antes.
+# The trainable LoRA is always FP32 and the model computes in BF16/FP16 under autocast (PR 93): in BF16
+# small LoRA updates rounded away. It is still exported in BF16.
 PRECISION_CFG     = str(cfg.get("precision", DEFAULTS["precision"]) or "auto").lower()
 
 
@@ -337,7 +341,7 @@ def calculate_shift(image_seq_len, base_seq_len=256, max_seq_len=6400,
 
 
 def sample_sigma(batch_size, image_seq_len, device, shift_cfg):
-    mode = str(TIMESTEP_SAMPLING or "sigmoid").strip().lower()
+    mode = str(TIMESTEP_SAMPLING or "krea2_shift").strip().lower()
     if mode == "sigmoid":
         sigma = torch.sigmoid(torch.randn(batch_size, device=device))
     elif mode == "style":

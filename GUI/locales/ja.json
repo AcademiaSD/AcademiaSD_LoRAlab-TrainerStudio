@@ -1738,5 +1738,7 @@
   "Caption type": "キャプションの種類",
   "Short captions without the fixed traits: the trigger learns the identity. Then Redo Captions with Overwrite": "固定的な特徴を含まない短いキャプション: トリガーが人物を学びます。その後 Overwrite で Redo Captions",
   "Long descriptions for styles and objects": "スタイルや物体向けの長い説明",
-  "{n} settings applied. They are saved when you start the training.": "{n} 件の設定を適用しました。学習開始時に保存されます。"
+  "{n} settings applied. They are saved when you start the training.": "{n} 件の設定を適用しました。学習開始時に保存されます。",
+  "Timestep Sampling": "タイムステップのサンプリング",
+  "How training timesteps are sampled. krea2_shift: uniform, shifted by resolution toward high noise (default). logit_normal: logit-normal, shifted by resolution. sigmoid: logit-normal without the shift, centered on mid noise. style: sigmoid biased toward low and mid noise, for fine texture and brushwork. Applies on the next step, also while training.": "学習のタイムステップの選び方。krea2_shift: 一様分布を解像度に応じて高ノイズ側へシフト (既定)。logit_normal: ロジット正規分布を解像度に応じてシフト。sigmoid: シフトなしのロジット正規分布、中ノイズが中心。style: 低〜中ノイズ寄りの sigmoid、細かな質感や筆致向け。次のステップから適用され、学習中でも反映されます。"
 }
