@@ -21,6 +21,7 @@ import cache_names
 from i18n import t
 import settings_limits
 import preview_prompts
+import slider_text
 from text_io import read_text_file
 import gpu_stats
 from project_layout import resolve_cache_dir, resolve_model_dir, resolve_output_dir
@@ -292,6 +293,18 @@ def preprocess_krea2():
     for idx, (name, _) in enumerate(samples, 1):
         encode_and_save(pipe, with_trigger(read_caption(name)), name)
         print(f"[{idx}/{len(samples)}] {t('Text')}: {name}")
+
+    # Slider por texto: cada caption también con los dos extremos del concepto (slider_text.py).
+    slider = slider_text.settings(cfg)
+    old_slider = [f for f in os.listdir(CACHE_DIR) if f.startswith("_slider")]
+    for f in old_slider:
+        os.remove(os.path.join(CACHE_DIR, f))
+    if slider["active"]:
+        manifest, jobs = slider_text.plan({name: with_trigger(read_caption(name)) for name, _ in samples}, slider)
+        for idx, (cache_name, slider_prompt) in enumerate(jobs, 1):
+            encode_and_save(pipe, slider_prompt, cache_name)
+            print(f"[{idx}/{len(jobs)}] Slider: {slider_prompt}")
+        slider_text.write_manifest(CACHE_DIR, manifest)
 
     del pipe
     free_vram()

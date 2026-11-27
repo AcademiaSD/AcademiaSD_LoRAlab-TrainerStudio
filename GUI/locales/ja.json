@@ -1738,5 +1738,18 @@
   "Caption type": "キャプションの種類",
   "Short captions without the fixed traits: the trigger learns the identity. Then Redo Captions with Overwrite": "固定的な特徴を含まない短いキャプション: トリガーが人物を学びます。その後 Overwrite で Redo Captions",
   "Long descriptions for styles and objects": "スタイルや物体向けの長い説明",
-  "{n} settings applied. They are saved when you start the training.": "{n} 件の設定を適用しました。学習開始時に保存されます。"
+  "{n} settings applied. They are saved when you start the training.": "{n} 件の設定を適用しました。学習開始時に保存されます。",
+  "Text slider (dial)": "テキストスライダー（ダイヤル）",
+  "Trains a dial instead of a subject or a style: the LoRA strength moves the picture from the negative end to the positive one (for example from very thin to very fat). Strength 0 is the model as it is and every point of strength moves it the same amount, so +2 is a little and +5 is the end. It needs no before and after pictures: the base model already knows both ends, and the dataset captions say what the pictures show. Run the Pre-Cache after changing the ends.": "被写体やスタイルではなくダイヤルを学習します。LoRAの強度で画像がネガティブ側からポジティブ側へ動きます（例：とても痩せた→とても太った）。強度0はモデルそのままで、強度1ごとに同じだけ動くので、+2は少し、+5は端です。ビフォー・アフター画像は不要です。ベースモデルが両端をすでに知っており、データセットのキャプションが画像の内容を伝えます。両端を変えたらPre-Cacheを実行してください。",
+  "Ultra: the LoRA only goes into the composition blocks. The dial holds up at much higher strengths and changes the shape more than the details.": "Ultra：LoRAは構図ブロックだけに入ります。ダイヤルはずっと高い強度まで崩れず、細部より形を変えます。",
+  "Ultra (composition blocks)": "Ultra（構図ブロック）",
+  "What strength +5 adds. Describe the body or the trait, not the face or the camera: a face word can move the camera closer. Example: a very fat obese person, overweight all over the body: chubby face, thick arms, thick thighs, wide waist and hips": "強度+5で加わるもの。顔やカメラではなく、体や特徴を書いてください。顔の言葉はカメラを近づけることがあります。例：a very fat obese person, overweight all over the body: chubby face, thick arms, thick thighs, wide waist and hips",
+  "Positive end (+):": "ポジティブ側（+）：",
+  "What strength -5 adds, the opposite of the positive end and written the same way. Example: a very thin skinny underweight person, slim all over the body: thin arms, thin legs, narrow waist and hips": "強度-5で加わるもの。ポジティブ側の反対を同じ書き方で。例：a very thin skinny underweight person, slim all over the body: thin arms, thin legs, narrow waist and hips",
+  "Negative end (−):": "ネガティブ側（−）：",
+  "How far strength 5 goes, as a multiple of the difference the base model makes between the two ends. Raise it if the dial changes too little, lower it if the ends break the picture.": "強度5でどこまで行くか。ベースモデルが両端の間に作る差の倍率です。変化が小さければ上げ、端で画像が崩れれば下げてください。",
+  "Slider intensity:": "スライダーの強さ：",
+  "Before training, the base model draws this many pictures from the dataset captions and the slider learns on them instead of on the dataset photos: the dial then keeps the framing the model gives to each prompt. 0 = the dataset photos.": "学習の前に、ベースモデルがデータセットのキャプションからこの枚数の画像を描き、スライダーはデータセットの写真の代わりにそれで学習します。ダイヤルはモデルが各プロンプトに与える構図を保ちます。0 = データセットの写真。",
+  "Practice images:": "練習用画像：",
+  "Strength 0 is the model as it is; +5 and −5 in ComfyUI are the two ends. The previews show the dial. Run the Pre-Cache after changing the ends.": "強度0はモデルそのまま。ComfyUIの+5と−5が両端です。プレビューにダイヤルが表示されます。両端を変えたらPre-Cacheを実行してください。"
 }

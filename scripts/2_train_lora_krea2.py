@@ -38,6 +38,7 @@ import xy_grid
 import output_preservation
 import subject_masks
 import block_swap
+import slider_text
 
 # La GUI busca "<Paso> N/Total" en la consola para saber por qué paso va.
 STEP_WORD = t("Step")
@@ -211,6 +212,9 @@ print(f"  {t('Preview Every'):<22}: {PREVIEW_EVERY} | {t('Preview Steps')} {PREV
 print(f"  {t('Seed'):<22}: {SEED} ({t('random') if SEED <= 0 else t('fixed')})")
 print(f"  {'Turbo LoRA':<22}: {t('ON (strength {s})', s=TURBO_LORA_STRENGTH) if USE_TURBO else t('OFF')}")
 print(f"  {'Filter Bypass LoRA':<22}: {t('ON (strength {s})', s=FILTER_BYPASS_STRENGTH) if USE_FILTER_BYPASS else t('OFF')}")
+SLIDER = slider_text.settings(cfg)
+if SLIDER["active"]:
+    print(f"  {'Text Slider':<22}: {slider_text.describe(SLIDER)}")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 RESUME_DIR = os.path.join(OUTPUT_DIR, "resume_checkpoint")
@@ -507,6 +511,8 @@ def _export_lora(model, path, step):
         if "lora_magnitude_vector" in k:
             continue                        # DoRA: va como dora_scale, abajo
         k = "transformer." + k.replace("base_model.model.", "")
+        if SLIDER["active"] and ".lora_B." in k:
+            v = v.float() * slider_text.export_factor(SLIDER)   # fuerza 5 en ComfyUI = el extremo
         clean[k] = v.to(torch.bfloat16).cpu().contiguous()
         if k.endswith(".lora_A.weight"):
             clean[k[:-len(".lora_A.weight")] + ".alpha"] = torch.tensor(float(export_alpha()))
@@ -1011,7 +1017,39 @@ def apply_preview_lora_hooks(
     return hooks
 
 
-def run_preview(model, scheduler, embed, mask, neg, size, step, shift_cfg):
+def render_latent(model, scheduler, embed, mask, size, seed, shift_cfg):
+    """Latente [1, 16, H/8, W/8] generado con el modelo tal como está y los LoRAs de las previews (Turbo...)."""
+    H, W = size
+    device = "cuda"
+    was_training = model.training
+    model.eval()
+    hooks = []
+    if USE_TURBO:
+        ensure_file_downloaded(TURBO_LORA_PATH, HF_REPO_ID, "LoRAs/krea2_turbo_lora_rank_64_bf16.safetensors")
+        hooks.extend(apply_preview_lora_hooks(model, TURBO_LORA_PATH, tag="🚀 Turbo LoRA", strength=TURBO_LORA_STRENGTH, device=device))
+    try:
+        g = torch.Generator(device=device).manual_seed(seed)
+        latents = pack_latents(torch.randn((1, 16, H // 8, W // 8), generator=g, device=device, dtype=COMPUTE_DTYPE))
+        pos_ids = prepare_position_ids(embed.shape[1], H // 16, W // 16, device)
+        embed, mask = embed.to(device, COMPUTE_DTYPE), mask.to(device)
+        sigmas = np.linspace(1.0, 1.0 / PREVIEW_STEPS, PREVIEW_STEPS)
+        scheduler.set_timesteps(PREVIEW_STEPS, device=device, sigmas=sigmas, mu=calculate_shift(latents.shape[1], *shift_cfg))
+        scheduler.set_begin_index(0)
+        with torch.no_grad():
+            for ts in scheduler.timesteps:
+                tt = (ts / scheduler.config.num_train_timesteps).expand(1).to(COMPUTE_DTYPE)
+                pred = model(hidden_states=latents, encoder_hidden_states=embed, timestep=tt,
+                             position_ids=pos_ids, encoder_attention_mask=mask, return_dict=False)[0]
+                latents = scheduler.step(pred, ts, latents, return_dict=False)[0]
+        return unpack_latents(latents, H // 8, W // 8).to(COMPUTE_DTYPE)
+    finally:
+        for h in hooks:
+            h.remove()
+        if was_training:
+            model.train()
+
+
+def run_preview(model, scheduler, embed, mask, neg, size, step, shift_cfg, dial=None):
     H, W = size
     gh, gw = H // 16, W // 16
     device = "cuda"
@@ -1034,45 +1072,55 @@ def run_preview(model, scheduler, embed, mask, neg, size, step, shift_cfg):
         preview_hooks.extend(apply_preview_lora_hooks(model, FILTER_BYPASS_PATH, tag="🔓 Filter Bypass", strength=FILTER_BYPASS_STRENGTH, device=device))
 
     try:
-        g = torch.Generator(device=device).manual_seed(actual_seed)
-        latents = torch.randn((1, 16, H // 8, W // 8), generator=g, device=device, dtype=COMPUTE_DTYPE)
-        latents = pack_latents(latents)
-        pos_ids = prepare_position_ids(embed.shape[1], gh, gw, device)
-        embed, mask = embed.to(device, COMPUTE_DTYPE), mask.to(device)
-        if neg is not None:
-            neg = (neg[0].to(device, COMPUTE_DTYPE), neg[1].to(device))
+        # Slider por texto: la misma semilla a cada fuerza del dial, en una tira (sin dial, una imagen).
+        dial_points = [(s, slider_text.strength_to_multiplier(s, SLIDER)) for s in SLIDER["slider_preview_strengths"]] if dial else [(None, None)]
+        images = []
+        for _strength, mult in dial_points:
+            if dial:
+                dial.set(mult)
+            g = torch.Generator(device=device).manual_seed(actual_seed)
+            latents = torch.randn((1, 16, H // 8, W // 8), generator=g, device=device, dtype=COMPUTE_DTYPE)
+            latents = pack_latents(latents)
+            pos_ids = prepare_position_ids(embed.shape[1], gh, gw, device)
+            embed, mask = embed.to(device, COMPUTE_DTYPE), mask.to(device)
+            if neg is not None:
+                neg = (neg[0].to(device, COMPUTE_DTYPE), neg[1].to(device))
 
-        sigmas = np.linspace(1.0, 1.0 / PREVIEW_STEPS, PREVIEW_STEPS)
-        mu = calculate_shift(latents.shape[1], *shift_cfg)
-        scheduler.set_timesteps(PREVIEW_STEPS, device=device, sigmas=sigmas, mu=mu)
-        scheduler.set_begin_index(0)
+            sigmas = np.linspace(1.0, 1.0 / PREVIEW_STEPS, PREVIEW_STEPS)
+            mu = calculate_shift(latents.shape[1], *shift_cfg)
+            scheduler.set_timesteps(PREVIEW_STEPS, device=device, sigmas=sigmas, mu=mu)
+            scheduler.set_begin_index(0)
 
-        with torch.no_grad():
-            for ts in scheduler.timesteps:
-                tt = (ts / scheduler.config.num_train_timesteps).expand(1).to(COMPUTE_DTYPE)
-                pred = model(hidden_states=latents, encoder_hidden_states=embed, timestep=tt,
-                             position_ids=pos_ids, encoder_attention_mask=mask, return_dict=False)[0]
-                if neg is not None and PREVIEW_CFG > 1.0:
-                    pred_u = model(hidden_states=latents, encoder_hidden_states=neg[0], timestep=tt,
-                                   position_ids=pos_ids, encoder_attention_mask=neg[1], return_dict=False)[0]
-                    pred = pred + PREVIEW_CFG * (pred - pred_u)
-                latents = scheduler.step(pred, ts, latents, return_dict=False)[0]
+            with torch.no_grad():
+                for ts in scheduler.timesteps:
+                    tt = (ts / scheduler.config.num_train_timesteps).expand(1).to(COMPUTE_DTYPE)
+                    pred = model(hidden_states=latents, encoder_hidden_states=embed, timestep=tt,
+                                 position_ids=pos_ids, encoder_attention_mask=mask, return_dict=False)[0]
+                    if neg is not None and PREVIEW_CFG > 1.0:
+                        pred_u = model(hidden_states=latents, encoder_hidden_states=neg[0], timestep=tt,
+                                       position_ids=pos_ids, encoder_attention_mask=neg[1], return_dict=False)[0]
+                        pred = pred + PREVIEW_CFG * (pred - pred_u)
+                    latents = scheduler.step(pred, ts, latents, return_dict=False)[0]
 
-            vae = VaeHolder.get().to(device)
-            lat = unpack_latents(latents, H // 8, W // 8).to(vae.dtype).unsqueeze(2)
-            mean = torch.tensor(vae.config.latents_mean, device=device, dtype=lat.dtype).view(1, -1, 1, 1, 1)
-            std  = torch.tensor(vae.config.latents_std,  device=device, dtype=lat.dtype).view(1, -1, 1, 1, 1)
-            try:
-                img = vae.decode(lat * std + mean, return_dict=False)[0][:, :, 0]
-            except torch.OutOfMemoryError:
-                # Con 8 GB y el entrenamiento cargado no cabe entera: por mosaicos usa mucha menos VRAM,
-                # a cambio de alguna marca leve en las uniones. Sigue así el resto del run.
-                print("  ↳ " + t("Low VRAM: tiled VAE decode for previews"))
-                torch.cuda.empty_cache()
-                vae.enable_tiling()
-                img = vae.decode(lat * std + mean, return_dict=False)[0][:, :, 0]
-            img = ((img.float() / 2 + 0.5).clamp(0, 1)[0].cpu().permute(1, 2, 0).numpy() * 255).astype("uint8")
-            vae.to("cpu")
+                vae = VaeHolder.get().to(device)
+                lat = unpack_latents(latents, H // 8, W // 8).to(vae.dtype).unsqueeze(2)
+                mean = torch.tensor(vae.config.latents_mean, device=device, dtype=lat.dtype).view(1, -1, 1, 1, 1)
+                std  = torch.tensor(vae.config.latents_std,  device=device, dtype=lat.dtype).view(1, -1, 1, 1, 1)
+                try:
+                    img = vae.decode(lat * std + mean, return_dict=False)[0][:, :, 0]
+                except torch.OutOfMemoryError:
+                    # Con 8 GB y el entrenamiento cargado no cabe entera: por mosaicos usa mucha menos VRAM,
+                    # a cambio de alguna marca leve en las uniones. Sigue así el resto del run.
+                    print("  ↳ " + t("Low VRAM: tiled VAE decode for previews"))
+                    torch.cuda.empty_cache()
+                    vae.enable_tiling()
+                    img = vae.decode(lat * std + mean, return_dict=False)[0][:, :, 0]
+                img = ((img.float() / 2 + 0.5).clamp(0, 1)[0].cpu().permute(1, 2, 0).numpy() * 255).astype("uint8")
+                vae.to("cpu")
+            images.append(img)
+        if dial:
+            dial.set(1.0)
+            img = slider_text.strip(images, [p[0] for p in dial_points])
 
         from PIL import Image
         out = os.path.join(OUTPUT_DIR, preview_prompts.preview_name(step, PREVIEW_NOW["index"]))
@@ -1174,6 +1222,9 @@ BLOCK_PREFIXES = ("transformer_blocks.",)
 # Con block swap el offload de activaciones gasta bastante menos; el plan deja además el margen de setup.
 ACT_GB_BASE = 0.6
 ACT_GB_PER_TOKEN = 0.00075
+KREA2_ULTRA_PREFIXES = tuple(f"transformer_blocks.{i}." for i in range(8)) + (
+    "text_fusion.layerwise_blocks.", "text_fusion.refiner_blocks.")
+SLIDER_EXTRA_GB = 1.0   # slider por texto: 3 pasadas sin gradiente por paso (medido: 11,5 GB con 28/28 en 16 GB)
 DORA_EXTRA_GB = 1.0   # medido: +1,4 GB con todos los bloques en VRAM; con offload de activaciones, bastante menos
 
 
@@ -1201,6 +1252,12 @@ def train_krea2():
         print("\n[!] ERROR: " + t("Cache directory '{path}' is empty or does not exist.", path=CACHE_DIR))
         print("[!] " + t("Please run Pre-Cache first!"))
         sys.exit(2)  # la GUI muestra este código como "falta la pre-caché"
+    if SLIDER["active"] and slider_text.stale(slider_text.read_manifest(CACHE_DIR), SLIDER,
+                                              [f[:-len("_latent.pt")] for f in os.listdir(CACHE_DIR)
+                                               if f.endswith("_latent.pt") and not cache_names.is_reserved(f)]):
+        # Antes de cargar el modelo: los extremos del slider cambiaron o el Pre-Caché no los codificó.
+        print("\n[!] Text Slider: " + t("Please run Pre-Cache first!"))
+        sys.exit(2)
 
     ensure_model_downloaded(
         local_path=MODEL_ID,
@@ -1234,6 +1291,10 @@ def train_krea2():
 
     target_modules = [name for name, m in transformer.named_modules()
                       if isinstance(m, (torch.nn.Linear, bnb.nn.Linear4bit))]
+    if SLIDER["active"] and SLIDER["slider_ultra"]:
+        # Slider Ultra: solo los bloques de composición (0-7) y los de fusión del texto; sin los de detalle ni
+        # las capas de entrada y salida el dial aguanta fuerzas mucho más altas (others devs, medido en Krea 2).
+        target_modules = [n for n in target_modules if n.startswith(KREA2_ULTRA_PREFIXES)]
     print(t("Target LoRA layers: {n}", n=len(target_modules)))
 
     # Reanudar es continuar EL MISMO LoRA: capas, rank y alpha salen del checkpoint, no de la GUI.
@@ -1294,6 +1355,10 @@ def train_krea2():
                               a=saved_dora, b=USE_DORA))
         USE_DORA = saved_dora
 
+    if SLIDER["active"] and (USE_LOKR or USE_DORA):
+        # El dial cambia la escala de las capas LoRA de PEFT: LoKr y DoRA no la tienen igual.
+        print("\n[!] Text Slider: LoKr / DoRA off (the slider needs a plain LoRA / el slider necesita un LoRA normal).")
+        USE_LOKR = USE_DORA = False
     if USE_LOKR:
         USE_RSLORA = USE_LORAPLUS = USE_DORA = False
         model = lora_options.LoKrModel(transformer, target_modules, LORA_RANK, LORA_ALPHA, LOKR_FACTOR)
@@ -1326,6 +1391,7 @@ def train_krea2():
                 adapter.data = adapter.data.to(ADAPTER_DTYPE)
 
     model.print_trainable_parameters()
+    dial = slider_text.Dial(model) if SLIDER["active"] else None
 
     # El LoRA de las capas con el peso aún en el fichero se creó en la CPU: a la GPU, sin subir los bloques.
     block_swap.to_device_except_nf4(model, "cuda")
@@ -1418,6 +1484,7 @@ def train_krea2():
     pin = torch.cuda.is_available()
     cache_data, buckets = {}, defaultdict(list)
     dop_data = {}   # prompts de clase de la protección de salida: (embeds, máscara) por muestra
+    slider_data = {}   # slider por texto: (c | pos | neg, caption, variante) -> (embeds, máscara)
 
     for f in os.listdir(CACHE_DIR):
         if not f.endswith("_latent.pt"):
@@ -1435,6 +1502,20 @@ def train_krea2():
             d_emb = torch.load(f"{CACHE_DIR}/{pres.name(nombre)}_embed.pt", weights_only=True).to(COMPUTE_DTYPE)
             d_msk = torch.load(f"{CACHE_DIR}/{pres.name(nombre)}_mask.pt", weights_only=True).bool()
             dop_data[nombre] = (d_emb.pin_memory(), d_msk.pin_memory()) if pin else (d_emb, d_msk)
+    if SLIDER["active"]:
+        # Slider por texto: el caption de cada muestra con cada variante, solo y con los dos extremos
+        # (slider_text.plan). Sin fijar en RAM: Windows cuenta la RAM fijada como memoria compartida de la GPU.
+        slider_manifest = slider_text.read_manifest(CACHE_DIR)
+        if slider_text.stale(slider_manifest, SLIDER, [n for n in cache_data if not cache_names.is_reserved(n)]):
+            print("\n[!] Text Slider: run Pre-Cache again / vuelve a lanzar el Pre-Caché.")
+            sys.exit(2)
+        for cid in set(slider_manifest["samples"].values()):
+            for v in range(slider_manifest["variants"]):
+                for kind in ("c", "pos", "neg"):
+                    sl = slider_text.cache_name(kind, cid, v)
+                    slider_data[(kind, cid, v)] = (
+                        torch.load(f"{CACHE_DIR}/{sl}_embed.pt", weights_only=True).to(COMPUTE_DTYPE),
+                        torch.load(f"{CACHE_DIR}/{sl}_mask.pt", weights_only=True).bool())
     pres.begin(start_step)
 
     def load_custom_sample(name):
@@ -1489,6 +1570,9 @@ def train_krea2():
     max_tokens = max(v[0].shape[2] * v[0].shape[3] // 4 + v[1].shape[1] for k, v in cache_data.items()
                      if not cache_names.is_reserved(k))
     act_gb = ACT_GB_BASE + max_tokens * ACT_GB_PER_TOKEN + (DORA_EXTRA_GB if USE_DORA else 0.0)
+    if SLIDER["active"]:
+        # Slider por texto: tres pasadas más sin gradiente y sus predicciones en VRAM en cada paso.
+        act_gb += SLIDER_EXTRA_GB
     swap = block_swap.setup(list(transformer.transformer_blocks), model, card_gb, usable_gb, act_gb,
                             resident_blocks=SWAP_CFG.resident_blocks, park=SWAP_CFG.park_mode,
                             ram_limit_gb=SWAP_CFG.ram_limit_gb, ram_reserve_gb=SWAP_CFG.ram_reserve_gb,
@@ -1496,6 +1580,22 @@ def train_krea2():
     offload = SWAP_CFG.activation_offload and swap.swapping
     if offload:
         print("[VRAM] " + t("Activation offload ON: the inputs of each block wait in pinned RAM."))
+
+    slider_bank = []   # imágenes de práctica del slider: (latente, id del caption)
+    if dial is not None and SLIDER["slider_bank"] > 0:
+        # El modelo base (LoRA a 0, con el Turbo de las previews) dibuja los captions: el slider aprende sobre lo que
+        # el modelo genera con ellos, con su encuadre, y no sobre las fotos del dataset (others devs).
+        lat0 = next(v[0] for k, v in cache_data.items() if not cache_names.is_reserved(k))
+        bank_size = (lat0.shape[2] * 8, lat0.shape[3] * 8)
+        cids = sorted(set(slider_manifest["samples"].values()))
+        dial.set(0.0)
+        for i in range(SLIDER["slider_bank"]):
+            cid = cids[i % len(cids)]
+            emb, msk = slider_data[("c", cid, 0)]
+            slider_bank.append((render_latent(model, scheduler, emb, msk, bank_size, 1000 + i, shift_cfg).cpu(), cid))
+            print(f"[Slider] {t('Practice image')} {i + 1}/{SLIDER['slider_bank']}", flush=True)
+        dial.set(1.0)
+        free_vram()
 
     running_loss, t_step_avg, grad_norm = 0.0, 0.0, 0.0
     print("\n" + t("STARTING TRAINING! {n} {kind} in {b} buckets.", n=len(all_preview_names), kind=t("images"), b=len(buckets)))
@@ -1524,7 +1624,7 @@ def train_krea2():
             s = PREVIEW_SIZE / math.sqrt(size[0] * size[1])
             size = (max(16, round(size[0] * s / 16) * 16),
                     max(16, round(size[1] * s / 16) * 16))
-        run_preview(model, scheduler, emb0, msk0, neg, size, step, shift_cfg)
+        run_preview(model, scheduler, emb0, msk0, neg, size, step, shift_cfg, dial)
 
     step = start_step
     try:
@@ -1551,6 +1651,13 @@ def train_krea2():
             latents = torch.cat([cache_data[n][0] for n in names]).to("cuda", non_blocking=True)
             embeds  = torch.cat([cache_data[n][1] for n in names]).to("cuda", non_blocking=True)
             masks   = torch.cat([cache_data[n][2] for n in names]).to("cuda", non_blocking=True)
+            slider_cids = [slider_manifest["samples"][n] for n in names] if dial is not None else None
+            if slider_bank:
+                # Slider con imágenes de práctica: las del modelo base, cada una con su caption.
+                picks = [random.choice(slider_bank) for _ in names]
+                latents = torch.cat([p[0] for p in picks]).to("cuda", non_blocking=True)
+                slider_cids = [p[1] for p in picks]
+                size = tuple(latents.shape[-2:])
 
             latent_patched = pack_latents(latents)
             B, seq_img, _ = latent_patched.shape
@@ -1565,6 +1672,30 @@ def train_krea2():
 
             pos_ids = get_pos_ids(embeds.shape[1], size[0], size[1])
 
+            if dial is not None:
+                # Slider por texto: el modelo base (LoRA a 0) da el objetivo con el caption y con los dos
+                # extremos; el LoRA a un multiplicador al azar aprende ese desplazamiento (slider_text.py).
+                mult = slider_text.random_multiplier(SLIDER, random)
+
+                def base_pred(emb, msk):
+                    with torch.no_grad():
+                        return model(hidden_states=noisy, encoder_hidden_states=emb, timestep=sigma,
+                                     position_ids=get_pos_ids(emb.shape[1], size[0], size[1]),
+                                     encoder_attention_mask=msk, return_dict=False)[0].float()
+
+                # Una variante de preservación al azar por muestra, la misma para el caption y los extremos.
+                keys = [(cid, random.randrange(slider_manifest["variants"])) for cid in slider_cids]
+                texts = {kind: (torch.cat([slider_data[(kind, *k)][0] for k in keys]).to("cuda", non_blocking=True),
+                                torch.cat([slider_data[(kind, *k)][1] for k in keys]).to("cuda", non_blocking=True))
+                         for kind in ("c", "pos", "neg")}
+                embeds, masks = texts["c"]
+                pos_ids = get_pos_ids(embeds.shape[1], size[0], size[1])
+                dial.set(0.0)
+                target = slider_text.target(base_pred(*texts["c"]), base_pred(*texts["pos"]), base_pred(*texts["neg"]),
+                                            mult, SLIDER)
+                del texts
+                dial.set(mult)
+
             while True:
                 try:
                     with (block_swap.SaveOnCpu() if offload else block_swap._null()):
@@ -1576,7 +1707,7 @@ def train_krea2():
                             encoder_attention_mask=masks,
                             return_dict=False,
                         )[0]
-                    loss = subject_masks.loss(pred.float(), target.float(), subject.weight(names, grid=(size[0] // 2, size[1] // 2))) / GRAD_ACCUM_STEPS
+                    loss = subject_masks.loss(pred.float(), target.float(), None if slider_bank else subject.weight(names, grid=(size[0] // 2, size[1] // 2))) / GRAD_ACCUM_STEPS
                     scaler.scale(loss).backward()
                     break
                 except torch.OutOfMemoryError:

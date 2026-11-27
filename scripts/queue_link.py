@@ -269,6 +269,10 @@ def register(app, trainer_id, runtime, train_config, precache_config):
     def masked_loss_js():
         return send_from_directory(str(GUI_DIR), "masked_loss.js")
 
+    @app.route("/slider_text.js")
+    def slider_text_js():
+        return send_from_directory(str(GUI_DIR), "slider_text.js")
+
     @app.route("/output_preservation.js")
     def output_preservation_js():
         return send_from_directory(str(GUI_DIR), "output_preservation.js")

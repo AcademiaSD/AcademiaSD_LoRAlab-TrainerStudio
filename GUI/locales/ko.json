@@ -1738,5 +1738,18 @@
   "Caption type": "캡션 유형",
   "Short captions without the fixed traits: the trigger learns the identity. Then Redo Captions with Overwrite": "고정 특징 없는 짧은 캡션: 트리거가 정체성을 배웁니다. 그다음 Overwrite로 Redo Captions",
   "Long descriptions for styles and objects": "스타일과 사물용 긴 설명",
-  "{n} settings applied. They are saved when you start the training.": "설정 {n}개를 적용했습니다. 학습을 시작할 때 저장됩니다."
+  "{n} settings applied. They are saved when you start the training.": "설정 {n}개를 적용했습니다. 학습을 시작할 때 저장됩니다.",
+  "Text slider (dial)": "텍스트 슬라이더 (다이얼)",
+  "Trains a dial instead of a subject or a style: the LoRA strength moves the picture from the negative end to the positive one (for example from very thin to very fat). Strength 0 is the model as it is and every point of strength moves it the same amount, so +2 is a little and +5 is the end. It needs no before and after pictures: the base model already knows both ends, and the dataset captions say what the pictures show. Run the Pre-Cache after changing the ends.": "피사체나 스타일 대신 다이얼을 학습합니다. LoRA 강도가 이미지를 음수 끝에서 양수 끝으로 옮깁니다(예: 아주 마른 → 아주 뚱뚱한). 강도 0은 모델 그대로이고 강도 1마다 같은 만큼 움직이므로 +2는 조금, +5는 끝입니다. 전후 이미지가 필요 없습니다. 베이스 모델이 이미 두 끝을 알고 있고, 데이터셋 캡션이 이미지 내용을 알려 줍니다. 끝을 바꾼 뒤에는 Pre-Cache를 실행하세요.",
+  "Ultra: the LoRA only goes into the composition blocks. The dial holds up at much higher strengths and changes the shape more than the details.": "Ultra: LoRA가 구도 블록에만 들어갑니다. 다이얼이 훨씬 높은 강도까지 버티고 디테일보다 형태를 바꿉니다.",
+  "Ultra (composition blocks)": "Ultra (구도 블록)",
+  "What strength +5 adds. Describe the body or the trait, not the face or the camera: a face word can move the camera closer. Example: a very fat obese person, overweight all over the body: chubby face, thick arms, thick thighs, wide waist and hips": "강도 +5가 더하는 것. 얼굴이나 카메라가 아니라 몸이나 특징을 쓰세요. 얼굴 단어는 카메라를 가깝게 할 수 있습니다. 예: a very fat obese person, overweight all over the body: chubby face, thick arms, thick thighs, wide waist and hips",
+  "Positive end (+):": "양수 끝 (+):",
+  "What strength -5 adds, the opposite of the positive end and written the same way. Example: a very thin skinny underweight person, slim all over the body: thin arms, thin legs, narrow waist and hips": "강도 -5가 더하는 것. 양수 끝의 반대를 같은 방식으로 쓰세요. 예: a very thin skinny underweight person, slim all over the body: thin arms, thin legs, narrow waist and hips",
+  "Negative end (−):": "음수 끝 (−):",
+  "How far strength 5 goes, as a multiple of the difference the base model makes between the two ends. Raise it if the dial changes too little, lower it if the ends break the picture.": "강도 5가 어디까지 가는지, 베이스 모델이 두 끝 사이에 만드는 차이의 배수입니다. 다이얼 변화가 작으면 올리고, 끝에서 이미지가 깨지면 내리세요.",
+  "Slider intensity:": "슬라이더 강도:",
+  "Before training, the base model draws this many pictures from the dataset captions and the slider learns on them instead of on the dataset photos: the dial then keeps the framing the model gives to each prompt. 0 = the dataset photos.": "학습 전에 베이스 모델이 데이터셋 캡션으로 이 수만큼 이미지를 그리고, 슬라이더는 데이터셋 사진 대신 그 이미지로 학습합니다. 그래서 다이얼이 모델이 각 프롬프트에 주는 구도를 유지합니다. 0 = 데이터셋 사진.",
+  "Practice images:": "연습 이미지:",
+  "Strength 0 is the model as it is; +5 and −5 in ComfyUI are the two ends. The previews show the dial. Run the Pre-Cache after changing the ends.": "강도 0은 모델 그대로이고, ComfyUI의 +5와 −5가 두 끝입니다. 프리뷰에 다이얼이 표시됩니다. 끝을 바꾼 뒤에는 Pre-Cache를 실행하세요."
 }
